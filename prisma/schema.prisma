@@ -1,0 +1,38 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+model Post {
+    id        Int      @id @default(autoincrement())
+    name      String
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@index([name])
+}
+
+model BookSearch {
+  id            Int      @id @default(autoincrement())
+  title         String
+  author        String
+  hardcover     Boolean  @default(true)
+  firstEdition  Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  titleNorm     String
+  authorNorm    String
+  isbn          String?
+  isbnNorm      String   @default("")
+
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@unique([titleNorm, authorNorm, isbnNorm])
+}
