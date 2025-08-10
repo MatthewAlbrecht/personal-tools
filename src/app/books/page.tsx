@@ -9,7 +9,7 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Separator } from "~/components/ui/separator";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, Loader2 } from "lucide-react";
 
 type FormValues = {
   title: string;
@@ -79,6 +79,7 @@ function buildEbayUrl(values: FormValues): string {
 
 export default function BooksPage() {
   const [submitted, setSubmitted] = useState<FormValues | null>(null);
+  const [isRefreshingLinks, setIsRefreshingLinks] = useState(false);
   const utils = api.useUtils();
   const { data: recent } = api.bookSearch.listRecent.useQuery({ limit: 10 });
   const saveMutation = api.bookSearch.create.useMutation({
@@ -106,7 +107,10 @@ export default function BooksPage() {
       const next = { ...value, isbn: isbnClean || undefined };
       // Build links synchronously via state update; save non-blocking afterward
       setSubmitted(next);
+      setIsRefreshingLinks(true);
       queueMicrotask(() => saveMutation.mutate(next));
+      // Enforce a short loading animation to make the update obvious
+      setTimeout(() => setIsRefreshingLinks(false), 480);
     },
   });
 
@@ -204,17 +208,22 @@ export default function BooksPage() {
             <Button type="submit" variant="outline">Generate links</Button>
           </form>
           {links && (
-            <div className="mt-6 space-y-3">
-              <h2 className="text-lg font-semibold">Links</h2>
-              <div className="flex flex-wrap items-center gap-3">
-                <Button asChild variant="outline" className="rounded-full">
-                  <a className="inline-flex items-center gap-1" href={links.abebooks} target="_blank" rel="noreferrer noopener">
-                    AbeBooks <ArrowUpRight className="size-4" />
-                  </a>
-                </Button>
+            <div className="mt-6 space-y-3" aria-busy={isRefreshingLinks}>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-semibold">Links</h2>
+                {isRefreshingLinks ? (
+                  <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                ) : null}
+              </div>
+              <div className={`flex flex-wrap items-center gap-3 ${isRefreshingLinks ? "opacity-60 transition-opacity" : ""}`}>
                 <Button asChild variant="outline" className="rounded-full">
                   <a className="inline-flex items-center gap-1" href={links.biblio} target="_blank" rel="noreferrer noopener">
                     Biblio <ArrowUpRight className="size-4" />
+                  </a>
+                </Button>
+                <Button asChild variant="outline" className="rounded-full">
+                  <a className="inline-flex items-center gap-1" href={links.abebooks} target="_blank" rel="noreferrer noopener">
+                    AbeBooks <ArrowUpRight className="size-4" />
                   </a>
                 </Button>
                 <Button asChild variant="outline" className="rounded-full">
@@ -236,6 +245,7 @@ export default function BooksPage() {
                       variant="ghost"
                       className="px-0"
                       onClick={() => {
+                        setIsRefreshingLinks(true);
                         form.setFieldValue("title", s.title);
                         form.setFieldValue("author", s.author);
                         form.setFieldValue("hardcover", s.hardcover);
@@ -248,6 +258,7 @@ export default function BooksPage() {
                           firstEdition: s.firstEdition,
                           isbn: s.isbn ?? undefined,
                         });
+                        setTimeout(() => setIsRefreshingLinks(false), 480);
                       }}
                     >
                       {s.author ? `${s.author} — ` : ""}
