@@ -210,7 +210,7 @@ export default function BooksPage() {
           {links && (
             <div className="mt-6 space-y-3" aria-busy={isRefreshingLinks}>
               <div className="flex items-center gap-2">
-                <h2 className="text-lg font-semibold">Links</h2>
+                <h2 className="font-semibold text-lg">Links</h2>
                 {isRefreshingLinks ? (
                   <Loader2 className="size-4 animate-spin text-muted-foreground" />
                 ) : null}
@@ -236,7 +236,7 @@ export default function BooksPage() {
           )}
           <Separator className="my-6" />
           <div>
-            <h2 className="text-lg font-semibold mb-2">Recent searches</h2>
+            <h2 className="mb-2 font-semibold text-lg">Recent searches</h2>
             <ul className="space-y-2">
               {(recent ?? []).map((s) => (
                 <li key={s.id}>
