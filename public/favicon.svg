@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <style>
+      .a {
+        fill: #1f2937
+      }
+
+      @media (prefers-color-scheme: dark) {
+        .a {
+          fill: #e5e7eb
+        }
+      }
+    </style>
+  </defs>
+  <g class="a">
+    <path
+      d="M22 24c0-6 4-10 10-10s10 4 10 10v6h2a6 6 0 0 1 6 6v6h-6v-4a2 2 0 0 0-2-2h-2v6a8 8 0 0 1-16 0v-6h-2a2 2 0 0 0-2 2v4h-6v-6a6 6 0 0 1 6-6h2z" />
+    <path d="M14 20c-3 0-6-3-6-6 3 0 6 3 6 6zm36 0c3 0 6-3 6-6-3 0-6 3-6 6z" />
+    <circle cx="26" cy="34" r="2" />
+    <circle cx="38" cy="34" r="2" />
+  </g>
+</svg>

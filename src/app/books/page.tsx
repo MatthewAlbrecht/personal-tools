@@ -67,12 +67,27 @@ function buildEbayUrl(values: FormValues): string {
   if (values.title) keywords.push(values.title);
   if (values.author) keywords.push(values.author);
   if (values.isbn) keywords.push(values.isbn);
-  if (values.hardcover) keywords.push("hardcover");
-  if (values.firstEdition) keywords.push("1st");
+  if (values.hardcover) keywords.push('"hardcover"');
+  if (values.firstEdition) keywords.push('"1st"');
   const params = new URLSearchParams({
     _nkw: keywords.join(" "),
     _sacat: "0",
     _sop: "15", // Price + Shipping: lowest first
+  });
+  return `https://www.ebay.com/sch/i.html?${params.toString()}`;
+}
+
+function buildEbayCompletedUrl(values: FormValues): string {
+  const keywords: string[] = [];
+  if (values.title) keywords.push(values.title);
+  if (values.author) keywords.push(values.author);
+  if (values.isbn) keywords.push(values.isbn);
+  if (values.hardcover) keywords.push('"hardcover"');
+  if (values.firstEdition) keywords.push('"1st"');
+  const params = new URLSearchParams({
+    _nkw: keywords.join(" "),
+    _sacat: "0",
+    LH_Complete: "1",
   });
   return `https://www.ebay.com/sch/i.html?${params.toString()}`;
 }
@@ -120,6 +135,7 @@ export default function BooksPage() {
       abebooks: buildAbeBooksUrl(submitted),
       biblio: buildBiblioUrl(submitted),
       ebay: buildEbayUrl(submitted),
+      ebaySold: buildEbayCompletedUrl(submitted),
     };
   }, [submitted]);
 
@@ -228,7 +244,12 @@ export default function BooksPage() {
                 </Button>
                 <Button asChild variant="outline" className="rounded-full">
                   <a className="inline-flex items-center gap-1" href={links.ebay} target="_blank" rel="noreferrer noopener">
-                    eBay <ArrowUpRight className="size-4" />
+                    eBay — for sale <ArrowUpRight className="size-4" />
+                  </a>
+                </Button>
+                <Button asChild variant="outline" className="rounded-full">
+                  <a className="inline-flex items-center gap-1" href={links.ebaySold} target="_blank" rel="noreferrer noopener">
+                    eBay — sold <ArrowUpRight className="size-4" />
                   </a>
                 </Button>
               </div>
