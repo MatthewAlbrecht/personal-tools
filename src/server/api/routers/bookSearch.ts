@@ -20,6 +20,7 @@ export const bookSearchRouter = createTRPCRouter({
         isbn: z.string().optional(),
         hardcover: z.boolean().default(true),
         firstEdition: z.boolean().default(true),
+        folioSociety: z.boolean().default(false),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -40,6 +41,7 @@ export const bookSearchRouter = createTRPCRouter({
           author: input.author,
           hardcover: input.hardcover,
           firstEdition: input.firstEdition,
+          folioSociety: input.folioSociety,
           titleNorm,
           authorNorm,
           isbn: isbnRaw || null,
@@ -50,6 +52,7 @@ export const bookSearchRouter = createTRPCRouter({
           author: input.author,
           hardcover: input.hardcover,
           firstEdition: input.firstEdition,
+          folioSociety: input.folioSociety,
           isbn: isbnRaw || null,
           isbnNorm,
         },
@@ -66,11 +69,11 @@ export const bookSearchRouter = createTRPCRouter({
   listRecent: publicProcedure
     .input(
       z
-        .object({ limit: z.number().int().min(1).max(50).default(10) })
+        .object({ limit: z.number().int().min(1).max(500).default(500) })
         .optional()
     )
     .query(async ({ ctx, input }) => {
-      const limit = input?.limit ?? 10;
+      const limit = input?.limit ?? 500;
       return ctx.db.bookSearch.findMany({
         orderBy: { updatedAt: 'desc' },
         take: limit,

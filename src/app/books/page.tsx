@@ -17,6 +17,7 @@ type FormValues = {
   hardcover: boolean;
   firstEdition: boolean;
   isbn?: string;
+  folioSociety: boolean;
 };
 
 function buildAbeBooksUrl(values: FormValues): string {
@@ -24,6 +25,7 @@ function buildAbeBooksUrl(values: FormValues): string {
   if (values.title) params.set("tn", values.title);
   if (values.author) params.set("an", values.author);
   if (values.isbn) params.set("isbn", values.isbn);
+  if (values.folioSociety) params.set("pn", "folio society");
   // Attributes and filters
   const attrs: string[] = [];
   if (values.hardcover) {
@@ -53,6 +55,7 @@ function buildBiblioUrl(values: FormValues): string {
   if (values.isbn) params.set("keyisbn", values.isbn);
   if (values.hardcover) params.set("format", "hardcover");
   if (values.firstEdition) params.set("first", "y");
+  if (values.folioSociety) params.set("publisher", "folio society");
   params.set("pageper", "20");
   params.set("omit_product_types", "bp,bd,ns");
   params.set("strip_common", "1");
@@ -67,6 +70,7 @@ function buildEbayUrl(values: FormValues): string {
   if (values.title) keywords.push(values.title);
   if (values.author) keywords.push(values.author);
   if (values.isbn) keywords.push(values.isbn);
+  if (values.folioSociety) keywords.push("Folio Society");
   if (values.hardcover) keywords.push('"hardcover"');
   if (values.firstEdition) keywords.push('"1st"');
   const params = new URLSearchParams({
@@ -82,6 +86,7 @@ function buildEbayCompletedUrl(values: FormValues): string {
   if (values.title) keywords.push(values.title);
   if (values.author) keywords.push(values.author);
   if (values.isbn) keywords.push(values.isbn);
+  if (values.folioSociety) keywords.push("Folio Society");
   if (values.hardcover) keywords.push('"hardcover"');
   if (values.firstEdition) keywords.push('"1st"');
   const params = new URLSearchParams({
@@ -96,7 +101,7 @@ export default function BooksPage() {
   const [submitted, setSubmitted] = useState<FormValues | null>(null);
   const [isRefreshingLinks, setIsRefreshingLinks] = useState(false);
   const utils = api.useUtils();
-  const { data: recent } = api.bookSearch.listRecent.useQuery({ limit: 10 });
+  const { data: recent } = api.bookSearch.listRecent.useQuery({ limit: 500 });
   const saveMutation = api.bookSearch.create.useMutation({
     onSuccess: async () => {
       await utils.bookSearch.listRecent.invalidate();
@@ -115,6 +120,7 @@ export default function BooksPage() {
       hardcover: true,
       firstEdition: true,
       isbn: "",
+      folioSociety: false,
     },
     onSubmit: async ({ value }) => {
       // Normalize ISBN in the UI as well (digits + optional X)
@@ -218,6 +224,17 @@ export default function BooksPage() {
                   </Label>
                 )}
               </form.Field>
+              <form.Field name="folioSociety">
+                {(field) => (
+                  <Label className="inline-flex items-center gap-2">
+                    <Checkbox
+                      checked={field.state.value}
+                      onCheckedChange={(v) => field.handleChange(Boolean(v))}
+                    />
+                    Folio Society
+                  </Label>
+                )}
+              </form.Field>
             </div>
 
             <Separator />
@@ -278,6 +295,7 @@ export default function BooksPage() {
                           hardcover: s.hardcover,
                           firstEdition: s.firstEdition,
                           isbn: s.isbn ?? undefined,
+                          folioSociety: Boolean((s as any).folioSociety),
                         });
                         setTimeout(() => setIsRefreshingLinks(false), 480);
                       }}

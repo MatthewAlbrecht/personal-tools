@@ -25,6 +25,7 @@ model BookSearch {
   author        String
   hardcover     Boolean  @default(true)
   firstEdition  Boolean  @default(true)
+  folioSociety  Boolean  @default(false)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   titleNorm     String
