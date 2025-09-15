@@ -9,6 +9,7 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Separator } from "~/components/ui/separator";
+import { Skeleton } from "~/components/ui/skeleton";
 import { ArrowUpRight, Loader2 } from "lucide-react";
 
 type FormValues = {
@@ -18,6 +19,21 @@ type FormValues = {
   firstEdition: boolean;
   isbn?: string;
   folioSociety: boolean;
+};
+
+type BookSearch = {
+  id: number;
+  title: string;
+  author: string;
+  hardcover: boolean;
+  firstEdition: boolean;
+  folioSociety: boolean;
+  isbn?: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  titleNorm: string;
+  authorNorm: string;
+  isbnNorm: string;
 };
 
 function buildAbeBooksUrl(values: FormValues): string {
@@ -97,11 +113,26 @@ function buildEbayCompletedUrl(values: FormValues): string {
   return `https://www.ebay.com/sch/i.html?${params.toString()}`;
 }
 
+function SearchResultSkeleton() {
+  return (
+    <li>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-4 w-20" />
+        </div>
+        <Skeleton className="h-8 w-16" />
+      </div>
+    </li>
+  );
+}
+
 export default function BooksPage() {
   const [submitted, setSubmitted] = useState<FormValues | null>(null);
   const [isRefreshingLinks, setIsRefreshingLinks] = useState(false);
   const utils = api.useUtils();
-  const { data: recent } = api.bookSearch.listRecent.useQuery({ limit: 500 });
+  const { data: recent, isLoading: isRecentLoading } = api.bookSearch.listRecent.useQuery({ limit: 500 });
   const saveMutation = api.bookSearch.create.useMutation({
     onSuccess: async () => {
       await utils.bookSearch.listRecent.invalidate();
@@ -276,47 +307,54 @@ export default function BooksPage() {
           <div>
             <h2 className="mb-2 font-semibold text-lg">Recent searches</h2>
             <ul className="space-y-2">
-              {(recent ?? []).map((s) => (
-                <li key={s.id}>
-                  <div className="flex items-center justify-between gap-3">
-                    <Button
-                      variant="ghost"
-                      className="px-0"
-                      onClick={() => {
-                        setIsRefreshingLinks(true);
-                        form.setFieldValue("title", s.title);
-                        form.setFieldValue("author", s.author);
-                        form.setFieldValue("hardcover", s.hardcover);
-                        form.setFieldValue("firstEdition", s.firstEdition);
-                        form.setFieldValue("isbn", s.isbn ?? "");
-                        setSubmitted({
-                          title: s.title,
-                          author: s.author,
-                          hardcover: s.hardcover,
-                          firstEdition: s.firstEdition,
-                          isbn: s.isbn ?? undefined,
-                          folioSociety: Boolean((s as any).folioSociety),
-                        });
-                        setTimeout(() => setIsRefreshingLinks(false), 480);
-                      }}
-                    >
-                      {s.author ? `${s.author} — ` : ""}
-                      {s.title || "(no title)"}
-                      {s.hardcover ? " • Hardcover" : ""}
-                      {s.firstEdition ? " • First ed." : ""}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        deleteMutation.mutate({ id: s.id });
-                      }}
-                    >
-                      Delete
-                    </Button>
-                  </div>
-                </li>
-              ))}
+              {isRecentLoading ? (
+                // Show skeleton items while loading
+                ["skeleton-1", "skeleton-2", "skeleton-3", "skeleton-4", "skeleton-5"].map((key) => (
+                  <SearchResultSkeleton key={key} />
+                ))
+              ) : (
+                (recent ?? []).map((s: BookSearch) => (
+                  <li key={s.id}>
+                    <div className="flex items-center justify-between gap-3">
+                      <Button
+                        variant="ghost"
+                        className="px-0"
+                        onClick={() => {
+                          setIsRefreshingLinks(true);
+                          form.setFieldValue("title", s.title);
+                          form.setFieldValue("author", s.author);
+                          form.setFieldValue("hardcover", s.hardcover);
+                          form.setFieldValue("firstEdition", s.firstEdition);
+                          form.setFieldValue("isbn", s.isbn ?? "");
+                          setSubmitted({
+                            title: s.title,
+                            author: s.author,
+                            hardcover: s.hardcover,
+                            firstEdition: s.firstEdition,
+                            isbn: s.isbn ?? undefined,
+                            folioSociety: s.folioSociety,
+                          });
+                          setTimeout(() => setIsRefreshingLinks(false), 480);
+                        }}
+                      >
+                        {s.author ? `${s.author} — ` : ""}
+                        {s.title || "(no title)"}
+                        {s.hardcover ? " • Hardcover" : ""}
+                        {s.firstEdition ? " • First ed." : ""}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          deleteMutation.mutate({ id: s.id });
+                        }}
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                  </li>
+                ))
+              )}
             </ul>
           </div>
         </CardContent>
