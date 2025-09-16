@@ -9,7 +9,7 @@ import { Label } from "~/components/ui/label";
 export function LoginForm() {
 	const router = useRouter();
 	const params = useSearchParams();
-	const next = params.get("next") || "/";
+	const next = params?.get("next") || "/";
 	const [username, setUsername] = useState("");
 	const [password, setPassword] = useState("");
 	const [error, setError] = useState<string | null>(null);
