@@ -195,7 +195,11 @@ export const syncReleases = action({
   },
   handler: async (ctx, args): Promise<SyncResult> => {
     // Get current config
-    const config = await ctx.runQuery(api.folioSocietyReleases.getConfig);
+    const config = (await ctx.runQuery(api.folioSocietyReleases.getConfig)) || {
+      startId: 5130,
+      endId: 5300,
+      updatedAt: Date.now(),
+    };
 
     if (!config) {
       throw new Error(

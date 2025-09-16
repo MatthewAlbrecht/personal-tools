@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api as convexApi } from "../../../convex/_generated/api";
+import { useDebouncedState } from "~/lib/hooks/use-debounced-state";
 
 // Import our new components
 import { StatsSection } from "./_components/stats-section";
@@ -17,14 +18,14 @@ import { formatDate } from "./_utils/formatters";
 export default function FolioSocietyPage() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isUpdatingConfig, setIsUpdatingConfig] = useState(false);
-  const [searchInput, setSearchInput] = useState("");
+  const [searchInput, debouncedSearchInput, setSearchInput] = useDebouncedState("", 300);
 
   // Convex hooks
   const releases = useQuery(convexApi.folioSocietyReleases.getReleases, {
     limit: 50,
     sortBy: "id",
     sortOrder: "desc",
-    search: searchInput || undefined,
+    search: debouncedSearchInput || undefined,
   });
 
   const stats = useQuery(convexApi.folioSocietyReleases.getStats);
