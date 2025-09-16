@@ -1,0 +1,190 @@
+# Cursor AI Coding Rules
+
+## Code Style Preferences
+
+### Function Definitions
+
+- ALWAYS use classic function declarations instead of arrow functions for named functions
+- Use `function myFunction() {}` instead of `const myFunction = () => {}`
+- Arrow functions are only acceptable for inline callbacks and short anonymous functions
+
+### Examples
+
+Good:
+
+```typescript
+export function MyComponent() {
+  return <div>Hello</div>;
+}
+
+function handleSubmit(data: FormData) {
+  // handle logic
+}
+```
+
+Bad:
+
+```typescript
+export const MyComponent = () => {
+  return <div>Hello</div>;
+};
+
+const handleSubmit = (data: FormData) => {
+  // handle logic
+};
+```
+
+### Exceptions
+
+Arrow functions are acceptable for:
+
+- `.map()`, `.filter()`, `.reduce()` callbacks
+- Event handlers passed inline: `onClick={() => handleClick()}`
+- Short utility functions that are genuinely one-liners
+
+## Type Definitions
+
+- ALWAYS use type aliases instead of interfaces when possible
+- Use `type MyType = {}` instead of `interface MyInterface {}`
+- Interfaces should only be used when you need declaration merging or extending from classes
+
+### Examples
+
+Good:
+
+```typescript
+type User = {
+  id: string;
+  name: string;
+  email: string;
+};
+
+type UserWithProfile = User & {
+  profile: Profile;
+};
+```
+
+Bad:
+
+```typescript
+interface User {
+  id: string;
+  name: string;
+  email: string;
+}
+
+interface UserWithProfile extends User {
+  profile: Profile;
+}
+```
+
+## Component Props
+
+- ALWAYS declare prop types inline in the function definition
+- Use `function MyComponent({ prop1, prop2 }: { prop1: string; prop2: number })` instead of separate type/interface definitions
+- Only create separate prop types when they need to be reused across multiple components
+
+### Examples
+
+Good:
+
+```typescript
+export function MyComponent({
+  name,
+  age,
+  onSubmit
+}: {
+  name: string;
+  age: number;
+  onSubmit: (data: FormData) => void;
+}) {
+  return <div>{name}</div>;
+}
+```
+
+Bad:
+
+```typescript
+type MyComponentProps = {
+  name: string;
+  age: number;
+  onSubmit: (data: FormData) => void;
+};
+
+export function MyComponent({ name, age, onSubmit }: MyComponentProps) {
+  return <div>{name}</div>;
+}
+```
+
+## Component Structure
+
+- For skeletons more complex than a single `<Skeleton />`, create a dedicated skeleton component colocated with the component it represents
+- Use descriptive names like `ComponentNameSkeleton` (e.g. `ReleaseItemSkeleton`, `StatsCardSkeleton`)
+- Place skeleton components in the same file as the component they're skeletoning for better maintainability
+- ALWAYS place additional components (helpers, skeletons, etc.) AFTER the main exported component in the file
+
+### Examples
+
+Good:
+
+```typescript
+// In release-item.tsx
+export function ReleaseItem({ release }: Props) {
+  // ...
+}
+
+function ReleaseItemSkeleton() {
+  return (
+    <div className="flex items-start justify-between rounded-lg border p-4">
+      <div className="min-w-0 flex-1">
+        <Skeleton className="h-6 w-64 mb-2" />
+        <div className="flex gap-4 mb-2">
+          <Skeleton className="h-4 w-16" />
+          <Skeleton className="h-4 w-20" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export { ReleaseItemSkeleton };
+
+// In releases-list.tsx
+import { ReleaseItem, ReleaseItemSkeleton } from "./release-item";
+
+export function ReleasesList({ releases, isLoading }: Props) {
+  if (isLoading) {
+    return <ReleaseItemSkeleton />;
+  }
+  // ...
+}
+```
+
+Bad:
+
+```typescript
+// Helper component BEFORE main component - WRONG!
+function ReleaseItemSkeleton() {
+  return (
+    <div className="flex items-start justify-between rounded-lg border p-4">
+      <div className="min-w-0 flex-1">
+        <Skeleton className="h-6 w-64 mb-2" />
+        <div className="flex gap-4 mb-2">
+          <Skeleton className="h-4 w-16" />
+          <Skeleton className="h-4 w-20" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function ReleasesList({ releases, isLoading }: Props) {
+  // ...
+}
+```
+
+## Other Preferences
+
+- Prefer explicit return types on exported functions
+- Use classic function syntax for React components
+- Use kebab-case for file names
