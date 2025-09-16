@@ -2,14 +2,14 @@ import { ExternalLink } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
 import { ImageGallery } from "~/components/ImageGallery";
-import type { Release } from "../_utils/types";
+import type { ConvexRelease } from "../_utils/types";
 import { generateImageUrls } from "../_utils/image-utils";
 import { formatPrice, formatDate } from "../_utils/formatters";
 
 export function ReleaseItem({
   release,
 }: {
-  release: Release;
+  release: ConvexRelease;
 }) {
   return (
     <div

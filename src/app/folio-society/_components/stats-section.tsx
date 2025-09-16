@@ -6,13 +6,13 @@ import {
   CardTitle,
 } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
-import type { Stats } from "../_utils/types";
+import type { ConvexStats } from "../_utils/types";
 
 export function StatsSection({
   stats,
   formatDate
 }: {
-  stats?: Stats | null;
+  stats?: ConvexStats | null;
   formatDate: (date: Date | number | string) => string;
 }) {
   return (

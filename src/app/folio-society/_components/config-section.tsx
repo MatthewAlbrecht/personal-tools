@@ -9,7 +9,7 @@ import {
 } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { InputGroup } from "~/components/ui/input-group";
-import type { Config } from "../_utils/types";
+import type { ConvexConfig } from "../_utils/types";
 
 export function ConfigSection({
   config,
@@ -19,7 +19,7 @@ export function ConfigSection({
   formatDate,
   onUpdateConfig,
 }: {
-  config?: Config | null;
+  config?: ConvexConfig | null;
   isUpdatingConfig: boolean;
   startIdPlaceholder: string;
   endIdPlaceholder: string;

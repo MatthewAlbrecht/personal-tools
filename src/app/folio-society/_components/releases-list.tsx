@@ -1,12 +1,12 @@
 import { Package } from "lucide-react";
 import { ReleaseItem, ReleaseItemSkeleton } from "./release-item";
-import type { Release } from "../_utils/types";
+import type { ConvexRelease } from "../_utils/types";
 
 export function ReleasesList({
   releases,
   isLoading,
 }: {
-  releases?: Release[] | null;
+  releases?: ConvexRelease[] | null;
   isLoading: boolean;
 }) {
   if (isLoading) {

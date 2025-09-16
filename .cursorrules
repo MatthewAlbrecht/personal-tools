@@ -183,6 +183,30 @@ export function ReleasesList({ releases, isLoading }: Props) {
 }
 ```
 
+## Environment Variables
+
+- ALWAYS use `~/env.js` to access environment variables instead of `process.env` directly
+- Import environment variables from the env module: `import { env } from "~/env.js"`
+- This ensures type safety and validation of environment variables
+
+### Examples
+
+Good:
+
+```typescript
+import { env } from '~/env.js';
+
+const apiUrl = env.NEXT_PUBLIC_API_URL;
+const secret = env.DATABASE_URL;
+```
+
+Bad:
+
+```typescript
+const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+const secret = process.env.DATABASE_URL;
+```
+
 ## Other Preferences
 
 - Prefer explicit return types on exported functions

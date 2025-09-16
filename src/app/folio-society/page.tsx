@@ -4,9 +4,8 @@ import { RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
-import { api } from "~/trpc/react";
-import { useQuery, useMutation } from "convex/react";
-import { api as convexApi } from "~/convex/_generated/api";
+import { useQuery, useMutation, useAction } from "convex/react";
+import { api as convexApi } from "../../../convex/_generated/api";
 
 // Import our new components
 import { StatsSection } from "./_components/stats-section";
@@ -20,24 +19,21 @@ export default function FolioSocietyPage() {
   const [isUpdatingConfig, setIsUpdatingConfig] = useState(false);
   const [searchInput, setSearchInput] = useState("");
 
-  // TRPC hooks
-  const {
-    data: releases,
-    refetch: refetchReleases,
-    isLoading: releasesLoading,
-  } = api.folioSociety.getReleases.useQuery({
+  // Convex hooks
+  const releases = useQuery(convexApi.folioSocietyReleases.getReleases, {
     limit: 50,
     sortBy: "id",
     sortOrder: "desc",
     search: searchInput || undefined,
   });
 
-  const { data: stats } = api.folioSociety.getStats.useQuery();
-  const syncMutation = api.folioSociety.syncReleases.useMutation();
-
-  // Use Convex for config management
+  const stats = useQuery(convexApi.folioSocietyReleases.getStats);
   const config = useQuery(convexApi.folioSociety.getConfig);
+
+  const syncAction = useAction(convexApi.folioSocietyReleases.syncReleases);
   const updateConfigMutation = useMutation(convexApi.folioSociety.updateConfig);
+
+  const releasesLoading = releases === undefined;
 
   const startIdPlaceholder = config?.startId?.toString() || "5130";
   const endIdPlaceholder = config?.endId?.toString() || "5300";
@@ -45,11 +41,10 @@ export default function FolioSocietyPage() {
   async function handleSync() {
     setIsSyncing(true);
     try {
-      const result = await syncMutation.mutateAsync({
+      const result = await syncAction({
         // Use configured range or defaults
       });
       console.log("Sync completed:", result);
-      await refetchReleases();
       toast.success("Releases synced successfully!");
     } catch (error) {
       console.error("Sync failed:", error);

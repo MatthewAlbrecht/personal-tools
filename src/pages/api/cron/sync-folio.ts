@@ -1,7 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { appRouter } from '~/server/api/root';
-import { createTRPCContext } from '~/server/api/trpc';
+import { ConvexHttpClient } from 'convex/browser';
+import { api } from '../../../../convex/_generated/api';
 import { sendNewReleasesEmail } from '~/lib/email';
+import { env } from '~/env';
 
 export default async function handler(
   req: NextApiRequest,
@@ -23,15 +24,15 @@ export default async function handler(
   try {
     console.log('🔄 Starting scheduled Folio Society sync..');
 
-    // Create TRPC context and caller
-    const ctx = await createTRPCContext({
-      headers: new Headers(req.headers as HeadersInit),
-    });
-    const caller = appRouter.createCaller(ctx);
+    // Create Convex client
+    const convex = new ConvexHttpClient(env.NEXT_PUBLIC_CONVEX_URL);
 
     // Perform the sync
     console.log('🔄 Calling syncReleases mutation...');
-    const result = await caller.folioSociety.syncReleases({});
+    const result = await convex.action(
+      api.folioSocietyReleases.syncReleases,
+      {}
+    );
 
     console.log('✅ Sync completed:', JSON.stringify(result, null, 2));
     console.log('📊 Sync details:');
