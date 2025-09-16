@@ -1,5 +1,5 @@
 import type { RouterOutputs } from '~/trpc/react';
-import type { api } from '~/convex/_generated/api';
+import type { api } from '../../../../convex/_generated/api';
 import type { FunctionReturnType } from 'convex/server';
 
 // Convex types - preferred for new functionality
