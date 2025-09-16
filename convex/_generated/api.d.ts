@@ -13,6 +13,7 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
+import type * as bookSearch from "../bookSearch.js";
 import type * as folioSociety from "../folioSociety.js";
 import type * as folioSocietyReleases from "../folioSocietyReleases.js";
 
@@ -25,6 +26,7 @@ import type * as folioSocietyReleases from "../folioSocietyReleases.js";
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  bookSearch: typeof bookSearch;
   folioSociety: typeof folioSociety;
   folioSocietyReleases: typeof folioSocietyReleases;
 }>;

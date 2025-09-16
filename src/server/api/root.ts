@@ -1,5 +1,3 @@
-import { bookSearchRouter } from '~/server/api/routers/bookSearch';
-import { folioSocietyRouter } from '~/server/api/routers/folioSociety';
 import { createCallerFactory, createTRPCRouter } from '~/server/api/trpc';
 
 /**
@@ -8,8 +6,7 @@ import { createCallerFactory, createTRPCRouter } from '~/server/api/trpc';
  * All routers added in /api/routers should be manually added here.
  */
 export const appRouter = createTRPCRouter({
-  bookSearch: bookSearchRouter,
-  folioSociety: folioSocietyRouter,
+  // Add new routers here as needed
 });
 
 // export type definition of API

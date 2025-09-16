@@ -10,7 +10,9 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Separator } from "~/components/ui/separator";
 import { Skeleton } from "~/components/ui/skeleton";
-import { api } from "~/trpc/react";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "../../../convex/_generated/api";
+import type { Doc } from "../../../convex/_generated/dataModel";
 
 type FormValues = {
 	title: string;
@@ -21,20 +23,7 @@ type FormValues = {
 	folioSociety: boolean;
 };
 
-type BookSearch = {
-	id: number;
-	title: string;
-	author: string;
-	hardcover: boolean;
-	firstEdition: boolean;
-	folioSociety: boolean;
-	isbn?: string | null;
-	createdAt: Date;
-	updatedAt: Date;
-	titleNorm: string;
-	authorNorm: string;
-	isbnNorm: string;
-};
+type BookSearch = Doc<'bookSearch'>;
 
 function buildAbeBooksUrl(values: FormValues): string {
 	const params = new URLSearchParams();
@@ -131,19 +120,11 @@ function SearchResultSkeleton() {
 export default function BooksPage() {
 	const [submitted, setSubmitted] = useState<FormValues | null>(null);
 	const [isRefreshingLinks, setIsRefreshingLinks] = useState(false);
-	const utils = api.useUtils();
-	const { data: recent, isLoading: isRecentLoading } =
-		api.bookSearch.listRecent.useQuery({ limit: 500 });
-	const saveMutation = api.bookSearch.create.useMutation({
-		onSuccess: async () => {
-			await utils.bookSearch.listRecent.invalidate();
-		},
-	});
-	const deleteMutation = api.bookSearch.delete.useMutation({
-		onSuccess: async () => {
-			await utils.bookSearch.listRecent.invalidate();
-		},
-	});
+
+	// Convex hooks
+	const recent = useQuery(api.bookSearch.listRecent, { limit: 500 });
+	const saveMutation = useMutation(api.bookSearch.create);
+	const deleteMutation = useMutation(api.bookSearch.deleteSearch);
 
 	const form = useForm({
 		defaultValues: {
@@ -163,7 +144,7 @@ export default function BooksPage() {
 			// Build links synchronously via state update; save non-blocking afterward
 			setSubmitted(next);
 			setIsRefreshingLinks(true);
-			queueMicrotask(() => saveMutation.mutate(next));
+			queueMicrotask(() => saveMutation({ ...next }));
 			// Enforce a short loading animation to make the update obvious
 			setTimeout(() => setIsRefreshingLinks(false), 480);
 		},
@@ -334,56 +315,56 @@ export default function BooksPage() {
 					<div>
 						<h2 className="mb-2 font-semibold text-lg">Recent searches</h2>
 						<ul className="space-y-2">
-							{isRecentLoading
+							{recent === undefined
 								? // Show skeleton items while loading
-									[
-										"skeleton-1",
-										"skeleton-2",
-										"skeleton-3",
-										"skeleton-4",
-										"skeleton-5",
-									].map((key) => <SearchResultSkeleton key={key} />)
+								[
+									"skeleton-1",
+									"skeleton-2",
+									"skeleton-3",
+									"skeleton-4",
+									"skeleton-5",
+								].map((key) => <SearchResultSkeleton key={key} />)
 								: (recent ?? []).map((s: BookSearch) => (
-										<li key={s.id}>
-											<div className="flex items-center justify-between gap-3">
-												<Button
-													variant="ghost"
-													className="px-0"
-													onClick={() => {
-														setIsRefreshingLinks(true);
-														form.setFieldValue("title", s.title);
-														form.setFieldValue("author", s.author);
-														form.setFieldValue("hardcover", s.hardcover);
-														form.setFieldValue("firstEdition", s.firstEdition);
-														form.setFieldValue("isbn", s.isbn ?? "");
-														setSubmitted({
-															title: s.title,
-															author: s.author,
-															hardcover: s.hardcover,
-															firstEdition: s.firstEdition,
-															isbn: s.isbn ?? undefined,
-															folioSociety: s.folioSociety,
-														});
-														setTimeout(() => setIsRefreshingLinks(false), 480);
-													}}
-												>
-													{s.author ? `${s.author} — ` : ""}
-													{s.title || "(no title)"}
-													{s.hardcover ? " • Hardcover" : ""}
-													{s.firstEdition ? " • First ed." : ""}
-												</Button>
-												<Button
-													variant="outline"
-													size="sm"
-													onClick={() => {
-														deleteMutation.mutate({ id: s.id });
-													}}
-												>
-													Delete
-												</Button>
-											</div>
-										</li>
-									))}
+									<li key={s._id}>
+										<div className="flex items-center justify-between gap-3">
+											<Button
+												variant="ghost"
+												className="px-0"
+												onClick={() => {
+													setIsRefreshingLinks(true);
+													form.setFieldValue("title", s.title);
+													form.setFieldValue("author", s.author);
+													form.setFieldValue("hardcover", s.hardcover);
+													form.setFieldValue("firstEdition", s.firstEdition);
+													form.setFieldValue("isbn", s.isbn ?? "");
+													setSubmitted({
+														title: s.title,
+														author: s.author,
+														hardcover: s.hardcover,
+														firstEdition: s.firstEdition,
+														isbn: s.isbn ?? undefined,
+														folioSociety: s.folioSociety,
+													});
+													setTimeout(() => setIsRefreshingLinks(false), 480);
+												}}
+											>
+												{s.author ? `${s.author} — ` : ""}
+												{s.title || "(no title)"}
+												{s.hardcover ? " • Hardcover" : ""}
+												{s.firstEdition ? " • First ed." : ""}
+											</Button>
+											<Button
+												variant="outline"
+												size="sm"
+												onClick={() => {
+													deleteMutation({ id: s._id });
+												}}
+											>
+												Delete
+											</Button>
+										</div>
+									</li>
+								))}
 						</ul>
 					</div>
 				</CardContent>
