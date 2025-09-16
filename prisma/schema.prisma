@@ -37,3 +37,28 @@ model BookSearch {
   @@index([updatedAt])
   @@unique([titleNorm, authorNorm, isbnNorm])
 }
+
+model FolioSocietyRelease {
+  id            Int       @id
+  sku           String
+  name          String
+  url           String
+  visibility    Json
+  image         String?
+  price         Float?
+  isActive      Boolean   @default(true)
+  firstSeenAt   DateTime  @default(now())
+  lastSeenAt    DateTime  @updatedAt
+  lastUpdatedAt DateTime  @updatedAt
+
+  @@unique([id])
+  @@index([firstSeenAt])
+  @@index([lastSeenAt])
+}
+
+model FolioSocietyConfig {
+  id          String   @id @default("default")
+  startId     Int      @default(5130)
+  endId       Int      @default(5300)
+  updatedAt   DateTime @updatedAt
+}
