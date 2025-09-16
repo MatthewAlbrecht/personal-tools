@@ -175,7 +175,7 @@ export const folioSocietyRouter = createTRPCRouter({
             },
           },
           data: {
-            isActive: false,
+            isActive: true,
           },
         });
 
@@ -215,27 +215,32 @@ export const folioSocietyRouter = createTRPCRouter({
       }
     }),
 
-  // Get all active releases
+  // Get all releases
   getReleases: publicProcedure
     .input(
       z.object({
-        includeInactive: z.boolean().default(false),
-        limit: z.number().min(1).max(1000).default(500),
+        limit: z.number().min(1).max(1000).default(50),
         sortBy: z
           .enum(['firstSeenAt', 'lastSeenAt', 'name', 'price', 'id'])
           .default('id'),
         sortOrder: z.enum(['asc', 'desc']).default('desc'),
+        search: z.string().optional(),
       })
     )
     .query(async ({ ctx, input }) => {
-      const { includeInactive, limit, sortBy, sortOrder } = input;
+      const { limit, sortBy, sortOrder, search } = input;
 
       return ctx.db.folioSocietyRelease.findMany({
-        where: includeInactive ? {} : { isActive: true },
         orderBy: {
           [sortBy]: sortOrder,
         },
         take: limit,
+        where: {
+          name: {
+            contains: search,
+            mode: 'insensitive',
+          },
+        },
       });
     }),
 
@@ -250,10 +255,8 @@ export const folioSocietyRouter = createTRPCRouter({
 
   // Get statistics about releases
   getStats: publicProcedure.query(async ({ ctx }) => {
-    const [total, active, inactive, recent] = await Promise.all([
+    const [total, recent] = await Promise.all([
       ctx.db.folioSocietyRelease.count(),
-      ctx.db.folioSocietyRelease.count({ where: { isActive: true } }),
-      ctx.db.folioSocietyRelease.count({ where: { isActive: false } }),
       ctx.db.folioSocietyRelease.count({
         where: {
           firstSeenAt: {
@@ -265,8 +268,6 @@ export const folioSocietyRouter = createTRPCRouter({
 
     return {
       total,
-      active,
-      inactive,
       recent,
       lastSync: await ctx.db.folioSocietyRelease
         .findFirst({
