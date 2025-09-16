@@ -21,7 +21,7 @@ export default async function handler(
   }
 
   try {
-    console.log('🔄 Starting scheduled Folio Society sync...');
+    console.log('🔄 Starting scheduled Folio Society sync..');
 
     // Create TRPC context and caller
     const ctx = await createTRPCContext({
