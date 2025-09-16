@@ -1,6 +1,7 @@
 import type { RouterOutputs } from '~/trpc/react';
 import type { api } from '../../../../convex/_generated/api';
 import type { FunctionReturnType } from 'convex/server';
+import type { Doc } from 'convex/_generated/dataModel';
 
 // Convex types - preferred for new functionality
 export type ConvexRelease = FunctionReturnType<
@@ -14,6 +15,6 @@ export type ConvexConfig = FunctionReturnType<
 >;
 
 // Legacy TRPC types - will be removed after migration
-export type Release = RouterOutputs['folioSociety']['getReleases'][number];
-export type Stats = RouterOutputs['folioSociety']['getStats'];
+export type Release = Doc<'folioSocietyReleases'>;
+export type Stats = Doc<'folioSocietyReleases'>;
 export type Config = FunctionReturnType<typeof api.folioSociety.getConfig>;

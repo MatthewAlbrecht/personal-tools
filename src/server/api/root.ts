@@ -6,7 +6,8 @@ import { createCallerFactory, createTRPCRouter } from '~/server/api/trpc';
  * All routers added in /api/routers should be manually added here.
  */
 export const appRouter = createTRPCRouter({
-  // Add new routers here as needed
+  // Placeholder router to satisfy TypeScript
+  _placeholder: createTRPCRouter({}),
 });
 
 // export type definition of API
