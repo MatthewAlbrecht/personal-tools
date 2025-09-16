@@ -15,6 +15,8 @@ export const env = createEnv({
     AUTH_PASSWORD: z.string().min(1),
     SESSION_SECRET: z.string().min(16),
     CRON_SECRET: z.string().min(16),
+    RESEND_API_KEY: z.string().min(1),
+    NOTIFICATION_EMAIL: z.string().email(),
   },
 
   /**
@@ -37,6 +39,8 @@ export const env = createEnv({
     AUTH_PASSWORD: process.env.AUTH_PASSWORD,
     SESSION_SECRET: process.env.SESSION_SECRET,
     CRON_SECRET: process.env.CRON_SECRET,
+    RESEND_API_KEY: process.env.RESEND_API_KEY,
+    NOTIFICATION_EMAIL: process.env.NOTIFICATION_EMAIL,
     // NEXT_PUBLIC_CLIENTVAR: process.env.NEXT_PUBLIC_CLIENTVAR,
   },
   /**
