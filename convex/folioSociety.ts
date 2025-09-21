@@ -1,10 +1,13 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
+import { requireAuth } from './auth';
 
 // Get current configuration
 export const getConfig = query({
   args: {},
   handler: async (ctx) => {
+    // Require authentication
+    requireAuth(ctx);
     const config = await ctx.db.query('folioSocietyConfig').first();
 
     // Return existing config or null if none exists
@@ -26,6 +29,8 @@ export const updateConfig = mutation({
     endId: v.number(),
   },
   handler: async (ctx, { startId, endId }) => {
+    // Require authentication
+    requireAuth(ctx);
     if (startId >= endId) {
       throw new Error('Start ID must be less than end ID');
     }

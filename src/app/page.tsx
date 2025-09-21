@@ -11,30 +11,24 @@ export default async function Home() {
 					Personal Tools
 				</h1>
 				<p className="text-white/80">Jump to a tool:</p>
-				<div className="grid grid-cols-1 gap-4">
-					{isAuthed ? (
-						<>
-							<Link
-								className="rounded-lg bg-white/10 px-6 py-3 text-center font-semibold transition hover:bg-white/20"
-								href="/books"
-							>
-								Book Search Aggregator →
-							</Link>
-							<Link
-								className="rounded-lg bg-white/10 px-6 py-3 text-center font-semibold transition hover:bg-white/20"
-								href="/folio-society"
-							>
-								Folio Society Release Tracker →
-							</Link>
-						</>
-					) : null}
-					<Link
-						className="rounded-lg bg-white/10 px-6 py-3 text-center font-semibold transition hover:bg-white/20"
-						href="/login"
-					>
-						Sign in →
-					</Link>
-				</div>
+				{isAuthed ? (
+					<div className="grid grid-cols-1 gap-4">
+						<Link
+							className="rounded-lg bg-white/10 px-6 py-3 text-center font-semibold transition hover:bg-white/20"
+							href="/books"
+						>
+							Book Search Aggregator →
+						</Link>
+						<Link
+							className="rounded-lg bg-white/10 px-6 py-3 text-center font-semibold transition hover:bg-white/20"
+							href="/folio-society"
+						>
+							Folio Society Release Tracker →
+						</Link>
+					</div>
+				) : (
+					<p className="text-white/60">Sign in to access tools</p>
+				)}
 			</div>
 		</main>
 	);

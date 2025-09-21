@@ -1,5 +1,6 @@
 import { v } from 'convex/values';
 import { query, mutation } from './_generated/server';
+import { requireAuth } from './auth';
 
 // Normalize text for search comparison
 function normalize(text: string): string {
@@ -22,6 +23,8 @@ export const create = mutation({
     folioSociety: v.boolean(),
   },
   handler: async (ctx, args) => {
+    // Require authentication
+    requireAuth(ctx);
     const titleNorm = normalize(args.title);
     const authorNorm = normalize(args.author);
     const isbnRaw = args.isbn?.trim() ?? '';
@@ -75,6 +78,8 @@ export const create = mutation({
 export const deleteSearch = mutation({
   args: { id: v.id('bookSearch') },
   handler: async (ctx, args) => {
+    // Require authentication
+    requireAuth(ctx);
     await ctx.db.delete(args.id);
     return { success: true } as const;
   },
@@ -86,6 +91,8 @@ export const listRecent = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    // Require authentication
+    requireAuth(ctx);
     const limit = args.limit ?? 500;
     return await ctx.db
       .query('bookSearch')

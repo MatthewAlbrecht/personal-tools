@@ -5,11 +5,13 @@ import { useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
+import { useAuth } from "~/lib/auth-context";
 
 export function LoginForm() {
 	const router = useRouter();
 	const params = useSearchParams();
-	const next = params?.get("next") || "/";
+	const next = params?.get("next");
+	const { login } = useAuth();
 	const [username, setUsername] = useState("");
 	const [password, setPassword] = useState("");
 	const [error, setError] = useState<string | null>(null);
@@ -19,13 +21,12 @@ export function LoginForm() {
 		e.preventDefault();
 		setIsSubmitting(true);
 		setError(null);
-		const body = new FormData();
-		body.set("username", username);
-		body.set("password", password);
-		const res = await fetch("/api/auth", { method: "POST", body });
+
+		const success = await login(username, password);
 		setIsSubmitting(false);
-		if (res.ok) {
-			router.replace(next);
+
+		if (success) {
+			router.replace(next || "/books");
 		} else {
 			setError("Invalid credentials");
 		}

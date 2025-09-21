@@ -2,6 +2,7 @@ import { v } from 'convex/values';
 import { query, mutation, action } from './_generated/server';
 import { api } from './_generated/api';
 import type { Doc } from './_generated/dataModel';
+import { requireAuth } from './auth';
 
 // Type for the API product response
 type FolioSocietyProduct = {
@@ -48,6 +49,8 @@ export const getReleases = query({
     search: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    // Require authentication
+    requireAuth(ctx);
     const { limit = 50, sortBy = 'id', sortOrder = 'desc', search } = args;
 
     let results = await ctx.db.query('folioSocietyReleases').collect();
@@ -84,6 +87,8 @@ export const getReleases = query({
 export const getRelease = query({
   args: { id: v.id('folioSocietyReleases') },
   handler: async (ctx, args) => {
+    // Require authentication
+    requireAuth(ctx);
     return await ctx.db.get(args.id);
   },
 });
@@ -92,6 +97,8 @@ export const getRelease = query({
 export const getStats = query({
   args: {},
   handler: async (ctx) => {
+    // Require authentication
+    requireAuth(ctx);
     const releases = await ctx.db.query('folioSocietyReleases').collect();
 
     const total = releases.length;
@@ -120,6 +127,8 @@ export const getStats = query({
 export const getAllReleases = query({
   args: {},
   handler: async (ctx) => {
+    // Require authentication
+    requireAuth(ctx);
     return await ctx.db.query('folioSocietyReleases').collect();
   },
 });
@@ -128,6 +137,8 @@ export const getAllReleases = query({
 export const getConfig = query({
   args: {},
   handler: async (ctx) => {
+    // Require authentication
+    requireAuth(ctx);
     return await ctx.db.query('folioSocietyConfig').first();
   },
 });
@@ -148,6 +159,8 @@ export const createRelease = mutation({
     lastUpdatedAt: v.number(),
   },
   handler: async (ctx, args) => {
+    // Require authentication
+    requireAuth(ctx);
     return await ctx.db.insert('folioSocietyReleases', args);
   },
 });
@@ -167,6 +180,8 @@ export const updateRelease = mutation({
     lastUpdatedAt: v.number(),
   },
   handler: async (ctx, args) => {
+    // Require authentication
+    requireAuth(ctx);
     const { id, ...updateData } = args;
     await ctx.db.patch(id, updateData);
   },
@@ -179,6 +194,8 @@ export const updateConfig = mutation({
     updatedAt: v.number(),
   },
   handler: async (ctx, args) => {
+    // Require authentication
+    requireAuth(ctx);
     const config = await ctx.db.query('folioSocietyConfig').first();
     if (config) {
       await ctx.db.patch(config._id, args);
@@ -194,6 +211,8 @@ export const syncReleases = action({
     autoExpand: v.optional(v.boolean()),
   },
   handler: async (ctx, args): Promise<SyncResult> => {
+    // Require authentication
+    requireAuth(ctx);
     // Get current config
     const config = (await ctx.runQuery(api.folioSocietyReleases.getConfig)) || {
       startId: 5130,
