@@ -78,10 +78,10 @@ export default function FolioSocietyPage() {
     setIsEnriching(true);
     try {
       const result = await enrichAction({
-        // Force refresh all products by setting TTL to 0 (no product filter needed)
-        detailsTtlHours: 0,
+        // Normal enrichment but with higher limit to process more products
+        detailsTtlHours: 24,
         maxConcurrent: 10,
-        limit: 600, // High limit for full enrichment
+        limit: 600, // Process up to 600 products that need enrichment
       });
       console.log("Full enrichment completed:", result);
       toast.success(`Full enrichment completed! Processed ${result.attempted} products.`);

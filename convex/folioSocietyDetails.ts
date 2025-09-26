@@ -142,11 +142,6 @@ export const enrichDetails = action({
     console.log(
       `📊 Enrichment params: TTL=${args.detailsTtlHours ?? 24}h, maxConcurrent=${maxConcurrent}, limit=${limit}`
     );
-    if (args.detailsTtlHours === 0) {
-      console.log(
-        '🔥 FORCE REFRESH MODE: Will process ALL products regardless of existing data'
-      );
-    }
     if (args.productIds) {
       console.log(
         `🎯 Checking specific product IDs: ${args.productIds.join(', ')}`
@@ -173,9 +168,6 @@ export const enrichDetails = action({
     console.log(`📋 Found ${existingDetails.length} existing details records`);
 
     function shouldFetch(productId: number): boolean {
-      // If TTL is 0, force refresh all products
-      if (ttlMs === 0) return true;
-
       const d = byProductId.get(productId);
       if (!d) return true;
       if (d.fetchStatus !== 'ok') return true;
