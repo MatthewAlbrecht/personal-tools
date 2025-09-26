@@ -74,20 +74,15 @@ function ImageThumbnail({ imageUrl }: { imageUrl: string }) {
   const handleLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     const img = e.currentTarget;
 
-    console.log(`🖼️ Image loaded: ${imageUrl} (${img.naturalWidth}x${img.naturalHeight})`);
-
     // Filter out the Folio Society backup logo (262x262)
     if (img.naturalWidth === 262 && img.naturalHeight === 262) {
-      console.log(`🚫 Filtering out logo: ${imageUrl}`);
       setIsValidImage(false);
     } else {
-      console.log(`✅ Valid image: ${imageUrl}`);
       setIsValidImage(true);
     }
   };
 
   const handleError = () => {
-    console.log(`❌ Image failed to load: ${imageUrl}`);
     setIsValidImage(false);
   };
 

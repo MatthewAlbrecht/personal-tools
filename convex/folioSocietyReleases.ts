@@ -209,6 +209,9 @@ export const syncReleases = action({
     startId: v.optional(v.number()),
     endId: v.optional(v.number()),
     autoExpand: v.optional(v.boolean()),
+    enrich: v.optional(v.boolean()),
+    detailsTtlHours: v.optional(v.number()),
+    maxConcurrent: v.optional(v.number()),
   },
   handler: async (ctx, args): Promise<SyncResult> => {
     // Require authentication
@@ -230,6 +233,9 @@ export const syncReleases = action({
       startId = config.startId,
       endId = config.endId,
       autoExpand = true,
+      enrich = true,
+      detailsTtlHours = 24,
+      maxConcurrent = 10,
     } = args;
 
     // Generate ID range
@@ -380,7 +386,7 @@ export const syncReleases = action({
         }
       }
 
-      return {
+      const result: SyncResult = {
         success: true,
         syncedCount: validProducts.length,
         totalIds: ids.length,
@@ -389,6 +395,43 @@ export const syncReleases = action({
         newReleases,
         newReleasesCount: newReleases.length,
       };
+
+      // Non-blocking enrichment trigger
+      if (enrich) {
+        console.log(
+          `🔄 Scheduling enrichment for ${validProducts.length} products from batch API...`
+        );
+        console.log(
+          `📋 Enrichment params: TTL=${detailsTtlHours}h, maxConcurrent=${maxConcurrent}, limit=100`
+        );
+        console.log(
+          `🎯 Product IDs to check: ${validProducts.map((p) => p.id).join(', ')}`
+        );
+
+        // Schedule enrichment as non-blocking
+        console.log('🔄 Scheduling enrichment as non-blocking job...');
+        try {
+          await ctx.scheduler.runAfter(
+            0,
+            api.folioSocietyDetails.enrichDetails,
+            {
+              productIds: validProducts.map((p) => p.id),
+              detailsTtlHours,
+              maxConcurrent,
+              limit: 100,
+            }
+          );
+          console.log(
+            `✅ Enrichment job scheduled successfully for ${validProducts.length} products`
+          );
+        } catch (error) {
+          console.error('❌ Failed to schedule enrichment job:', error);
+        }
+      } else {
+        console.log('⏭️  Enrichment disabled - skipping details fetch');
+      }
+
+      return result;
     } catch (error) {
       console.error('Error syncing Folio Society releases:', error);
       throw new Error(

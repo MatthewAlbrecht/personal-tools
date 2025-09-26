@@ -29,10 +29,11 @@ export default async function handler(
 
     // Perform the sync
     console.log('🔄 Calling syncReleases mutation...');
-    const result = await convex.action(
-      api.folioSocietyReleases.syncReleases,
-      {}
-    );
+    const result = await convex.action(api.folioSocietyReleases.syncReleases, {
+      enrich: true,
+      detailsTtlHours: 24,
+      maxConcurrent: 10,
+    });
 
     console.log('✅ Sync completed:', JSON.stringify(result, null, 2));
     console.log('📊 Sync details:');

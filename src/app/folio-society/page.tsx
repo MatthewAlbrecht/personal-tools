@@ -1,6 +1,6 @@
 "use client";
 
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Database } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
@@ -18,6 +18,7 @@ import { formatDate } from "./_utils/formatters";
 export default function FolioSocietyPage() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isUpdatingConfig, setIsUpdatingConfig] = useState(false);
+  const [isEnriching, setIsEnriching] = useState(false);
   const [searchInput, debouncedSearchInput, setSearchInput] = useDebouncedState("", 300);
 
   // Convex hooks
@@ -33,6 +34,7 @@ export default function FolioSocietyPage() {
 
   const syncAction = useAction(convexApi.folioSocietyReleases.syncReleases);
   const updateConfigMutation = useMutation(convexApi.folioSociety.updateConfig);
+  const enrichAction = useAction(convexApi.folioSocietyDetails.enrichDetails);
 
   const releasesLoading = releases === undefined;
 
@@ -72,6 +74,25 @@ export default function FolioSocietyPage() {
     }
   }
 
+  async function handleFullEnrichment() {
+    setIsEnriching(true);
+    try {
+      const result = await enrichAction({
+        // No productIds - enrich all
+        detailsTtlHours: 24,
+        maxConcurrent: 10,
+        limit: 100,
+      });
+      console.log("Full enrichment completed:", result);
+      toast.success("Full enrichment completed successfully!");
+    } catch (error) {
+      console.error("Full enrichment failed:", error);
+      toast.error("Failed to run full enrichment. Check console for details.");
+    } finally {
+      setIsEnriching(false);
+    }
+  }
+
 
 
   return (
@@ -84,14 +105,25 @@ export default function FolioSocietyPage() {
             Track upcoming and current Folio Society book releases
           </p>
         </div>
-        <Button
-          onClick={handleSync}
-          disabled={isSyncing}
-          className="flex items-center gap-2"
-        >
-          <RefreshCw className={`h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
-          {isSyncing ? "Syncing..." : "Sync from API"}
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            onClick={handleSync}
+            disabled={isSyncing}
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className={`h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
+            {isSyncing ? "Syncing..." : "Sync from API"}
+          </Button>
+          <Button
+            onClick={handleFullEnrichment}
+            disabled={isEnriching}
+            variant="outline"
+            className="flex items-center gap-2"
+          >
+            <Database className={`h-4 w-4 ${isEnriching ? "animate-spin" : ""}`} />
+            {isEnriching ? "Enriching..." : "Full Enrichment"}
+          </Button>
+        </div>
       </div>
 
       {/* Stats Section */}

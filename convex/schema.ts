@@ -26,6 +26,48 @@ export default defineSchema({
     .index('by_lastSeenAt', ['lastSeenAt']) // For recent activity
     .index('by_isActive', ['isActive']), // For filtering active/inactive
 
+  folioSocietyProductDetails: defineTable({
+    productId: v.number(), // Maps to folioSocietyReleases.id
+    slug: v.string(),
+    sku: v.string(),
+    name: v.string(),
+
+    price: v.optional(v.number()),
+    availability: v.optional(v.string()),
+    isInStock: v.optional(v.boolean()),
+
+    publicationDateText: v.optional(v.string()),
+    publicationDateISO: v.optional(v.string()),
+    pages: v.optional(v.number()),
+    dimensions: v.optional(v.string()),
+    font: v.optional(v.string()),
+    illustration: v.optional(v.string()),
+    presentation: v.optional(v.string()), // presentation_box_binding
+    printing: v.optional(v.string()),
+
+    authorIds: v.optional(v.array(v.number())),
+    illustratorIds: v.optional(v.array(v.number())),
+    translatorIds: v.optional(v.array(v.number())),
+
+    heroImage: v.optional(v.string()),
+    galleryImages: v.optional(v.array(v.string())),
+
+    canonical: v.optional(v.string()),
+    ogImage: v.optional(v.string()),
+    store: v.optional(v.number()),
+
+    lastFetchedAt: v.number(),
+    fetchStatus: v.string(), // 'ok' | 'error' | 'stale'
+    errorCount: v.number(),
+    lastError: v.optional(v.string()),
+
+    raw: v.any(),
+  })
+    .index('by_productId', ['productId'])
+    .index('by_slug', ['slug'])
+    .index('by_lastFetchedAt', ['lastFetchedAt'])
+    .index('by_fetchStatus', ['fetchStatus']),
+
   bookSearch: defineTable({
     title: v.string(),
     author: v.string(),
