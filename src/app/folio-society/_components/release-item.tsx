@@ -1,7 +1,11 @@
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Image } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
 import { ImageGallery } from "~/components/ImageGallery";
+import { useQuery, useAction } from "convex/react";
+import { api as convexApi } from "../../../../convex/_generated/api";
 import type { ConvexRelease } from "../_utils/types";
 import { generateImageUrls } from "../_utils/image-utils";
 import { formatPrice, formatDate } from "../_utils/formatters";
@@ -11,6 +15,34 @@ export function ReleaseItem({
 }: {
   release: ConvexRelease;
 }) {
+  const [isProcessingImages, setIsProcessingImages] = useState(false);
+
+  // Query for enriched image data
+  const images = useQuery(convexApi.folioSocietyImages.getActiveImagesByProduct, {
+    productId: release.id,
+  });
+
+  // Action for enriching images for this specific product
+  const enrichImagesAction = useAction(convexApi.folioSocietyImages.enrichImages);
+
+  const handleProcessImages = async () => {
+    setIsProcessingImages(true);
+    try {
+      console.log(`🚀 Starting image enrichment for ${release.name}`);
+
+      const result = await enrichImagesAction({
+        productId: release.id,
+      });
+
+      toast.success(`Processed ${result.processed} images for ${release.name}`);
+    } catch (error) {
+      console.error('Image enrichment failed:', error);
+      toast.error('Failed to process images. Check console for details.');
+    } finally {
+      setIsProcessingImages(false);
+    }
+  };
+
   return (
     <div
       key={release.id}
@@ -42,11 +74,12 @@ export function ReleaseItem({
         </div>
 
         <ImageGallery
-          imageUrls={generateImageUrls(release.sku, release.image)}
+          images={images}
+          fallbackImageUrls={generateImageUrls(release.sku, release.image)}
         />
       </div>
 
-      <div className="ml-4">
+      <div className="ml-4 flex gap-2">
         <Button
           variant="outline"
           size="sm"
@@ -60,6 +93,16 @@ export function ReleaseItem({
         >
           <ExternalLink className="h-3 w-3" />
           View
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleProcessImages}
+          disabled={isProcessingImages}
+          className="flex items-center gap-1"
+        >
+          <Image className={`h-3 w-3 ${isProcessingImages ? "animate-spin" : ""}`} />
+          {isProcessingImages ? "Processing..." : "Process Images"}
         </Button>
       </div>
     </div>
@@ -88,8 +131,9 @@ export function ReleaseItemSkeleton() {
           <Skeleton className="h-20 w-20 rounded" />
         </div>
       </div>
-      <div className="ml-4">
+      <div className="ml-4 flex gap-2">
         <Skeleton className="h-8 w-16" />
+        <Skeleton className="h-8 w-24" />
       </div>
     </div>
   );

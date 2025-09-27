@@ -1,6 +1,6 @@
 "use client";
 
-import { RefreshCw, Database } from "lucide-react";
+import { RefreshCw, Database, Image } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
@@ -19,6 +19,7 @@ export default function FolioSocietyPage() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isUpdatingConfig, setIsUpdatingConfig] = useState(false);
   const [isEnriching, setIsEnriching] = useState(false);
+  const [isProcessingImages, setIsProcessingImages] = useState(false);
   const [searchInput, debouncedSearchInput, setSearchInput] = useDebouncedState("", 300);
 
   // Convex hooks
@@ -35,6 +36,7 @@ export default function FolioSocietyPage() {
   const syncAction = useAction(convexApi.folioSocietyReleases.syncReleases);
   const updateConfigMutation = useMutation(convexApi.folioSociety.updateConfig);
   const enrichAction = useAction(convexApi.folioSocietyDetails.enrichDetails);
+  const processAllImagesAction = useAction(convexApi.folioSocietyImages.processAllImages);
 
   const releasesLoading = releases === undefined;
 
@@ -93,6 +95,23 @@ export default function FolioSocietyPage() {
     }
   }
 
+  async function handleProcessAllImages() {
+    setIsProcessingImages(true);
+    try {
+      const result = await processAllImagesAction({
+        batchSize: 5, // Process 5 releases at a time
+        maxConcurrent: 2, // 2 concurrent image processing operations
+      });
+      console.log("Process all images completed:", result);
+      toast.success(`Image processing completed! Processed ${result.processed}/${result.total} releases. Skipped ${result.skipped} already processed.`);
+    } catch (error) {
+      console.error("Process all images failed:", error);
+      toast.error("Failed to process all images. Check console for details.");
+    } finally {
+      setIsProcessingImages(false);
+    }
+  }
+
 
 
   return (
@@ -122,6 +141,15 @@ export default function FolioSocietyPage() {
           >
             <Database className={`h-4 w-4 ${isEnriching ? "animate-spin" : ""}`} />
             {isEnriching ? "Enriching..." : "Full Enrichment"}
+          </Button>
+          <Button
+            onClick={handleProcessAllImages}
+            disabled={isProcessingImages}
+            variant="outline"
+            className="flex items-center gap-2"
+          >
+            <Image className={`h-4 w-4 ${isProcessingImages ? "animate-spin" : ""}`} />
+            {isProcessingImages ? "Processing Images..." : "Process All Images"}
           </Button>
         </div>
       </div>

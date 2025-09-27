@@ -68,6 +68,29 @@ export default defineSchema({
     .index('by_lastFetchedAt', ['lastFetchedAt'])
     .index('by_fetchStatus', ['fetchStatus']),
 
+  folioSocietyImages: defineTable({
+    productId: v.number(),
+    blobUrl: v.string(), // Vercel Blob Storage URL
+    originalUrl: v.string(), // Original Folio image URL
+    originalFilename: v.string(), // Original filename from Folio API (e.g., "1q84_01_base_1.jpg")
+    imageType: v.union(
+      v.literal('hero'),
+      v.literal('gallery'),
+      v.literal('thumbnail')
+    ),
+    position: v.optional(v.number()), // For gallery ordering
+    imageHash: v.string(), // SHA-256 hash for deduplication
+    firstSeenAt: v.number(),
+    lastSeenAt: v.number(),
+    isActive: v.boolean(),
+    metadata: v.optional(v.any()), // width, height, fileSize, contentType, etc.
+  })
+    .index('by_productId', ['productId'])
+    .index('by_imageHash', ['imageHash'])
+    .index('by_originalFilename', ['originalFilename'])
+    .index('by_productId_originalFilename', ['productId', 'originalFilename'])
+    .index('by_isActive', ['isActive']),
+
   bookSearch: defineTable({
     title: v.string(),
     author: v.string(),

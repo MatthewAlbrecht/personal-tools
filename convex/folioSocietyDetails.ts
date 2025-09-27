@@ -457,6 +457,13 @@ export const enrichDetails = action({
         console.log(
           `✅ Successfully enriched ${task.name} with ${galleryImages.length} gallery images`
         );
+
+        console.log(
+          `📸 Images available for processing: Hero: ${heroImage || 'none'}, Gallery: ${galleryImages?.length || 0} images`
+        );
+        console.log(
+          `ℹ️ Image processing is handled separately - use the "Process Images" button in the UI`
+        );
       } catch (error) {
         const message =
           error instanceof Error ? error.message : 'Unknown error';

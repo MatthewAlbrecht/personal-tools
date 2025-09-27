@@ -6,12 +6,17 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
+import type { Doc } from "../../convex/_generated/dataModel";
+
+// Use the actual Convex-generated type for images
+type FolioImage = Doc<'folioSocietyImages'>;
 
 interface ImageGalleryProps {
-  imageUrls: string[];
+  images?: FolioImage[]; // Use the actual Convex type
+  fallbackImageUrls?: string[]; // Legacy support
 }
 
-function ImageTooltip({ imageUrl }: { imageUrl: string }) {
+function ImageTooltip({ imageUrl, filename }: { imageUrl: string; filename?: string }) {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageDimensions, setImageDimensions] = useState<{
     width: number;
@@ -42,6 +47,7 @@ function ImageTooltip({ imageUrl }: { imageUrl: string }) {
   };
 
   const containerDims = getContainerDimensions();
+  const displayFilename = filename || imageUrl.split("/").pop()?.split("?")[0] || imageUrl;
 
   return (
     <TooltipContent side="top" sideOffset={10} className="max-w-none p-2">
@@ -60,7 +66,7 @@ function ImageTooltip({ imageUrl }: { imageUrl: string }) {
         />
         {imageLoaded && (
           <div className="absolute bottom-0 left-0 rounded-tr rounded-bl bg-black/70 px-2 py-1 text-white text-xs">
-            {imageUrl.split("/").pop()?.split("?")[0]}
+            {displayFilename}
           </div>
         )}
       </div>
@@ -68,36 +74,7 @@ function ImageTooltip({ imageUrl }: { imageUrl: string }) {
   );
 }
 
-function ImageThumbnail({ imageUrl }: { imageUrl: string }) {
-  const [isValidImage, setIsValidImage] = useState(false);
-
-  const handleLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
-    const img = e.currentTarget;
-
-    // Filter out the Folio Society backup logo (262x262)
-    if (img.naturalWidth === 262 && img.naturalHeight === 262) {
-      setIsValidImage(false);
-    } else {
-      setIsValidImage(true);
-    }
-  };
-
-  const handleError = () => {
-    setIsValidImage(false);
-  };
-
-  if (!isValidImage) {
-    return (
-      <img
-        src={imageUrl}
-        alt={imageUrl}
-        className="hidden" // Hidden until we determine if it's valid
-        loading="eager" // Must be eager for hidden images to load
-        onLoad={handleLoad}
-        onError={handleError}
-      />
-    );
-  }
+function ImageThumbnail({ imageUrl, filename }: { imageUrl: string; filename?: string }) {
 
   return (
     <Tooltip>
@@ -116,18 +93,27 @@ function ImageThumbnail({ imageUrl }: { imageUrl: string }) {
           />
         </a>
       </TooltipTrigger>
-      <ImageTooltip imageUrl={imageUrl} />
+      <ImageTooltip imageUrl={imageUrl} filename={filename} />
     </Tooltip>
   );
 }
 
-export function ImageGallery({ imageUrls }: ImageGalleryProps) {
+export function ImageGallery({ images, fallbackImageUrls }: ImageGalleryProps) {
+  // Use new image data structure if available, otherwise fall back to legacy URLs
+  const displayImages = images?.map((img) => ({
+    displayUrl: img.blobUrl || img.originalUrl,
+    filename: img.originalFilename || img.originalUrl.split('/').pop()?.split('?')[0] || img.originalUrl,
+  })) || fallbackImageUrls?.map((url) => ({
+    displayUrl: url,
+    filename: url.split('/').pop()?.split('?')[0] || url,
+  })) || [];
+
   return (
     <TooltipProvider delayDuration={300}>
       <div className="mt-3">
         <div className="flex flex-wrap gap-2">
-          {imageUrls.map((imageUrl) => (
-            <ImageThumbnail key={imageUrl} imageUrl={imageUrl} />
+          {displayImages.map((image) => (
+            <ImageThumbnail key={image.displayUrl + image.filename} imageUrl={image.displayUrl} filename={image.filename} />
           ))}
         </div>
       </div>
