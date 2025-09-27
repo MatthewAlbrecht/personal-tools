@@ -557,6 +557,7 @@ export const processProductImages = action({
               access: 'public',
               contentType: 'image/jpeg',
               token: process.env.BLOB_READ_WRITE_TOKEN,
+              addRandomSuffix: true, // Avoid filename conflicts in blob storage
             });
 
             const blobUrl = blob.url;
