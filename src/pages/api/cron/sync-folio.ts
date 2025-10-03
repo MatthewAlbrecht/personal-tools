@@ -15,7 +15,7 @@ export default async function handler(
 
   // Verify this is a legitimate cron request
   const authHeader = req.headers.authorization;
-  const expectedAuth = `Bearer ${process.env.CRON_SECRET}`;
+  const expectedAuth = `Bearer ${env.CRON_SECRET}`;
 
   if (!authHeader || authHeader !== expectedAuth) {
     return res.status(401).json({ error: 'Unauthorized' });

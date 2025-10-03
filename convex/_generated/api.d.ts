@@ -19,6 +19,7 @@ import type * as folioSociety from "../folioSociety.js";
 import type * as folioSocietyDetails from "../folioSocietyDetails.js";
 import type * as folioSocietyImages from "../folioSocietyImages.js";
 import type * as folioSocietyReleases from "../folioSocietyReleases.js";
+import type * as s3Helper from "../s3Helper.js";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -35,6 +36,7 @@ declare const fullApi: ApiFromModules<{
   folioSocietyDetails: typeof folioSocietyDetails;
   folioSocietyImages: typeof folioSocietyImages;
   folioSocietyReleases: typeof folioSocietyReleases;
+  s3Helper: typeof s3Helper;
 }>;
 export declare const api: FilterApi<
   typeof fullApi,

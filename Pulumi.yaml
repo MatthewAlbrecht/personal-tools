@@ -1,0 +1,7 @@
+name: personal-tools-infra
+runtime:
+  name: nodejs
+  options:
+    typescript: true
+description: AWS infrastructure for personal-tools image storage
+main: infra/

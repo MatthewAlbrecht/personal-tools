@@ -70,7 +70,7 @@ export default defineSchema({
 
   folioSocietyImages: defineTable({
     productId: v.number(),
-    blobUrl: v.string(), // Vercel Blob Storage URL
+    blobUrl: v.string(), // S3/CloudFront CDN URL
     originalUrl: v.string(), // Original Folio image URL
     originalFilename: v.string(), // Original filename from Folio API (e.g., "1q84_01_base_1.jpg")
     imageType: v.union(

@@ -2,7 +2,7 @@ import { v } from 'convex/values';
 import { query, mutation, action } from './_generated/server';
 import { api } from './_generated/api';
 import { requireAuth } from './auth';
-import { put } from '@vercel/blob';
+import { uploadToS3 } from './s3Helper';
 
 // Helper functions for image processing
 async function fetchImageWithRetry(
@@ -545,30 +545,27 @@ export const processProductImages = action({
           console.log(`✅ Database record created: ${upsertResult}`);
         } else {
           // If we get here, the image hash wasn't found globally, so upload new
-          console.log('🆕 New image, uploading to blob storage...');
+          console.log('🆕 New image, uploading to S3...');
 
-          // Upload to Vercel Blob Storage
-          const blobFilename = `${imageHash}.jpg`;
-          console.log(`📤 Uploading to blob storage: ${blobFilename}`);
+          // Upload to S3
+          const s3Filename = `${imageHash}.jpg`;
+          console.log(`📤 Uploading to S3: ${s3Filename}`);
 
           try {
-            // @ts-ignore
-            const blob = await put(blobFilename, content, {
-              access: 'public',
+            const { cdnUrl } = await uploadToS3({
+              content,
+              filename: s3Filename,
               contentType: 'image/jpeg',
-              token: process.env.BLOB_READ_WRITE_TOKEN,
-              addRandomSuffix: true, // Avoid filename conflicts in blob storage
             });
 
-            const blobUrl = blob.url;
-            console.log(`✅ Blob upload successful: ${blobUrl}`);
+            console.log(`✅ S3 upload successful: ${cdnUrl}`);
 
             // Create new record for this product
             const upsertResult = await ctx.runMutation(
               api.folioSocietyImages.upsertImage,
               {
                 productId: args.productId,
-                blobUrl,
+                blobUrl: cdnUrl,
                 originalUrl: imageData.url,
                 originalFilename,
                 imageType: imageData.type,
@@ -589,18 +586,13 @@ export const processProductImages = action({
               `✅ Uploaded and processed new image: ${imageData.url}`
             );
             console.log(`✅ Database record created: ${upsertResult}`);
-          } catch (blobError) {
-            console.error(
-              `❌ Blob upload failed for ${imageData.url}:`,
-              blobError
-            );
-            console.error('Blob error details:', {
-              blobFilename,
+          } catch (s3Error) {
+            console.error(`❌ S3 upload failed for ${imageData.url}:`, s3Error);
+            console.error('S3 error details:', {
+              s3Filename,
               contentLength: content.length,
               error:
-                blobError instanceof Error
-                  ? blobError.message
-                  : String(blobError),
+                s3Error instanceof Error ? s3Error.message : String(s3Error),
             });
           }
         }

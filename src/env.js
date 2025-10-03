@@ -16,7 +16,11 @@ export const env = createEnv({
     CRON_SECRET: z.string().min(16),
     RESEND_API_KEY: z.string().min(1),
     NOTIFICATION_EMAIL: z.string().email(),
-    BLOB_READ_WRITE_TOKEN: z.string().min(1),
+    AWS_ACCESS_KEY_ID: z.string().min(1),
+    AWS_SECRET_ACCESS_KEY: z.string().min(1),
+    AWS_REGION: z.string().default('us-east-1'),
+    S3_BUCKET_NAME: z.string().min(1),
+    CLOUDFRONT_DOMAIN: z.string().min(1),
   },
 
   /**
@@ -41,7 +45,11 @@ export const env = createEnv({
     RESEND_API_KEY: process.env.RESEND_API_KEY,
     NOTIFICATION_EMAIL: process.env.NOTIFICATION_EMAIL,
     NEXT_PUBLIC_CONVEX_URL: process.env.NEXT_PUBLIC_CONVEX_URL,
-    BLOB_READ_WRITE_TOKEN: process.env.BLOB_READ_WRITE_TOKEN,
+    AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID,
+    AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY,
+    AWS_REGION: process.env.AWS_REGION,
+    S3_BUCKET_NAME: process.env.S3_BUCKET_NAME,
+    CLOUDFRONT_DOMAIN: process.env.CLOUDFRONT_DOMAIN,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially
