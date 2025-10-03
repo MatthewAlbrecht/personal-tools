@@ -4,9 +4,13 @@ export async function uploadToS3(args: {
   contentType: string;
 }): Promise<{ url: string; cdnUrl: string }> {
   const region = process.env.AWS_REGION || 'us-east-1';
+  // biome-ignore lint/style/noNonNullAssertion: <explanation>
   const bucket = process.env.S3_BUCKET_NAME!;
+  // biome-ignore lint/style/noNonNullAssertion: <explanation>
   const accessKeyId = process.env.AWS_ACCESS_KEY_ID!;
+  // biome-ignore lint/style/noNonNullAssertion: <explanation>
   const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY!;
+  // biome-ignore lint/style/noNonNullAssertion: <explanation>
   const cdnDomain = process.env.CLOUDFRONT_DOMAIN!;
 
   const key = `images/${args.filename}`;
@@ -25,6 +29,7 @@ export async function uploadToS3(args: {
   const response = await fetch(signedUrl, {
     method: 'PUT',
     headers,
+    // @ts-ignore
     body: args.content.buffer,
   });
 
@@ -88,7 +93,7 @@ async function createSignedPutRequest(params: {
     .map((k) => k.toLowerCase())
     .join(';');
 
-  const canonicalUri = '/' + key.split('/').map(encodeURIComponent).join('/');
+  const canonicalUri = `/${key.split('/').map(encodeURIComponent).join('/')}`;
 
   const canonicalRequest = [
     'PUT',
@@ -126,12 +131,14 @@ async function createSignedPutRequest(params: {
 async function sha256(message: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(message);
+  // @ts-ignore
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
   return Array.from(new Uint8Array(hashBuffer))
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
 }
 
+// @ts-ignore
 async function hmac(
   key: Uint8Array | string,
   message: string
@@ -141,12 +148,14 @@ async function hmac(
 
   const cryptoKey = await crypto.subtle.importKey(
     'raw',
+    // @ts-ignore
     keyData,
     { name: 'HMAC', hash: 'SHA-256' },
     false,
     ['sign']
   );
 
+  // @ts-ignore
   const signature = await crypto.subtle.sign(
     'HMAC',
     cryptoKey,
