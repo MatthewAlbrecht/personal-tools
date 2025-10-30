@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { parse as parseHTML } from 'node-html-parser';
 
 type SongData = {
@@ -27,7 +28,8 @@ function extractLyricsFromHTML(html: string): string {
     const lines: string[] = [];
 
     // Recursively process nodes to preserve formatting
-    function processNode(node: any, depth: number = 0): void {
+    // biome-ignore lint/suspicious/noExplicitAny: node-html-parser doesn't export proper types for DOM nodes
+    function processNode(node: any, depth = 0): void {
       if (node.nodeType === 3) {
         // Text node
         const text = node.textContent.trim();
@@ -187,7 +189,7 @@ export async function POST(request: NextRequest) {
 
     // Get the full tracklist from the album page (in correct order with track numbers)
     type TrackInfo = { url: string; trackNumber: number };
-    let tracklistInfo: TrackInfo[] = [];
+    const tracklistInfo: TrackInfo[] = [];
 
     if (fullAlbumUrl) {
       console.log('Fetching album page for tracklist:', fullAlbumUrl);
@@ -212,7 +214,8 @@ export async function POST(request: NextRequest) {
               '[class*="AlbumTracklist__TrackNumber"]'
             );
             const trackNumberText = trackNumberElem?.textContent.trim() || '';
-            const trackNumber = parseInt(trackNumberText.replace('.', '')) || 0;
+            const trackNumber =
+              Number.parseInt(trackNumberText.replace('.', '')) || 0;
 
             // Look for a link
             const link = trackItem.querySelector('a[href*="-lyrics"]');
@@ -257,7 +260,8 @@ export async function POST(request: NextRequest) {
             '[class*="AlbumTracklist__TrackNumber"]'
           );
           const trackNumberText = trackNumberElem?.textContent.trim() || '';
-          const trackNumber = parseInt(trackNumberText.replace('.', '')) || 0;
+          const trackNumber =
+            Number.parseInt(trackNumberText.replace('.', '')) || 0;
 
           const link = trackItem.querySelector('a[href*="-lyrics"]');
           if (link) {
@@ -298,6 +302,8 @@ export async function POST(request: NextRequest) {
 
     for (let i = 0; i < tracklistUrls.length; i++) {
       const songUrl = tracklistUrls[i];
+      if (!songUrl) continue;
+
       const trackNumber = i + 1;
 
       console.log(`Fetching song ${trackNumber}/${tracklistUrls.length}`);
@@ -334,7 +340,7 @@ export async function POST(request: NextRequest) {
         if (songTitle && lyrics) {
           songs.push({
             songTitle,
-            geniusSongUrl: songUrl,
+            geniusSongUrl: songUrl || '',
             trackNumber,
             lyrics,
             about,
@@ -343,7 +349,6 @@ export async function POST(request: NextRequest) {
         }
       } catch (error) {
         console.error(`Error processing song ${trackNumber}:`, error);
-        continue;
       }
     }
 
