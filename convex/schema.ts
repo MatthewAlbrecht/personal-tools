@@ -107,4 +107,28 @@ export default defineSchema({
     .index('by_createdAt', ['createdAt']) // For date range queries
     .index('by_updatedAt', ['updatedAt']) // For recent searches
     .index('by_search_key', ['titleNorm', 'authorNorm', 'isbnNorm']), // For unique lookups
+
+  geniusAlbums: defineTable({
+    albumTitle: v.string(),
+    artistName: v.string(),
+    albumSlug: v.string(),
+    geniusAlbumUrl: v.string(),
+    totalSongs: v.number(),
+    createdAt: v.number(), // Unix timestamp
+    updatedAt: v.number(), // Unix timestamp
+  })
+    .index('by_albumSlug', ['albumSlug']) // For slug-based lookups
+    .index('by_updatedAt', ['updatedAt']), // For recent albums
+
+  geniusSongs: defineTable({
+    albumId: v.id('geniusAlbums'),
+    songTitle: v.string(),
+    geniusSongUrl: v.string(),
+    trackNumber: v.number(),
+    lyrics: v.string(),
+    about: v.optional(v.string()),
+    createdAt: v.number(), // Unix timestamp
+  })
+    .index('by_albumId', ['albumId']) // For fetching songs by album
+    .index('by_trackNumber', ['trackNumber']), // For ordering songs
 });

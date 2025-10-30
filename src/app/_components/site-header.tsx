@@ -21,6 +21,9 @@ export function SiteHeader() {
 							<Link href="/folio-society" className="text-sm hover:underline">
 								Folio Society
 							</Link>
+							<Link href="/lyrics" className="text-sm hover:underline">
+								Lyrics
+							</Link>
 						</nav>
 					)}
 				</div>
