@@ -272,9 +272,11 @@ export async function POST(request: NextRequest) {
 
     for (let i = 0; i < tracklistInfo.length; i++) {
       const trackInfo = tracklistInfo[i];
+      if (!trackInfo) continue;
+      
       const songUrl = trackInfo.url;
       if (!songUrl) continue;
-
+      
       const trackNumber = trackInfo.trackNumber;
 
       console.log(`Fetching song ${trackNumber}/${tracklistInfo.length}`);
