@@ -1,6 +1,7 @@
 "use client";
 
 import { useForm } from "@tanstack/react-form";
+import { useMutation, useQuery } from "convex/react";
 import { ArrowUpRight, Loader2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "~/components/ui/button";
@@ -10,7 +11,6 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Separator } from "~/components/ui/separator";
 import { Skeleton } from "~/components/ui/skeleton";
-import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import type { Doc } from "../../../convex/_generated/dataModel";
 
@@ -23,7 +23,7 @@ type FormValues = {
 	folioSociety: boolean;
 };
 
-type BookSearch = Doc<'bookSearch'>;
+type BookSearch = Doc<"bookSearch">;
 
 function buildAbeBooksUrl(values: FormValues): string {
 	const params = new URLSearchParams();
@@ -317,54 +317,54 @@ export default function BooksPage() {
 						<ul className="space-y-2">
 							{recent === undefined
 								? // Show skeleton items while loading
-								[
-									"skeleton-1",
-									"skeleton-2",
-									"skeleton-3",
-									"skeleton-4",
-									"skeleton-5",
-								].map((key) => <SearchResultSkeleton key={key} />)
+									[
+										"skeleton-1",
+										"skeleton-2",
+										"skeleton-3",
+										"skeleton-4",
+										"skeleton-5",
+									].map((key) => <SearchResultSkeleton key={key} />)
 								: (recent ?? []).map((s: BookSearch) => (
-									<li key={s._id}>
-										<div className="flex items-center justify-between gap-3">
-											<Button
-												variant="ghost"
-												className="px-0"
-												onClick={() => {
-													setIsRefreshingLinks(true);
-													form.setFieldValue("title", s.title);
-													form.setFieldValue("author", s.author);
-													form.setFieldValue("hardcover", s.hardcover);
-													form.setFieldValue("firstEdition", s.firstEdition);
-													form.setFieldValue("isbn", s.isbn ?? "");
-													setSubmitted({
-														title: s.title,
-														author: s.author,
-														hardcover: s.hardcover,
-														firstEdition: s.firstEdition,
-														isbn: s.isbn ?? undefined,
-														folioSociety: s.folioSociety,
-													});
-													setTimeout(() => setIsRefreshingLinks(false), 480);
-												}}
-											>
-												{s.author ? `${s.author} — ` : ""}
-												{s.title || "(no title)"}
-												{s.hardcover ? " • Hardcover" : ""}
-												{s.firstEdition ? " • First ed." : ""}
-											</Button>
-											<Button
-												variant="outline"
-												size="sm"
-												onClick={() => {
-													deleteMutation({ id: s._id });
-												}}
-											>
-												Delete
-											</Button>
-										</div>
-									</li>
-								))}
+										<li key={s._id}>
+											<div className="flex items-center justify-between gap-3">
+												<Button
+													variant="ghost"
+													className="px-0"
+													onClick={() => {
+														setIsRefreshingLinks(true);
+														form.setFieldValue("title", s.title);
+														form.setFieldValue("author", s.author);
+														form.setFieldValue("hardcover", s.hardcover);
+														form.setFieldValue("firstEdition", s.firstEdition);
+														form.setFieldValue("isbn", s.isbn ?? "");
+														setSubmitted({
+															title: s.title,
+															author: s.author,
+															hardcover: s.hardcover,
+															firstEdition: s.firstEdition,
+															isbn: s.isbn ?? undefined,
+															folioSociety: s.folioSociety,
+														});
+														setTimeout(() => setIsRefreshingLinks(false), 480);
+													}}
+												>
+													{s.author ? `${s.author} — ` : ""}
+													{s.title || "(no title)"}
+													{s.hardcover ? " • Hardcover" : ""}
+													{s.firstEdition ? " • First ed." : ""}
+												</Button>
+												<Button
+													variant="outline"
+													size="sm"
+													onClick={() => {
+														deleteMutation({ id: s._id });
+													}}
+												>
+													Delete
+												</Button>
+											</div>
+										</li>
+									))}
 						</ul>
 					</div>
 				</CardContent>

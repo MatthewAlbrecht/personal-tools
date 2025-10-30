@@ -8,8 +8,8 @@
  * @returns Formatted price string or "N/A" if no price
  */
 export function formatPrice(price?: number | null): string {
-  if (!price) return 'N/A';
-  return `$${price.toFixed(2)}`;
+	if (!price) return "N/A";
+	return `$${price.toFixed(2)}`;
 }
 
 /**
@@ -18,11 +18,11 @@ export function formatPrice(price?: number | null): string {
  * @returns Formatted date string
  */
 export function formatDate(date: Date | number | string): string {
-  return new Intl.DateTimeFormat('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(date));
+	return new Intl.DateTimeFormat("en-US", {
+		year: "numeric",
+		month: "short",
+		day: "numeric",
+		hour: "2-digit",
+		minute: "2-digit",
+	}).format(new Date(date));
 }

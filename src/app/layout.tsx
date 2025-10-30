@@ -5,9 +5,9 @@ import { Geist } from "next/font/google";
 
 import { SiteHeader } from "~/app/_components/site-header";
 import { Toaster } from "~/components/ui/sonner";
-import { TRPCReactProvider } from "~/trpc/react";
-import ConvexClientProvider from "~/providers/ConvexProvider";
 import { AuthProvider } from "~/lib/auth-context";
+import ConvexClientProvider from "~/providers/ConvexProvider";
+import { TRPCReactProvider } from "~/trpc/react";
 
 export const metadata: Metadata = {
 	title: "moooose",
