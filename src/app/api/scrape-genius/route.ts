@@ -116,16 +116,16 @@ function extractAboutFromHTML(html: string): string | undefined {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { geniusSongUrl } = body;
+    const { geniusAlbumUrl } = body;
 
-    if (!geniusSongUrl || !geniusSongUrl.includes('genius.com')) {
+    if (!geniusAlbumUrl || !geniusAlbumUrl.includes('genius.com')) {
       return NextResponse.json(
         { error: 'Invalid Genius URL' },
         { status: 400 }
       );
     }
 
-    console.log('Fetching song page:', geniusSongUrl);
+    console.log('Fetching album page:', geniusAlbumUrl);
 
     // Enhanced headers to appear as a real browser
     const headers = {
@@ -143,40 +143,37 @@ export async function POST(request: NextRequest) {
       'Sec-Fetch-User': '?1',
     };
 
-    // Fetch initial song page
-    const initialResponse = await fetch(geniusSongUrl, { headers });
+    // Fetch album page directly
+    const albumResponse = await fetch(geniusAlbumUrl, { headers });
 
-    if (!initialResponse.ok) {
-      const errorText = await initialResponse.text();
+    if (!albumResponse.ok) {
+      const errorText = await albumResponse.text();
       console.error(
         'Failed to fetch:',
-        initialResponse.status,
+        albumResponse.status,
         errorText.substring(0, 200)
       );
       return NextResponse.json(
-        { error: `Failed to fetch song page: ${initialResponse.status}` },
-        { status: initialResponse.status }
+        { error: `Failed to fetch album page: ${albumResponse.status}` },
+        { status: albumResponse.status }
       );
     }
 
-    const initialHtml = await initialResponse.text();
-    const root = parseHTML(initialHtml);
+    const albumHtml = await albumResponse.text();
+    const albumRoot = parseHTML(albumHtml);
 
-    // Extract album metadata
-    const albumTitleElem = root.querySelector('[class*="PrimaryAlbum__Title"]');
-    const albumTitle = albumTitleElem ? albumTitleElem.textContent.trim() : '';
-
-    const artistNameElem = root.querySelector(
-      '[class*="SongHeader"][class*="CreditList"] a'
+    // Extract album title - look for h1 with album name
+    const albumTitleElem = albumRoot.querySelector(
+      'h1[class*="header_with_cover_art"]'
     );
-    const artistName = artistNameElem ? artistNameElem.textContent.trim() : '';
+    let albumTitle = albumTitleElem ? albumTitleElem.textContent.trim() : '';
 
-    const albumUrl = albumTitleElem
-      ? albumTitleElem.getAttribute('href') || ''
-      : '';
-    const fullAlbumUrl = albumUrl.startsWith('http')
-      ? albumUrl
-      : `https://genius.com${albumUrl}`;
+    // Clean up title (remove "Album" label if present)
+    albumTitle = albumTitle.replace(/^Album\s+/i, '');
+
+    // Extract artist name from h2 link
+    const artistElem = albumRoot.querySelector('h2 a[href*="/artists/"]');
+    const artistName = artistElem ? artistElem.textContent.trim() : '';
 
     if (!albumTitle || !artistName) {
       return NextResponse.json(
@@ -187,66 +184,40 @@ export async function POST(request: NextRequest) {
 
     console.log('Found album:', albumTitle, 'by', artistName);
 
-    // Get the full tracklist from the album page (in correct order with track numbers)
+    // Extract tracklist - look for chart_row or album-tracklist-row elements
     type TrackInfo = { url: string; trackNumber: number };
     const tracklistInfo: TrackInfo[] = [];
 
-    if (fullAlbumUrl) {
-      console.log('Fetching album page for tracklist:', fullAlbumUrl);
-      const albumResponse = await fetch(fullAlbumUrl, { headers });
-      if (albumResponse.ok) {
-        const albumHtml = await albumResponse.text();
-        const albumRoot = parseHTML(albumHtml);
+    // Try old Angular version first (chart_row)
+    const chartRows = albumRoot.querySelectorAll('.chart_row');
 
-        // ONLY look inside AlbumTracklist__Container
-        const tracklistContainer = albumRoot.querySelector(
-          '[class*="AlbumTracklist__Container"]'
+    if (chartRows.length > 0) {
+      console.log(`Found ${chartRows.length} chart rows (old Genius format)`);
+      for (const row of chartRows) {
+        // Get track number from chart_row-number_container
+        const numberElem = row.querySelector(
+          '.chart_row-number_container span'
         );
+        const trackNumber = numberElem
+          ? Number.parseInt(numberElem.textContent.trim()) || 0
+          : 0;
 
-        if (tracklistContainer) {
-          const trackItems = tracklistContainer.querySelectorAll(
-            'li[class*="AlbumTracklist__Track"]'
-          );
-
-          for (const trackItem of trackItems) {
-            // Extract track number
-            const trackNumberElem = trackItem.querySelector(
-              '[class*="AlbumTracklist__TrackNumber"]'
-            );
-            const trackNumberText = trackNumberElem?.textContent.trim() || '';
-            const trackNumber =
-              Number.parseInt(trackNumberText.replace('.', '')) || 0;
-
-            // Look for a link
-            const link = trackItem.querySelector('a[href*="-lyrics"]');
-
-            if (link) {
-              // Track has a link - use it
-              const href = link.getAttribute('href');
-              if (href) {
-                const url = href.startsWith('http')
-                  ? href
-                  : `https://genius.com${href}`;
-                tracklistInfo.push({ url, trackNumber });
-              }
-            } else {
-              // No link = current song page - use the initial URL
-              console.log(
-                `Track ${trackNumber} has no link - using initial URL`
-              );
-              tracklistInfo.push({ url: geniusSongUrl, trackNumber });
-            }
+        // Get song URL
+        const link = row.querySelector('a[href*="-lyrics"]');
+        if (link && trackNumber > 0) {
+          const href = link.getAttribute('href');
+          if (href) {
+            const url = href.startsWith('http')
+              ? href
+              : `https://genius.com${href}`;
+            tracklistInfo.push({ url, trackNumber });
           }
-
-          console.log(`Found ${tracklistInfo.length} tracks from album page`);
         }
       }
-    }
-
-    // Fallback: try from initial song page if album page failed
-    if (tracklistInfo.length === 0) {
-      console.log('No tracklist from album page, trying song page');
-      const tracklistContainer = root.querySelector(
+    } else {
+      // Try new React version (AlbumTracklist__Container)
+      console.log('Trying new Genius format (AlbumTracklist)');
+      const tracklistContainer = albumRoot.querySelector(
         '[class*="AlbumTracklist__Container"]'
       );
 
@@ -264,7 +235,7 @@ export async function POST(request: NextRequest) {
             Number.parseInt(trackNumberText.replace('.', '')) || 0;
 
           const link = trackItem.querySelector('a[href*="-lyrics"]');
-          if (link) {
+          if (link && trackNumber > 0) {
             const href = link.getAttribute('href');
             if (href) {
               const url = href.startsWith('http')
@@ -272,17 +243,16 @@ export async function POST(request: NextRequest) {
                 : `https://genius.com${href}`;
               tracklistInfo.push({ url, trackNumber });
             }
-          } else {
-            tracklistInfo.push({ url: geniusSongUrl, trackNumber });
           }
         }
       }
     }
 
-    // Last resort: use just the initial song
     if (tracklistInfo.length === 0) {
-      console.log('No tracklist found anywhere, using initial song only');
-      tracklistInfo.push({ url: geniusSongUrl, trackNumber: 1 });
+      return NextResponse.json(
+        { error: 'Could not find any songs in album' },
+        { status: 400 }
+      );
     }
 
     // Sort by track number
@@ -300,13 +270,14 @@ export async function POST(request: NextRequest) {
     // Fetch each song
     const songs: SongData[] = [];
 
-    for (let i = 0; i < tracklistUrls.length; i++) {
-      const songUrl = tracklistUrls[i];
+    for (let i = 0; i < tracklistInfo.length; i++) {
+      const trackInfo = tracklistInfo[i];
+      const songUrl = trackInfo.url;
       if (!songUrl) continue;
 
-      const trackNumber = i + 1;
+      const trackNumber = trackInfo.trackNumber;
 
-      console.log(`Fetching song ${trackNumber}/${tracklistUrls.length}`);
+      console.log(`Fetching song ${trackNumber}/${tracklistInfo.length}`);
 
       try {
         // Small delay to be respectful
@@ -355,7 +326,7 @@ export async function POST(request: NextRequest) {
     const albumData: AlbumData = {
       albumTitle,
       artistName,
-      geniusAlbumUrl: fullAlbumUrl,
+      geniusAlbumUrl,
       songs,
     };
 

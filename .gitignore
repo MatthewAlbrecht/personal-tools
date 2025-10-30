@@ -38,3 +38,6 @@ next-env.d.ts
 # Pulumi
 node_modules/
 bin/
+
+# example-html
+example-html/

@@ -43,7 +43,7 @@ function slugify(text: string): string {
 
 export default function LyricsSearchPage() {
   const router = useRouter();
-  const [geniusUrl, setGeniusUrl] = useState("https://genius.com/Joey-valence-and-brae-hyperyouth-lyrics");
+  const [geniusUrl, setGeniusUrl] = useState("");
   const [isFetching, setIsFetching] = useState(false);
 
   // Convex hooks
@@ -74,7 +74,7 @@ export default function LyricsSearchPage() {
       const response = await fetch('/api/scrape-genius', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ geniusSongUrl: geniusUrl.trim() }),
+        body: JSON.stringify({ geniusAlbumUrl: geniusUrl.trim() }),
       });
 
       if (!response.ok) {
@@ -144,13 +144,13 @@ export default function LyricsSearchPage() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="flex flex-col gap-1">
-              <Label htmlFor="geniusUrl">Genius Song URL</Label>
+              <Label htmlFor="geniusUrl">Genius Album URL</Label>
               <Input
                 id="geniusUrl"
                 type="url"
                 value={geniusUrl}
                 onChange={(e) => setGeniusUrl(e.target.value)}
-                placeholder="Paste Genius URL here..."
+                placeholder="Paste Genius album URL here..."
                 disabled={isFetching}
               />
             </div>
