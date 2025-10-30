@@ -1,7 +1,7 @@
 "use client";
 
 import { useAction, useMutation, useQuery } from "convex/react";
-import { Loader2, Music, Trash2 } from "lucide-react";
+import { CloudUpload, Link as LinkIcon, Loader2, Music, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -48,6 +48,7 @@ export default function LyricsSearchPage() {
 	const router = useRouter();
 	const [geniusUrl, setGeniusUrl] = useState("");
 	const [isFetching, setIsFetching] = useState(false);
+	const [isSyncing, setIsSyncing] = useState(false);
 
 	// Convex hooks
 	const recentAlbums = useQuery(api.geniusAlbums.listRecent, { limit: 50 });
@@ -138,6 +139,38 @@ export default function LyricsSearchPage() {
 		}
 	}
 
+	function handleCopyPublicLink(albumSlug: string) {
+		const publicUrl = `${window.location.origin}/public/lyrics/${albumSlug}`;
+		navigator.clipboard.writeText(publicUrl);
+		toast.success("Public link copied to clipboard!");
+	}
+
+	async function handleSyncToProduction() {
+		setIsSyncing(true);
+		try {
+			const response = await fetch("/api/migrate-lyrics", {
+				method: "POST",
+			});
+
+			if (!response.ok) {
+				const error = await response.json();
+				throw new Error(error.error || "Sync failed");
+			}
+
+			const result = await response.json();
+			toast.success(
+				`Synced to production! Created: ${result.created}, Skipped: ${result.skipped}`,
+			);
+		} catch (error) {
+			console.error("Sync error:", error);
+			toast.error(
+				error instanceof Error ? error.message : "Failed to sync to production",
+			);
+		} finally {
+			setIsSyncing(false);
+		}
+	}
+
 	return (
 		<main className="mx-auto max-w-2xl px-4 py-10">
 			<Card>
@@ -176,7 +209,27 @@ export default function LyricsSearchPage() {
 					<Separator className="my-6" />
 
 					<div>
-						<h2 className="mb-4 font-semibold text-lg">Recent Albums</h2>
+						<div className="mb-4 flex items-center justify-between">
+							<h2 className="font-semibold text-lg">Recent Albums</h2>
+							<Button
+								variant="outline"
+								size="sm"
+								onClick={handleSyncToProduction}
+								disabled={isSyncing}
+							>
+								{isSyncing ? (
+									<>
+										<Loader2 className="mr-2 h-4 w-4 animate-spin" />
+										Syncing...
+									</>
+								) : (
+									<>
+										<CloudUpload className="mr-2 h-4 w-4" />
+										Sync to Prod
+									</>
+								)}
+							</Button>
+						</div>
 						{albumsLoading ? (
 							<ul className="space-y-3">
 								{["skeleton-1", "skeleton-2", "skeleton-3"].map((key) => (
@@ -204,13 +257,24 @@ export default function LyricsSearchPage() {
 													</div>
 												</div>
 											</Button>
-											<Button
-												variant="outline"
-												size="sm"
-												onClick={() => handleDelete(album._id)}
-											>
-												<Trash2 className="h-4 w-4" />
-											</Button>
+											<div className="flex gap-2">
+												<Button
+													variant="outline"
+													size="sm"
+													onClick={() => handleCopyPublicLink(album.albumSlug)}
+													title="Copy public link"
+												>
+													<LinkIcon className="h-4 w-4" />
+												</Button>
+												<Button
+													variant="outline"
+													size="sm"
+													onClick={() => handleDelete(album._id)}
+													title="Delete album"
+												>
+													<Trash2 className="h-4 w-4" />
+												</Button>
+											</div>
 										</div>
 									</li>
 								))}

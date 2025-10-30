@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 export function middleware(request: NextRequest) {
+	// Allow all /public/* routes without auth
+	if (request.nextUrl.pathname.startsWith("/public")) {
+		return NextResponse.next();
+	}
+
 	const session = request.cookies.get("session")?.value;
 
 	// Protect /books and /folio-society routes and their API calls

@@ -1,9 +1,10 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import { ArrowLeft, Printer } from "lucide-react";
+import { ArrowLeft, Link as LinkIcon, Printer } from "lucide-react";
 import Link from "next/link";
 import React from "react";
+import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
 import { api } from "../../../../convex/_generated/api";
@@ -97,12 +98,17 @@ export default function AlbumLyricsPage({
 	params: Promise<{ slug: string }>;
 }) {
 	const unwrappedParams = React.use(params);
-	const albumData = useQuery(api.geniusAlbums.getAlbumBySlug, {
-		slug: unwrappedParams.slug,
-	});
+	const slug = unwrappedParams.slug;
+	const albumData = useQuery(api.geniusAlbums.getAlbumBySlug, { slug });
 
 	function handlePrint() {
 		window.print();
+	}
+
+	function handleCopyPublicLink() {
+		const publicUrl = `${window.location.origin}/public/lyrics/${slug}`;
+		navigator.clipboard.writeText(publicUrl);
+		toast.success("Public link copied to clipboard!");
 	}
 
 	if (albumData === undefined) {
@@ -138,10 +144,16 @@ export default function AlbumLyricsPage({
 						Back to Search
 					</Link>
 				</Button>
-				<Button onClick={handlePrint} variant="outline">
-					<Printer className="mr-2 h-4 w-4" />
-					Print
-				</Button>
+				<div className="flex gap-2">
+					<Button onClick={handleCopyPublicLink} variant="outline">
+						<LinkIcon className="mr-2 h-4 w-4" />
+						Share Link
+					</Button>
+					<Button onClick={handlePrint} variant="outline">
+						<Printer className="mr-2 h-4 w-4" />
+						Print
+					</Button>
+				</div>
 			</div>
 
 			{/* Album Header */}
