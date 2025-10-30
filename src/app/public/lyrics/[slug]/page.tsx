@@ -1,7 +1,8 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import { Printer } from "lucide-react";
+import { ArrowLeft, Printer } from "lucide-react";
+import Link from "next/link";
 import React from "react";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
@@ -119,28 +120,38 @@ export default function PublicAlbumLyricsPage({
     window.print();
   }
 
-  return (
-    <div className="mx-auto max-w-4xl px-4 py-10">
-      {/* Header */}
-      <header className="mb-12 text-center print:mb-8">
-        <h1 className="mb-2 font-bold text-4xl print:text-5xl">
-          {albumData.album.albumTitle}
-        </h1>
-        <p className="mb-4 text-muted-foreground text-xl print:text-2xl">
-          {albumData.album.artistName}
-        </p>
-        <p className="text-muted-foreground text-sm print:text-base">
-          {albumData.album.totalSongs} songs
-        </p>
+	return (
+		<div className="mx-auto max-w-4xl px-4 py-10">
+			{/* Back button - hidden when printing */}
+			<div className="mb-6 print:hidden">
+				<Button asChild variant="ghost">
+					<Link href="/public/lyrics">
+						<ArrowLeft className="mr-2 h-4 w-4" />
+						Back to Albums
+					</Link>
+				</Button>
+			</div>
 
-        {/* Print button - hidden when printing */}
-        <div className="mt-6 print:hidden">
-          <Button variant="outline" onClick={handlePrint}>
-            <Printer className="mr-2 h-4 w-4" />
-            Print Lyrics
-          </Button>
-        </div>
-      </header>
+			{/* Header */}
+			<header className="mb-12 text-center print:mb-8">
+				<h1 className="mb-2 font-bold text-4xl print:text-5xl">
+					{albumData.album.albumTitle}
+				</h1>
+				<p className="mb-4 text-muted-foreground text-xl print:text-2xl">
+					{albumData.album.artistName}
+				</p>
+				<p className="text-muted-foreground text-sm print:text-base">
+					{albumData.album.totalSongs} songs
+				</p>
+
+				{/* Print button - hidden when printing */}
+				<div className="mt-6 print:hidden">
+					<Button variant="outline" onClick={handlePrint}>
+						<Printer className="mr-2 h-4 w-4" />
+						Print Lyrics
+					</Button>
+				</div>
+			</header>
 
       {/* Songs */}
       <div className="space-y-12 print:space-y-8">
