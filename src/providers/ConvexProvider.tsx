@@ -3,7 +3,6 @@
 import { ConvexProvider, ConvexReactClient } from "convex/react";
 import type { ReactNode } from "react";
 import { env } from "~/env.js";
-import { useAuthToken } from "~/lib/hooks/use-auth-token";
 
 const convex = new ConvexReactClient(env.NEXT_PUBLIC_CONVEX_URL);
 

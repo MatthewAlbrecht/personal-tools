@@ -14,6 +14,7 @@ import type {
   FunctionReference,
 } from "convex/server";
 import type * as _utils_geniusParser from "../_utils/geniusParser.js";
+import type * as articles from "../articles.js";
 import type * as auth from "../auth.js";
 import type * as bookSearch from "../bookSearch.js";
 import type * as folioSociety from "../folioSociety.js";
@@ -33,6 +34,7 @@ import type * as s3Helper from "../s3Helper.js";
  */
 declare const fullApi: ApiFromModules<{
   "_utils/geniusParser": typeof _utils_geniusParser;
+  articles: typeof articles;
   auth: typeof auth;
   bookSearch: typeof bookSearch;
   folioSociety: typeof folioSociety;

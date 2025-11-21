@@ -9,11 +9,12 @@ export function middleware(request: NextRequest) {
 
 	const session = request.cookies.get("session")?.value;
 
-	// Protect /books and /folio-society routes and their API calls
+	// Protect /books, /folio-society, and /articles routes and their API calls
 	const isBooks = request.nextUrl.pathname.startsWith("/books");
 	const isFolioSociety = request.nextUrl.pathname.startsWith("/folio-society");
+	const isArticles = request.nextUrl.pathname.startsWith("/articles");
 
-	if ((isBooks || isFolioSociety) && !session) {
+	if ((isBooks || isFolioSociety || isArticles) && !session) {
 		const url = request.nextUrl.clone();
 		url.pathname = "/login";
 		url.searchParams.set("next", request.nextUrl.pathname);
@@ -28,5 +29,7 @@ export const config = {
 		"/books/:path*",
 		"/folio-society",
 		"/folio-society/:path*",
+		"/articles",
+		"/articles/:path*",
 	],
 };
