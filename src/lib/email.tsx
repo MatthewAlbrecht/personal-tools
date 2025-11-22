@@ -1,59 +1,38 @@
-import { render } from "@react-email/components";
 import { Resend } from "resend";
 import { env } from "~/env.js";
-import { FolioNotificationEmail } from "./emails/folio-notification";
+import { ExampleEmail } from "./emails/example-email";
 
 const resend = new Resend(env.RESEND_API_KEY);
 
-// Import types from the React Email component
-type NewRelease = {
-	id: number;
-	name: string;
-	sku: string;
-	url: string;
-	price?: number | null;
-	image?: string | null;
+type ExampleEmailData = {
+	userName: string;
+	message: string;
 };
 
-type SyncResult = {
-	syncedCount: number;
-	totalIds: number;
-	rangeExpanded?: boolean;
-	newEndId?: number;
-	newReleases?: NewRelease[];
-};
-
-export async function sendNewReleasesEmail(syncResult: SyncResult) {
-	const newReleases = syncResult.newReleases || [];
-
-	if (newReleases.length === 0) {
-		console.log("📧 No new releases found, skipping email notification");
-		return;
-	}
-
+/**
+ * Example function to send an email using Resend and React Email
+ * 
+ * Usage:
+ * await sendExampleEmail({
+ *   userName: "John Doe",
+ *   message: "This is an example message"
+ * });
+ */
+export async function sendExampleEmail(data: ExampleEmailData) {
 	try {
-		console.log(
-			`📧 Sending email notification for ${newReleases.length} new releases...`,
-		);
+		console.log(`📧 Sending example email to ${data.userName}...`);
 
 		const result = await resend.emails.send({
-			from: "Folio Society Tracker <notifications@moooose.dev>",
+			from: "Your App <notifications@yourdomain.com>",
 			to: env.NOTIFICATION_EMAIL,
-			subject: `🏛️ ${newReleases.length} New Folio Society Release${
-				newReleases.length > 1 ? "s" : ""
-			} Found!`,
-			react: (
-				<FolioNotificationEmail
-					newReleases={newReleases}
-					syncResult={syncResult}
-				/>
-			),
+			subject: `Hello ${data.userName}!`,
+			react: <ExampleEmail userName={data.userName} message={data.message} />,
 		});
 
 		console.log("✅ Email sent successfully:", result.data?.id);
 		return result;
 	} catch (error) {
-		console.error("❌ Failed to send email notification:", error);
+		console.error("❌ Failed to send email:", error);
 		throw error;
 	}
 }

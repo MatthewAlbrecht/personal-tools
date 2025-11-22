@@ -1,8 +1,8 @@
 {
 	"crons": [
 		{
-			"path": "/api/cron/sync-folio",
-			"schedule": "30 8 * * *"
+			"path": "/api/cron/hello-world",
+			"schedule": "0 9 * * *"
 		}
 	]
 }

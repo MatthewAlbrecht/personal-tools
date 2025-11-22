@@ -11,18 +11,12 @@ export function SiteHeader() {
 			<div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
 				<div className="flex items-center gap-3">
 					<Link href="/" className="font-semibold tracking-tight">
-						moooose.dev
+						Your App
 					</Link>
 					{isAuthenticated && (
 						<nav className="flex items-center gap-3">
-							<Link href="/books" className="text-sm hover:underline">
-								Books
-							</Link>
-							<Link href="/folio-society" className="text-sm hover:underline">
-								Folio Society
-							</Link>
-							<Link href="/lyrics" className="text-sm hover:underline">
-								Lyrics
+							<Link href="/example" className="text-sm hover:underline">
+								Example
 							</Link>
 						</nav>
 					)}
