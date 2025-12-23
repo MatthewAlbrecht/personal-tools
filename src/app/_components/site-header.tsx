@@ -24,6 +24,9 @@ export function SiteHeader() {
 							<Link href="/lyrics" className="text-sm hover:underline">
 								Lyrics
 							</Link>
+							<Link href="/spotify-playlister" className="text-sm hover:underline">
+								Spotify
+							</Link>
 						</nav>
 					)}
 				</div>

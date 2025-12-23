@@ -147,4 +147,88 @@ export default defineSchema({
   })
     .index('by_userId', ['userId'])
     .index('by_userId_savedAt', ['userId', 'savedAt']),
+
+  // Spotify Playlister tables
+  spotifyConnections: defineTable({
+    userId: v.string(), // Maps to your existing auth user
+    accessToken: v.string(),
+    refreshToken: v.string(),
+    expiresAt: v.number(), // Unix timestamp when access token expires
+    spotifyUserId: v.string(), // Spotify's user ID
+    displayName: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index('by_userId', ['userId'])
+    .index('by_spotifyUserId', ['spotifyUserId']),
+
+  spotifyPlaylists: defineTable({
+    userId: v.string(), // Your auth user
+    spotifyPlaylistId: v.string(), // Spotify's playlist ID
+    name: v.string(),
+    description: v.string(), // AI-generated mood/vibe description for AI matching
+    userNotes: v.optional(v.string()), // Original user input for regeneration
+    imageUrl: v.optional(v.string()),
+    isActive: v.boolean(), // Whether to include in AI suggestions
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index('by_userId', ['userId'])
+    .index('by_userId_active', ['userId', 'isActive'])
+    .index('by_spotifyPlaylistId', ['spotifyPlaylistId']),
+
+  spotifySongCategorizations: defineTable({
+    userId: v.string(),
+    trackId: v.string(), // Spotify track ID
+    trackName: v.string(),
+    artistName: v.string(),
+    albumName: v.optional(v.string()),
+    albumImageUrl: v.optional(v.string()),
+    trackData: v.optional(v.string()), // JSON stringified SpotifyTrack for re-categorization
+    userInput: v.string(), // What user typed about the song's vibe
+    aiSuggestions: v.array(
+      v.object({
+        playlistId: v.string(),
+        playlistName: v.string(),
+        confidence: v.string(), // 'high' | 'medium' | 'low'
+        reason: v.string(),
+      })
+    ),
+    finalSelections: v.array(v.string()), // Playlist IDs user confirmed
+    createdAt: v.number(),
+  })
+    .index('by_userId', ['userId'])
+    .index('by_trackId', ['trackId'])
+    .index('by_userId_createdAt', ['userId', 'createdAt']),
+
+  spotifySavedForLater: defineTable({
+    userId: v.string(),
+    trackId: v.string(),
+    trackName: v.string(),
+    artistName: v.string(),
+    albumName: v.optional(v.string()),
+    albumImageUrl: v.optional(v.string()),
+    trackData: v.optional(v.string()), // JSON stringified SpotifyTrack for full data
+    savedAt: v.number(),
+  })
+    .index('by_userId', ['userId'])
+    .index('by_trackId', ['trackId'])
+    .index('by_userId_savedAt', ['userId', 'savedAt']),
+
+  spotifyPendingSuggestions: defineTable({
+    userId: v.string(),
+    trackId: v.string(), // Spotify track ID
+    userInput: v.string(), // User's description before submitting
+    suggestions: v.array(
+      v.object({
+        playlistId: v.string(),
+        playlistName: v.string(),
+        confidence: v.string(), // 'high' | 'medium' | 'low'
+        reason: v.string(),
+      })
+    ),
+    createdAt: v.number(),
+  })
+    .index('by_trackId', ['trackId'])
+    .index('by_userId', ['userId']),
 });

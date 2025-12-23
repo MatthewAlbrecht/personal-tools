@@ -23,6 +23,7 @@ import type * as folioSocietyImages from "../folioSocietyImages.js";
 import type * as folioSocietyReleases from "../folioSocietyReleases.js";
 import type * as geniusAlbums from "../geniusAlbums.js";
 import type * as s3Helper from "../s3Helper.js";
+import type * as spotify from "../spotify.js";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -43,6 +44,7 @@ declare const fullApi: ApiFromModules<{
   folioSocietyReleases: typeof folioSocietyReleases;
   geniusAlbums: typeof geniusAlbums;
   s3Helper: typeof s3Helper;
+  spotify: typeof spotify;
 }>;
 export declare const api: FilterApi<
   typeof fullApi,

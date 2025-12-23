@@ -21,6 +21,11 @@ export const env = createEnv({
 		AWS_REGION: z.string().default("us-east-1"),
 		S3_BUCKET_NAME: z.string().min(1),
 		CLOUDFRONT_DOMAIN: z.string().min(1),
+		// Spotify OAuth
+		SPOTIFY_CLIENT_ID: z.string().min(1),
+		SPOTIFY_CLIENT_SECRET: z.string().min(1),
+		// OpenAI
+		OPENAI_API_KEY: z.string().min(1),
 	},
 
 	/**
@@ -52,6 +57,9 @@ export const env = createEnv({
 		AWS_REGION: process.env.AWS_REGION,
 		S3_BUCKET_NAME: process.env.S3_BUCKET_NAME,
 		CLOUDFRONT_DOMAIN: process.env.CLOUDFRONT_DOMAIN,
+		SPOTIFY_CLIENT_ID: process.env.SPOTIFY_CLIENT_ID,
+		SPOTIFY_CLIENT_SECRET: process.env.SPOTIFY_CLIENT_SECRET,
+		OPENAI_API_KEY: process.env.OPENAI_API_KEY,
 	},
 	/**
 	 * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially

@@ -31,6 +31,12 @@ export default async function Home() {
 						>
 							Album Lyrics Aggregator →
 						</Link>
+						<Link
+							className="rounded-lg bg-white/10 px-6 py-3 text-center font-semibold transition hover:bg-white/20"
+							href="/spotify-playlister"
+						>
+							Spotify Playlister →
+						</Link>
 					</div>
 				) : (
 					<p className="text-white/60">Sign in to access tools</p>
