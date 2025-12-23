@@ -92,7 +92,7 @@ export function useSpotifyPlayer(
 
     function initializePlayer() {
       console.log('Initializing Spotify player...');
-      
+
       player = new window.Spotify.Player({
         name: 'Playlister Web Player',
         getOAuthToken: async (cb) => {
@@ -109,41 +109,48 @@ export function useSpotifyPlayer(
       });
 
       // Error handling
-      player.addListener('initialization_error', ({ message }: { message: string }) => {
+      player.addListener('initialization_error', (state) => {
+        const { message } = state as { message: string };
         console.error('Initialization error:', message);
         setState((s) => ({ ...s, error: `Init: ${message}` }));
       });
 
-      player.addListener('authentication_error', ({ message }: { message: string }) => {
+      player.addListener('authentication_error', (state) => {
+        const { message } = state as { message: string };
         console.error('Authentication error:', message);
         setState((s) => ({ ...s, error: 'Premium required for playback' }));
       });
 
-      player.addListener('account_error', ({ message }: { message: string }) => {
+      player.addListener('account_error', (state) => {
+        const { message } = state as { message: string };
         console.error('Account error:', message);
         setState((s) => ({ ...s, error: 'Premium account required' }));
       });
 
-      player.addListener('playback_error', ({ message }: { message: string }) => {
+      player.addListener('playback_error', (state) => {
+        const { message } = state as { message: string };
         console.error('Playback error:', message);
         setState((s) => ({ ...s, error: message }));
       });
 
       // Ready
-      player.addListener('ready', ({ device_id }: { device_id: string }) => {
+      player.addListener('ready', (state) => {
+        const { device_id } = state as { device_id: string };
         console.log('Spotify Player ready with device ID:', device_id);
         deviceIdRef.current = device_id;
         setState((s) => ({ ...s, isReady: true, error: null }));
       });
 
       // Not ready
-      player.addListener('not_ready', ({ device_id }: { device_id: string }) => {
+      player.addListener('not_ready', (state) => {
+        const { device_id } = state as { device_id: string };
         console.log('Device ID has gone offline:', device_id);
         setState((s) => ({ ...s, isReady: false }));
       });
 
       // Playback state changes
-      player.addListener('player_state_changed', (playbackState: PlaybackState | null) => {
+      player.addListener('player_state_changed', (state) => {
+        const playbackState = state as PlaybackState | null;
         if (!playbackState) {
           setState((s) => ({
             ...s,
@@ -176,7 +183,7 @@ export function useSpotifyPlayer(
           setState((s) => ({ ...s, error: 'Failed to connect player' }));
         }
       });
-      
+
       playerRef.current = player;
     }
 
@@ -213,7 +220,7 @@ export function useSpotifyPlayer(
     }
 
     const trackId = trackUri.replace('spotify:track:', '');
-    
+
     // Set pending state immediately for visual feedback
     setState((s) => ({ ...s, isPending: true, pendingTrackId: trackId }));
 
@@ -225,16 +232,19 @@ export function useSpotifyPlayer(
     }
 
     try {
-      await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceIdRef.current}`, {
-        method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          uris: [trackUri],
-        }),
-      });
+      await fetch(
+        `https://api.spotify.com/v1/me/player/play?device_id=${deviceIdRef.current}`,
+        {
+          method: 'PUT',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            uris: [trackUri],
+          }),
+        }
+      );
     } catch (error) {
       console.error('Play error:', error);
       setState((s) => ({ ...s, isPending: false, pendingTrackId: null }));
@@ -263,9 +273,12 @@ export function useSpotifyPlayer(
     [state.currentTrackId, state.isPlaying, play, pause, resume]
   );
 
-  const skip = useCallback((seconds: number) => {
-    playerRef.current?.seek((state.position || 0) + seconds * 1000);
-  }, [state.position]);
+  const skip = useCallback(
+    (seconds: number) => {
+      playerRef.current?.seek((state.position || 0) + seconds * 1000);
+    },
+    [state.position]
+  );
 
   return {
     state,
@@ -276,4 +289,3 @@ export function useSpotifyPlayer(
     skip,
   };
 }
-
