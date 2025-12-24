@@ -256,7 +256,8 @@ export default defineSchema({
   userAlbums: defineTable({
     userId: v.string(),
     albumId: v.id('spotifyAlbums'), // Reference to spotifyAlbums
-    rating: v.optional(v.number()), // For future use
+    rating: v.optional(v.number()), // 1-10 rating mapped to tiers
+    position: v.optional(v.number()), // Float for ordering within year (fractional indexing)
     category: v.optional(v.string()), // For future use
     firstListenedAt: v.number(),
     lastListenedAt: v.number(),

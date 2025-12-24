@@ -979,3 +979,65 @@ export const backfillTracksFromAlbum = mutation({
     return { addedCount };
   },
 });
+
+// ============================================================================
+// Album Rating
+// ============================================================================
+
+export const updateAlbumRating = mutation({
+  args: {
+    userAlbumId: v.id('userAlbums'),
+    rating: v.number(), // 1-10
+    position: v.number(), // Float for ordering
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.userAlbumId, {
+      rating: args.rating,
+      position: args.position,
+    });
+  },
+});
+
+export const getRatedAlbumsForYear = query({
+  args: {
+    userId: v.string(),
+    year: v.number(),
+  },
+  handler: async (ctx, args) => {
+    // Get all user albums with ratings
+    const userAlbums = await ctx.db
+      .query('userAlbums')
+      .withIndex('by_userId', (q) => q.eq('userId', args.userId))
+      .collect();
+
+    // Filter to rated albums and fetch album details
+    const ratedWithDetails = await Promise.all(
+      userAlbums
+        .filter((ua) => ua.rating !== undefined)
+        .map(async (ua) => {
+          const album = await ctx.db.get(ua.albumId);
+          return { ...ua, album };
+        })
+    );
+
+    // Filter by year (from album releaseDate)
+    const filtered = ratedWithDetails.filter((ua) => {
+      if (!ua.album?.releaseDate) return false;
+      const albumYear = parseInt(ua.album.releaseDate.substring(0, 4), 10);
+      return albumYear === args.year;
+    });
+
+    // Sort by position (nulls at end), then by rating desc
+    return filtered.sort((a, b) => {
+      // Both have positions - sort by position
+      if (a.position !== undefined && b.position !== undefined) {
+        return a.position - b.position;
+      }
+      // One has position, one doesn't - position first
+      if (a.position !== undefined) return -1;
+      if (b.position !== undefined) return 1;
+      // Neither has position - sort by rating desc
+      return (b.rating ?? 0) - (a.rating ?? 0);
+    });
+  },
+});

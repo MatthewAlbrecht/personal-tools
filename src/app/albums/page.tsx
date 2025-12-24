@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { useQuery } from 'convex/react';
+import { useQuery, useMutation } from 'convex/react';
 import { Disc3 } from 'lucide-react';
+import { toast } from 'sonner';
 import { api } from '../../../convex/_generated/api';
+import type { Id } from '../../../convex/_generated/dataModel';
 
 import { SpotifyConnection } from '../spotify-playlister/_components/spotify-connection';
 import { SyncAlbumsButton } from '~/components/sync-albums-button';
@@ -11,20 +13,36 @@ import { LoginPrompt } from '~/components/login-prompt';
 import { useSpotifyAuth } from '~/lib/hooks/use-spotify-auth';
 import { useSyncHistory } from '~/lib/hooks/use-sync-history';
 import { AlbumCard } from './_components/album-card';
+import { AlbumRanker } from './_components/album-ranker';
 import {
   TIER_ORDER,
   getRatingsForTier,
   groupByMonth,
   extractReleaseYear,
+  getRatingColors,
+  getTierShortLabel,
   type TierName,
 } from '~/lib/album-tiers';
 
 type TabValue = 'history' | 'rankings';
 
+type AlbumToRate = {
+  userAlbumId: string;
+  albumId: string;
+  name: string;
+  artistName: string;
+  imageUrl?: string;
+  releaseDate?: string;
+};
+
 export default function AlbumsPage() {
   const { userId, isLoading, connection, isConnected, getValidAccessToken } = useSpotifyAuth();
   const [activeTab, setActiveTab] = useState<TabValue>('history');
-  const [yearFilter, setYearFilter] = useState<string>('all');
+  const [yearFilter, setYearFilter] = useState<string>(() => {
+    // Default to current year
+    return new Date().getFullYear().toString();
+  });
+  const [albumToRate, setAlbumToRate] = useState<AlbumToRate | null>(null);
 
   const { isSyncing, syncHistory } = useSyncHistory({
     userId,
@@ -32,17 +50,46 @@ export default function AlbumsPage() {
     getValidAccessToken,
   });
 
+  // Mutations
+  const updateAlbumRating = useMutation(api.spotify.updateAlbumRating);
+
   // Fetch album listens (last 500)
   const albumListens = useQuery(
     api.spotify.getUserAlbumListens,
     userId ? { userId, limit: 500 } : 'skip'
   );
 
-  // Fetch rated albums
+  // Fetch all user albums (for checking if rated)
   const userAlbums = useQuery(
     api.spotify.getUserAlbums,
     userId ? { userId } : 'skip'
   );
+
+  // Fetch rated albums for the selected year (for the ranker)
+  const currentYear = yearFilter === 'all' ? new Date().getFullYear() : parseInt(yearFilter, 10);
+  const ratedAlbumsForYear = useQuery(
+    api.spotify.getRatedAlbumsForYear,
+    userId ? { userId, year: currentYear } : 'skip'
+  );
+
+  // Build a map of albumId -> rating for quick lookup
+  const albumRatings = useMemo(() => {
+    if (!userAlbums) return new Map<string, number>();
+    const map = new Map<string, number>();
+    for (const ua of userAlbums) {
+      if (ua.rating !== undefined) {
+        map.set(ua.albumId, ua.rating);
+      }
+    }
+    return map;
+  }, [userAlbums]);
+
+  // Build a map from spotifyAlbums._id to userAlbums record
+  type UserAlbumRecord = NonNullable<typeof userAlbums>[number];
+  const userAlbumsMap = useMemo(() => {
+    if (!userAlbums) return new Map<string, UserAlbumRecord>();
+    return new Map(userAlbums.map((ua) => [ua.albumId, ua]));
+  }, [userAlbums]);
 
   // Compute listen ordinals (which listen # this was for each album)
   // and group by month for history view
@@ -106,6 +153,42 @@ export default function AlbumsPage() {
     window.location.href = '/spotify-playlister';
   }
 
+  // Handle rate album - open the ranker
+  function handleRateAlbum(listen: {
+    albumId: string;
+    album: { name: string; artistName: string; imageUrl?: string; releaseDate?: string } | null;
+  }) {
+    const userAlbum = userAlbumsMap.get(listen.albumId);
+    if (!userAlbum || !listen.album) return;
+
+    setAlbumToRate({
+      userAlbumId: userAlbum._id,
+      albumId: listen.albumId,
+      name: listen.album.name,
+      artistName: listen.album.artistName,
+      imageUrl: listen.album.imageUrl,
+      releaseDate: listen.album.releaseDate,
+    });
+  }
+
+  // Handle save rating
+  async function handleSaveRating(rating: number, position: number) {
+    if (!albumToRate) return;
+
+    try {
+      await updateAlbumRating({
+        userAlbumId: albumToRate.userAlbumId as Id<'userAlbums'>,
+        rating,
+        position,
+      });
+      toast.success(`Rated "${albumToRate.name}"`);
+      setAlbumToRate(null);
+    } catch (error) {
+      console.error('Failed to save rating:', error);
+      toast.error('Failed to save rating');
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="container mx-auto max-w-6xl p-6">
@@ -159,22 +242,20 @@ export default function AlbumsPage() {
             <button
               type="button"
               onClick={() => setActiveTab('history')}
-              className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-                activeTab === 'history'
+              className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'history'
                   ? 'bg-background text-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground'
-              }`}
+                }`}
             >
               History
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('rankings')}
-              className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-                activeTab === 'rankings'
+              className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'rankings'
                   ? 'bg-background text-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground'
-              }`}
+                }`}
             >
               Rankings
             </button>
@@ -185,6 +266,8 @@ export default function AlbumsPage() {
             <HistoryView
               listensByMonth={listensByMonth}
               listenOrdinals={listenOrdinals}
+              albumRatings={albumRatings}
+              onRateAlbum={handleRateAlbum}
               isLoading={albumListens === undefined}
             />
           )}
@@ -201,18 +284,59 @@ export default function AlbumsPage() {
           )}
         </div>
       )}
+
+      {/* Album Ranker Overlay */}
+      {albumToRate && ratedAlbumsForYear && (
+        <AlbumRanker
+          albumToRate={albumToRate}
+          existingRankedAlbums={ratedAlbumsForYear}
+          onSave={handleSaveRating}
+          onCancel={() => setAlbumToRate(null)}
+        />
+      )}
+
+      {/* TEMP: Badge preview */}
+      <div className="mt-12 rounded-lg border p-4">
+        <h3 className="mb-4 font-semibold">Badge Preview (temporary)</h3>
+        <div className="flex flex-wrap gap-3">
+          <BadgePreview rating={10} />
+          <BadgePreview rating={9} />
+          <BadgePreview rating={8} />
+          <BadgePreview rating={7} />
+          <BadgePreview rating={6} />
+          <BadgePreview rating={5} />
+          <BadgePreview rating={4} />
+          <BadgePreview rating={3} />
+          <BadgePreview rating={2} />
+          <BadgePreview rating={1} />
+          <span className="inline-flex items-center rounded-full border border-dashed border-muted-foreground/30 px-2 py-0.5 font-medium text-[10px] text-muted-foreground/50">
+            Unrated
+          </span>
+        </div>
+      </div>
     </div>
   );
 }
 
 // History View Component
+type HistoryListen = {
+  _id: string;
+  albumId: string;
+  listenedAt: number;
+  album: { name: string; artistName: string; imageUrl?: string; releaseDate?: string } | null;
+};
+
 function HistoryView({
   listensByMonth,
   listenOrdinals,
+  albumRatings,
+  onRateAlbum,
   isLoading,
 }: {
-  listensByMonth: Map<string, Array<{ _id: string; listenedAt: number; album: { name: string; artistName: string; imageUrl?: string; releaseDate?: string } | null }>>;
+  listensByMonth: Map<string, HistoryListen[]>;
   listenOrdinals: Map<string, number>;
+  albumRatings: Map<string, number>;
+  onRateAlbum: (listen: HistoryListen) => void;
   isLoading: boolean;
 }) {
   if (isLoading) {
@@ -251,7 +375,9 @@ function HistoryView({
                 imageUrl={listen.album?.imageUrl}
                 listenedAt={listen.listenedAt}
                 listenOrdinal={listenOrdinals.get(listen._id)}
+                rating={albumRatings.get(listen.albumId)}
                 showListenDate
+                onRate={() => onRateAlbum(listen)}
               />
             ))}
           </div>
@@ -382,5 +508,17 @@ function RankingsView({
         );
       })}
     </div>
+  );
+}
+
+// TEMP: Badge preview component
+function BadgePreview({ rating }: { rating: number }) {
+  const colors = getRatingColors(rating);
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-2 py-0.5 font-medium text-[10px] ${colors.bg} ${colors.text} ${colors.border}`}
+    >
+      {getTierShortLabel(rating)}
+    </span>
   );
 }
