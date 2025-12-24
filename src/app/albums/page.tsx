@@ -14,17 +14,17 @@ import { useSpotifyAuth } from '~/lib/hooks/use-spotify-auth';
 import { useSyncHistory } from '~/lib/hooks/use-sync-history';
 import { AlbumCard } from './_components/album-card';
 import { AlbumRanker } from './_components/album-ranker';
+import { AddListenDrawer } from './_components/add-listen-view';
 import {
   TIER_ORDER,
   getRatingsForTier,
   groupByMonth,
   extractReleaseYear,
-  getRatingColors,
   getTierShortLabel,
   type TierName,
 } from '~/lib/album-tiers';
 
-type TabValue = 'history' | 'rankings';
+type TabValue = 'history' | 'rankings' | 'tracks';
 
 type AlbumToRate = {
   userAlbumId: string;
@@ -43,6 +43,8 @@ export default function AlbumsPage() {
     return new Date().getFullYear().toString();
   });
   const [albumToRate, setAlbumToRate] = useState<AlbumToRate | null>(null);
+  const [trackToAddListen, setTrackToAddListen] = useState<TrackItem | null>(null);
+  const [isAddingListen, setIsAddingListen] = useState(false);
 
   const { isSyncing, syncHistory } = useSyncHistory({
     userId,
@@ -52,6 +54,8 @@ export default function AlbumsPage() {
 
   // Mutations
   const updateAlbumRating = useMutation(api.spotify.updateAlbumRating);
+  const addManualAlbumListen = useMutation(api.spotify.addManualAlbumListen);
+  const upsertAlbum = useMutation(api.spotify.upsertAlbum);
 
   // Fetch album listens (last 500)
   const albumListens = useQuery(
@@ -66,10 +70,16 @@ export default function AlbumsPage() {
   );
 
   // Fetch rated albums for the selected year (for the ranker)
-  const currentYear = yearFilter === 'all' ? new Date().getFullYear() : parseInt(yearFilter, 10);
+  const currentYear = yearFilter === 'all' ? new Date().getFullYear() : Number.parseInt(yearFilter, 10);
   const ratedAlbumsForYear = useQuery(
     api.spotify.getRatedAlbumsForYear,
     userId ? { userId, year: currentYear } : 'skip'
+  );
+
+  // Fetch recently played tracks (for tracks history tab)
+  const recentTracks = useQuery(
+    api.spotify.getRecentlyPlayedTracks,
+    userId ? { userId, limit: 200 } : 'skip'
   );
 
   // Build a map of albumId -> rating for quick lookup
@@ -175,17 +185,76 @@ export default function AlbumsPage() {
   async function handleSaveRating(rating: number, position: number) {
     if (!albumToRate) return;
 
+    const albumName = albumToRate.name;
+    const userAlbumId = albumToRate.userAlbumId as Id<'userAlbums'>;
+    setAlbumToRate(null); // Close drawer immediately
+
     try {
       await updateAlbumRating({
-        userAlbumId: albumToRate.userAlbumId as Id<'userAlbums'>,
+        userAlbumId,
         rating,
         position,
       });
-      toast.success(`Rated "${albumToRate.name}"`);
-      setAlbumToRate(null);
+      toast.success(`Rated "${albumName}"`);
     } catch (error) {
       console.error('Failed to save rating:', error);
       toast.error('Failed to save rating');
+    }
+  }
+
+  // Handle add listen from tracks view
+  async function handleAddListen(listenedAt: number) {
+    if (!trackToAddListen?.spotifyAlbumId || !userId) return;
+
+    setIsAddingListen(true);
+    try {
+      const accessToken = await getValidAccessToken();
+      if (!accessToken) {
+        toast.error('Not connected to Spotify');
+        return;
+      }
+
+      // Check if album exists in DB, if not fetch and upsert
+      const albumResponse = await fetch(
+        `/api/spotify/album/${trackToAddListen.spotifyAlbumId}`,
+        { headers: { 'X-Access-Token': accessToken } }
+      );
+
+      if (!albumResponse.ok) {
+        throw new Error('Failed to fetch album from Spotify');
+      }
+
+      const albumData = await albumResponse.json();
+
+      // Upsert the album to ensure it exists
+      await upsertAlbum({
+        spotifyAlbumId: albumData.spotifyAlbumId,
+        name: albumData.name,
+        artistName: albumData.artistName,
+        imageUrl: albumData.imageUrl,
+        releaseDate: albumData.releaseDate,
+        totalTracks: albumData.totalTracks,
+        genres: albumData.genres,
+      });
+
+      // Add the listen
+      const result = await addManualAlbumListen({
+        userId,
+        spotifyAlbumId: trackToAddListen.spotifyAlbumId,
+        listenedAt,
+      });
+
+      if (result.recorded) {
+        toast.success(`Added listen for "${result.albumName}"`);
+        setTrackToAddListen(null);
+      } else {
+        toast.info('Listen already recorded for this date');
+      }
+    } catch (error) {
+      console.error('Failed to add listen:', error);
+      toast.error('Failed to add listen');
+    } finally {
+      setIsAddingListen(false);
     }
   }
 
@@ -243,8 +312,8 @@ export default function AlbumsPage() {
               type="button"
               onClick={() => setActiveTab('history')}
               className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'history'
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
                 }`}
             >
               History
@@ -253,11 +322,21 @@ export default function AlbumsPage() {
               type="button"
               onClick={() => setActiveTab('rankings')}
               className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'rankings'
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
                 }`}
             >
               Rankings
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('tracks')}
+              className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'tracks'
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+                }`}
+            >
+              Tracks
             </button>
           </div>
 
@@ -282,38 +361,41 @@ export default function AlbumsPage() {
               isLoading={userAlbums === undefined}
             />
           )}
+
+          {/* Tracks View */}
+          {activeTab === 'tracks' && (
+            <TracksView
+              tracks={recentTracks ?? []}
+              isLoading={recentTracks === undefined}
+              onAddListen={(track) => setTrackToAddListen(track)}
+            />
+          )}
         </div>
       )}
 
-      {/* Album Ranker Overlay */}
-      {albumToRate && ratedAlbumsForYear && (
+      {/* Add Listen Drawer */}
+      <AddListenDrawer
+        track={trackToAddListen}
+        open={trackToAddListen !== null}
+        onOpenChange={(open) => {
+          if (!open) setTrackToAddListen(null);
+        }}
+        onSave={handleAddListen}
+        isSaving={isAddingListen}
+      />
+
+      {/* Album Ranker Drawer */}
+      {ratedAlbumsForYear && (
         <AlbumRanker
           albumToRate={albumToRate}
           existingRankedAlbums={ratedAlbumsForYear}
+          open={albumToRate !== null}
+          onOpenChange={(open) => {
+            if (!open) setAlbumToRate(null);
+          }}
           onSave={handleSaveRating}
-          onCancel={() => setAlbumToRate(null)}
         />
       )}
-
-      {/* TEMP: Badge preview */}
-      <div className="mt-12 rounded-lg border p-4">
-        <h3 className="mb-4 font-semibold">Badge Preview (temporary)</h3>
-        <div className="flex flex-wrap gap-3">
-          <BadgePreview rating={10} />
-          <BadgePreview rating={9} />
-          <BadgePreview rating={8} />
-          <BadgePreview rating={7} />
-          <BadgePreview rating={6} />
-          <BadgePreview rating={5} />
-          <BadgePreview rating={4} />
-          <BadgePreview rating={3} />
-          <BadgePreview rating={2} />
-          <BadgePreview rating={1} />
-          <span className="inline-flex items-center rounded-full border border-dashed border-muted-foreground/30 px-2 py-0.5 font-medium text-[10px] text-muted-foreground/50">
-            Unrated
-          </span>
-        </div>
-      </div>
     </div>
   );
 }
@@ -511,14 +593,143 @@ function RankingsView({
   );
 }
 
-// TEMP: Badge preview component
-function BadgePreview({ rating }: { rating: number }) {
-  const colors = getRatingColors(rating);
+// Tracks View Component
+type TrackItem = {
+  _id: string;
+  trackId: string;
+  trackName: string;
+  artistName: string;
+  albumName?: string;
+  albumImageUrl?: string;
+  spotifyAlbumId?: string;
+  lastPlayedAt?: number;
+};
+
+function TracksView({
+  tracks,
+  isLoading,
+  onAddListen,
+}: {
+  tracks: TrackItem[];
+  isLoading: boolean;
+  onAddListen: (track: TrackItem) => void;
+}) {
+  if (isLoading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <p className="text-muted-foreground">Loading tracks...</p>
+      </div>
+    );
+  }
+
+  if (tracks.length === 0) {
+    return (
+      <div className="flex h-64 items-center justify-center rounded-lg border border-dashed">
+        <div className="text-center">
+          <Disc3 className="mx-auto h-12 w-12 text-muted-foreground/50" />
+          <p className="mt-4 text-muted-foreground">No recently played tracks</p>
+          <p className="mt-1 text-muted-foreground text-sm">
+            Click "Sync Albums" to start tracking your listening history
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <span
-      className={`inline-flex items-center rounded-full border px-2 py-0.5 font-medium text-[10px] ${colors.bg} ${colors.text} ${colors.border}`}
-    >
-      {getTierShortLabel(rating)}
-    </span>
+    <div className="space-y-1">
+      {tracks.map((track) => (
+        <TrackCard
+          key={track._id}
+          track={track}
+          onAddListen={() => onAddListen(track)}
+        />
+      ))}
+    </div>
   );
+}
+
+function TrackCard({
+  track,
+  onAddListen,
+}: {
+  track: TrackItem;
+  onAddListen: () => void;
+}) {
+  const timeAgo = track.lastPlayedAt
+    ? formatRelativeTime(track.lastPlayedAt)
+    : null;
+
+  return (
+    <div className="group flex items-center gap-3 rounded-lg p-2 transition-colors hover:bg-muted/50">
+      {/* Album Cover */}
+      <div className="relative h-10 w-10 flex-shrink-0 overflow-hidden rounded bg-muted">
+        {track.albumImageUrl ? (
+          <img
+            src={track.albumImageUrl}
+            alt={track.albumName ?? track.trackName}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center">
+            <Disc3 className="h-5 w-5 text-muted-foreground" />
+          </div>
+        )}
+      </div>
+
+      {/* Track Info */}
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-medium text-sm">{track.trackName}</p>
+        <p className="truncate text-muted-foreground text-xs">
+          {track.artistName}
+          {track.albumName && (
+            <span className="text-muted-foreground/60"> · {track.albumName}</span>
+          )}
+        </p>
+      </div>
+
+      {/* Add Listen Button */}
+      {track.spotifyAlbumId && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onAddListen();
+          }}
+          className="inline-flex items-center rounded-full border border-dashed border-muted-foreground/20 px-2 py-0.5 font-medium text-[10px] text-muted-foreground/40 transition-all hover:border-muted-foreground/50 hover:text-muted-foreground"
+          title="Add album listen"
+        >
+          + Listen
+        </button>
+      )}
+
+      {/* Timestamp */}
+      {timeAgo && (
+        <span className="flex-shrink-0 text-muted-foreground text-xs">
+          {timeAgo}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function formatRelativeTime(timestamp: number): string {
+  const now = Date.now();
+  const diff = now - timestamp;
+
+  const minutes = Math.floor(diff / (1000 * 60));
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  if (days === 1) return 'Yesterday';
+  if (days < 7) return `${days}d ago`;
+
+  // For older dates, show the actual date
+  return new Date(timestamp).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+  });
 }

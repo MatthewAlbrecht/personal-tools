@@ -219,7 +219,8 @@ export default defineSchema({
     .index('by_userId', ['userId'])
     .index('by_userId_trackId', ['userId', 'trackId'])
     .index('by_userId_lastSeenAt', ['userId', 'lastSeenAt'])
-    .index('by_userId_albumId', ['userId', 'spotifyAlbumId']),
+    .index('by_userId_albumId', ['userId', 'spotifyAlbumId'])
+    .index('by_userId_lastPlayedAt', ['userId', 'lastPlayedAt']),
 
   spotifyPendingSuggestions: defineTable({
     userId: v.string(),

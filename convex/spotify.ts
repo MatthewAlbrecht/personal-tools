@@ -485,21 +485,19 @@ export const getRecentlyPlayedTracks = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    // Get all tracks for user with lastPlayedAt, then sort client-side
+    const limit = args.limit ?? 200;
+
+    // Query tracks with lastPlayedAt, ordered by most recent using the index
     const tracks = await ctx.db
       .query('spotifyTracks')
-      .withIndex('by_userId', (q) => q.eq('userId', args.userId))
+      .withIndex('by_userId_lastPlayedAt', (q) => q.eq('userId', args.userId))
+      .order('desc')
       .collect();
 
-    // Filter to only tracks with lastPlayedAt and sort by it descending
-    const filtered = tracks
-      .filter((t) => t.lastPlayedAt !== undefined)
-      .sort((a, b) => (b.lastPlayedAt ?? 0) - (a.lastPlayedAt ?? 0));
-
-    if (args.limit) {
-      return filtered.slice(0, args.limit);
-    }
-    return filtered;
+    // Filter out tracks without lastPlayedAt and apply limit
+    return tracks
+      .filter((track) => track.lastPlayedAt !== undefined)
+      .slice(0, limit);
   },
 });
 
@@ -852,6 +850,89 @@ export const recordAlbumListen = mutation({
     }
 
     return { recorded: true };
+  },
+});
+
+// Add a manual album listen (from tracks view)
+export const addManualAlbumListen = mutation({
+  args: {
+    userId: v.string(),
+    spotifyAlbumId: v.string(),
+    listenedAt: v.number(),
+  },
+  handler: async (ctx, args) => {
+    // 1. Find the album in spotifyAlbums by Spotify's album ID
+    const album = await ctx.db
+      .query('spotifyAlbums')
+      .withIndex('by_spotifyAlbumId', (q) =>
+        q.eq('spotifyAlbumId', args.spotifyAlbumId)
+      )
+      .first();
+
+    if (!album) {
+      throw new Error(
+        `Album not found in database: ${args.spotifyAlbumId}. Please ensure album is fetched first.`
+      );
+    }
+
+    // 2. Check for duplicate listens at the same timestamp
+    const existingListens = await ctx.db
+      .query('userAlbumListens')
+      .withIndex('by_userId_albumId', (q) =>
+        q.eq('userId', args.userId).eq('albumId', album._id)
+      )
+      .collect();
+
+    const isDuplicate = existingListens.some(
+      (listen) => listen.listenedAt === args.listenedAt
+    );
+
+    if (isDuplicate) {
+      return { recorded: false, reason: 'duplicate_listen' };
+    }
+
+    // 3. Create the listen event
+    await ctx.db.insert('userAlbumListens', {
+      userId: args.userId,
+      albumId: album._id,
+      listenedAt: args.listenedAt,
+      earliestPlayedAt: args.listenedAt,
+      latestPlayedAt: args.listenedAt,
+      trackIds: [],
+      source: 'manual',
+    });
+
+    // 4. Upsert userAlbums record
+    const existingUserAlbum = await ctx.db
+      .query('userAlbums')
+      .withIndex('by_userId_albumId', (q) =>
+        q.eq('userId', args.userId).eq('albumId', album._id)
+      )
+      .first();
+
+    if (existingUserAlbum) {
+      await ctx.db.patch(existingUserAlbum._id, {
+        firstListenedAt: Math.min(
+          existingUserAlbum.firstListenedAt,
+          args.listenedAt
+        ),
+        lastListenedAt: Math.max(
+          existingUserAlbum.lastListenedAt,
+          args.listenedAt
+        ),
+        listenCount: existingUserAlbum.listenCount + 1,
+      });
+    } else {
+      await ctx.db.insert('userAlbums', {
+        userId: args.userId,
+        albumId: album._id,
+        firstListenedAt: args.listenedAt,
+        lastListenedAt: args.listenedAt,
+        listenCount: 1,
+      });
+    }
+
+    return { recorded: true, albumName: album.name };
   },
 });
 

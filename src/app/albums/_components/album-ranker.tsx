@@ -1,9 +1,16 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
-import Image from 'next/image';
-import { X, Disc3, ChevronUp, ChevronDown } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback, forwardRef, useMemo } from 'react';
+import { X } from 'lucide-react';
 import { TIER_ORDER, getTierInfo, getRatingsForTier, type TierName } from '~/lib/album-tiers';
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerDescription,
+  DrawerFooter,
+} from '~/components/ui/drawer';
 
 type RankedAlbum = {
   _id: string;
@@ -28,10 +35,11 @@ type AlbumToRate = {
 };
 
 type AlbumRankerProps = {
-  albumToRate: AlbumToRate;
+  albumToRate: AlbumToRate | null;
   existingRankedAlbums: RankedAlbum[];
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   onSave: (rating: number, position: number) => void;
-  onCancel: () => void;
 };
 
 // All possible slots: 10 ratings (Holy Moly High=10 down to Actively Bad Low=1)
@@ -40,15 +48,47 @@ const ALL_RATINGS = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1] as const;
 export function AlbumRanker({
   albumToRate,
   existingRankedAlbums,
+  open,
+  onOpenChange,
   onSave,
-  onCancel,
 }: AlbumRankerProps) {
   // Current rating for the new album (starts at top = 10)
   const [currentRating, setCurrentRating] = useState(10);
   // Position within the current rating's list (0 = top)
   const [positionInRating, setPositionInRating] = useState(0);
-  
+
   const containerRef = useRef<HTMLDivElement>(null);
+  const newAlbumRowRef = useRef<HTMLDivElement>(null);
+
+  // Memoize albumToRate id to detect when a NEW album is being rated
+  const albumToRateId = albumToRate?.userAlbumId;
+
+  // Reset state only when a different album is selected
+  useEffect(() => {
+    if (albumToRateId) {
+      setCurrentRating(10);
+      setPositionInRating(0);
+    }
+  }, [albumToRateId]);
+
+  // Scroll the new album row into view when position changes (with padding)
+  useEffect(() => {
+    const el = newAlbumRowRef.current;
+    const container = containerRef.current;
+    if (!el || !container) return;
+
+    const padding = 80; // Extra scroll padding in pixels
+    const elRect = el.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+
+    if (elRect.top < containerRect.top + padding) {
+      // Element is above visible area - scroll up
+      container.scrollBy({ top: elRect.top - containerRect.top - padding, behavior: 'smooth' });
+    } else if (elRect.bottom > containerRect.bottom - padding) {
+      // Element is below visible area - scroll down
+      container.scrollBy({ top: elRect.bottom - containerRect.bottom + padding, behavior: 'smooth' });
+    }
+  }, [currentRating, positionInRating]);
 
   // Group existing albums by rating
   const albumsByRating = useCallback(() => {
@@ -78,7 +118,7 @@ export function AlbumRanker({
   const maxPositionInRating = albumsAtCurrentRating.length; // Can be 0 to length (insert at end)
 
   // Move within current rating or to adjacent rating
-  function moveUp() {
+  const moveUp = useCallback(() => {
     if (positionInRating > 0) {
       // Move up within current rating
       setPositionInRating(positionInRating - 1);
@@ -95,9 +135,9 @@ export function AlbumRanker({
         }
       }
     }
-  }
+  }, [positionInRating, currentRating, groups]);
 
-  function moveDown() {
+  const moveDown = useCallback(() => {
     if (positionInRating < maxPositionInRating) {
       // Move down within current rating
       setPositionInRating(positionInRating + 1);
@@ -112,10 +152,10 @@ export function AlbumRanker({
         }
       }
     }
-  }
+  }, [positionInRating, maxPositionInRating, currentRating]);
 
   // Jump to next/prev sub-tier (High/Low boundary)
-  function jumpToTier(direction: 'up' | 'down') {
+  const jumpToTier = useCallback((direction: 'up' | 'down') => {
     const currentTierInfo = getTierInfo(currentRating);
     if (!currentTierInfo) return;
 
@@ -152,12 +192,12 @@ export function AlbumRanker({
         }
       }
     }
-  }
+  }, [currentRating]);
 
   // Calculate final position value for saving
-  function calculatePosition(): number {
+  const calculatePosition = useCallback((): number => {
     const albumsAtRating = groups.get(currentRating) ?? [];
-    
+
     if (albumsAtRating.length === 0) {
       return 0;
     }
@@ -166,32 +206,38 @@ export function AlbumRanker({
       // Insert at top
       const firstAlbum = albumsAtRating[0];
       return (firstAlbum?.position ?? 0) - 1;
-    } else if (positionInRating >= albumsAtRating.length) {
+    }
+    if (positionInRating >= albumsAtRating.length) {
       // Insert at bottom
       const lastAlbum = albumsAtRating[albumsAtRating.length - 1];
       return (lastAlbum?.position ?? 0) + 1;
-    } else {
-      // Insert between two albums
-      const before = albumsAtRating[positionInRating - 1];
-      const after = albumsAtRating[positionInRating];
-      return ((before?.position ?? 0) + (after?.position ?? 0)) / 2;
     }
-  }
+    // Insert between two albums
+    const before = albumsAtRating[positionInRating - 1];
+    const after = albumsAtRating[positionInRating];
+    return ((before?.position ?? 0) + (after?.position ?? 0)) / 2;
+  }, [groups, currentRating, positionInRating]);
 
-  function handleSave() {
+  const handleSave = useCallback(() => {
+    if (!albumToRate) return;
     const position = calculatePosition();
     onSave(currentRating, position);
-  }
+  }, [albumToRate, currentRating, onSave, calculatePosition]);
 
   // Keyboard handler
   useEffect(() => {
+    if (!open) return;
+
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape') {
-        onCancel();
+        onOpenChange(false);
         return;
       }
 
       if (e.key === 'Enter') {
+        if (e.repeat) return;
+        e.preventDefault();
+        e.stopPropagation();
         handleSave();
         return;
       }
@@ -215,140 +261,90 @@ export function AlbumRanker({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  });
+  }, [open, onOpenChange, handleSave, moveUp, moveDown, jumpToTier]);
 
-  // Focus container on mount for keyboard events
+  // Focus container when drawer opens for keyboard events
   useEffect(() => {
-    containerRef.current?.focus();
-  }, []);
+    if (open) {
+      containerRef.current?.focus();
+    }
+  }, [open]);
+
+  if (!albumToRate) return null;
 
   const currentTierInfo = getTierInfo(currentRating);
 
   return (
-    <div
-      ref={containerRef}
-      tabIndex={-1}
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-background/95 backdrop-blur-sm outline-none"
-    >
-      <div className="w-full max-w-2xl p-6">
-        {/* Header */}
-        <div className="mb-6 flex items-center justify-between">
-          <div>
-            <h2 className="font-bold text-xl">Rate Album</h2>
-            <p className="mt-1 text-muted-foreground text-sm">
-              Use arrow keys to position, Shift+arrows for tier jumps
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
+    <Drawer open={open} onOpenChange={onOpenChange} direction="right">
+      <DrawerContent className="h-full max-w-2xl">
+        <DrawerHeader>
+          <DrawerTitle>Rate Album</DrawerTitle>
+          <DrawerDescription>
+            Use arrow keys to position, Shift+arrows for tier jumps
+          </DrawerDescription>
+        </DrawerHeader>
 
-        {/* Album being rated - sticky at top */}
-        <div className="mb-6 rounded-lg border-2 border-primary bg-primary/5 p-4">
-          <div className="flex items-center gap-4">
-            <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-md bg-muted">
-              {albumToRate.imageUrl ? (
-                <Image
-                  src={albumToRate.imageUrl}
-                  alt={albumToRate.name}
-                  fill
-                  className="object-cover"
-                  sizes="64px"
-                />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center">
-                  <Disc3 className="h-8 w-8 text-muted-foreground" />
+        <div
+          ref={containerRef}
+          tabIndex={-1}
+          className="overflow-y-auto px-4 pb-4 outline-none"
+        >
+
+          {/* Instructions */}
+          <div className="mb-4 flex items-center justify-between text-muted-foreground text-xs">
+            <span>↑↓ Move • Shift+↑↓ Jump tier • Enter Save • Esc Cancel</span>
+          </div>
+
+          {/* All tiers - always show the template */}
+          <div className="space-y-4">
+            {TIER_ORDER.map((tier) => {
+              const { high: highRating, low: lowRating } = getRatingsForTier(tier);
+              const highAlbums = groups.get(highRating) ?? [];
+              const lowAlbums = groups.get(lowRating) ?? [];
+
+              return (
+                <div key={tier} className="rounded-lg border p-3">
+                  <h3 className="mb-3 font-semibold text-sm">{tier}</h3>
+
+                  {/* High sub-tier */}
+                  <div className="mb-3">
+                    <p className="mb-1.5 text-muted-foreground text-xs">High</p>
+                    <div className="min-h-[40px] space-y-1">
+                      <TierSlot
+                        albums={highAlbums}
+                        rating={highRating}
+                        currentRating={currentRating}
+                        positionInRating={positionInRating}
+                        newAlbum={albumToRate}
+                        newAlbumRef={newAlbumRowRef}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Low sub-tier */}
+                  <div>
+                    <p className="mb-1.5 text-muted-foreground text-xs">Low</p>
+                    <div className="min-h-[40px] space-y-1">
+                      <TierSlot
+                        albums={lowAlbums}
+                        rating={lowRating}
+                        currentRating={currentRating}
+                        positionInRating={positionInRating}
+                        newAlbum={albumToRate}
+                        newAlbumRef={newAlbumRowRef}
+                      />
+                    </div>
+                  </div>
                 </div>
-              )}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate font-semibold">{albumToRate.name}</p>
-              <p className="truncate text-muted-foreground text-sm">
-                {albumToRate.artistName}
-              </p>
-            </div>
-            <div className="text-right">
-              <p className="font-medium text-primary">
-                {currentTierInfo?.tier} - {currentTierInfo?.subTier}
-              </p>
-              <div className="mt-1 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={moveUp}
-                  className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                >
-                  <ChevronUp className="h-5 w-5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={moveDown}
-                  className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                >
-                  <ChevronDown className="h-5 w-5" />
-                </button>
-              </div>
-            </div>
+              );
+            })}
           </div>
         </div>
 
-        {/* Instructions */}
-        <div className="mb-4 flex items-center justify-between text-muted-foreground text-xs">
-          <span>↑↓ Move • Shift+↑↓ Jump tier • Enter Save • Esc Cancel</span>
-        </div>
-
-        {/* All tiers - always show the template */}
-        <div className="space-y-4">
-          {TIER_ORDER.map((tier) => {
-            const { high: highRating, low: lowRating } = getRatingsForTier(tier);
-            const highAlbums = groups.get(highRating) ?? [];
-            const lowAlbums = groups.get(lowRating) ?? [];
-
-            return (
-              <div key={tier} className="rounded-lg border p-3">
-                <h3 className="mb-3 font-semibold text-sm">{tier}</h3>
-
-                {/* High sub-tier */}
-                <div className="mb-3">
-                  <p className="mb-1.5 text-muted-foreground text-xs">High</p>
-                  <div className="min-h-[40px] space-y-1">
-                    <TierSlot
-                      albums={highAlbums}
-                      rating={highRating}
-                      currentRating={currentRating}
-                      positionInRating={positionInRating}
-                      newAlbum={albumToRate}
-                    />
-                  </div>
-                </div>
-
-                {/* Low sub-tier */}
-                <div>
-                  <p className="mb-1.5 text-muted-foreground text-xs">Low</p>
-                  <div className="min-h-[40px] space-y-1">
-                    <TierSlot
-                      albums={lowAlbums}
-                      rating={lowRating}
-                      currentRating={currentRating}
-                      positionInRating={positionInRating}
-                      newAlbum={albumToRate}
-                    />
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Save/Cancel buttons */}
-        <div className="mt-6 flex justify-end gap-3">
+        <DrawerFooter className="flex-row justify-end gap-3">
           <button
             type="button"
-            onClick={onCancel}
+            onClick={() => onOpenChange(false)}
             className="rounded-md px-4 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
           >
             Cancel
@@ -360,9 +356,9 @@ export function AlbumRanker({
           >
             Save Rating
           </button>
-        </div>
-      </div>
-    </div>
+        </DrawerFooter>
+      </DrawerContent>
+    </Drawer>
   );
 }
 
@@ -373,12 +369,14 @@ function TierSlot({
   currentRating,
   positionInRating,
   newAlbum,
+  newAlbumRef,
 }: {
   albums: RankedAlbum[];
   rating: number;
   currentRating: number;
   positionInRating: number;
   newAlbum: AlbumToRate;
+  newAlbumRef: React.RefObject<HTMLDivElement | null>;
 }) {
   const isCurrentTier = rating === currentRating;
 
@@ -390,7 +388,7 @@ function TierSlot({
       // Show new album insertion point
       if (i === positionInRating) {
         elements.push(
-          <NewAlbumRow key="new" album={newAlbum} />
+          <NewAlbumRow key="new" album={newAlbum} ref={newAlbumRef} />
         );
       }
 
@@ -407,11 +405,11 @@ function TierSlot({
 
     // If inserting at end and we haven't shown it yet
     if (positionInRating >= albums.length && elements.filter(e => e && (e as React.ReactElement).key === 'new').length === 0) {
-      elements.push(<NewAlbumRow key="new" album={newAlbum} />);
+      elements.push(<NewAlbumRow key="new" album={newAlbum} ref={newAlbumRef} />);
     }
 
     if (elements.length === 0) {
-      return <NewAlbumRow album={newAlbum} />;
+      return <NewAlbumRow album={newAlbum} ref={newAlbumRef} />;
     }
 
     return <>{elements}</>;
@@ -435,56 +433,29 @@ function TierSlot({
   );
 }
 
-function NewAlbumRow({ album }: { album: AlbumToRate }) {
-  return (
-    <div className="flex items-center gap-2 rounded-md bg-primary/10 p-2 ring-2 ring-primary">
-      <div className="relative h-8 w-8 flex-shrink-0 overflow-hidden rounded bg-muted">
-        {album.imageUrl ? (
-          <Image
-            src={album.imageUrl}
-            alt={album.name}
-            fill
-            className="object-cover"
-            sizes="32px"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center">
-            <Disc3 className="h-4 w-4 text-muted-foreground" />
-          </div>
-        )}
+const NewAlbumRow = forwardRef<HTMLDivElement, { album: AlbumToRate }>(
+  function NewAlbumRow({ album }, ref) {
+    return (
+      <div
+        ref={ref}
+        className="truncate rounded-md bg-primary/10 px-2 py-1.5 text-sm ring-2 ring-primary"
+      >
+        <span className="font-medium">{album.artistName}</span>
+        <span className="text-muted-foreground"> – </span>
+        <span>{album.name}</span>
       </div>
-      <div className="min-w-0 flex-1">
-        <p className="truncate font-medium text-sm">{album.name}</p>
-        <p className="truncate text-muted-foreground text-xs">{album.artistName}</p>
-      </div>
-    </div>
-  );
-}
+    );
+  }
+);
 
 function ExistingAlbumRow({ album }: { album: RankedAlbum }) {
   if (!album.album) return null;
 
   return (
-    <div className="flex items-center gap-2 rounded-md bg-muted/30 p-2">
-      <div className="relative h-8 w-8 flex-shrink-0 overflow-hidden rounded bg-muted">
-        {album.album.imageUrl ? (
-          <Image
-            src={album.album.imageUrl}
-            alt={album.album.name}
-            fill
-            className="object-cover"
-            sizes="32px"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center">
-            <Disc3 className="h-4 w-4 text-muted-foreground" />
-          </div>
-        )}
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm">{album.album.name}</p>
-        <p className="truncate text-muted-foreground text-xs">{album.album.artistName}</p>
-      </div>
+    <div className="truncate rounded-md bg-muted/30 px-2 py-1.5 text-sm">
+      <span className="font-medium">{album.album.artistName}</span>
+      <span className="text-muted-foreground"> – </span>
+      <span>{album.album.name}</span>
     </div>
   );
 }
