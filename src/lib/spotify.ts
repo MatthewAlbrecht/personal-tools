@@ -19,6 +19,7 @@ export type SpotifyTrack = {
   duration_ms: number;
   external_urls: { spotify: string };
   preview_url: string | null;
+  track_number: number;
 };
 
 export type RecentlyPlayedItem = {

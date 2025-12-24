@@ -134,6 +134,7 @@ export default function SpotifyPlaylisterPage() {
       duration_ms: 0,
       external_urls: { spotify: `https://open.spotify.com/track/${t.trackId}` },
       preview_url: null,
+      track_number: 0,
     };
   }
 
@@ -448,6 +449,7 @@ export default function SpotifyPlaylisterPage() {
       duration_ms: 0,
       external_urls: { spotify: `https://open.spotify.com/track/${saved.trackId}` },
       preview_url: null,
+      track_number: 0,
     };
   }
 

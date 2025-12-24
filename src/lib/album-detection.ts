@@ -53,8 +53,13 @@ function isRestart(
   currTrackNumber: number,
   totalTracks: number
 ): boolean {
-  const restartAfterTrack = Math.ceil(totalTracks * RESTART_AFTER_TRACK_PERCENT);
-  return prevTrackNumber >= restartAfterTrack && currTrackNumber <= RESTART_FROM_TRACK;
+  const restartAfterTrack = Math.ceil(
+    totalTracks * RESTART_AFTER_TRACK_PERCENT
+  );
+  return (
+    prevTrackNumber >= restartAfterTrack &&
+    currTrackNumber <= RESTART_FROM_TRACK
+  );
 }
 
 /**
@@ -70,11 +75,14 @@ function splitIntoSessions(
   const sorted = [...plays].sort((a, b) => a.playedAt - b.playedAt);
 
   const sessions: PlayEvent[][] = [];
-  let currentSession: PlayEvent[] = [sorted[0]];
+  const firstPlay = sorted[0];
+  if (!firstPlay) return [];
+
+  let currentSession: PlayEvent[] = [firstPlay];
 
   for (let i = 1; i < sorted.length; i++) {
-    const prev = sorted[i - 1];
-    const curr = sorted[i];
+    const prev = sorted[i - 1]!;
+    const curr = sorted[i]!;
 
     if (isRestart(prev.trackNumber, curr.trackNumber, totalTracks)) {
       // Start new session
@@ -103,8 +111,10 @@ function isMostlyAscending(plays: PlayEvent[]): boolean {
   let totalPairs = 0;
 
   for (let i = 1; i < plays.length; i++) {
+    const curr = plays[i]!;
+    const prev = plays[i - 1]!;
     totalPairs++;
-    if (plays[i].trackNumber >= plays[i - 1].trackNumber) {
+    if (curr.trackNumber >= prev.trackNumber) {
       ascendingPairs++;
     }
   }
@@ -115,10 +125,7 @@ function isMostlyAscending(plays: PlayEvent[]): boolean {
 /**
  * Validates a session against all criteria
  */
-function isValidSession(
-  session: PlayEvent[],
-  totalTracks: number
-): boolean {
+function isValidSession(session: PlayEvent[], totalTracks: number): boolean {
   if (session.length === 0) return false;
 
   // Check majority threshold (70% of unique tracks)
@@ -162,7 +169,7 @@ export function detectAlbumListenSessions(
   const validSessions: ListenSession[] = [];
 
   for (const session of sessions) {
-    if (isValidSession(session, totalTracks)) {
+    if (isValidSession(session, totalTracks) && session[0]) {
       const trackIds = [...new Set(session.map((p) => p.trackId))];
       const earliestPlayedAt = Math.min(...session.map((p) => p.playedAt));
       const latestPlayedAt = Math.max(...session.map((p) => p.playedAt));
@@ -199,4 +206,3 @@ export function detectAllAlbumListens(
 
   return allSessions;
 }
-
