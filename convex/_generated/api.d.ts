@@ -22,6 +22,8 @@ import type * as folioSocietyDetails from "../folioSocietyDetails.js";
 import type * as folioSocietyImages from "../folioSocietyImages.js";
 import type * as folioSocietyReleases from "../folioSocietyReleases.js";
 import type * as geniusAlbums from "../geniusAlbums.js";
+import type * as migrations_backfillCategorizedAt from "../migrations/backfillCategorizedAt.js";
+import type * as migrations_backfillSpotifyAlbumId from "../migrations/backfillSpotifyAlbumId.js";
 import type * as s3Helper from "../s3Helper.js";
 import type * as spotify from "../spotify.js";
 
@@ -43,6 +45,8 @@ declare const fullApi: ApiFromModules<{
   folioSocietyImages: typeof folioSocietyImages;
   folioSocietyReleases: typeof folioSocietyReleases;
   geniusAlbums: typeof geniusAlbums;
+  "migrations/backfillCategorizedAt": typeof migrations_backfillCategorizedAt;
+  "migrations/backfillSpotifyAlbumId": typeof migrations_backfillSpotifyAlbumId;
   s3Helper: typeof s3Helper;
   spotify: typeof spotify;
 }>;

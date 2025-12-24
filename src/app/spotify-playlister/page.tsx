@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useQuery, useMutation } from 'convex/react';
 import { toast } from 'sonner';
 import { Music } from 'lucide-react';
@@ -13,7 +13,7 @@ import { SongReviewCard } from './_components/song-review-card';
 import { PlaylistSuggestions } from './_components/playlist-suggestions';
 import { PlaylistManager } from './_components/playlist-manager';
 import { MiniPlayer } from './_components/mini-player';
-import { BackfillPreviewDialog, type BackfillMatch } from './_components/backfill-preview-dialog';
+import { type BackfillMatch } from './_components/backfill-preview-dialog';
 import { formatPlaylistName } from './_utils/formatters';
 import type {
   RecentlyPlayedItem,
@@ -24,17 +24,23 @@ import type {
   LocalPlaylist,
   ReviewState,
 } from './_utils/types';
-import { useAuthToken } from '~/lib/hooks/use-auth-token';
+import { useSpotifyAuth } from '~/lib/hooks/use-spotify-auth';
+import { useSyncHistory } from '~/lib/hooks/use-sync-history';
+import { SyncAlbumsButton } from '~/components/sync-albums-button';
+import { LoginPrompt } from '~/components/login-prompt';
 import { useSpotifyPlayer } from './_hooks/use-spotify-player';
 
 export default function SpotifyPlaylisterPage() {
-  const { userId, isLoading: authLoading } = useAuthToken();
+  const { userId, isLoading: authLoading, connection, isConnected, getValidAccessToken } = useSpotifyAuth();
+
+  // Sync history hook for album detection
+  const { isSyncing: isSyncingHistory, syncHistory: handleSyncHistory } = useSyncHistory({
+    userId,
+    isConnected,
+    getValidAccessToken,
+  });
 
   // Convex queries
-  const connection = useQuery(
-    convexApi.spotify.getConnection,
-    userId ? { userId } : 'skip'
-  );
   const localPlaylists = useQuery(
     convexApi.spotify.getPlaylists,
     userId ? { userId } : 'skip'
@@ -43,16 +49,17 @@ export default function SpotifyPlaylisterPage() {
     convexApi.spotify.getActivePlaylists,
     userId ? { userId } : 'skip'
   );
-  const savedForLater = useQuery(
-    convexApi.spotify.getSavedForLater,
-    userId ? { userId } : 'skip'
-  );
-  const categorizedTrackIdsList = useQuery(
-    convexApi.spotify.getCategorizedTrackIds,
-    userId ? { userId } : 'skip'
-  );
   const categorizations = useQuery(
     convexApi.spotify.getCategorizations,
+    userId ? { userId } : 'skip'
+  );
+  // Persisted track history from Convex
+  const recentTracksFromDb = useQuery(
+    convexApi.spotify.getRecentlyPlayedTracks,
+    userId ? { userId } : 'skip'
+  );
+  const likedTracksFromDb = useQuery(
+    convexApi.spotify.getLikedTracksHistory,
     userId ? { userId } : 'skip'
   );
 
@@ -63,26 +70,72 @@ export default function SpotifyPlaylisterPage() {
   const togglePlaylistActive = useMutation(convexApi.spotify.togglePlaylistActive);
   const deletePlaylist = useMutation(convexApi.spotify.deletePlaylist);
   const saveCategorization = useMutation(convexApi.spotify.saveCategorization);
-  const saveForLaterMutation = useMutation(convexApi.spotify.saveForLater);
-  const removeSavedForLater = useMutation(convexApi.spotify.removeSavedForLater);
   const savePendingSuggestions = useMutation(convexApi.spotify.savePendingSuggestions);
   const clearPendingSuggestions = useMutation(convexApi.spotify.clearPendingSuggestions);
+  const upsertTracksFromRecentlyPlayed = useMutation(convexApi.spotify.upsertTracksFromRecentlyPlayed);
+  const upsertTracksFromLiked = useMutation(convexApi.spotify.upsertTracksFromLiked);
 
   // Local state
-  const [recentTracks, setRecentTracks] = useState<RecentlyPlayedItem[] | undefined>();
-  const [likedTracks, setLikedTracks] = useState<SavedTrackItem[] | undefined>();
-  const [likedTracksTotal, setLikedTracksTotal] = useState(0);
   const [spotifyPlaylists, setSpotifyPlaylists] = useState<SpotifyPlaylist[] | undefined>();
   const [isLoadingTracks, setIsLoadingTracks] = useState(false);
   const [isLoadingLiked, setIsLoadingLiked] = useState(false);
-  const [isLoadingMoreLiked, setIsLoadingMoreLiked] = useState(false);
+  const [currentlyPlayingTrack, setCurrentlyPlayingTrack] = useState<SpotifyTrack | null>(null);
   const [selectedTrack, setSelectedTrack] = useState<RecentlyPlayedItem | null>(null);
   const [reviewState, setReviewState] = useState<ReviewState>({ status: 'idle' });
   const [userInput, setUserInput] = useState('');
   const [pendingSuggestionsCache, setPendingSuggestionsCache] = useState<Map<string, { userInput: string; suggestions: PlaylistSuggestion[] }>>(new Map());
-  const isConnected = !!connection;
-  const savedTrackIds = new Set(savedForLater?.map((s) => s.trackId) ?? []);
-  const categorizedTrackIds = new Set(categorizedTrackIdsList ?? []);
+
+  // Derive categorized track IDs from track data (lastCategorizedAt timestamp)
+  const categorizedTrackIds = new Set(
+    [...(recentTracksFromDb ?? []), ...(likedTracksFromDb ?? [])]
+      .filter((t) => t.lastCategorizedAt !== undefined)
+      .map((t) => t.trackId)
+  );
+
+  // Convert Convex track data to UI format, with currently playing at top
+  const recentTracks: RecentlyPlayedItem[] | undefined = (() => {
+    const dbTracks = recentTracksFromDb?.map((t) => ({
+      track: t.trackData ? JSON.parse(t.trackData) as SpotifyTrack : createMinimalTrackFromDb(t),
+      played_at: new Date(t.lastPlayedAt ?? t.lastSeenAt).toISOString(),
+    }));
+
+    if (!dbTracks) return undefined;
+
+    // If we have a currently playing track, add it to the top if not already there
+    if (currentlyPlayingTrack) {
+      const isAlreadyInList = dbTracks.some((t) => t.track.id === currentlyPlayingTrack.id);
+      if (!isAlreadyInList) {
+        return [
+          { track: currentlyPlayingTrack, played_at: new Date().toISOString() },
+          ...dbTracks,
+        ];
+      }
+    }
+
+    return dbTracks;
+  })();
+
+  const likedTracks: SavedTrackItem[] | undefined = likedTracksFromDb?.map((t) => ({
+    track: t.trackData ? JSON.parse(t.trackData) as SpotifyTrack : createMinimalTrackFromDb(t),
+    added_at: new Date(t.lastLikedAt ?? t.lastSeenAt).toISOString(),
+  }));
+
+  // Helper to create minimal track from DB record
+  function createMinimalTrackFromDb(t: { trackId: string; trackName: string; artistName: string; albumName?: string; albumImageUrl?: string }): SpotifyTrack {
+    return {
+      id: t.trackId,
+      name: t.trackName,
+      artists: [{ id: '', name: t.artistName }],
+      album: {
+        id: '',
+        name: t.albumName ?? '',
+        images: t.albumImageUrl ? [{ url: t.albumImageUrl, height: 300, width: 300 }] : [],
+      },
+      duration_ms: 0,
+      external_urls: { spotify: `https://open.spotify.com/track/${t.trackId}` },
+      preview_url: null,
+    };
+  }
 
   // Query for pending suggestions (after selectedTrack state is declared)
   const getPendingSuggestions = useQuery(
@@ -90,53 +143,12 @@ export default function SpotifyPlaylisterPage() {
     selectedTrack ? { trackId: selectedTrack.track.id } : 'skip'
   );
 
-  // Token cache to prevent redundant refresh calls
-  const tokenCacheRef = useRef<{ token: string; expiresAt: number } | null>(null);
-
-  // Get a valid access token (refreshes if expired, uses cache otherwise)
-  const getValidAccessToken = useCallback(async (): Promise<string | null> => {
-    if (!userId) return null;
-
-    // Check cache - use 5 minute buffer before expiry
-    const now = Date.now();
-    if (tokenCacheRef.current && tokenCacheRef.current.expiresAt > now + 5 * 60 * 1000) {
-      return tokenCacheRef.current.token;
-    }
-
-    try {
-      const res = await fetch('/api/spotify/refresh-token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId }),
-      });
-
-      if (!res.ok) {
-        console.error('Failed to get valid token');
-        return null;
-      }
-
-      const data = await res.json();
-
-      // Cache the token (assume 1 hour expiry if not provided)
-      const expiresIn = data.expiresIn ?? 3600;
-      tokenCacheRef.current = {
-        token: data.accessToken,
-        expiresAt: now + expiresIn * 1000,
-      };
-
-      return data.accessToken;
-    } catch (error) {
-      console.error('Token refresh error:', error);
-      return null;
-    }
-  }, [userId]);
-
   // Spotify Web Playback SDK - only enable when connected
   const { state: playerState, togglePlayback, skip } = useSpotifyPlayer(getValidAccessToken, isConnected);
 
-  // Fetch recent tracks when connected
+  // Fetch recent tracks and currently playing when connected, upsert to Convex
   const fetchRecentTracks = useCallback(async () => {
-    if (!connection) return;
+    if (!connection || !userId) return;
 
     setIsLoadingTracks(true);
     try {
@@ -145,29 +157,74 @@ export default function SpotifyPlaylisterPage() {
         throw new Error('No valid access token');
       }
 
-      const res = await fetch('/api/spotify/recent-tracks', {
-        headers: {
-          'X-Access-Token': accessToken,
-        },
-      });
+      // Fetch both recent tracks and currently playing in parallel
+      const [recentRes, currentlyPlayingRes] = await Promise.all([
+        fetch('/api/spotify/recent-tracks', {
+          headers: { 'X-Access-Token': accessToken },
+        }),
+        fetch('/api/spotify/currently-playing', {
+          headers: { 'X-Access-Token': accessToken },
+        }),
+      ]);
 
-      if (!res.ok) {
+      if (!recentRes.ok) {
         throw new Error('Failed to fetch recent tracks');
       }
 
-      const data = await res.json();
-      setRecentTracks(data.items);
+      const recentData = await recentRes.json();
+      const items = recentData.items as RecentlyPlayedItem[];
+
+      // Handle currently playing (may be null if nothing is playing)
+      if (currentlyPlayingRes.ok) {
+        const cpData = await currentlyPlayingRes.json();
+        if (cpData.currentlyPlaying?.item) {
+          setCurrentlyPlayingTrack(cpData.currentlyPlaying.item as SpotifyTrack);
+
+          // Also upsert the currently playing track
+          const cpTrack = cpData.currentlyPlaying.item as SpotifyTrack;
+          await upsertTracksFromRecentlyPlayed({
+            userId,
+            items: [{
+              trackId: cpTrack.id,
+              trackName: cpTrack.name,
+              artistName: cpTrack.artists.map((a) => a.name).join(', '),
+              albumName: cpTrack.album.name,
+              albumImageUrl: cpTrack.album.images?.[0]?.url,
+              spotifyAlbumId: cpTrack.album.id,
+              trackData: JSON.stringify(cpTrack),
+              playedAt: Date.now(),
+            }],
+          });
+        } else {
+          setCurrentlyPlayingTrack(null);
+        }
+      }
+
+      // Upsert recent tracks to Convex for persistence
+      await upsertTracksFromRecentlyPlayed({
+        userId,
+        items: items.map((item) => ({
+          trackId: item.track.id,
+          trackName: item.track.name,
+          artistName: item.track.artists.map((a) => a.name).join(', '),
+          albumName: item.track.album.name,
+          albumImageUrl: item.track.album.images?.[0]?.url,
+          spotifyAlbumId: item.track.album.id,
+          trackData: JSON.stringify(item.track),
+          playedAt: Date.parse(item.played_at),
+        })),
+      });
     } catch (error) {
       console.error('Error fetching recent tracks:', error);
       toast.error('Failed to fetch recent tracks');
     } finally {
       setIsLoadingTracks(false);
     }
-  }, [connection, getValidAccessToken]);
+  }, [connection, userId, getValidAccessToken, upsertTracksFromRecentlyPlayed]);
 
-  // Fetch liked tracks when connected
+  // Fetch liked tracks when connected and upsert to Convex
   const fetchLikedTracks = useCallback(async () => {
-    if (!connection) return;
+    if (!connection || !userId) return;
 
     setIsLoadingLiked(true);
     try {
@@ -187,46 +244,29 @@ export default function SpotifyPlaylisterPage() {
       }
 
       const data = await res.json();
-      setLikedTracks(data.items);
-      setLikedTracksTotal(data.total);
+      const items = data.items as SavedTrackItem[];
+
+      // Upsert to Convex for persistence
+      await upsertTracksFromLiked({
+        userId,
+        items: items.map((item) => ({
+          trackId: item.track.id,
+          trackName: item.track.name,
+          artistName: item.track.artists.map((a) => a.name).join(', '),
+          albumName: item.track.album.name,
+          albumImageUrl: item.track.album.images?.[0]?.url,
+          spotifyAlbumId: item.track.album.id,
+          trackData: JSON.stringify(item.track),
+          addedAt: Date.parse(item.added_at),
+        })),
+      });
     } catch (error) {
       console.error('Error fetching liked tracks:', error);
       toast.error('Failed to fetch liked tracks');
     } finally {
       setIsLoadingLiked(false);
     }
-  }, [connection, getValidAccessToken]);
-
-  // Load more liked tracks
-  const fetchMoreLikedTracks = useCallback(async () => {
-    if (!connection || !likedTracks) return;
-
-    setIsLoadingMoreLiked(true);
-    try {
-      const accessToken = await getValidAccessToken();
-      if (!accessToken) {
-        throw new Error('No valid access token');
-      }
-
-      const res = await fetch(`/api/spotify/liked-tracks?offset=${likedTracks.length}`, {
-        headers: {
-          'X-Access-Token': accessToken,
-        },
-      });
-
-      if (!res.ok) {
-        throw new Error('Failed to fetch more liked tracks');
-      }
-
-      const data = await res.json();
-      setLikedTracks((prev) => [...(prev ?? []), ...data.items]);
-    } catch (error) {
-      console.error('Error fetching more liked tracks:', error);
-      toast.error('Failed to load more');
-    } finally {
-      setIsLoadingMoreLiked(false);
-    }
-  }, [connection, likedTracks, getValidAccessToken]);
+  }, [connection, userId, getValidAccessToken, upsertTracksFromLiked]);
 
   // Fetch user playlists
   const fetchSpotifyPlaylists = useCallback(async () => {
@@ -295,8 +335,6 @@ export default function SpotifyPlaylisterPage() {
     if (!userId) return;
     try {
       await deleteConnection({ userId });
-      setRecentTracks(undefined);
-      setLikedTracks(undefined);
       setSpotifyPlaylists(undefined);
       toast.success('Disconnected from Spotify');
     } catch {
@@ -340,47 +378,6 @@ export default function SpotifyPlaylisterPage() {
 
     // Check for pending suggestions in cache
     const cached = pendingSuggestionsCache.get(item.track.id);
-    if (cached) {
-      setUserInput(cached.userInput);
-      setReviewState({ status: 'suggestions', suggestions: cached.suggestions });
-    } else {
-      setReviewState({ status: 'input' });
-      setUserInput('');
-    }
-  }
-
-  // Handle selecting a saved track
-  function handleSelectSavedTrack(saved: {
-    trackId: string;
-    trackName: string;
-    artistName: string;
-    albumName?: string;
-    albumImageUrl?: string;
-    trackData?: string;
-  }) {
-    // Don't reset if it's the same track and we're already showing it
-    if (selectedTrack?.track.id === saved.trackId && reviewState.status !== 'idle') {
-      return;
-    }
-
-    // Use full track data if available, otherwise create minimal object
-    let track: SpotifyTrack;
-
-    if (saved.trackData) {
-      try {
-        track = JSON.parse(saved.trackData) as SpotifyTrack;
-      } catch {
-        // Fallback to minimal object if parsing fails
-        track = createMinimalTrack(saved);
-      }
-    } else {
-      track = createMinimalTrack(saved);
-    }
-
-    setSelectedTrack({ track, played_at: '' });
-
-    // Check for pending suggestions in cache
-    const cached = pendingSuggestionsCache.get(saved.trackId);
     if (cached) {
       setUserInput(cached.userInput);
       setReviewState({ status: 'suggestions', suggestions: cached.suggestions });
@@ -452,55 +449,6 @@ export default function SpotifyPlaylisterPage() {
       external_urls: { spotify: `https://open.spotify.com/track/${saved.trackId}` },
       preview_url: null,
     };
-  }
-
-  // Handle save for later
-  async function handleSaveForLater(item: RecentlyPlayedItem) {
-    if (!userId) return;
-
-    try {
-      await saveForLaterMutation({
-        userId,
-        trackId: item.track.id,
-        trackName: item.track.name,
-        artistName: item.track.artists.map((a) => a.name).join(', '),
-        albumName: item.track.album.name,
-        albumImageUrl: item.track.album.images?.[0]?.url,
-        trackData: JSON.stringify(item.track),
-      });
-      toast.success('Saved for later');
-    } catch {
-      toast.error('Failed to save');
-    }
-  }
-
-  // Handle save for later from liked songs
-  async function handleSaveForLaterLiked(item: SavedTrackItem) {
-    if (!userId) return;
-
-    try {
-      await saveForLaterMutation({
-        userId,
-        trackId: item.track.id,
-        trackName: item.track.name,
-        artistName: item.track.artists.map((a) => a.name).join(', '),
-        albumName: item.track.album.name,
-        albumImageUrl: item.track.album.images?.[0]?.url,
-        trackData: JSON.stringify(item.track),
-      });
-      toast.success('Saved for later');
-    } catch {
-      toast.error('Failed to save');
-    }
-  }
-
-  // Handle remove from saved
-  async function handleRemoveSaved(trackId: string) {
-    try {
-      await removeSavedForLater({ trackId });
-    } catch {
-      toast.error('Failed to remove');
-    }
   }
 
   // Handle categorization submission
@@ -619,11 +567,6 @@ export default function SpotifyPlaylisterPage() {
         next.delete(selectedTrack.track.id);
         return next;
       });
-
-      // Remove from saved for later if it was saved
-      if (savedTrackIds.has(selectedTrack.track.id)) {
-        await removeSavedForLater({ trackId: selectedTrack.track.id });
-      }
 
       toast.success(
         selectedPlaylistIds.length > 0
@@ -940,15 +883,11 @@ export default function SpotifyPlaylisterPage() {
 
   if (!userId) {
     return (
-      <div className="container mx-auto max-w-6xl p-6">
-        <div className="flex h-[50vh] flex-col items-center justify-center gap-4">
-          <Music className="h-12 w-12 text-muted-foreground" />
-          <p className="text-muted-foreground">Please log in to use Spotify Playlister</p>
-          <a href="/login?redirect=/spotify-playlister" className="text-primary hover:underline">
-            Go to login
-          </a>
-        </div>
-      </div>
+      <LoginPrompt
+        icon={Music}
+        message="Please log in to use Spotify Playlister"
+        redirectPath="/spotify-playlister"
+      />
     );
   }
 
@@ -963,13 +902,20 @@ export default function SpotifyPlaylisterPage() {
           </p>
         </div>
         {isConnected && (
-          <button
-            type="button"
-            onClick={handleDisconnect}
-            className="text-muted-foreground text-sm hover:text-foreground hover:underline"
-          >
-            Disconnect Spotify
-          </button>
+          <div className="flex items-center gap-4">
+            <SyncAlbumsButton
+              isSyncing={isSyncingHistory}
+              onSync={handleSyncHistory}
+              variant="ghost"
+            />
+            <button
+              type="button"
+              onClick={handleDisconnect}
+              className="text-muted-foreground text-sm hover:text-foreground hover:underline"
+            >
+              Disconnect Spotify
+            </button>
+          </div>
         )}
       </div>
 
@@ -1035,28 +981,19 @@ export default function SpotifyPlaylisterPage() {
             <TracksPanel
               recentTracks={recentTracks}
               likedTracks={likedTracks}
-              likedTracksTotal={likedTracksTotal}
-              savedTracks={savedForLater}
               categorizedTracks={categorizations}
               isLoadingRecent={isLoadingTracks}
               isLoadingLiked={isLoadingLiked}
-              isLoadingMoreLiked={isLoadingMoreLiked}
-              isLoadingSaved={savedForLater === undefined}
               isLoadingCategorized={categorizations === undefined}
               selectedTrackId={selectedTrack?.track.id ?? null}
+              nowPlayingTrackId={currentlyPlayingTrack?.id ?? null}
               categorizedTrackIds={categorizedTrackIds}
-              savedTrackIds={savedTrackIds}
               playerState={playerState}
               onTogglePlayback={togglePlayback}
               onSelectRecentTrack={handleSelectTrack}
               onSelectLikedTrack={handleSelectLikedTrack}
-              onSelectSavedTrack={handleSelectSavedTrack}
-              onSaveForLater={handleSaveForLater}
-              onSaveForLaterLiked={handleSaveForLaterLiked}
-              onRemoveSaved={handleRemoveSaved}
               onRefresh={fetchRecentTracks}
               onRefreshLiked={fetchLikedTracks}
-              onLoadMoreLiked={fetchMoreLikedTracks}
               onSelectCategorizedTrack={handleSelectCategorizedTrack}
             />
           </div>

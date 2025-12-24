@@ -1,0 +1,3228 @@
+diff --git a/convex/schema.ts b/convex/schema.ts
+index ce4c6a4..27d81f2 100644
+--- a/convex/schema.ts
++++ b/convex/schema.ts
+@@ -166,8 +166,7 @@ export default defineSchema({
+     userId: v.string(), // Your auth user
+     spotifyPlaylistId: v.string(), // Spotify's playlist ID
+     name: v.string(),
+-    description: v.string(), // AI-generated mood/vibe description for AI matching
+-    userNotes: v.optional(v.string()), // Original user input for regeneration
++    description: v.string(), // User-written mood/vibe description for AI matching
+     imageUrl: v.optional(v.string()),
+     isActive: v.boolean(), // Whether to include in AI suggestions
+     createdAt: v.number(),
+@@ -201,34 +200,26 @@ export default defineSchema({
+     .index('by_trackId', ['trackId'])
+     .index('by_userId_createdAt', ['userId', 'createdAt']),
+ 
+-  spotifySavedForLater: defineTable({
+-    userId: v.string(),
++  // Canonical Spotify track metadata (one row per trackId, shared across users)
++  spotifyTracks: defineTable({
+     trackId: v.string(),
+     trackName: v.string(),
+     artistName: v.string(),
+     albumName: v.optional(v.string()),
+     albumImageUrl: v.optional(v.string()),
+-    trackData: v.optional(v.string()), // JSON stringified SpotifyTrack for full data
+-    savedAt: v.number(),
+-  })
+-    .index('by_userId', ['userId'])
+-    .index('by_trackId', ['trackId'])
+-    .index('by_userId_savedAt', ['userId', 'savedAt']),
++    trackData: v.optional(v.string()), // JSON stringified SpotifyTrack
++    updatedAt: v.number(),
++  }).index('by_trackId', ['trackId']),
+ 
+-  spotifyPendingSuggestions: defineTable({
++  // Per-user track encounter stats (one row per userId+trackId)
++  spotifyUserTracks: defineTable({
+     userId: v.string(),
+-    trackId: v.string(), // Spotify track ID
+-    userInput: v.string(), // User's description before submitting
+-    suggestions: v.array(
+-      v.object({
+-        playlistId: v.string(),
+-        playlistName: v.string(),
+-        confidence: v.string(), // 'high' | 'medium' | 'low'
+-        reason: v.string(),
+-      })
+-    ),
+-    createdAt: v.number(),
++    trackId: v.string(),
++    firstSeenAt: v.number(),
++    lastSeenAt: v.number(),
++    lastPlayedAt: v.optional(v.number()), // Last seen in recently played
++    lastLikedAt: v.optional(v.number()), // Last seen in liked songs
+   })
+-    .index('by_trackId', ['trackId'])
+-    .index('by_userId', ['userId']),
++    .index('by_userId_trackId', ['userId', 'trackId'])
++    .index('by_userId_lastSeenAt', ['userId', 'lastSeenAt']),
+ });
+diff --git a/convex/spotify.ts b/convex/spotify.ts
+index 97d5fdf..335843a 100644
+--- a/convex/spotify.ts
++++ b/convex/spotify.ts
+@@ -1,3 +1,4 @@
++import { paginationOptsValidator } from 'convex/server';
+ import { v } from 'convex/values';
+ import { mutation, query } from './_generated/server';
+ 
+@@ -111,7 +112,6 @@ export const upsertPlaylist = mutation({
+     spotifyPlaylistId: v.string(),
+     name: v.string(),
+     description: v.string(),
+-    userNotes: v.optional(v.string()),
+     imageUrl: v.optional(v.string()),
+     isActive: v.optional(v.boolean()),
+   },
+@@ -129,7 +129,6 @@ export const upsertPlaylist = mutation({
+       await ctx.db.patch(existing._id, {
+         name: args.name,
+         description: args.description,
+-        userNotes: args.userNotes,
+         imageUrl: args.imageUrl,
+         isActive: args.isActive ?? existing.isActive,
+         updatedAt: now,
+@@ -142,7 +141,6 @@ export const upsertPlaylist = mutation({
+       spotifyPlaylistId: args.spotifyPlaylistId,
+       name: args.name,
+       description: args.description,
+-      userNotes: args.userNotes,
+       imageUrl: args.imageUrl,
+       isActive: args.isActive ?? true,
+       createdAt: now,
+@@ -177,12 +175,10 @@ export const updatePlaylistDescription = mutation({
+   args: {
+     playlistId: v.id('spotifyPlaylists'),
+     description: v.string(),
+-    userNotes: v.optional(v.string()),
+   },
+   handler: async (ctx, args) => {
+     await ctx.db.patch(args.playlistId, {
+       description: args.description,
+-      ...(args.userNotes !== undefined ? { userNotes: args.userNotes } : {}),
+       updatedAt: Date.now(),
+     });
+   },
+@@ -220,7 +216,6 @@ export const saveCategorization = mutation({
+     artistName: v.string(),
+     albumName: v.optional(v.string()),
+     albumImageUrl: v.optional(v.string()),
+-    trackData: v.optional(v.string()), // JSON stringified SpotifyTrack
+     userInput: v.string(),
+     aiSuggestions: v.array(
+       v.object({
+@@ -233,23 +228,6 @@ export const saveCategorization = mutation({
+     finalSelections: v.array(v.string()),
+   },
+   handler: async (ctx, args) => {
+-    // Check if this track was already categorized (for re-categorization)
+-    const existing = await ctx.db
+-      .query('spotifySongCategorizations')
+-      .withIndex('by_trackId', (q) => q.eq('trackId', args.trackId))
+-      .first();
+-
+-    if (existing) {
+-      // Update existing categorization
+-      await ctx.db.patch(existing._id, {
+-        userInput: args.userInput,
+-        aiSuggestions: args.aiSuggestions,
+-        finalSelections: args.finalSelections,
+-        trackData: args.trackData,
+-      });
+-      return existing._id;
+-    }
+-
+     return await ctx.db.insert('spotifySongCategorizations', {
+       userId: args.userId,
+       trackId: args.trackId,
+@@ -257,7 +235,6 @@ export const saveCategorization = mutation({
+       artistName: args.artistName,
+       albumName: args.albumName,
+       albumImageUrl: args.albumImageUrl,
+-      trackData: args.trackData,
+       userInput: args.userInput,
+       aiSuggestions: args.aiSuggestions,
+       finalSelections: args.finalSelections,
+@@ -319,157 +296,216 @@ export const searchCategorizations = query({
+ });
+ 
+ // ============================================================================
+-// Save for Later
++// Track History Upserts
+ // ============================================================================
+ 
+-export const saveForLater = mutation({
+-  args: {
+-    userId: v.string(),
+-    trackId: v.string(),
+-    trackName: v.string(),
+-    artistName: v.string(),
+-    albumName: v.optional(v.string()),
+-    albumImageUrl: v.optional(v.string()),
+-    trackData: v.optional(v.string()), // JSON stringified SpotifyTrack
+-  },
+-  handler: async (ctx, args) => {
+-    // Check if already saved
+-    const existing = await ctx.db
+-      .query('spotifySavedForLater')
+-      .withIndex('by_trackId', (q) => q.eq('trackId', args.trackId))
+-      .first();
+-
+-    if (existing) {
+-      return existing._id;
+-    }
+-
+-    return await ctx.db.insert('spotifySavedForLater', {
+-      userId: args.userId,
+-      trackId: args.trackId,
+-      trackName: args.trackName,
+-      artistName: args.artistName,
+-      albumName: args.albumName,
+-      albumImageUrl: args.albumImageUrl,
+-      trackData: args.trackData,
+-      savedAt: Date.now(),
+-    });
+-  },
++const trackItemValidator = v.object({
++  trackId: v.string(),
++  trackName: v.string(),
++  artistName: v.string(),
++  albumName: v.optional(v.string()),
++  albumImageUrl: v.optional(v.string()),
++  trackData: v.optional(v.string()),
++  timestamp: v.number(), // played_at or added_at as Unix ms
+ });
+ 
+-export const removeSavedForLater = mutation({
++export const upsertTracksFromRecentlyPlayed = mutation({
+   args: {
+-    trackId: v.string(),
++    userId: v.string(),
++    items: v.array(trackItemValidator),
+   },
+   handler: async (ctx, args) => {
+-    const saved = await ctx.db
+-      .query('spotifySavedForLater')
+-      .withIndex('by_trackId', (q) => q.eq('trackId', args.trackId))
+-      .first();
++    const now = Date.now();
+ 
+-    if (saved) {
+-      await ctx.db.delete(saved._id);
++    for (const item of args.items) {
++      // Upsert canonical track
++      const existingTrack = await ctx.db
++        .query('spotifyTracks')
++        .withIndex('by_trackId', (q) => q.eq('trackId', item.trackId))
++        .first();
++
++      if (existingTrack) {
++        await ctx.db.patch(existingTrack._id, {
++          trackName: item.trackName,
++          artistName: item.artistName,
++          albumName: item.albumName,
++          albumImageUrl: item.albumImageUrl,
++          trackData: item.trackData,
++          updatedAt: now,
++        });
++      } else {
++        await ctx.db.insert('spotifyTracks', {
++          trackId: item.trackId,
++          trackName: item.trackName,
++          artistName: item.artistName,
++          albumName: item.albumName,
++          albumImageUrl: item.albumImageUrl,
++          trackData: item.trackData,
++          updatedAt: now,
++        });
++      }
++
++      // Upsert user track stats
++      const existingUserTrack = await ctx.db
++        .query('spotifyUserTracks')
++        .withIndex('by_userId_trackId', (q) =>
++          q.eq('userId', args.userId).eq('trackId', item.trackId)
++        )
++        .first();
++
++      if (existingUserTrack) {
++        const newLastPlayedAt = Math.max(
++          existingUserTrack.lastPlayedAt ?? 0,
++          item.timestamp
++        );
++        const newLastSeenAt = Math.max(
++          newLastPlayedAt,
++          existingUserTrack.lastLikedAt ?? 0
++        );
++
++        await ctx.db.patch(existingUserTrack._id, {
++          lastPlayedAt: newLastPlayedAt,
++          lastSeenAt: newLastSeenAt,
++        });
++      } else {
++        await ctx.db.insert('spotifyUserTracks', {
++          userId: args.userId,
++          trackId: item.trackId,
++          firstSeenAt: item.timestamp,
++          lastSeenAt: item.timestamp,
++          lastPlayedAt: item.timestamp,
++        });
++      }
+     }
+   },
+ });
+ 
+-export const getSavedForLater = query({
++export const upsertTracksFromLiked = mutation({
+   args: {
+     userId: v.string(),
++    items: v.array(trackItemValidator),
+   },
+   handler: async (ctx, args) => {
+-    return await ctx.db
+-      .query('spotifySavedForLater')
+-      .withIndex('by_userId_savedAt', (q) => q.eq('userId', args.userId))
+-      .order('desc')
+-      .collect();
+-  },
+-});
++    const now = Date.now();
+ 
+-export const getSavedTrackIds = query({
+-  args: {
+-    userId: v.string(),
+-  },
+-  handler: async (ctx, args) => {
+-    const saved = await ctx.db
+-      .query('spotifySavedForLater')
+-      .withIndex('by_userId', (q) => q.eq('userId', args.userId))
+-      .collect();
+-    return new Set(saved.map((s) => s.trackId));
++    for (const item of args.items) {
++      // Upsert canonical track
++      const existingTrack = await ctx.db
++        .query('spotifyTracks')
++        .withIndex('by_trackId', (q) => q.eq('trackId', item.trackId))
++        .first();
++
++      if (existingTrack) {
++        await ctx.db.patch(existingTrack._id, {
++          trackName: item.trackName,
++          artistName: item.artistName,
++          albumName: item.albumName,
++          albumImageUrl: item.albumImageUrl,
++          trackData: item.trackData,
++          updatedAt: now,
++        });
++      } else {
++        await ctx.db.insert('spotifyTracks', {
++          trackId: item.trackId,
++          trackName: item.trackName,
++          artistName: item.artistName,
++          albumName: item.albumName,
++          albumImageUrl: item.albumImageUrl,
++          trackData: item.trackData,
++          updatedAt: now,
++        });
++      }
++
++      // Upsert user track stats
++      const existingUserTrack = await ctx.db
++        .query('spotifyUserTracks')
++        .withIndex('by_userId_trackId', (q) =>
++          q.eq('userId', args.userId).eq('trackId', item.trackId)
++        )
++        .first();
++
++      if (existingUserTrack) {
++        const newLastLikedAt = Math.max(
++          existingUserTrack.lastLikedAt ?? 0,
++          item.timestamp
++        );
++        const newLastSeenAt = Math.max(
++          existingUserTrack.lastPlayedAt ?? 0,
++          newLastLikedAt
++        );
++
++        await ctx.db.patch(existingUserTrack._id, {
++          lastLikedAt: newLastLikedAt,
++          lastSeenAt: newLastSeenAt,
++        });
++      } else {
++        await ctx.db.insert('spotifyUserTracks', {
++          userId: args.userId,
++          trackId: item.trackId,
++          firstSeenAt: item.timestamp,
++          lastSeenAt: item.timestamp,
++          lastLikedAt: item.timestamp,
++        });
++      }
++    }
+   },
+ });
+ 
+ // ============================================================================
+-// Pending Suggestions (saved before confirmation)
++// Track History Queries (Paginated)
+ // ============================================================================
+ 
+-export const savePendingSuggestions = mutation({
+-  args: {
+-    userId: v.string(),
+-    trackId: v.string(),
+-    userInput: v.string(),
+-    suggestions: v.array(
+-      v.object({
+-        playlistId: v.string(),
+-        playlistName: v.string(),
+-        confidence: v.string(),
+-        reason: v.string(),
+-      })
+-    ),
+-  },
+-  handler: async (ctx, args) => {
+-    // Check if pending suggestions already exist for this track
+-    const existing = await ctx.db
+-      .query('spotifyPendingSuggestions')
+-      .withIndex('by_trackId', (q) => q.eq('trackId', args.trackId))
+-      .first();
+-
+-    if (existing) {
+-      // Update existing record
+-      await ctx.db.patch(existing._id, {
+-        userId: args.userId,
+-        userInput: args.userInput,
+-        suggestions: args.suggestions,
+-        createdAt: Date.now(),
+-      });
+-      return existing._id;
+-    }
+-
+-    // Create new record
+-    return await ctx.db.insert('spotifyPendingSuggestions', {
+-      userId: args.userId,
+-      trackId: args.trackId,
+-      userInput: args.userInput,
+-      suggestions: args.suggestions,
+-      createdAt: Date.now(),
+-    });
+-  },
+-});
++export const getRecentlyPlayedHistory = query({
++  args: { userId: v.string(), paginationOpts: paginationOptsValidator },
++  handler: async (ctx, { userId, paginationOpts }) => {
++    const userTracks = await ctx.db
++      .query('spotifyUserTracks')
++      .withIndex('by_userId_lastSeenAt', (q) => q.eq('userId', userId))
++      .order('desc')
++      .paginate(paginationOpts);
++
++    // Filter to only those with lastPlayedAt, then join with spotifyTracks
++    const filtered = userTracks.page.filter((ut) => ut.lastPlayedAt != null);
++    const trackDocs = await Promise.all(
++      filtered.map((ut) =>
++        ctx.db
++          .query('spotifyTracks')
++          .withIndex('by_trackId', (q) => q.eq('trackId', ut.trackId))
++          .first()
++      )
++    );
+ 
+-export const getPendingSuggestions = query({
+-  args: {
+-    trackId: v.string(),
+-  },
+-  handler: async (ctx, args) => {
+-    return await ctx.db
+-      .query('spotifyPendingSuggestions')
+-      .withIndex('by_trackId', (q) => q.eq('trackId', args.trackId))
+-      .first();
++    return {
++      ...userTracks,
++      page: filtered.map((ut, i) => ({ ...ut, track: trackDocs[i] })),
++    };
+   },
+ });
+ 
+-export const clearPendingSuggestions = mutation({
+-  args: {
+-    trackId: v.string(),
+-  },
+-  handler: async (ctx, args) => {
+-    const pending = await ctx.db
+-      .query('spotifyPendingSuggestions')
+-      .withIndex('by_trackId', (q) => q.eq('trackId', args.trackId))
+-      .first();
++export const getLikedHistory = query({
++  args: { userId: v.string(), paginationOpts: paginationOptsValidator },
++  handler: async (ctx, { userId, paginationOpts }) => {
++    const userTracks = await ctx.db
++      .query('spotifyUserTracks')
++      .withIndex('by_userId_lastSeenAt', (q) => q.eq('userId', userId))
++      .order('desc')
++      .paginate(paginationOpts);
++
++    // Filter to only those with lastLikedAt, then join with spotifyTracks
++    const filtered = userTracks.page.filter((ut) => ut.lastLikedAt != null);
++    const trackDocs = await Promise.all(
++      filtered.map((ut) =>
++        ctx.db
++          .query('spotifyTracks')
++          .withIndex('by_trackId', (q) => q.eq('trackId', ut.trackId))
++          .first()
++      )
++    );
+ 
+-    if (pending) {
+-      await ctx.db.delete(pending._id);
+-    }
++    return {
++      ...userTracks,
++      page: filtered.map((ut, i) => ({ ...ut, track: trackDocs[i] })),
++    };
+   },
+ });
+ 
+diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
+index 2416f18..8101cdf 100644
+--- a/pnpm-lock.yaml
++++ b/pnpm-lock.yaml
+@@ -72,8 +72,8 @@ importers:
+         specifier: ^0.539.0
+         version: 0.539.0(react@19.1.1)
+       next:
+-        specifier: 15.2.8
+-        version: 15.2.8(@opentelemetry/api@1.9.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
++        specifier: ^15.2.3
++        version: 15.5.3(@opentelemetry/api@1.9.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+       next-themes:
+         specifier: ^0.4.6
+         version: 0.4.6(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+@@ -716,107 +716,124 @@ packages:
+     engines: {node: '>=6'}
+     hasBin: true
+ 
+-  '@img/sharp-darwin-arm64@0.33.5':
+-    resolution: {integrity: sha512-UT4p+iz/2H4twwAoLCqfA9UH5pI6DggwKEGuaPy7nCVQ8ZsiY5PIcrRvD1DzuY3qYL07NtIQcWnBSY/heikIFQ==}
++  '@img/sharp-darwin-arm64@0.34.3':
++    resolution: {integrity: sha512-ryFMfvxxpQRsgZJqBd4wsttYQbCxsJksrv9Lw/v798JcQ8+w84mBWuXwl+TT0WJ/WrYOLaYpwQXi3sA9nTIaIg==}
+     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
+     cpu: [arm64]
+     os: [darwin]
+ 
+-  '@img/sharp-darwin-x64@0.33.5':
+-    resolution: {integrity: sha512-fyHac4jIc1ANYGRDxtiqelIbdWkIuQaI84Mv45KvGRRxSAa7o7d1ZKAOBaYbnepLC1WqxfpimdeWfvqqSGwR2Q==}
++  '@img/sharp-darwin-x64@0.34.3':
++    resolution: {integrity: sha512-yHpJYynROAj12TA6qil58hmPmAwxKKC7reUqtGLzsOHfP7/rniNGTL8tjWX6L3CTV4+5P4ypcS7Pp+7OB+8ihA==}
+     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
+     cpu: [x64]
+     os: [darwin]
+ 
+-  '@img/sharp-libvips-darwin-arm64@1.0.4':
+-    resolution: {integrity: sha512-XblONe153h0O2zuFfTAbQYAX2JhYmDHeWikp1LM9Hul9gVPjFY427k6dFEcOL72O01QxQsWi761svJ/ev9xEDg==}
++  '@img/sharp-libvips-darwin-arm64@1.2.0':
++    resolution: {integrity: sha512-sBZmpwmxqwlqG9ueWFXtockhsxefaV6O84BMOrhtg/YqbTaRdqDE7hxraVE3y6gVM4eExmfzW4a8el9ArLeEiQ==}
+     cpu: [arm64]
+     os: [darwin]
+ 
+-  '@img/sharp-libvips-darwin-x64@1.0.4':
+-    resolution: {integrity: sha512-xnGR8YuZYfJGmWPvmlunFaWJsb9T/AO2ykoP3Fz/0X5XV2aoYBPkX6xqCQvUTKKiLddarLaxpzNe+b1hjeWHAQ==}
++  '@img/sharp-libvips-darwin-x64@1.2.0':
++    resolution: {integrity: sha512-M64XVuL94OgiNHa5/m2YvEQI5q2cl9d/wk0qFTDVXcYzi43lxuiFTftMR1tOnFQovVXNZJ5TURSDK2pNe9Yzqg==}
+     cpu: [x64]
+     os: [darwin]
+ 
+-  '@img/sharp-libvips-linux-arm64@1.0.4':
+-    resolution: {integrity: sha512-9B+taZ8DlyyqzZQnoeIvDVR/2F4EbMepXMc/NdVbkzsJbzkUjhXv/70GQJ7tdLA4YJgNP25zukcxpX2/SueNrA==}
++  '@img/sharp-libvips-linux-arm64@1.2.0':
++    resolution: {integrity: sha512-RXwd0CgG+uPRX5YYrkzKyalt2OJYRiJQ8ED/fi1tq9WQW2jsQIn0tqrlR5l5dr/rjqq6AHAxURhj2DVjyQWSOA==}
+     cpu: [arm64]
+     os: [linux]
+ 
+-  '@img/sharp-libvips-linux-arm@1.0.5':
+-    resolution: {integrity: sha512-gvcC4ACAOPRNATg/ov8/MnbxFDJqf/pDePbBnuBDcjsI8PssmjoKMAz4LtLaVi+OnSb5FK/yIOamqDwGmXW32g==}
++  '@img/sharp-libvips-linux-arm@1.2.0':
++    resolution: {integrity: sha512-mWd2uWvDtL/nvIzThLq3fr2nnGfyr/XMXlq8ZJ9WMR6PXijHlC3ksp0IpuhK6bougvQrchUAfzRLnbsen0Cqvw==}
+     cpu: [arm]
+     os: [linux]
+ 
+-  '@img/sharp-libvips-linux-s390x@1.0.4':
+-    resolution: {integrity: sha512-u7Wz6ntiSSgGSGcjZ55im6uvTrOxSIS8/dgoVMoiGE9I6JAfU50yH5BoDlYA1tcuGS7g/QNtetJnxA6QEsCVTA==}
++  '@img/sharp-libvips-linux-ppc64@1.2.0':
++    resolution: {integrity: sha512-Xod/7KaDDHkYu2phxxfeEPXfVXFKx70EAFZ0qyUdOjCcxbjqyJOEUpDe6RIyaunGxT34Anf9ue/wuWOqBW2WcQ==}
++    cpu: [ppc64]
++    os: [linux]
++
++  '@img/sharp-libvips-linux-s390x@1.2.0':
++    resolution: {integrity: sha512-eMKfzDxLGT8mnmPJTNMcjfO33fLiTDsrMlUVcp6b96ETbnJmd4uvZxVJSKPQfS+odwfVaGifhsB07J1LynFehw==}
+     cpu: [s390x]
+     os: [linux]
+ 
+-  '@img/sharp-libvips-linux-x64@1.0.4':
+-    resolution: {integrity: sha512-MmWmQ3iPFZr0Iev+BAgVMb3ZyC4KeFc3jFxnNbEPas60e1cIfevbtuyf9nDGIzOaW9PdnDciJm+wFFaTlj5xYw==}
++  '@img/sharp-libvips-linux-x64@1.2.0':
++    resolution: {integrity: sha512-ZW3FPWIc7K1sH9E3nxIGB3y3dZkpJlMnkk7z5tu1nSkBoCgw2nSRTFHI5pB/3CQaJM0pdzMF3paf9ckKMSE9Tg==}
+     cpu: [x64]
+     os: [linux]
+ 
+-  '@img/sharp-libvips-linuxmusl-arm64@1.0.4':
+-    resolution: {integrity: sha512-9Ti+BbTYDcsbp4wfYib8Ctm1ilkugkA/uscUn6UXK1ldpC1JjiXbLfFZtRlBhjPZ5o1NCLiDbg8fhUPKStHoTA==}
++  '@img/sharp-libvips-linuxmusl-arm64@1.2.0':
++    resolution: {integrity: sha512-UG+LqQJbf5VJ8NWJ5Z3tdIe/HXjuIdo4JeVNADXBFuG7z9zjoegpzzGIyV5zQKi4zaJjnAd2+g2nna8TZvuW9Q==}
+     cpu: [arm64]
+     os: [linux]
+ 
+-  '@img/sharp-libvips-linuxmusl-x64@1.0.4':
+-    resolution: {integrity: sha512-viYN1KX9m+/hGkJtvYYp+CCLgnJXwiQB39damAO7WMdKWlIhmYTfHjwSbQeUK/20vY154mwezd9HflVFM1wVSw==}
++  '@img/sharp-libvips-linuxmusl-x64@1.2.0':
++    resolution: {integrity: sha512-SRYOLR7CXPgNze8akZwjoGBoN1ThNZoqpOgfnOxmWsklTGVfJiGJoC/Lod7aNMGA1jSsKWM1+HRX43OP6p9+6Q==}
+     cpu: [x64]
+     os: [linux]
+ 
+-  '@img/sharp-linux-arm64@0.33.5':
+-    resolution: {integrity: sha512-JMVv+AMRyGOHtO1RFBiJy/MBsgz0x4AWrT6QoEVVTyh1E39TrCUpTRI7mx9VksGX4awWASxqCYLCV4wBZHAYxA==}
++  '@img/sharp-linux-arm64@0.34.3':
++    resolution: {integrity: sha512-QdrKe3EvQrqwkDrtuTIjI0bu6YEJHTgEeqdzI3uWJOH6G1O8Nl1iEeVYRGdj1h5I21CqxSvQp1Yv7xeU3ZewbA==}
+     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
+     cpu: [arm64]
+     os: [linux]
+ 
+-  '@img/sharp-linux-arm@0.33.5':
+-    resolution: {integrity: sha512-JTS1eldqZbJxjvKaAkxhZmBqPRGmxgu+qFKSInv8moZ2AmT5Yib3EQ1c6gp493HvrvV8QgdOXdyaIBrhvFhBMQ==}
++  '@img/sharp-linux-arm@0.34.3':
++    resolution: {integrity: sha512-oBK9l+h6KBN0i3dC8rYntLiVfW8D8wH+NPNT3O/WBHeW0OQWCjfWksLUaPidsrDKpJgXp3G3/hkmhptAW0I3+A==}
+     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
+     cpu: [arm]
+     os: [linux]
+ 
+-  '@img/sharp-linux-s390x@0.33.5':
+-    resolution: {integrity: sha512-y/5PCd+mP4CA/sPDKl2961b+C9d+vPAveS33s6Z3zfASk2j5upL6fXVPZi7ztePZ5CuH+1kW8JtvxgbuXHRa4Q==}
++  '@img/sharp-linux-ppc64@0.34.3':
++    resolution: {integrity: sha512-GLtbLQMCNC5nxuImPR2+RgrviwKwVql28FWZIW1zWruy6zLgA5/x2ZXk3mxj58X/tszVF69KK0Is83V8YgWhLA==}
++    engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
++    cpu: [ppc64]
++    os: [linux]
++
++  '@img/sharp-linux-s390x@0.34.3':
++    resolution: {integrity: sha512-3gahT+A6c4cdc2edhsLHmIOXMb17ltffJlxR0aC2VPZfwKoTGZec6u5GrFgdR7ciJSsHT27BD3TIuGcuRT0KmQ==}
+     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
+     cpu: [s390x]
+     os: [linux]
+ 
+-  '@img/sharp-linux-x64@0.33.5':
+-    resolution: {integrity: sha512-opC+Ok5pRNAzuvq1AG0ar+1owsu842/Ab+4qvU879ippJBHvyY5n2mxF1izXqkPYlGuP/M556uh53jRLJmzTWA==}
++  '@img/sharp-linux-x64@0.34.3':
++    resolution: {integrity: sha512-8kYso8d806ypnSq3/Ly0QEw90V5ZoHh10yH0HnrzOCr6DKAPI6QVHvwleqMkVQ0m+fc7EH8ah0BB0QPuWY6zJQ==}
+     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
+     cpu: [x64]
+     os: [linux]
+ 
+-  '@img/sharp-linuxmusl-arm64@0.33.5':
+-    resolution: {integrity: sha512-XrHMZwGQGvJg2V/oRSUfSAfjfPxO+4DkiRh6p2AFjLQztWUuY/o8Mq0eMQVIY7HJ1CDQUJlxGGZRw1a5bqmd1g==}
++  '@img/sharp-linuxmusl-arm64@0.34.3':
++    resolution: {integrity: sha512-vAjbHDlr4izEiXM1OTggpCcPg9tn4YriK5vAjowJsHwdBIdx0fYRsURkxLG2RLm9gyBq66gwtWI8Gx0/ov+JKQ==}
+     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
+     cpu: [arm64]
+     os: [linux]
+ 
+-  '@img/sharp-linuxmusl-x64@0.33.5':
+-    resolution: {integrity: sha512-WT+d/cgqKkkKySYmqoZ8y3pxx7lx9vVejxW/W4DOFMYVSkErR+w7mf2u8m/y4+xHe7yY9DAXQMWQhpnMuFfScw==}
++  '@img/sharp-linuxmusl-x64@0.34.3':
++    resolution: {integrity: sha512-gCWUn9547K5bwvOn9l5XGAEjVTTRji4aPTqLzGXHvIr6bIDZKNTA34seMPgM0WmSf+RYBH411VavCejp3PkOeQ==}
+     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
+     cpu: [x64]
+     os: [linux]
+ 
+-  '@img/sharp-wasm32@0.33.5':
+-    resolution: {integrity: sha512-ykUW4LVGaMcU9lu9thv85CbRMAwfeadCJHRsg2GmeRa/cJxsVY9Rbd57JcMxBkKHag5U/x7TSBpScF4U8ElVzg==}
++  '@img/sharp-wasm32@0.34.3':
++    resolution: {integrity: sha512-+CyRcpagHMGteySaWos8IbnXcHgfDn7pO2fiC2slJxvNq9gDipYBN42/RagzctVRKgxATmfqOSulgZv5e1RdMg==}
+     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
+     cpu: [wasm32]
+ 
+-  '@img/sharp-win32-ia32@0.33.5':
+-    resolution: {integrity: sha512-T36PblLaTwuVJ/zw/LaH0PdZkRz5rd3SmMHX8GSmR7vtNSP5Z6bQkExdSK7xGWyxLw4sUknBuugTelgw2faBbQ==}
++  '@img/sharp-win32-arm64@0.34.3':
++    resolution: {integrity: sha512-MjnHPnbqMXNC2UgeLJtX4XqoVHHlZNd+nPt1kRPmj63wURegwBhZlApELdtxM2OIZDRv/DFtLcNhVbd1z8GYXQ==}
++    engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
++    cpu: [arm64]
++    os: [win32]
++
++  '@img/sharp-win32-ia32@0.34.3':
++    resolution: {integrity: sha512-xuCdhH44WxuXgOM714hn4amodJMZl3OEvf0GVTm0BEyMeA2to+8HEdRPShH0SLYptJY1uBw+SCFP9WVQi1Q/cw==}
+     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
+     cpu: [ia32]
+     os: [win32]
+ 
+-  '@img/sharp-win32-x64@0.33.5':
+-    resolution: {integrity: sha512-MpY/o8/8kj+EcnxwvrP4aTJSWw/aZ7JIGR4aBeZkZw5B7/Jn+tY9/VNwtcoGmdT7GfggGIU4kygOMSbYnOrAbg==}
++  '@img/sharp-win32-x64@0.34.3':
++    resolution: {integrity: sha512-OWwz05d++TxzLEv4VnsTz5CmZ6mI6S05sfQGEMrNrQcOEERbX46332IvE7pO/EUiw7jUrrS40z/M7kPyjfl04g==}
+     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
+     cpu: [x64]
+     os: [win32]
+@@ -870,53 +887,53 @@ packages:
+     resolution: {integrity: sha512-juG5VWh4qAivzTAeMzvY9xs9HY5rAcr2E4I7tiSSCokRFi7XIZCAu92ZkSTsIj1OPceCifL3cpfteP3pDT9/QQ==}
+     engines: {node: '>=14.0.0'}
+ 
+-  '@next/env@15.2.8':
+-    resolution: {integrity: sha512-TaEsAki14R7BlgywA05t2PFYfwZiNlGUHyIQHVyloXX3y+Dm0HUITe5YwTkjtuOQuDhuuLotNEad4VtnmE11Uw==}
++  '@next/env@15.5.3':
++    resolution: {integrity: sha512-RSEDTRqyihYXygx/OJXwvVupfr9m04+0vH8vyy0HfZ7keRto6VX9BbEk0J2PUk0VGy6YhklJUSrgForov5F9pw==}
+ 
+-  '@next/swc-darwin-arm64@15.2.5':
+-    resolution: {integrity: sha512-4OimvVlFTbgzPdA0kh8A1ih6FN9pQkL4nPXGqemEYgk+e7eQhsst/p35siNNqA49eQA6bvKZ1ASsDtu9gtXuog==}
++  '@next/swc-darwin-arm64@15.5.3':
++    resolution: {integrity: sha512-nzbHQo69+au9wJkGKTU9lP7PXv0d1J5ljFpvb+LnEomLtSbJkbZyEs6sbF3plQmiOB2l9OBtN2tNSvCH1nQ9Jg==}
+     engines: {node: '>= 10'}
+     cpu: [arm64]
+     os: [darwin]
+ 
+-  '@next/swc-darwin-x64@15.2.5':
+-    resolution: {integrity: sha512-ohzRaE9YbGt1ctE0um+UGYIDkkOxHV44kEcHzLqQigoRLaiMtZzGrA11AJh2Lu0lv51XeiY1ZkUvkThjkVNBMA==}
++  '@next/swc-darwin-x64@15.5.3':
++    resolution: {integrity: sha512-w83w4SkOOhekJOcA5HBvHyGzgV1W/XvOfpkrxIse4uPWhYTTRwtGEM4v/jiXwNSJvfRvah0H8/uTLBKRXlef8g==}
+     engines: {node: '>= 10'}
+     cpu: [x64]
+     os: [darwin]
+ 
+-  '@next/swc-linux-arm64-gnu@15.2.5':
+-    resolution: {integrity: sha512-FMSdxSUt5bVXqqOoZCc/Seg4LQep9w/fXTazr/EkpXW2Eu4IFI9FD7zBDlID8TJIybmvKk7mhd9s+2XWxz4flA==}
++  '@next/swc-linux-arm64-gnu@15.5.3':
++    resolution: {integrity: sha512-+m7pfIs0/yvgVu26ieaKrifV8C8yiLe7jVp9SpcIzg7XmyyNE7toC1fy5IOQozmr6kWl/JONC51osih2RyoXRw==}
+     engines: {node: '>= 10'}
+     cpu: [arm64]
+     os: [linux]
+ 
+-  '@next/swc-linux-arm64-musl@15.2.5':
+-    resolution: {integrity: sha512-4ZNKmuEiW5hRKkGp2HWwZ+JrvK4DQLgf8YDaqtZyn7NYdl0cHfatvlnLFSWUayx9yFAUagIgRGRk8pFxS8Qniw==}
++  '@next/swc-linux-arm64-musl@15.5.3':
++    resolution: {integrity: sha512-u3PEIzuguSenoZviZJahNLgCexGFhso5mxWCrrIMdvpZn6lkME5vc/ADZG8UUk5K1uWRy4hqSFECrON6UKQBbQ==}
+     engines: {node: '>= 10'}
+     cpu: [arm64]
+     os: [linux]
+ 
+-  '@next/swc-linux-x64-gnu@15.2.5':
+-    resolution: {integrity: sha512-bE6lHQ9GXIf3gCDE53u2pTl99RPZW5V1GLHSRMJ5l/oB/MT+cohu9uwnCK7QUph2xIOu2a6+27kL0REa/kqwZw==}
++  '@next/swc-linux-x64-gnu@15.5.3':
++    resolution: {integrity: sha512-lDtOOScYDZxI2BENN9m0pfVPJDSuUkAD1YXSvlJF0DKwZt0WlA7T7o3wrcEr4Q+iHYGzEaVuZcsIbCps4K27sA==}
+     engines: {node: '>= 10'}
+     cpu: [x64]
+     os: [linux]
+ 
+-  '@next/swc-linux-x64-musl@15.2.5':
+-    resolution: {integrity: sha512-y7EeQuSkQbTAkCEQnJXm1asRUuGSWAchGJ3c+Qtxh8LVjXleZast8Mn/rL7tZOm7o35QeIpIcid6ufG7EVTTcA==}
++  '@next/swc-linux-x64-musl@15.5.3':
++    resolution: {integrity: sha512-9vWVUnsx9PrY2NwdVRJ4dUURAQ8Su0sLRPqcCCxtX5zIQUBES12eRVHq6b70bbfaVaxIDGJN2afHui0eDm+cLg==}
+     engines: {node: '>= 10'}
+     cpu: [x64]
+     os: [linux]
+ 
+-  '@next/swc-win32-arm64-msvc@15.2.5':
+-    resolution: {integrity: sha512-gQMz0yA8/dskZM2Xyiq2FRShxSrsJNha40Ob/M2n2+JGRrZ0JwTVjLdvtN6vCxuq4ByhOd4a9qEf60hApNR2gQ==}
++  '@next/swc-win32-arm64-msvc@15.5.3':
++    resolution: {integrity: sha512-1CU20FZzY9LFQigRi6jM45oJMU3KziA5/sSG+dXeVaTm661snQP6xu3ykGxxwU5sLG3sh14teO/IOEPVsQMRfA==}
+     engines: {node: '>= 10'}
+     cpu: [arm64]
+     os: [win32]
+ 
+-  '@next/swc-win32-x64-msvc@15.2.5':
+-    resolution: {integrity: sha512-tBDNVUcI7U03+3oMvJ11zrtVin5p0NctiuKmTGyaTIEAVj9Q77xukLXGXRnWxKRIIdFG4OTA2rUVGZDYOwgmAA==}
++  '@next/swc-win32-x64-msvc@15.5.3':
++    resolution: {integrity: sha512-JMoLAq3n3y5tKXPQwCK5c+6tmwkuFDa2XAxz8Wm4+IVthdBZdZGh+lmiLUHg9f9IDwIQpUjp+ysd6OkYTyZRZw==}
+     engines: {node: '>= 10'}
+     cpu: [x64]
+     os: [win32]
+@@ -1711,9 +1728,6 @@ packages:
+   '@standard-schema/spec@1.0.0':
+     resolution: {integrity: sha512-m2bOd0f2RT9k8QJx1JN85cZYyH1RqFBdlwtkSlf4tBDYLCiiZnv1fIIwacK6cqwXavOydf0NPToMQgpKq+dVlA==}
+ 
+-  '@swc/counter@0.1.3':
+-    resolution: {integrity: sha512-e2BR4lsJkkRlKZ/qCHPw9ZaSxc0MVUd7gtbtaB7aMvHeJVYe8sOB8DBZkP2DtISHGSku9sCK6T6cnY0CtXrOCQ==}
+-
+   '@swc/helpers@0.5.15':
+     resolution: {integrity: sha512-JQ5TuMi45Owi4/BIMAJBoSQoOJu12oOk/gADqlcUL9JEdHB8vyjUSsxqeNXnmXHjYKMi2WcYtezGEEhqUI/E2g==}
+ 
+@@ -2033,10 +2047,6 @@ packages:
+   buffer-from@1.1.2:
+     resolution: {integrity: sha512-E+XQCRwSbaaiChtv6k6Dwgc+bx+Bs6vuKJHHl5kox/BaKbhiXzqQOwK4cO22yElGp2OCmjwVhT3HmxgyPGnJfQ==}
+ 
+-  busboy@1.6.0:
+-    resolution: {integrity: sha512-8SFQbg/0hQ9xy3UNTB0YEnsNBbWfhf7RtnzpL7TkBiTBRfrQ9Fxcnz7VJsleJpyp6rVLvXiuORqjlHi5q+PYuA==}
+-    engines: {node: '>=10.16.0'}
+-
+   cacache@18.0.4:
+     resolution: {integrity: sha512-B+L5iIa9mgcjLbliir2th36yEwPftrzteHYujzsx3dFP/31GCHcIeS8f5MGd80odLOjaOvSpU3EEAmRQptkxLQ==}
+     engines: {node: ^16.14.0 || >=18.0.0}
+@@ -2841,13 +2851,13 @@ packages:
+       react: ^16.8 || ^17 || ^18 || ^19 || ^19.0.0-rc
+       react-dom: ^16.8 || ^17 || ^18 || ^19 || ^19.0.0-rc
+ 
+-  next@15.2.8:
+-    resolution: {integrity: sha512-pe2trLKZTdaCuvNER0S9Wp+SP2APf7SfFmyUP9/w1SFA2UqmW0u+IsxCKkiky3n6um7mryaQIlgiDnKrf1ZwIw==}
++  next@15.5.3:
++    resolution: {integrity: sha512-r/liNAx16SQj4D+XH/oI1dlpv9tdKJ6cONYPwwcCC46f2NjpaRWY+EKCzULfgQYV6YKXjHBchff2IZBSlZmJNw==}
+     engines: {node: ^18.18.0 || ^19.8.0 || >= 20.0.0}
+     hasBin: true
+     peerDependencies:
+       '@opentelemetry/api': ^1.1.0
+-      '@playwright/test': ^1.41.2
++      '@playwright/test': ^1.51.1
+       babel-plugin-react-compiler: '*'
+       react: ^18.2.0 || 19.0.0-rc-de68d2f4-20241204 || ^19.0.0
+       react-dom: ^18.2.0 || 19.0.0-rc-de68d2f4-20241204 || ^19.0.0
+@@ -3177,8 +3187,8 @@ packages:
+   server-only@0.0.1:
+     resolution: {integrity: sha512-qepMx2JxAa5jjfzxG79yPPq+8BuFToHd1hm7kI+Z4zAq1ftQiP7HcxMhDDItrbtwVeLg/cY2JnKnrcFkmiswNA==}
+ 
+-  sharp@0.33.5:
+-    resolution: {integrity: sha512-haPVm1EkS9pgvHrQ/F3Xy+hgcuMV0Wm9vfIBSiwZ05k+xgb0PkBQpGsAA/oWdDobNaZTH5ppvHtzCFbnSEwHVw==}
++  sharp@0.34.3:
++    resolution: {integrity: sha512-eX2IQ6nFohW4DbvHIOLRB3MHFpYqaqvXd3Tp5e/T/dSH83fxaNJQRvDMhASmkNTsNTVF2/OOopzRCt7xokgPfg==}
+     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
+ 
+   shebang-command@2.0.0:
+@@ -3272,10 +3282,6 @@ packages:
+     resolution: {integrity: sha512-UhDfHmA92YAlNnCfhmq0VeNL5bDbiZGg7sZ2IvPsXubGkiNa9EC+tUTsjBRsYUAz87btI6/1wf4XoVvQ3uRnmQ==}
+     engines: {node: '>=18'}
+ 
+-  streamsearch@1.1.0:
+-    resolution: {integrity: sha512-Mcc5wHehp9aXz1ax6bZUyY5afg9u2rv5cqQI3mRrYkGC8rW2hM02jWuwjtL++LS5qinSyhj2QfLyNsuc+VsExg==}
+-    engines: {node: '>=10.0.0'}
+-
+   string-width@4.2.3:
+     resolution: {integrity: sha512-wKyQRQpjJ0sIp62ErSZdGsjMJWsap5oRNihHhu6G7JVO/9jIB6UyevL+tXuOqrng8j/cxKTWyWUwvSTriiZz/g==}
+     engines: {node: '>=8'}
+@@ -4173,79 +4179,90 @@ snapshots:
+       protobufjs: 7.5.4
+       yargs: 17.7.2
+ 
+-  '@img/sharp-darwin-arm64@0.33.5':
++  '@img/sharp-darwin-arm64@0.34.3':
+     optionalDependencies:
+-      '@img/sharp-libvips-darwin-arm64': 1.0.4
++      '@img/sharp-libvips-darwin-arm64': 1.2.0
+     optional: true
+ 
+-  '@img/sharp-darwin-x64@0.33.5':
++  '@img/sharp-darwin-x64@0.34.3':
+     optionalDependencies:
+-      '@img/sharp-libvips-darwin-x64': 1.0.4
++      '@img/sharp-libvips-darwin-x64': 1.2.0
++    optional: true
++
++  '@img/sharp-libvips-darwin-arm64@1.2.0':
+     optional: true
+ 
+-  '@img/sharp-libvips-darwin-arm64@1.0.4':
++  '@img/sharp-libvips-darwin-x64@1.2.0':
+     optional: true
+ 
+-  '@img/sharp-libvips-darwin-x64@1.0.4':
++  '@img/sharp-libvips-linux-arm64@1.2.0':
+     optional: true
+ 
+-  '@img/sharp-libvips-linux-arm64@1.0.4':
++  '@img/sharp-libvips-linux-arm@1.2.0':
+     optional: true
+ 
+-  '@img/sharp-libvips-linux-arm@1.0.5':
++  '@img/sharp-libvips-linux-ppc64@1.2.0':
+     optional: true
+ 
+-  '@img/sharp-libvips-linux-s390x@1.0.4':
++  '@img/sharp-libvips-linux-s390x@1.2.0':
+     optional: true
+ 
+-  '@img/sharp-libvips-linux-x64@1.0.4':
++  '@img/sharp-libvips-linux-x64@1.2.0':
+     optional: true
+ 
+-  '@img/sharp-libvips-linuxmusl-arm64@1.0.4':
++  '@img/sharp-libvips-linuxmusl-arm64@1.2.0':
+     optional: true
+ 
+-  '@img/sharp-libvips-linuxmusl-x64@1.0.4':
++  '@img/sharp-libvips-linuxmusl-x64@1.2.0':
++    optional: true
++
++  '@img/sharp-linux-arm64@0.34.3':
++    optionalDependencies:
++      '@img/sharp-libvips-linux-arm64': 1.2.0
+     optional: true
+ 
+-  '@img/sharp-linux-arm64@0.33.5':
++  '@img/sharp-linux-arm@0.34.3':
+     optionalDependencies:
+-      '@img/sharp-libvips-linux-arm64': 1.0.4
++      '@img/sharp-libvips-linux-arm': 1.2.0
+     optional: true
+ 
+-  '@img/sharp-linux-arm@0.33.5':
++  '@img/sharp-linux-ppc64@0.34.3':
+     optionalDependencies:
+-      '@img/sharp-libvips-linux-arm': 1.0.5
++      '@img/sharp-libvips-linux-ppc64': 1.2.0
+     optional: true
+ 
+-  '@img/sharp-linux-s390x@0.33.5':
++  '@img/sharp-linux-s390x@0.34.3':
+     optionalDependencies:
+-      '@img/sharp-libvips-linux-s390x': 1.0.4
++      '@img/sharp-libvips-linux-s390x': 1.2.0
+     optional: true
+ 
+-  '@img/sharp-linux-x64@0.33.5':
++  '@img/sharp-linux-x64@0.34.3':
+     optionalDependencies:
+-      '@img/sharp-libvips-linux-x64': 1.0.4
++      '@img/sharp-libvips-linux-x64': 1.2.0
+     optional: true
+ 
+-  '@img/sharp-linuxmusl-arm64@0.33.5':
++  '@img/sharp-linuxmusl-arm64@0.34.3':
+     optionalDependencies:
+-      '@img/sharp-libvips-linuxmusl-arm64': 1.0.4
++      '@img/sharp-libvips-linuxmusl-arm64': 1.2.0
+     optional: true
+ 
+-  '@img/sharp-linuxmusl-x64@0.33.5':
++  '@img/sharp-linuxmusl-x64@0.34.3':
+     optionalDependencies:
+-      '@img/sharp-libvips-linuxmusl-x64': 1.0.4
++      '@img/sharp-libvips-linuxmusl-x64': 1.2.0
+     optional: true
+ 
+-  '@img/sharp-wasm32@0.33.5':
++  '@img/sharp-wasm32@0.34.3':
+     dependencies:
+       '@emnapi/runtime': 1.5.0
+     optional: true
+ 
+-  '@img/sharp-win32-ia32@0.33.5':
++  '@img/sharp-win32-arm64@0.34.3':
+     optional: true
+ 
+-  '@img/sharp-win32-x64@0.33.5':
++  '@img/sharp-win32-ia32@0.34.3':
++    optional: true
++
++  '@img/sharp-win32-x64@0.34.3':
+     optional: true
+ 
+   '@isaacs/balanced-match@4.0.1': {}
+@@ -4299,30 +4316,30 @@ snapshots:
+ 
+   '@mozilla/readability@0.6.0': {}
+ 
+-  '@next/env@15.2.8': {}
++  '@next/env@15.5.3': {}
+ 
+-  '@next/swc-darwin-arm64@15.2.5':
++  '@next/swc-darwin-arm64@15.5.3':
+     optional: true
+ 
+-  '@next/swc-darwin-x64@15.2.5':
++  '@next/swc-darwin-x64@15.5.3':
+     optional: true
+ 
+-  '@next/swc-linux-arm64-gnu@15.2.5':
++  '@next/swc-linux-arm64-gnu@15.5.3':
+     optional: true
+ 
+-  '@next/swc-linux-arm64-musl@15.2.5':
++  '@next/swc-linux-arm64-musl@15.5.3':
+     optional: true
+ 
+-  '@next/swc-linux-x64-gnu@15.2.5':
++  '@next/swc-linux-x64-gnu@15.5.3':
+     optional: true
+ 
+-  '@next/swc-linux-x64-musl@15.2.5':
++  '@next/swc-linux-x64-musl@15.5.3':
+     optional: true
+ 
+-  '@next/swc-win32-arm64-msvc@15.2.5':
++  '@next/swc-win32-arm64-msvc@15.5.3':
+     optional: true
+ 
+-  '@next/swc-win32-x64-msvc@15.2.5':
++  '@next/swc-win32-x64-msvc@15.5.3':
+     optional: true
+ 
+   '@npmcli/agent@2.2.2':
+@@ -5305,8 +5322,6 @@ snapshots:
+ 
+   '@standard-schema/spec@1.0.0': {}
+ 
+-  '@swc/counter@0.1.3': {}
+-
+   '@swc/helpers@0.5.15':
+     dependencies:
+       tslib: 2.8.1
+@@ -5576,10 +5591,6 @@ snapshots:
+ 
+   buffer-from@1.1.2: {}
+ 
+-  busboy@1.6.0:
+-    dependencies:
+-      streamsearch: 1.1.0
+-
+   cacache@18.0.4:
+     dependencies:
+       '@npmcli/fs': 3.1.1
+@@ -6356,28 +6367,26 @@ snapshots:
+       react: 19.1.1
+       react-dom: 19.1.1(react@19.1.1)
+ 
+-  next@15.2.8(@opentelemetry/api@1.9.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1):
++  next@15.5.3(@opentelemetry/api@1.9.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1):
+     dependencies:
+-      '@next/env': 15.2.8
+-      '@swc/counter': 0.1.3
++      '@next/env': 15.5.3
+       '@swc/helpers': 0.5.15
+-      busboy: 1.6.0
+       caniuse-lite: 1.0.30001741
+       postcss: 8.4.31
+       react: 19.1.1
+       react-dom: 19.1.1(react@19.1.1)
+       styled-jsx: 5.1.6(react@19.1.1)
+     optionalDependencies:
+-      '@next/swc-darwin-arm64': 15.2.5
+-      '@next/swc-darwin-x64': 15.2.5
+-      '@next/swc-linux-arm64-gnu': 15.2.5
+-      '@next/swc-linux-arm64-musl': 15.2.5
+-      '@next/swc-linux-x64-gnu': 15.2.5
+-      '@next/swc-linux-x64-musl': 15.2.5
+-      '@next/swc-win32-arm64-msvc': 15.2.5
+-      '@next/swc-win32-x64-msvc': 15.2.5
++      '@next/swc-darwin-arm64': 15.5.3
++      '@next/swc-darwin-x64': 15.5.3
++      '@next/swc-linux-arm64-gnu': 15.5.3
++      '@next/swc-linux-arm64-musl': 15.5.3
++      '@next/swc-linux-x64-gnu': 15.5.3
++      '@next/swc-linux-x64-musl': 15.5.3
++      '@next/swc-win32-arm64-msvc': 15.5.3
++      '@next/swc-win32-x64-msvc': 15.5.3
+       '@opentelemetry/api': 1.9.0
+-      sharp: 0.33.5
++      sharp: 0.34.3
+     transitivePeerDependencies:
+       - '@babel/core'
+       - babel-plugin-macros
+@@ -6751,31 +6760,34 @@ snapshots:
+ 
+   server-only@0.0.1: {}
+ 
+-  sharp@0.33.5:
++  sharp@0.34.3:
+     dependencies:
+       color: 4.2.3
+       detect-libc: 2.1.0
+       semver: 7.7.2
+     optionalDependencies:
+-      '@img/sharp-darwin-arm64': 0.33.5
+-      '@img/sharp-darwin-x64': 0.33.5
+-      '@img/sharp-libvips-darwin-arm64': 1.0.4
+-      '@img/sharp-libvips-darwin-x64': 1.0.4
+-      '@img/sharp-libvips-linux-arm': 1.0.5
+-      '@img/sharp-libvips-linux-arm64': 1.0.4
+-      '@img/sharp-libvips-linux-s390x': 1.0.4
+-      '@img/sharp-libvips-linux-x64': 1.0.4
+-      '@img/sharp-libvips-linuxmusl-arm64': 1.0.4
+-      '@img/sharp-libvips-linuxmusl-x64': 1.0.4
+-      '@img/sharp-linux-arm': 0.33.5
+-      '@img/sharp-linux-arm64': 0.33.5
+-      '@img/sharp-linux-s390x': 0.33.5
+-      '@img/sharp-linux-x64': 0.33.5
+-      '@img/sharp-linuxmusl-arm64': 0.33.5
+-      '@img/sharp-linuxmusl-x64': 0.33.5
+-      '@img/sharp-wasm32': 0.33.5
+-      '@img/sharp-win32-ia32': 0.33.5
+-      '@img/sharp-win32-x64': 0.33.5
++      '@img/sharp-darwin-arm64': 0.34.3
++      '@img/sharp-darwin-x64': 0.34.3
++      '@img/sharp-libvips-darwin-arm64': 1.2.0
++      '@img/sharp-libvips-darwin-x64': 1.2.0
++      '@img/sharp-libvips-linux-arm': 1.2.0
++      '@img/sharp-libvips-linux-arm64': 1.2.0
++      '@img/sharp-libvips-linux-ppc64': 1.2.0
++      '@img/sharp-libvips-linux-s390x': 1.2.0
++      '@img/sharp-libvips-linux-x64': 1.2.0
++      '@img/sharp-libvips-linuxmusl-arm64': 1.2.0
++      '@img/sharp-libvips-linuxmusl-x64': 1.2.0
++      '@img/sharp-linux-arm': 0.34.3
++      '@img/sharp-linux-arm64': 0.34.3
++      '@img/sharp-linux-ppc64': 0.34.3
++      '@img/sharp-linux-s390x': 0.34.3
++      '@img/sharp-linux-x64': 0.34.3
++      '@img/sharp-linuxmusl-arm64': 0.34.3
++      '@img/sharp-linuxmusl-x64': 0.34.3
++      '@img/sharp-wasm32': 0.34.3
++      '@img/sharp-win32-arm64': 0.34.3
++      '@img/sharp-win32-ia32': 0.34.3
++      '@img/sharp-win32-x64': 0.34.3
+     optional: true
+ 
+   shebang-command@2.0.0:
+@@ -6889,8 +6901,6 @@ snapshots:
+ 
+   stdin-discarder@0.2.2: {}
+ 
+-  streamsearch@1.1.0: {}
+-
+   string-width@4.2.3:
+     dependencies:
+       emoji-regex: 8.0.0
+diff --git a/src/app/api/spotify/categorize/route.ts b/src/app/api/spotify/categorize/route.ts
+index ca84119..a1a4f31 100644
+--- a/src/app/api/spotify/categorize/route.ts
++++ b/src/app/api/spotify/categorize/route.ts
+@@ -55,7 +55,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
+     );
+ 
+     const { object } = await generateObject({
+-      model: openai('gpt-5-nano-2025-08-07'),
++      model: openai('gpt-4.1-mini-2025-04-14'),
+       schema: playlistSuggestionSchema,
+       system: systemPrompt,
+       prompt: userPrompt,
+diff --git a/src/app/spotify-playlister/_components/mini-player.tsx b/src/app/spotify-playlister/_components/mini-player.tsx
+index 88234e7..ad260d3 100644
+--- a/src/app/spotify-playlister/_components/mini-player.tsx
++++ b/src/app/spotify-playlister/_components/mini-player.tsx
+@@ -1,18 +1,16 @@
+ 'use client';
+ 
+-import { Play, Pause, SkipForward } from 'lucide-react';
++import { Play, Pause } from 'lucide-react';
+ import type { PlayerState, SpotifyTrack } from '../_utils/types';
+ 
+ export function MiniPlayer({
+   playerState,
+   currentTrack,
+   onTogglePlayback,
+-  onSkip,
+ }: {
+   playerState: PlayerState;
+   currentTrack: SpotifyTrack | null;
+   onTogglePlayback: (trackUri: string) => void;
+-  onSkip?: (seconds: number) => void;
+ }) {
+   // Don't render if no track has been played yet
+   if (!currentTrack) return null;
+@@ -47,19 +45,6 @@ export function MiniPlayer({
+         </p>
+       </div>
+ 
+-      {/* Skip 30 seconds button */}
+-      {onSkip && (
+-        <button
+-          type="button"
+-          onClick={() => onSkip(30)}
+-          disabled={!playerState.isReady}
+-          className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+-          title="Skip 30 seconds"
+-        >
+-          <SkipForward className="h-5 w-5" />
+-        </button>
+-      )}
+-
+       {/* Play/pause button */}
+       <button
+         type="button"
+diff --git a/src/app/spotify-playlister/_components/playlist-manager.tsx b/src/app/spotify-playlister/_components/playlist-manager.tsx
+index 3e944e2..48e2bec 100644
+--- a/src/app/spotify-playlister/_components/playlist-manager.tsx
++++ b/src/app/spotify-playlister/_components/playlist-manager.tsx
+@@ -1,12 +1,10 @@
+ 'use client';
+ 
+ import { useState } from 'react';
+-import { Plus, Edit2, Trash2, Save, X, ListMusic, Power, Sparkles, Loader2, History, CheckCircle2 } from 'lucide-react';
+-import { toast } from 'sonner';
++import { Plus, Edit2, Trash2, Save, X, ListMusic, Power } from 'lucide-react';
+ import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
+ import { Button } from '~/components/ui/button';
+ import { Input } from '~/components/ui/input';
+-import { Textarea } from '~/components/ui/textarea';
+ import { Skeleton } from '~/components/ui/skeleton';
+ import {
+   Tooltip,
+@@ -14,24 +12,16 @@ import {
+   TooltipProvider,
+   TooltipTrigger,
+ } from '~/components/ui/tooltip';
+-import { BackfillPreviewDialog, type BackfillMatch } from './backfill-preview-dialog';
+ import type { LocalPlaylist, SpotifyPlaylist } from '../_utils/types';
+-import type { PlayerState } from '../_utils/types';
+-import { formatPlaylistName } from '../_utils/formatters';
+ 
+ type PlaylistManagerProps = {
+   localPlaylists: LocalPlaylist[] | undefined;
+   spotifyPlaylists: SpotifyPlaylist[] | undefined;
+   isLoading: boolean;
+-  onAddPlaylist: (spotifyPlaylist: SpotifyPlaylist, description: string, userNotes?: string) => void;
+-  onCreatePlaylist: (name: string, description: string, userNotes?: string) => Promise<{ playlist: SpotifyPlaylist } | null>;
+-  onUpdateDescription: (playlistId: string, description: string, userNotes?: string) => void;
++  onAddPlaylist: (spotifyPlaylist: SpotifyPlaylist, description: string) => void;
++  onUpdateDescription: (playlistId: string, description: string) => void;
+   onToggleActive: (playlistId: string, isActive: boolean) => void;
+   onDeletePlaylist: (playlistId: string) => void;
+-  onCheckPastSongs?: (playlist: LocalPlaylist) => Promise<BackfillMatch[] | null>;
+-  onConfirmBackfill?: (playlist: LocalPlaylist, matches: BackfillMatch[]) => Promise<void>;
+-  playerState?: PlayerState;
+-  onTogglePlayback?: (trackUri: string) => void;
+ };
+ 
+ export function PlaylistManager({
+@@ -39,49 +29,15 @@ export function PlaylistManager({
+   spotifyPlaylists,
+   isLoading,
+   onAddPlaylist,
+-  onCreatePlaylist,
+   onUpdateDescription,
+   onToggleActive,
+   onDeletePlaylist,
+-  onCheckPastSongs,
+-  onConfirmBackfill,
+-  playerState,
+-  onTogglePlayback,
+ }: PlaylistManagerProps) {
+   const [isAdding, setIsAdding] = useState(false);
+-  const [isCreating, setIsCreating] = useState(false);
+   const [selectedSpotifyPlaylist, setSelectedSpotifyPlaylist] = useState<SpotifyPlaylist | null>(null);
+-  // Add existing playlist state
+-  const [addUserNotes, setAddUserNotes] = useState('');
+-  const [addGeneratedDescription, setAddGeneratedDescription] = useState('');
+-  // Create new playlist state
+-  const [newPlaylistName, setNewPlaylistName] = useState('');
+-  const [newPlaylistVibe, setNewPlaylistVibe] = useState('');
+-  const [generatedDescription, setGeneratedDescription] = useState('');
+-  // Edit playlist state
++  const [newDescription, setNewDescription] = useState('');
+   const [editingId, setEditingId] = useState<string | null>(null);
+-  const [editUserNotes, setEditUserNotes] = useState('');
+-  const [editGeneratedDescription, setEditGeneratedDescription] = useState('');
+-  // Loading states
+-  const [isGenerating, setIsGenerating] = useState(false);
+-  const [isGeneratingEdit, setIsGeneratingEdit] = useState(false);
+-  const [isGeneratingCreate, setIsGeneratingCreate] = useState(false);
+-  const [isSubmittingCreate, setIsSubmittingCreate] = useState(false);
+-  const [backfillingId, setBackfillingId] = useState<string | null>(null);
+-  const [newlyCreatedPlaylist, setNewlyCreatedPlaylist] = useState<{ playlist: SpotifyPlaylist; description: string } | null>(null);
+-  const [previewDialog, setPreviewDialog] = useState<{
+-    isOpen: boolean;
+-    matches: BackfillMatch[];
+-    playlistName: string;
+-    selectedPlaylist: LocalPlaylist | null;
+-    isConfirming: boolean;
+-  }>({
+-    isOpen: false,
+-    matches: [],
+-    playlistName: '',
+-    selectedPlaylist: null,
+-    isConfirming: false,
+-  });
++  const [editDescription, setEditDescription] = useState('');
+ 
+   // Filter out playlists already added locally
+   const localPlaylistIds = new Set(localPlaylists?.map((p) => p.spotifyPlaylistId) ?? []);
+@@ -90,225 +46,30 @@ export function PlaylistManager({
+   );
+ 
+   function handleAddPlaylist() {
+-    if (selectedSpotifyPlaylist && addGeneratedDescription.trim()) {
+-      onAddPlaylist(selectedSpotifyPlaylist, addGeneratedDescription.trim(), addUserNotes.trim() || undefined);
++    if (selectedSpotifyPlaylist && newDescription.trim()) {
++      onAddPlaylist(selectedSpotifyPlaylist, newDescription.trim());
+       setIsAdding(false);
+       setSelectedSpotifyPlaylist(null);
+-      setAddUserNotes('');
+-      setAddGeneratedDescription('');
++      setNewDescription('');
+     }
+   }
+ 
+   function handleStartEdit(playlist: LocalPlaylist) {
+     setEditingId(playlist._id);
+-    setEditUserNotes(playlist.userNotes ?? '');
+-    setEditGeneratedDescription(''); // Clear any previous preview
++    setEditDescription(playlist.description);
+   }
+ 
+-  function handleSaveEdit(playlist: LocalPlaylist) {
+-    const newDescription = editGeneratedDescription.trim() || playlist.description;
+-    onUpdateDescription(playlist._id, newDescription, editUserNotes.trim() || undefined);
++  function handleSaveEdit(playlistId: string) {
++    if (editDescription.trim()) {
++      onUpdateDescription(playlistId, editDescription.trim());
++    }
+     setEditingId(null);
+-    setEditUserNotes('');
+-    setEditGeneratedDescription('');
++    setEditDescription('');
+   }
+ 
+   function handleCancelEdit() {
+     setEditingId(null);
+-    setEditUserNotes('');
+-    setEditGeneratedDescription('');
+-  }
+-
+-  async function handleGenerateAddDescription() {
+-    if (!addUserNotes.trim()) {
+-      toast.error('Enter some notes first');
+-      return;
+-    }
+-
+-    setIsGenerating(true);
+-    try {
+-      const res = await fetch('/api/spotify/generate-playlist-description', {
+-        method: 'POST',
+-        headers: { 'Content-Type': 'application/json' },
+-        body: JSON.stringify({ userNotes: addUserNotes }),
+-      });
+-
+-      if (!res.ok) throw new Error('Failed to generate');
+-
+-      const data = await res.json();
+-      setAddGeneratedDescription(data.description);
+-    } catch {
+-      toast.error('Failed to generate description');
+-    } finally {
+-      setIsGenerating(false);
+-    }
+-  }
+-
+-  async function handleGenerateEditDescription() {
+-    if (!editUserNotes.trim()) {
+-      toast.error('Enter some notes first');
+-      return;
+-    }
+-
+-    setIsGeneratingEdit(true);
+-    try {
+-      const res = await fetch('/api/spotify/generate-playlist-description', {
+-        method: 'POST',
+-        headers: { 'Content-Type': 'application/json' },
+-        body: JSON.stringify({ userNotes: editUserNotes }),
+-      });
+-
+-      if (!res.ok) throw new Error('Failed to generate');
+-
+-      const data = await res.json();
+-      setEditGeneratedDescription(data.description);
+-    } catch {
+-      toast.error('Failed to generate description');
+-    } finally {
+-      setIsGeneratingEdit(false);
+-    }
+-  }
+-
+-  async function handleGenerateCreateDescription() {
+-    if (!newPlaylistVibe.trim()) {
+-      toast.error('Enter some notes first');
+-      return;
+-    }
+-
+-    setIsGeneratingCreate(true);
+-    try {
+-      const res = await fetch('/api/spotify/generate-playlist-description', {
+-        method: 'POST',
+-        headers: { 'Content-Type': 'application/json' },
+-        body: JSON.stringify({ userNotes: newPlaylistVibe }),
+-      });
+-
+-      if (!res.ok) throw new Error('Failed to generate');
+-
+-      const data = await res.json();
+-      setGeneratedDescription(data.description);
+-    } catch {
+-      toast.error('Failed to generate description');
+-    } finally {
+-      setIsGeneratingCreate(false);
+-    }
+-  }
+-
+-  async function handleCreatePlaylist() {
+-    if (!newPlaylistName.trim() || !generatedDescription.trim()) {
+-      toast.error('Name and description are required');
+-      return;
+-    }
+-
+-    setIsSubmittingCreate(true);
+-    try {
+-      const result = await onCreatePlaylist(
+-        newPlaylistName.trim(),
+-        generatedDescription.trim(),
+-        newPlaylistVibe.trim() || undefined
+-      );
+-      if (result) {
+-        toast.success(`Created "${newPlaylistName}"`);
+-        // Show seed suggestion prompt
+-        setNewlyCreatedPlaylist({ playlist: result.playlist, description: generatedDescription });
+-        // Reset form but keep isCreating true to show the seed prompt
+-        setNewPlaylistName('');
+-        setNewPlaylistVibe('');
+-        setGeneratedDescription('');
+-      }
+-    } catch {
+-      toast.error('Failed to create playlist');
+-    } finally {
+-      setIsSubmittingCreate(false);
+-    }
+-  }
+-
+-  function handleDismissNewPlaylist() {
+-    setNewlyCreatedPlaylist(null);
+-    setIsCreating(false);
+-  }
+-
+-  async function handleSeedNewPlaylist() {
+-    if (!newlyCreatedPlaylist || !onCheckPastSongs) return;
+-
+-    // Find the local playlist that was just created
+-    const localPlaylist = localPlaylists?.find(
+-      (p) => p.spotifyPlaylistId === newlyCreatedPlaylist.playlist.id
+-    );
+-
+-    if (localPlaylist) {
+-      await handleCheckPastSongs(localPlaylist);
+-    }
+-
+-    handleDismissNewPlaylist();
+-  }
+-
+-  async function handleCheckPastSongs(playlist: LocalPlaylist) {
+-    if (!onCheckPastSongs) return;
+-
+-    setBackfillingId(playlist._id);
+-    try {
+-      const matches = await onCheckPastSongs(playlist);
+-      if (matches && matches.length > 0) {
+-        setPreviewDialog({
+-          isOpen: true,
+-          matches,
+-          playlistName: playlist.name,
+-          selectedPlaylist: playlist,
+-          isConfirming: false,
+-        });
+-      } else {
+-        toast.info(`No matching songs found for "${playlist.name}"`);
+-      }
+-    } catch {
+-      toast.error('Failed to check past songs');
+-    } finally {
+-      setBackfillingId(null);
+-    }
+-  }
+-
+-  async function handleConfirmBackfill(matches: BackfillMatch[]) {
+-    const { selectedPlaylist } = previewDialog;
+-    console.log('[PlaylistManager] Confirming backfill:', {
+-      playlistName: selectedPlaylist?.name,
+-      matchCount: matches.length,
+-    });
+-
+-    if (!selectedPlaylist || !onConfirmBackfill) {
+-      console.error('[PlaylistManager] Missing selectedPlaylist or onConfirmBackfill');
+-      return;
+-    }
+-
+-    setPreviewDialog((prev) => ({ ...prev, isConfirming: true }));
+-
+-    try {
+-      console.log('[PlaylistManager] Calling onConfirmBackfill');
+-      await onConfirmBackfill(selectedPlaylist, matches);
+-      console.log('[PlaylistManager] onConfirmBackfill completed successfully');
+-      toast.success(`Added ${matches.length} songs to "${selectedPlaylist.name}"`);
+-      setPreviewDialog({
+-        isOpen: false,
+-        matches: [],
+-        playlistName: '',
+-        selectedPlaylist: null,
+-        isConfirming: false,
+-      });
+-    } catch (error) {
+-      console.error('[PlaylistManager] Error during confirm:', error);
+-      toast.error(`Failed to add songs: ${error instanceof Error ? error.message : 'Unknown error'}`);
+-    } finally {
+-      setPreviewDialog((prev) => ({ ...prev, isConfirming: false }));
+-    }
+-  }
+-
+-  function handleCancelBackfill() {
+-    setPreviewDialog({
+-      isOpen: false,
+-      matches: [],
+-      playlistName: '',
+-      selectedPlaylist: null,
+-      isConfirming: false,
+-    });
++    setEditDescription('');
+   }
+ 
+   if (isLoading) {
+@@ -331,150 +92,19 @@ export function PlaylistManager({
+           <ListMusic className="h-5 w-5" />
+           Your Playlists
+         </CardTitle>
+-        {!isAdding && !isCreating && (
+-          <div className="flex gap-2">
+-            <Button size="sm" variant="outline" onClick={() => setIsCreating(true)}>
+-              <Sparkles className="mr-2 h-4 w-4" />
+-              Create New
+-            </Button>
+-            <Button size="sm" onClick={() => setIsAdding(true)}>
+-              <Plus className="mr-2 h-4 w-4" />
+-              Add Existing
+-            </Button>
+-          </div>
++        {!isAdding && (
++          <Button size="sm" onClick={() => setIsAdding(true)}>
++            <Plus className="mr-2 h-4 w-4" />
++            Add Playlist
++          </Button>
+         )}
+       </CardHeader>
+       <CardContent className="space-y-4">
+-        {/* Create New Playlist Form */}
+-        {isCreating && (
+-          <div className="bg-primary/5 border border-primary/50 border-dashed p-4 rounded-lg space-y-3">
+-            <p className="font-medium text-sm">Create a new playlist</p>
+-
+-            <Input
+-              placeholder="Playlist name"
+-              value={newPlaylistName}
+-              onChange={(e) => setNewPlaylistName(e.target.value)}
+-              autoFocus
+-            />
+-
+-            <div className="space-y-2">
+-              <div className="flex gap-2">
+-                <Textarea
+-                  placeholder="Describe the vibe (e.g., 'late night drives, melancholy')"
+-                  value={newPlaylistVibe}
+-                  onChange={(e) => setNewPlaylistVibe(e.target.value)}
+-                  rows={2}
+-                  className="flex-1"
+-                />
+-                <Button
+-                  type="button"
+-                  size="icon"
+-                  variant="outline"
+-                  onClick={handleGenerateCreateDescription}
+-                  disabled={isGeneratingCreate || !newPlaylistVibe.trim()}
+-                  title="Generate detailed description"
+-                >
+-                  {isGeneratingCreate ? (
+-                    <Loader2 className="h-4 w-4 animate-spin" />
+-                  ) : (
+-                    <Sparkles className="h-4 w-4" />
+-                  )}
+-                </Button>
+-              </div>
+-              <p className="text-muted-foreground text-xs">
+-                Enter short notes, then click <Sparkles className="inline h-3 w-3" /> to generate a description
+-              </p>
+-            </div>
+-
+-            {generatedDescription && (
+-              <div className="space-y-2">
+-                <p className="font-medium text-muted-foreground text-xs">Generated description:</p>
+-                <div className="rounded-md bg-muted p-3 text-sm">
+-                  {generatedDescription}
+-                </div>
+-                <Button
+-                  type="button"
+-                  size="sm"
+-                  variant="ghost"
+-                  onClick={handleGenerateCreateDescription}
+-                  disabled={isGeneratingCreate}
+-                >
+-                  {isGeneratingCreate ? (
+-                    <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+-                  ) : (
+-                    <Sparkles className="mr-2 h-3 w-3" />
+-                  )}
+-                  Regenerate
+-                </Button>
+-              </div>
+-            )}
+-
+-            <div className="flex gap-2">
+-              <Button
+-                size="sm"
+-                onClick={handleCreatePlaylist}
+-                disabled={!newPlaylistName.trim() || !generatedDescription.trim() || isSubmittingCreate}
+-              >
+-                {isSubmittingCreate ? (
+-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+-                ) : (
+-                  <Plus className="mr-2 h-4 w-4" />
+-                )}
+-                Create
+-              </Button>
+-              <Button
+-                size="sm"
+-                variant="ghost"
+-                onClick={() => {
+-                  setIsCreating(false);
+-                  setNewPlaylistName('');
+-                  setNewPlaylistVibe('');
+-                  setGeneratedDescription('');
+-                }}
+-              >
+-                Cancel
+-              </Button>
+-            </div>
+-          </div>
+-        )}
+-
+-        {/* Seed Suggestion Prompt - shown after playlist creation */}
+-        {newlyCreatedPlaylist && (
+-          <div className="bg-green-500/10 border border-green-500/50 p-4 rounded-lg space-y-3">
+-            <div className="flex items-center gap-2">
+-              <CheckCircle2 className="h-5 w-5 text-green-500" />
+-              <p className="font-medium text-sm">
+-                Created &quot;{formatPlaylistName(newlyCreatedPlaylist.playlist.name)}&quot;!
+-              </p>
+-            </div>
+-            <p className="text-muted-foreground text-sm">
+-              Want to seed this playlist with songs you&apos;ve already categorized?
+-            </p>
+-            <div className="flex gap-2">
+-              <Button
+-                size="sm"
+-                onClick={handleSeedNewPlaylist}
+-                disabled={!onCheckPastSongs || backfillingId !== null}
+-              >
+-                {backfillingId ? (
+-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+-                ) : (
+-                  <History className="mr-2 h-4 w-4" />
+-                )}
+-                Check Past Songs
+-              </Button>
+-              <Button size="sm" variant="ghost" onClick={handleDismissNewPlaylist}>
+-                Skip
+-              </Button>
+-            </div>
+-          </div>
+-        )}
+-
+-        {/* Add Existing Playlist Form */}
++        {/* Add New Playlist Form */}
+         {isAdding && (
+-          <div className="border border-dashed p-4 rounded-lg space-y-3">
++          <div className="space-y-3 rounded-lg border border-dashed p-4">
+             <p className="font-medium text-sm">Add a Spotify playlist</p>
+-
++            
+             {/* Spotify Playlist Selector */}
+             <select
+               className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+@@ -487,71 +117,30 @@ export function PlaylistManager({
+               <option value="">Select a playlist...</option>
+               {availableSpotifyPlaylists?.map((playlist) => (
+                 <option key={playlist.id} value={playlist.id}>
+-                  {formatPlaylistName(playlist.name)} ({playlist.tracks.total} tracks)
++                  {playlist.name} ({playlist.tracks.total} tracks)
+                 </option>
+               ))}
+             </select>
+ 
+             {selectedSpotifyPlaylist && (
+               <div className="space-y-2">
+-                <div className="flex gap-2">
+-                  <Textarea
+-                    placeholder="Describe the vibe (e.g., 'late night drives, melancholy')"
+-                    value={addUserNotes}
+-                    onChange={(e) => setAddUserNotes(e.target.value)}
+-                    autoFocus
+-                    rows={2}
+-                    className="flex-1"
+-                  />
+-                  <Button
+-                    type="button"
+-                    size="icon"
+-                    variant="outline"
+-                    onClick={handleGenerateAddDescription}
+-                    disabled={isGenerating || !addUserNotes.trim()}
+-                    title="Generate detailed description"
+-                  >
+-                    {isGenerating ? (
+-                      <Loader2 className="h-4 w-4 animate-spin" />
+-                    ) : (
+-                      <Sparkles className="h-4 w-4" />
+-                    )}
+-                  </Button>
+-                </div>
++                <Input
++                  placeholder="Describe the mood/vibe (e.g., 'late night drives, melancholy')"
++                  value={newDescription}
++                  onChange={(e) => setNewDescription(e.target.value)}
++                  autoFocus
++                />
+                 <p className="text-muted-foreground text-xs">
+-                  Enter short notes, then click <Sparkles className="inline h-3 w-3" /> to generate a description
++                  This description tells the AI what kind of songs belong in this playlist
+                 </p>
+               </div>
+             )}
+ 
+-            {addGeneratedDescription && (
+-              <div className="space-y-2">
+-                <p className="font-medium text-muted-foreground text-xs">Generated description:</p>
+-                <div className="rounded-md bg-muted p-3 text-sm">
+-                  {addGeneratedDescription}
+-                </div>
+-                <Button
+-                  type="button"
+-                  size="sm"
+-                  variant="ghost"
+-                  onClick={handleGenerateAddDescription}
+-                  disabled={isGenerating}
+-                >
+-                  {isGenerating ? (
+-                    <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+-                  ) : (
+-                    <Sparkles className="mr-2 h-3 w-3" />
+-                  )}
+-                  Regenerate
+-                </Button>
+-              </div>
+-            )}
+-
+             <div className="flex gap-2">
+               <Button
+                 size="sm"
+                 onClick={handleAddPlaylist}
+-                disabled={!selectedSpotifyPlaylist || !addGeneratedDescription.trim()}
++                disabled={!selectedSpotifyPlaylist || !newDescription.trim()}
+               >
+                 <Plus className="mr-2 h-4 w-4" />
+                 Add
+@@ -562,8 +151,7 @@ export function PlaylistManager({
+                 onClick={() => {
+                   setIsAdding(false);
+                   setSelectedSpotifyPlaylist(null);
+-                  setAddUserNotes('');
+-                  setAddGeneratedDescription('');
++                  setNewDescription('');
+                 }}
+               >
+                 Cancel
+@@ -585,68 +173,22 @@ export function PlaylistManager({
+             {localPlaylists.map((playlist) => (
+               <div
+                 key={playlist._id}
+-                className={`rounded-lg border p-3 ${!playlist.isActive ? 'opacity-50' : ''
+-                  }`}
++                className={`rounded-lg border p-3 ${
++                  !playlist.isActive ? 'opacity-50' : ''
++                }`}
+               >
+                 {editingId === playlist._id ? (
+-                  <div className="space-y-3">
+-                    <p className="font-medium">{formatPlaylistName(playlist.name)}</p>
+-
+-                    {/* User Notes Input */}
+-                    <div className="space-y-2">
+-                      <p className="font-medium text-muted-foreground text-xs">Your notes:</p>
+-                      <div className="flex gap-2">
+-                        <Textarea
+-                          value={editUserNotes}
+-                          onChange={(e) => setEditUserNotes(e.target.value)}
+-                          placeholder="Describe the vibe (e.g., 'late night drives, melancholy')"
+-                          autoFocus
+-                          rows={2}
+-                          className="flex-1"
+-                        />
+-                        <Button
+-                          type="button"
+-                          size="icon"
+-                          variant="outline"
+-                          onClick={handleGenerateEditDescription}
+-                          disabled={isGeneratingEdit || !editUserNotes.trim()}
+-                          title="Generate new description"
+-                        >
+-                          {isGeneratingEdit ? (
+-                            <Loader2 className="h-4 w-4 animate-spin" />
+-                          ) : (
+-                            <Sparkles className="h-4 w-4" />
+-                          )}
+-                        </Button>
+-                      </div>
+-                    </div>
+-
+-                    {/* Current Description */}
+-                    <div className="space-y-1">
+-                      <p className="font-medium text-muted-foreground text-xs">Current description:</p>
+-                      <div className="rounded-md bg-muted/50 p-3 text-sm text-muted-foreground">
+-                        {playlist.description}
+-                      </div>
+-                    </div>
+-
+-                    {/* Generated Preview (if regenerated) */}
+-                    {editGeneratedDescription && (
+-                      <div className="space-y-1">
+-                        <p className="font-medium text-muted-foreground text-xs">New description preview:</p>
+-                        <div className="rounded-md bg-green-500/10 border border-green-500/30 p-3 text-sm">
+-                          {editGeneratedDescription}
+-                        </div>
+-                      </div>
+-                    )}
+-
++                  <div className="space-y-2">
++                    <p className="font-medium">{playlist.name}</p>
++                    <Input
++                      value={editDescription}
++                      onChange={(e) => setEditDescription(e.target.value)}
++                      autoFocus
++                    />
+                     <div className="flex gap-2">
+-                      <Button
+-                        size="sm"
+-                        onClick={() => handleSaveEdit(playlist)}
+-                        disabled={!editGeneratedDescription && editUserNotes === (playlist.userNotes ?? '')}
+-                      >
++                      <Button size="sm" onClick={() => handleSaveEdit(playlist._id)}>
+                         <Save className="mr-2 h-3 w-3" />
+-                        {editGeneratedDescription ? 'Accept' : 'Save Notes'}
++                        Save
+                       </Button>
+                       <Button size="sm" variant="ghost" onClick={handleCancelEdit}>
+                         <X className="mr-2 h-3 w-3" />
+@@ -657,33 +199,12 @@ export function PlaylistManager({
+                 ) : (
+                   <div className="flex items-start justify-between gap-2">
+                     <div className="min-w-0 flex-1">
+-                      <p className="font-medium">{formatPlaylistName(playlist.name)}</p>
++                      <p className="font-medium">{playlist.name}</p>
++                      <p className="text-muted-foreground text-sm">
++                        {playlist.description}
++                      </p>
+                     </div>
+                     <div className="flex gap-1">
+-                      {onCheckPastSongs && (
+-                        <TooltipProvider>
+-                          <Tooltip>
+-                            <TooltipTrigger asChild>
+-                              <Button
+-                                size="icon"
+-                                variant="ghost"
+-                                className="h-8 w-8"
+-                                onClick={() => handleCheckPastSongs(playlist)}
+-                                disabled={backfillingId === playlist._id}
+-                              >
+-                                {backfillingId === playlist._id ? (
+-                                  <Loader2 className="h-4 w-4 animate-spin" />
+-                                ) : (
+-                                  <History className="h-4 w-4" />
+-                                )}
+-                              </Button>
+-                            </TooltipTrigger>
+-                            <TooltipContent>
+-                              Check past songs for this playlist
+-                            </TooltipContent>
+-                          </Tooltip>
+-                        </TooltipProvider>
+-                      )}
+                       <TooltipProvider>
+                         <Tooltip>
+                           <TooltipTrigger asChild>
+@@ -696,10 +217,11 @@ export function PlaylistManager({
+                               }
+                             >
+                               <Power
+-                                className={`h-4 w-4 ${playlist.isActive
+-                                  ? 'text-green-500'
+-                                  : 'text-muted-foreground'
+-                                  }`}
++                                className={`h-4 w-4 ${
++                                  playlist.isActive
++                                    ? 'text-green-500'
++                                    : 'text-muted-foreground'
++                                }`}
+                               />
+                             </Button>
+                           </TooltipTrigger>
+@@ -732,18 +254,6 @@ export function PlaylistManager({
+           </div>
+         )}
+       </CardContent>
+-
+-      {/* Backfill Preview Dialog */}
+-      <BackfillPreviewDialog
+-        isOpen={previewDialog.isOpen}
+-        matches={previewDialog.matches}
+-        playlistName={previewDialog.playlistName}
+-        isLoading={previewDialog.isConfirming}
+-        playerState={playerState}
+-        onTogglePlayback={onTogglePlayback}
+-        onConfirm={handleConfirmBackfill}
+-        onCancel={handleCancelBackfill}
+-      />
+     </Card>
+   );
+ }
+diff --git a/src/app/spotify-playlister/_components/playlist-suggestions.tsx b/src/app/spotify-playlister/_components/playlist-suggestions.tsx
+index 023ca00..1b53989 100644
+--- a/src/app/spotify-playlister/_components/playlist-suggestions.tsx
++++ b/src/app/spotify-playlister/_components/playlist-suggestions.tsx
+@@ -6,7 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
+ import { Button } from '~/components/ui/button';
+ import { Checkbox } from '~/components/ui/checkbox';
+ import { Badge } from '~/components/ui/badge';
+-import { formatPlaylistName } from '../_utils/formatters';
+ import type { PlaylistSuggestion, SpotifyTrack, LocalPlaylist } from '../_utils/types';
+ 
+ type PlaylistSuggestionsProps = {
+@@ -36,7 +35,7 @@ export function PlaylistSuggestions({
+         .map((s) => s.playlistId)
+     );
+   });
+-  const [showOtherPlaylists, setShowOtherPlaylists] = useState(true);
++  const [showOtherPlaylists, setShowOtherPlaylists] = useState(false);
+ 
+   // Get playlists that weren't suggested
+   const suggestedIds = new Set(suggestions.map((s) => s.playlistId));
+@@ -111,7 +110,7 @@ export function PlaylistSuggestions({
+                         htmlFor={suggestion.playlistId}
+                         className="cursor-pointer font-medium"
+                       >
+-                        {formatPlaylistName(suggestion.playlistName)}
++                        {suggestion.playlistName}
+                       </label>
+                       <Badge
+                         variant="outline"
+@@ -123,6 +122,11 @@ export function PlaylistSuggestions({
+                     <p className="text-muted-foreground text-sm">
+                       {suggestion.reason}
+                     </p>
++                    {playlist && (
++                      <p className="text-muted-foreground text-xs">
++                        Playlist vibe: {playlist.description}
++                      </p>
++                    )}
+                   </div>
+                 </div>
+               );
+@@ -161,7 +165,7 @@ export function PlaylistSuggestions({
+                         : 'border-border hover:border-muted-foreground'
+                         }`}
+                     >
+-                      {formatPlaylistName(playlist.name)}
++                      {playlist.name}
+                     </button>
+                   );
+                 })}
+diff --git a/src/app/spotify-playlister/_components/song-review-card.tsx b/src/app/spotify-playlister/_components/song-review-card.tsx
+index 9ec79af..fee5a98 100644
+--- a/src/app/spotify-playlister/_components/song-review-card.tsx
++++ b/src/app/spotify-playlister/_components/song-review-card.tsx
+@@ -1,19 +1,16 @@
+ 'use client';
+ 
+-import { useState, useEffect } from 'react';
+-import { Sparkles, Loader2, ExternalLink, Play, Pause } from 'lucide-react';
++import { useState } from 'react';
++import { Sparkles, Loader2, ExternalLink } from 'lucide-react';
+ import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
+ import { Button } from '~/components/ui/button';
+-import { Textarea } from '~/components/ui/textarea';
++import { Input } from '~/components/ui/input';
+ import { Label } from '~/components/ui/label';
+-import type { SpotifyTrack, ReviewState, PlayerState } from '../_utils/types';
++import type { SpotifyTrack, ReviewState } from '../_utils/types';
+ 
+ type SongReviewCardProps = {
+   track: SpotifyTrack;
+   reviewState: ReviewState;
+-  initialInput?: string;
+-  playerState?: PlayerState;
+-  onTogglePlayback?: (trackUri: string) => void;
+   onSubmit: (userInput: string) => void;
+   onCancel: () => void;
+ };
+@@ -21,18 +18,10 @@ type SongReviewCardProps = {
+ export function SongReviewCard({
+   track,
+   reviewState,
+-  initialInput = '',
+-  playerState,
+-  onTogglePlayback,
+   onSubmit,
+   onCancel,
+ }: SongReviewCardProps) {
+-  const [userInput, setUserInput] = useState(initialInput);
+-
+-  // Update input when initialInput changes (e.g., re-categorizing a track)
+-  useEffect(() => {
+-    setUserInput(initialInput);
+-  }, [initialInput]);
++  const [userInput, setUserInput] = useState('');
+   const isLoading = reviewState.status === 'loading';
+ 
+   function handleSubmit(e: React.FormEvent) {
+@@ -44,9 +33,6 @@ export function SongReviewCard({
+ 
+   const albumImage = track.album.images[0]?.url;
+   const artistNames = track.artists.map((a) => a.name).join(', ');
+-  const isCurrentTrack = playerState?.currentTrackId === track.id;
+-  const isPlayButtonLoading = playerState?.isPending && playerState?.pendingTrackId === track.id;
+-  const isPlaying = isCurrentTrack && playerState?.isPlaying;
+ 
+   return (
+     <Card>
+@@ -67,33 +53,9 @@ export function SongReviewCard({
+             />
+           )}
+           <div className="flex-1 space-y-1">
+-            <div className="flex items-start justify-between gap-2">
+-              <div>
+-                <h3 className="font-semibold text-lg">{track.name}</h3>
+-                <p className="text-muted-foreground">{artistNames}</p>
+-                <p className="text-muted-foreground text-sm">{track.album.name}</p>
+-              </div>
+-              {onTogglePlayback && (
+-                <button
+-                  type="button"
+-                  onClick={(e) => {
+-                    e.preventDefault();
+-                    onTogglePlayback(`spotify:track:${track.id}`);
+-                  }}
+-                  disabled={!playerState?.isReady}
+-                  className="p-1 flex-shrink-0 rounded hover:bg-primary/10 disabled:opacity-50"
+-                  title={isPlaying ? 'Pause' : 'Play'}
+-                >
+-                  {isPlayButtonLoading ? (
+-                    <Loader2 className="h-5 w-5 animate-spin" />
+-                  ) : isPlaying ? (
+-                    <Pause className="h-5 w-5" />
+-                  ) : (
+-                    <Play className="h-5 w-5" />
+-                  )}
+-                </button>
+-              )}
+-            </div>
++            <h3 className="font-semibold text-lg">{track.name}</h3>
++            <p className="text-muted-foreground">{artistNames}</p>
++            <p className="text-muted-foreground text-sm">{track.album.name}</p>
+             <a
+               href={track.external_urls.spotify}
+               target="_blank"
+@@ -112,14 +74,13 @@ export function SongReviewCard({
+             <Label htmlFor="vibe-input">
+               Describe when you&apos;d listen to this song
+             </Label>
+-            <Textarea
++            <Input
+               id="vibe-input"
+               placeholder="e.g., late night drive, moody, introspective..."
+               value={userInput}
+               onChange={(e) => setUserInput(e.target.value)}
+               disabled={isLoading}
+               autoFocus
+-              rows={3}
+             />
+             <p className="text-muted-foreground text-xs">
+               The AI will match your description to your playlist vibes
+diff --git a/src/app/spotify-playlister/_components/track-row.tsx b/src/app/spotify-playlister/_components/track-row.tsx
+index 653a832..180987e 100644
+--- a/src/app/spotify-playlister/_components/track-row.tsx
++++ b/src/app/spotify-playlister/_components/track-row.tsx
+@@ -1,6 +1,6 @@
+ 'use client';
+ 
+-import { Play, Pause, Bookmark, Loader2, X } from 'lucide-react';
++import { Play, Pause, Loader2 } from 'lucide-react';
+ import type { SpotifyTrack, PlayerState } from '../_utils/types';
+ 
+ export function TrackRow({
+@@ -9,16 +9,12 @@ export function TrackRow({
+   playerState,
+   onSelect,
+   onTogglePlayback,
+-  onSaveForLater,
+-  onRemove,
+ }: {
+   track: SpotifyTrack;
+   isSelected: boolean;
+   playerState: PlayerState;
+   onSelect: () => void;
+   onTogglePlayback: (trackUri: string) => void;
+-  onSaveForLater?: () => void;
+-  onRemove?: () => void;
+ }) {
+   const isPlaying = playerState.currentTrackId === track.id && playerState.isPlaying;
+   const isCurrentTrack = playerState.currentTrackId === track.id;
+@@ -80,31 +76,6 @@ export function TrackRow({
+           {track.artists.map((a) => a.name).join(', ')}
+         </p>
+       </button>
+-      {/* Save for later button */}
+-      {onSaveForLater && (
+-        <button
+-          type="button"
+-          onClick={onSaveForLater}
+-          className="flex-shrink-0 rounded p-1 opacity-0 transition-opacity hover:bg-muted group-hover:opacity-100"
+-          title="Save for later"
+-        >
+-          <Bookmark className="h-4 w-4 text-muted-foreground" />
+-        </button>
+-      )}
+-      {/* Remove button */}
+-      {onRemove && (
+-        <button
+-          type="button"
+-          onClick={(e) => {
+-            e.stopPropagation();
+-            onRemove();
+-          }}
+-          className="flex-shrink-0 rounded p-1 opacity-0 transition-opacity hover:bg-destructive/10 group-hover:opacity-100"
+-          title="Remove"
+-        >
+-          <X className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+-        </button>
+-      )}
+     </div>
+   );
+ }
+diff --git a/src/app/spotify-playlister/_components/tracks-panel.tsx b/src/app/spotify-playlister/_components/tracks-panel.tsx
+index f463b58..1500a9f 100644
+--- a/src/app/spotify-playlister/_components/tracks-panel.tsx
++++ b/src/app/spotify-playlister/_components/tracks-panel.tsx
+@@ -1,21 +1,40 @@
+ 'use client';
+ 
+ import { useState } from 'react';
+-import { Play, Pause, Clock, CheckCircle2, Bookmark, X, Heart, Loader2 } from 'lucide-react';
++import { Play, Clock, CheckCircle2, Heart } from 'lucide-react';
+ import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
+ import { Button } from '~/components/ui/button';
+ import { Skeleton } from '~/components/ui/skeleton';
+ import { TrackRow } from './track-row';
+-import type { RecentlyPlayedItem, SavedTrackItem, SpotifyTrack, PlayerState } from '../_utils/types';
++import type { PlayerState, SpotifyTrack } from '../_utils/types';
+ 
+-type SavedTrack = {
+-  _id: string;
++// Convex track from DB (parsed from trackData JSON)
++type ConvexTrack = {
+   trackId: string;
+   trackName: string;
+   artistName: string;
+   albumName?: string;
+   albumImageUrl?: string;
+-  savedAt: number;
++  trackData?: string;
++};
++
++// User track stats joined with canonical track
++type UserTrackWithTrack = {
++  _id: string;
++  userId: string;
++  trackId: string;
++  firstSeenAt: number;
++  lastSeenAt: number;
++  lastPlayedAt?: number;
++  lastLikedAt?: number;
++  track: ConvexTrack | null | undefined;
++};
++
++type PaginatedQueryResult = {
++  results: UserTrackWithTrack[];
++  status: 'LoadingFirstPage' | 'CanLoadMore' | 'LoadingMore' | 'Exhausted';
++  loadMore: (numItems: number) => void;
++  isLoading: boolean;
+ };
+ 
+ type CategorizedTrack = {
+@@ -25,123 +44,105 @@ type CategorizedTrack = {
+   artistName: string;
+   albumName?: string;
+   albumImageUrl?: string;
+-  trackData?: string;
+   userInput: string;
+   finalSelections: string[];
+   createdAt: number;
+ };
+ 
+ type TracksPanelProps = {
+-  recentTracks: RecentlyPlayedItem[] | undefined;
+-  likedTracks: SavedTrackItem[] | undefined;
+-  likedTracksTotal: number;
+-  savedTracks: SavedTrack[] | undefined;
++  recentTracksQuery: PaginatedQueryResult;
++  likedTracksQuery: PaginatedQueryResult;
+   categorizedTracks: CategorizedTrack[] | undefined;
+-  isLoadingRecent: boolean;
+-  isLoadingLiked: boolean;
+-  isLoadingMoreLiked: boolean;
+-  isLoadingSaved: boolean;
++  currentlyPlaying: SpotifyTrack | null;
++  isSyncingRecent: boolean;
++  isSyncingLiked: boolean;
+   isLoadingCategorized: boolean;
+   selectedTrackId: string | null;
+   categorizedTrackIds: Set<string>;
+-  savedTrackIds: Set<string>;
+   playerState: PlayerState;
+   onTogglePlayback: (trackUri: string) => void;
+-  onSelectRecentTrack: (track: RecentlyPlayedItem) => void;
+-  onSelectLikedTrack: (track: SavedTrackItem) => void;
+-  onSelectSavedTrack: (track: SavedTrack) => void;
+-  onSaveForLater: (track: RecentlyPlayedItem) => void;
+-  onSaveForLaterLiked: (track: SavedTrackItem) => void;
+-  onRemoveSaved: (trackId: string) => void;
++  onSelectTrack: (track: SpotifyTrack) => void;
+   onRefresh: () => void;
+   onRefreshLiked: () => void;
+-  onLoadMoreLiked: () => void;
+-  onSelectCategorizedTrack?: (track: CategorizedTrack) => void;
+ };
+ 
+ export function TracksPanel({
+-  recentTracks,
+-  likedTracks,
+-  likedTracksTotal,
+-  savedTracks,
++  recentTracksQuery,
++  likedTracksQuery,
+   categorizedTracks,
+-  isLoadingRecent,
+-  isLoadingLiked,
+-  isLoadingMoreLiked,
+-  isLoadingSaved,
++  currentlyPlaying,
++  isSyncingRecent,
++  isSyncingLiked,
+   isLoadingCategorized,
+   selectedTrackId,
+   categorizedTrackIds,
+-  savedTrackIds,
+   playerState,
+   onTogglePlayback,
+-  onSelectRecentTrack,
+-  onSelectLikedTrack,
+-  onSelectSavedTrack,
+-  onSaveForLater,
+-  onSaveForLaterLiked,
+-  onRemoveSaved,
++  onSelectTrack,
+   onRefresh,
+   onRefreshLiked,
+-  onLoadMoreLiked,
+-  onSelectCategorizedTrack,
+ }: TracksPanelProps) {
+-  const [activeTab, setActiveTab] = useState<'recent' | 'liked' | 'saved' | 'done'>('recent');
++  const [activeTab, setActiveTab] = useState<'recent' | 'liked' | 'done'>('recent');
+ 
+-  // Filter out saved, categorized, and duplicate tracks from recent
+-  const filteredRecentTracks = (() => {
+-    if (!recentTracks) return undefined;
+-    const seen = new Set<string>();
+-    return recentTracks.filter((item) => {
+-      if (seen.has(item.track.id)) return false;
+-      if (savedTrackIds.has(item.track.id)) return false;
+-      if (categorizedTrackIds.has(item.track.id)) return false;
+-      seen.add(item.track.id);
+-      return true;
+-    });
+-  })();
++  // Parse SpotifyTrack from trackData JSON
++  function parseTrack(userTrack: UserTrackWithTrack): SpotifyTrack | null {
++    if (!userTrack.track?.trackData) return null;
++    try {
++      return JSON.parse(userTrack.track.trackData) as SpotifyTrack;
++    } catch {
++      return null;
++    }
++  }
+ 
+-  // Filter out categorized and duplicate tracks from liked
+-  const filteredLikedTracks = (() => {
+-    if (!likedTracks) return undefined;
+-    const seen = new Set<string>();
+-    return likedTracks.filter((item) => {
+-      if (seen.has(item.track.id)) return false;
+-      if (categorizedTrackIds.has(item.track.id)) return false;
+-      seen.add(item.track.id);
+-      return true;
+-    });
+-  })();
++  // Filter out categorized tracks from recent
++  const filteredRecentTracks = recentTracksQuery.results.filter(
++    (item) => !categorizedTrackIds.has(item.trackId)
++  );
+ 
+-  const savedCount = savedTracks?.length ?? 0;
+-  const recentCount = filteredRecentTracks?.length ?? 0;
+-  const likedCount = filteredLikedTracks?.length ?? 0;
++  // Filter out categorized tracks from liked
++  const filteredLikedTracks = likedTracksQuery.results.filter(
++    (item) => !categorizedTrackIds.has(item.trackId)
++  );
++
++  const recentCount = filteredRecentTracks.length;
++  const likedCount = filteredLikedTracks.length;
+   const doneCount = categorizedTracks?.length ?? 0;
+ 
+   const icons = {
+     recent: <Clock className="h-5 w-5" />,
+     liked: <Heart className="h-5 w-5" />,
+-    saved: <Bookmark className="h-5 w-5" />,
+     done: <CheckCircle2 className="h-5 w-5" />,
+   };
+ 
+   const titles = {
+     recent: 'Recently Played',
+     liked: 'Liked Songs',
+-    saved: 'Saved for Later',
+     done: 'Categorized',
+   };
+ 
+   // Find current playing track info from all sources
+   const currentPlayingTrack = (() => {
+     if (!playerState.currentTrackId) return null;
+-    const fromRecent = recentTracks?.find((t) => t.track.id === playerState.currentTrackId);
+-    if (fromRecent) return { name: fromRecent.track.name, artist: fromRecent.track.artists[0]?.name };
+-    const fromLiked = likedTracks?.find((t) => t.track.id === playerState.currentTrackId);
+-    if (fromLiked) return { name: fromLiked.track.name, artist: fromLiked.track.artists[0]?.name };
++    const fromRecent = recentTracksQuery.results.find(
++      (t) => t.trackId === playerState.currentTrackId
++    );
++    if (fromRecent) {
++      const track = parseTrack(fromRecent);
++      if (track) return { name: track.name, artist: track.artists[0]?.name };
++    }
++    const fromLiked = likedTracksQuery.results.find(
++      (t) => t.trackId === playerState.currentTrackId
++    );
++    if (fromLiked) {
++      const track = parseTrack(fromLiked);
++      if (track) return { name: track.name, artist: track.artists[0]?.name };
++    }
+     return null;
+   })();
+ 
++  const isLoadingRecent = recentTracksQuery.isLoading;
++  const isLoadingLiked = likedTracksQuery.isLoading;
++
+   return (
+     <Card>
+       <CardHeader className="pb-3">
+@@ -197,17 +198,6 @@ export function TracksPanel({
+           >
+             Liked ({likedCount})
+           </button>
+-          <button
+-            type="button"
+-            onClick={() => setActiveTab('saved')}
+-            className={`flex-1 rounded-md px-2 py-1.5 font-medium text-xs transition-colors ${
+-              activeTab === 'saved'
+-                ? 'bg-background shadow-sm'
+-                : 'text-muted-foreground hover:text-foreground'
+-            }`}
+-          >
+-            Saved ({savedCount})
+-          </button>
+           <button
+             type="button"
+             onClick={() => setActiveTab('done')}
+@@ -225,48 +215,35 @@ export function TracksPanel({
+         {activeTab === 'recent' && (
+           <RecentTracksList
+             tracks={filteredRecentTracks}
++            currentlyPlaying={currentlyPlaying}
+             isLoading={isLoadingRecent}
+             selectedTrackId={selectedTrackId}
++            categorizedTrackIds={categorizedTrackIds}
+             playerState={playerState}
++            parseTrack={parseTrack}
++            queryStatus={recentTracksQuery.status}
+             onTogglePlayback={onTogglePlayback}
+-            onSelectTrack={onSelectRecentTrack}
+-            onSaveForLater={onSaveForLater}
++            onSelectTrack={onSelectTrack}
++            onLoadMore={() => recentTracksQuery.loadMore(50)}
+           />
+         )}
+         {activeTab === 'liked' && (
+           <LikedTracksList
+             tracks={filteredLikedTracks}
+-            totalTracks={likedTracksTotal}
+-            loadedCount={likedTracks?.length ?? 0}
+             isLoading={isLoadingLiked}
+-            isLoadingMore={isLoadingMoreLiked}
+             selectedTrackId={selectedTrackId}
+             playerState={playerState}
++            parseTrack={parseTrack}
++            queryStatus={likedTracksQuery.status}
+             onTogglePlayback={onTogglePlayback}
+-            onSelectTrack={onSelectLikedTrack}
+-            onSaveForLater={onSaveForLaterLiked}
+-            onLoadMore={onLoadMoreLiked}
+-          />
+-        )}
+-        {activeTab === 'saved' && (
+-          <SavedTracksList
+-            tracks={savedTracks}
+-            isLoading={isLoadingSaved}
+-            selectedTrackId={selectedTrackId}
+-            playerState={playerState}
+-            onTogglePlayback={onTogglePlayback}
+-            onSelectTrack={onSelectSavedTrack}
+-            onRemove={onRemoveSaved}
++            onSelectTrack={onSelectTrack}
++            onLoadMore={() => likedTracksQuery.loadMore(50)}
+           />
+         )}
+         {activeTab === 'done' && (
+           <CategorizedTracksList
+             tracks={categorizedTracks}
+             isLoading={isLoadingCategorized}
+-            selectedTrackId={selectedTrackId}
+-            playerState={playerState}
+-            onTogglePlayback={onTogglePlayback}
+-            onSelectTrack={onSelectCategorizedTrack}
+           />
+         )}
+       </CardContent>
+@@ -276,112 +253,100 @@ export function TracksPanel({
+ 
+ function RecentTracksList({
+   tracks,
++  currentlyPlaying,
+   isLoading,
+   selectedTrackId,
++  categorizedTrackIds,
+   playerState,
++  parseTrack,
++  queryStatus,
+   onTogglePlayback,
+   onSelectTrack,
+-  onSaveForLater,
+-}: {
+-  tracks: RecentlyPlayedItem[] | undefined;
+-  isLoading: boolean;
+-  selectedTrackId: string | null;
+-  playerState: PlayerState;
+-  onTogglePlayback: (trackUri: string) => void;
+-  onSelectTrack: (track: RecentlyPlayedItem) => void;
+-  onSaveForLater: (track: RecentlyPlayedItem) => void;
+-}) {
+-  if (isLoading) {
+-    return <TracksSkeleton />;
+-  }
+-
+-  if (!tracks?.length) {
+-    return (
+-      <p className="py-8 text-center text-muted-foreground">
+-        No recent tracks to categorize
+-      </p>
+-    );
+-  }
+-
+-  return (
+-    <div className="-mx-1 max-h-[500px] space-y-1 overflow-y-auto px-1">
+-      {tracks.map((item, index) => (
+-        <TrackRow
+-          key={`${item.track.id}-${index}`}
+-          track={item.track}
+-          isSelected={selectedTrackId === item.track.id}
+-          playerState={playerState}
+-          onSelect={() => onSelectTrack(item)}
+-          onTogglePlayback={onTogglePlayback}
+-          onSaveForLater={() => onSaveForLater(item)}
+-        />
+-      ))}
+-    </div>
+-  );
+-}
+-
+-function LikedTracksList({
+-  tracks,
+-  totalTracks,
+-  loadedCount,
+-  isLoading,
+-  isLoadingMore,
+-  selectedTrackId,
+-  playerState,
+-  onTogglePlayback,
+-  onSelectTrack,
+-  onSaveForLater,
+   onLoadMore,
+ }: {
+-  tracks: SavedTrackItem[] | undefined;
+-  totalTracks: number;
+-  loadedCount: number;
++  tracks: UserTrackWithTrack[];
++  currentlyPlaying: SpotifyTrack | null;
+   isLoading: boolean;
+-  isLoadingMore: boolean;
+   selectedTrackId: string | null;
++  categorizedTrackIds: Set<string>;
+   playerState: PlayerState;
++  parseTrack: (item: UserTrackWithTrack) => SpotifyTrack | null;
++  queryStatus: 'LoadingFirstPage' | 'CanLoadMore' | 'LoadingMore' | 'Exhausted';
+   onTogglePlayback: (trackUri: string) => void;
+-  onSelectTrack: (track: SavedTrackItem) => void;
+-  onSaveForLater: (track: SavedTrackItem) => void;
++  onSelectTrack: (track: SpotifyTrack) => void;
+   onLoadMore: () => void;
+ }) {
+-  if (isLoading) {
++  if (isLoading && tracks.length === 0) {
+     return <TracksSkeleton />;
+   }
+ 
+-  if (!tracks?.length) {
++  // Check if currently playing should be shown (not already categorized, not in recent list)
++  const showCurrentlyPlaying =
++    currentlyPlaying &&
++    !categorizedTrackIds.has(currentlyPlaying.id) &&
++    !tracks.some((t) => t.trackId === currentlyPlaying.id);
++
++  if (!tracks.length && !showCurrentlyPlaying) {
+     return (
+       <p className="py-8 text-center text-muted-foreground">
+-        No liked songs to categorize
++        No recent tracks to categorize
+       </p>
+     );
+   }
+ 
+-  const hasMore = loadedCount < totalTracks;
+-
+   return (
+     <div className="-mx-1 max-h-[500px] space-y-1 overflow-y-auto px-1">
+-      {tracks.map((item) => (
+-        <TrackRow
+-          key={item.track.id}
+-          track={item.track}
+-          isSelected={selectedTrackId === item.track.id}
+-          playerState={playerState}
+-          onSelect={() => onSelectTrack(item)}
+-          onTogglePlayback={onTogglePlayback}
+-          onSaveForLater={() => onSaveForLater(item)}
+-        />
+-      ))}
+-      {hasMore && (
++      {/* Currently playing track at top */}
++      {showCurrentlyPlaying && currentlyPlaying && (
++        <div className="mb-2 rounded-lg border border-green-500/30 bg-green-500/5">
++          <div className="flex items-center gap-2 px-2 pt-1">
++            <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-green-500" />
++            <span className="text-green-500 text-xs font-medium">Now Playing</span>
++          </div>
++          <TrackRow
++            track={currentlyPlaying}
++            isSelected={selectedTrackId === currentlyPlaying.id}
++            playerState={playerState}
++            onSelect={() => onSelectTrack(currentlyPlaying)}
++            onTogglePlayback={onTogglePlayback}
++          />
++        </div>
++      )}
++      {tracks.map((item, index) => {
++        const track = parseTrack(item);
++        if (!track) return null;
++        return (
++          <TrackRow
++            key={`${item.trackId}-${index}`}
++            track={track}
++            isSelected={selectedTrackId === item.trackId}
++            playerState={playerState}
++            onSelect={() => onSelectTrack(track)}
++            onTogglePlayback={onTogglePlayback}
++          />
++        );
++      })}
++      {queryStatus === 'CanLoadMore' && (
+         <div className="pt-2">
+           <Button
+             variant="ghost"
+             size="sm"
+             onClick={onLoadMore}
+-            disabled={isLoadingMore}
+             className="w-full text-muted-foreground"
+           >
+-            {isLoadingMore ? 'Loading...' : `Load more (${loadedCount} of ${totalTracks})`}
++            Load more
++          </Button>
++        </div>
++      )}
++      {queryStatus === 'LoadingMore' && (
++        <div className="pt-2">
++          <Button
++            variant="ghost"
++            size="sm"
++            disabled
++            className="w-full text-muted-foreground"
++          >
++            Loading...
+           </Button>
+         </div>
+       )}
+@@ -389,67 +354,79 @@ function LikedTracksList({
+   );
+ }
+ 
+-function SavedTracksList({
++function LikedTracksList({
+   tracks,
+   isLoading,
+   selectedTrackId,
+   playerState,
++  parseTrack,
++  queryStatus,
+   onTogglePlayback,
+   onSelectTrack,
+-  onRemove,
++  onLoadMore,
+ }: {
+-  tracks: SavedTrack[] | undefined;
++  tracks: UserTrackWithTrack[];
+   isLoading: boolean;
+   selectedTrackId: string | null;
+   playerState: PlayerState;
++  parseTrack: (item: UserTrackWithTrack) => SpotifyTrack | null;
++  queryStatus: 'LoadingFirstPage' | 'CanLoadMore' | 'LoadingMore' | 'Exhausted';
+   onTogglePlayback: (trackUri: string) => void;
+-  onSelectTrack: (track: SavedTrack) => void;
+-  onRemove: (trackId: string) => void;
++  onSelectTrack: (track: SpotifyTrack) => void;
++  onLoadMore: () => void;
+ }) {
+-  if (isLoading) {
++  if (isLoading && tracks.length === 0) {
+     return <TracksSkeleton />;
+   }
+ 
+-  if (!tracks?.length) {
++  if (!tracks.length) {
+     return (
+       <p className="py-8 text-center text-muted-foreground">
+-        No saved tracks
++        No liked songs to categorize
+       </p>
+     );
+   }
+ 
+   return (
+     <div className="-mx-1 max-h-[500px] space-y-1 overflow-y-auto px-1">
+-      {tracks.map((savedTrack) => {
+-        // Convert SavedTrack to SpotifyTrack format
+-        const track: SpotifyTrack = {
+-          id: savedTrack.trackId,
+-          name: savedTrack.trackName,
+-          artists: [{ id: '', name: savedTrack.artistName }],
+-          album: {
+-            id: '',
+-            name: savedTrack.albumName ?? '',
+-            images: savedTrack.albumImageUrl
+-              ? [{ url: savedTrack.albumImageUrl, height: 300, width: 300 }]
+-              : [],
+-          },
+-          duration_ms: 0,
+-          external_urls: { spotify: `https://open.spotify.com/track/${savedTrack.trackId}` },
+-          preview_url: null,
+-        };
+-
++      {tracks.map((item) => {
++        const track = parseTrack(item);
++        if (!track) return null;
+         return (
+           <TrackRow
+-            key={savedTrack._id}
++            key={item.trackId}
+             track={track}
+-            isSelected={selectedTrackId === savedTrack.trackId}
++            isSelected={selectedTrackId === item.trackId}
+             playerState={playerState}
+-            onSelect={() => onSelectTrack(savedTrack)}
++            onSelect={() => onSelectTrack(track)}
+             onTogglePlayback={onTogglePlayback}
+-            onRemove={() => onRemove(savedTrack.trackId)}
+           />
+         );
+       })}
++      {queryStatus === 'CanLoadMore' && (
++        <div className="pt-2">
++          <Button
++            variant="ghost"
++            size="sm"
++            onClick={onLoadMore}
++            className="w-full text-muted-foreground"
++          >
++            Load more
++          </Button>
++        </div>
++      )}
++      {queryStatus === 'LoadingMore' && (
++        <div className="pt-2">
++          <Button
++            variant="ghost"
++            size="sm"
++            disabled
++            className="w-full text-muted-foreground"
++          >
++            Loading...
++          </Button>
++        </div>
++      )}
+     </div>
+   );
+ }
+@@ -457,17 +434,9 @@ function SavedTracksList({
+ function CategorizedTracksList({
+   tracks,
+   isLoading,
+-  selectedTrackId,
+-  playerState,
+-  onTogglePlayback,
+-  onSelectTrack,
+ }: {
+   tracks: CategorizedTrack[] | undefined;
+   isLoading: boolean;
+-  selectedTrackId: string | null;
+-  playerState: PlayerState;
+-  onTogglePlayback: (trackUri: string) => void;
+-  onSelectTrack?: (track: CategorizedTrack) => void;
+ }) {
+   if (isLoading) {
+     return <TracksSkeleton />;
+@@ -483,81 +452,38 @@ function CategorizedTracksList({
+ 
+   return (
+     <div className="-mx-1 max-h-[500px] space-y-1 overflow-y-auto px-1">
+-      {tracks.map((track) => {
+-        const isSelected = selectedTrackId === track.trackId;
+-        const isPlaying = playerState.currentTrackId === track.trackId && playerState.isPlaying;
+-        const isCurrentTrack = playerState.currentTrackId === track.trackId;
+-        const isPending = playerState.isPending && playerState.pendingTrackId === track.trackId;
+-
+-        return (
+-          <div
+-            key={track._id}
+-            className={`group flex w-full items-center gap-3 overflow-hidden rounded-lg p-2 transition-colors hover:bg-muted/50 ${
+-              isSelected ? 'bg-primary/10 ring-1 ring-primary' : ''
+-            }`}
+-          >
+-            {/* Album art with play button overlay */}
+-            <div className="relative h-10 w-10 flex-shrink-0 overflow-hidden rounded">
+-              {track.albumImageUrl ? (
+-                <img
+-                  src={track.albumImageUrl}
+-                  alt={track.albumName ?? track.trackName}
+-                  className="h-full w-full object-cover"
+-                />
+-              ) : (
+-                <div className="flex h-full w-full items-center justify-center bg-muted">
+-                  <Play className="h-4 w-4" />
+-                </div>
+-              )}
+-              {/* Play button overlay */}
+-              <button
+-                type="button"
+-                onClick={() => {
+-                  onTogglePlayback(`spotify:track:${track.trackId}`);
+-                  onSelectTrack?.(track);
+-                }}
+-                disabled={!playerState.isReady || isPending}
+-                className={`absolute inset-0 flex items-center justify-center bg-black/40 transition-opacity ${
+-                  isCurrentTrack || isPending ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+-                } ${!playerState.isReady ? 'cursor-not-allowed' : ''}`}
+-                title={playerState.isReady ? (isPlaying ? 'Pause' : 'Play') : 'Player loading...'}
+-              >
+-                {isPending ? (
+-                  <Loader2 className="h-5 w-5 animate-spin text-white" />
+-                ) : isPlaying ? (
+-                  <Pause className="h-5 w-5 text-white" />
+-                ) : isCurrentTrack ? (
+-                  <Play className="h-5 w-5 text-white" />
+-                ) : (
+-                  <Play className="h-4 w-4 text-white" />
+-                )}
+-              </button>
+-              {/* Categorized checkmark badge */}
+-              {!isCurrentTrack && !isPending && (
+-                <div className="absolute right-0 bottom-0 rounded-tl bg-green-500/90 p-0.5">
+-                  <CheckCircle2 className="h-3 w-3 text-white" />
+-                </div>
+-              )}
++      {tracks.map((track) => (
++        <div
++          key={track._id}
++          className="flex w-full items-center gap-3 rounded-lg p-2"
++        >
++          <div className="relative h-10 w-10 flex-shrink-0 overflow-hidden rounded">
++            {track.albumImageUrl ? (
++              <img
++                src={track.albumImageUrl}
++                alt={track.albumName ?? track.trackName}
++                className="h-full w-full object-cover"
++              />
++            ) : (
++              <div className="flex h-full w-full items-center justify-center bg-muted">
++                <Play className="h-4 w-4" />
++              </div>
++            )}
++            <div className="absolute inset-0 flex items-center justify-center bg-black/40">
++              <CheckCircle2 className="h-4 w-4 text-green-400" />
+             </div>
+-            {/* Track info - clickable to select */}
+-            <button
+-              type="button"
+-              onClick={() => onSelectTrack?.(track)}
+-              className="min-w-0 flex-1 text-left"
+-            >
+-              <p className={`truncate font-medium text-sm ${isCurrentTrack ? 'text-green-500' : ''}`}>
+-                {track.trackName}
+-              </p>
+-              <p className="truncate text-muted-foreground text-xs">
+-                {track.artistName}
+-              </p>
+-              <p className="truncate text-muted-foreground/60 text-xs italic">
+-                &quot;{track.userInput}&quot;
+-              </p>
+-            </button>
+           </div>
+-        );
+-      })}
++          <div className="min-w-0 flex-1">
++            <p className="truncate font-medium text-sm">{track.trackName}</p>
++            <p className="truncate text-muted-foreground text-xs">
++              {track.artistName}
++            </p>
++            <p className="truncate text-muted-foreground/60 text-xs italic">
++              &quot;{track.userInput}&quot;
++            </p>
++          </div>
++        </div>
++      ))}
+     </div>
+   );
+ }
+diff --git a/src/app/spotify-playlister/_hooks/use-spotify-player.ts b/src/app/spotify-playlister/_hooks/use-spotify-player.ts
+index b1f78bb..e50d4c7 100644
+--- a/src/app/spotify-playlister/_hooks/use-spotify-player.ts
++++ b/src/app/spotify-playlister/_hooks/use-spotify-player.ts
+@@ -9,7 +9,6 @@ type UseSpotifyPlayerReturn = {
+   pause: () => void;
+   resume: () => void;
+   togglePlayback: (trackUri: string) => void;
+-  skip: (seconds: number) => void;
+ };
+ 
+ declare global {
+@@ -92,7 +91,7 @@ export function useSpotifyPlayer(
+ 
+     function initializePlayer() {
+       console.log('Initializing Spotify player...');
+-
++      
+       player = new window.Spotify.Player({
+         name: 'Playlister Web Player',
+         getOAuthToken: async (cb) => {
+@@ -109,48 +108,41 @@ export function useSpotifyPlayer(
+       });
+ 
+       // Error handling
+-      player.addListener('initialization_error', (state) => {
+-        const { message } = state as { message: string };
++      player.addListener('initialization_error', ({ message }: { message: string }) => {
+         console.error('Initialization error:', message);
+         setState((s) => ({ ...s, error: `Init: ${message}` }));
+       });
+ 
+-      player.addListener('authentication_error', (state) => {
+-        const { message } = state as { message: string };
++      player.addListener('authentication_error', ({ message }: { message: string }) => {
+         console.error('Authentication error:', message);
+         setState((s) => ({ ...s, error: 'Premium required for playback' }));
+       });
+ 
+-      player.addListener('account_error', (state) => {
+-        const { message } = state as { message: string };
++      player.addListener('account_error', ({ message }: { message: string }) => {
+         console.error('Account error:', message);
+         setState((s) => ({ ...s, error: 'Premium account required' }));
+       });
+ 
+-      player.addListener('playback_error', (state) => {
+-        const { message } = state as { message: string };
++      player.addListener('playback_error', ({ message }: { message: string }) => {
+         console.error('Playback error:', message);
+         setState((s) => ({ ...s, error: message }));
+       });
+ 
+       // Ready
+-      player.addListener('ready', (state) => {
+-        const { device_id } = state as { device_id: string };
++      player.addListener('ready', ({ device_id }: { device_id: string }) => {
+         console.log('Spotify Player ready with device ID:', device_id);
+         deviceIdRef.current = device_id;
+         setState((s) => ({ ...s, isReady: true, error: null }));
+       });
+ 
+       // Not ready
+-      player.addListener('not_ready', (state) => {
+-        const { device_id } = state as { device_id: string };
++      player.addListener('not_ready', ({ device_id }: { device_id: string }) => {
+         console.log('Device ID has gone offline:', device_id);
+         setState((s) => ({ ...s, isReady: false }));
+       });
+ 
+       // Playback state changes
+-      player.addListener('player_state_changed', (state) => {
+-        const playbackState = state as PlaybackState | null;
++      player.addListener('player_state_changed', (playbackState: PlaybackState | null) => {
+         if (!playbackState) {
+           setState((s) => ({
+             ...s,
+@@ -183,7 +175,7 @@ export function useSpotifyPlayer(
+           setState((s) => ({ ...s, error: 'Failed to connect player' }));
+         }
+       });
+-
++      
+       playerRef.current = player;
+     }
+ 
+@@ -220,7 +212,7 @@ export function useSpotifyPlayer(
+     }
+ 
+     const trackId = trackUri.replace('spotify:track:', '');
+-
++    
+     // Set pending state immediately for visual feedback
+     setState((s) => ({ ...s, isPending: true, pendingTrackId: trackId }));
+ 
+@@ -232,19 +224,16 @@ export function useSpotifyPlayer(
+     }
+ 
+     try {
+-      await fetch(
+-        `https://api.spotify.com/v1/me/player/play?device_id=${deviceIdRef.current}`,
+-        {
+-          method: 'PUT',
+-          headers: {
+-            Authorization: `Bearer ${token}`,
+-            'Content-Type': 'application/json',
+-          },
+-          body: JSON.stringify({
+-            uris: [trackUri],
+-          }),
+-        }
+-      );
++      await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceIdRef.current}`, {
++        method: 'PUT',
++        headers: {
++          Authorization: `Bearer ${token}`,
++          'Content-Type': 'application/json',
++        },
++        body: JSON.stringify({
++          uris: [trackUri],
++        }),
++      });
+     } catch (error) {
+       console.error('Play error:', error);
+       setState((s) => ({ ...s, isPending: false, pendingTrackId: null }));
+@@ -273,19 +262,12 @@ export function useSpotifyPlayer(
+     [state.currentTrackId, state.isPlaying, play, pause, resume]
+   );
+ 
+-  const skip = useCallback(
+-    (seconds: number) => {
+-      playerRef.current?.seek((state.position || 0) + seconds * 1000);
+-    },
+-    [state.position]
+-  );
+-
+   return {
+     state,
+     play,
+     pause,
+     resume,
+     togglePlayback,
+-    skip,
+   };
+ }
++
+diff --git a/src/app/spotify-playlister/_utils/types.ts b/src/app/spotify-playlister/_utils/types.ts
+index 6e10bce..1d59b06 100644
+--- a/src/app/spotify-playlister/_utils/types.ts
++++ b/src/app/spotify-playlister/_utils/types.ts
+@@ -29,7 +29,6 @@ export type LocalPlaylist = {
+   spotifyPlaylistId: string;
+   name: string;
+   description: string;
+-  userNotes?: string;
+   imageUrl?: string;
+   isActive: boolean;
+   createdAt: number;
+diff --git a/src/app/spotify-playlister/page.tsx b/src/app/spotify-playlister/page.tsx
+index 59a5199..14067a7 100644
+--- a/src/app/spotify-playlister/page.tsx
++++ b/src/app/spotify-playlister/page.tsx
+@@ -1,7 +1,7 @@
+ 'use client';
+ 
+ import { useState, useCallback, useEffect, useRef } from 'react';
+-import { useQuery, useMutation } from 'convex/react';
++import { useQuery, useMutation, usePaginatedQuery } from 'convex/react';
+ import { toast } from 'sonner';
+ import { Music } from 'lucide-react';
+ import { api as convexApi } from '../../../convex/_generated/api';
+@@ -43,10 +43,6 @@ export default function SpotifyPlaylisterPage() {
+     convexApi.spotify.getActivePlaylists,
+     userId ? { userId } : 'skip'
+   );
+-  const savedForLater = useQuery(
+-    convexApi.spotify.getSavedForLater,
+-    userId ? { userId } : 'skip'
+-  );
+   const categorizedTrackIdsList = useQuery(
+     convexApi.spotify.getCategorizedTrackIds,
+     userId ? { userId } : 'skip'
+@@ -56,6 +52,18 @@ export default function SpotifyPlaylisterPage() {
+     userId ? { userId } : 'skip'
+   );
+ 
++  // Paginated queries for track history (from Convex DB)
++  const recentTracksQuery = usePaginatedQuery(
++    convexApi.spotify.getRecentlyPlayedHistory,
++    userId ? { userId } : 'skip',
++    { initialNumItems: 50 }
++  );
++  const likedTracksQuery = usePaginatedQuery(
++    convexApi.spotify.getLikedHistory,
++    userId ? { userId } : 'skip',
++    { initialNumItems: 50 }
++  );
++
+   // Convex mutations
+   const deleteConnection = useMutation(convexApi.spotify.deleteConnection);
+   const upsertPlaylist = useMutation(convexApi.spotify.upsertPlaylist);
+@@ -63,8 +71,6 @@ export default function SpotifyPlaylisterPage() {
+   const togglePlaylistActive = useMutation(convexApi.spotify.togglePlaylistActive);
+   const deletePlaylist = useMutation(convexApi.spotify.deletePlaylist);
+   const saveCategorization = useMutation(convexApi.spotify.saveCategorization);
+-  const saveForLaterMutation = useMutation(convexApi.spotify.saveForLater);
+-  const removeSavedForLater = useMutation(convexApi.spotify.removeSavedForLater);
+   const savePendingSuggestions = useMutation(convexApi.spotify.savePendingSuggestions);
+   const clearPendingSuggestions = useMutation(convexApi.spotify.clearPendingSuggestions);
+ 
+@@ -81,7 +87,6 @@ export default function SpotifyPlaylisterPage() {
+   const [userInput, setUserInput] = useState('');
+   const [pendingSuggestionsCache, setPendingSuggestionsCache] = useState<Map<string, { userInput: string; suggestions: PlaylistSuggestion[] }>>(new Map());
+   const isConnected = !!connection;
+-  const savedTrackIds = new Set(savedForLater?.map((s) => s.trackId) ?? []);
+   const categorizedTrackIds = new Set(categorizedTrackIdsList ?? []);
+ 
+   // Query for pending suggestions (after selectedTrack state is declared)
+@@ -304,83 +309,17 @@ export default function SpotifyPlaylisterPage() {
+     }
+   }
+ 
+-  // Handle track selection
+-  function handleSelectTrack(item: RecentlyPlayedItem) {
+-    // Don't reset if it's the same track and we're already showing it
+-    if (selectedTrack?.track.id === item.track.id && reviewState.status !== 'idle') {
+-      return;
+-    }
+-
+-    setSelectedTrack(item);
+-
+-    // Check for pending suggestions in cache
+-    const cached = pendingSuggestionsCache.get(item.track.id);
+-    if (cached) {
+-      setUserInput(cached.userInput);
+-      setReviewState({ status: 'suggestions', suggestions: cached.suggestions });
+-    } else {
+-      setReviewState({ status: 'input' });
+-      setUserInput('');
+-    }
+-  }
+-
+-  // Handle liked track selection
+-  function handleSelectLikedTrack(item: SavedTrackItem) {
+-    // Don't reset if it's the same track and we're already showing it
+-    if (selectedTrack?.track.id === item.track.id && reviewState.status !== 'idle') {
+-      return;
+-    }
+-
+-    // Convert to RecentlyPlayedItem format for consistency
+-    const asRecentlyPlayed: RecentlyPlayedItem = {
+-      track: item.track,
+-      played_at: item.added_at,
+-    };
+-    setSelectedTrack(asRecentlyPlayed);
+-
+-    // Check for pending suggestions in cache
+-    const cached = pendingSuggestionsCache.get(item.track.id);
+-    if (cached) {
+-      setUserInput(cached.userInput);
+-      setReviewState({ status: 'suggestions', suggestions: cached.suggestions });
+-    } else {
+-      setReviewState({ status: 'input' });
+-      setUserInput('');
+-    }
+-  }
+-
+-  // Handle selecting a saved track
+-  function handleSelectSavedTrack(saved: {
+-    trackId: string;
+-    trackName: string;
+-    artistName: string;
+-    albumName?: string;
+-    albumImageUrl?: string;
+-    trackData?: string;
+-  }) {
++  // Handle track selection (works with SpotifyTrack from Convex)
++  function handleSelectTrack(track: SpotifyTrack) {
+     // Don't reset if it's the same track and we're already showing it
+-    if (selectedTrack?.track.id === saved.trackId && reviewState.status !== 'idle') {
++    if (selectedTrack?.track.id === track.id && reviewState.status !== 'idle') {
+       return;
+     }
+ 
+-    // Use full track data if available, otherwise create minimal object
+-    let track: SpotifyTrack;
+-
+-    if (saved.trackData) {
+-      try {
+-        track = JSON.parse(saved.trackData) as SpotifyTrack;
+-      } catch {
+-        // Fallback to minimal object if parsing fails
+-        track = createMinimalTrack(saved);
+-      }
+-    } else {
+-      track = createMinimalTrack(saved);
+-    }
+-
+-    setSelectedTrack({ track, played_at: '' });
++    setSelectedTrack({ track, played_at: new Date().toISOString() });
+ 
+     // Check for pending suggestions in cache
+-    const cached = pendingSuggestionsCache.get(saved.trackId);
++    const cached = pendingSuggestionsCache.get(track.id);
+     if (cached) {
+       setUserInput(cached.userInput);
+       setReviewState({ status: 'suggestions', suggestions: cached.suggestions });
+@@ -454,55 +393,6 @@ export default function SpotifyPlaylisterPage() {
+     };
+   }
+ 
+-  // Handle save for later
+-  async function handleSaveForLater(item: RecentlyPlayedItem) {
+-    if (!userId) return;
+-
+-    try {
+-      await saveForLaterMutation({
+-        userId,
+-        trackId: item.track.id,
+-        trackName: item.track.name,
+-        artistName: item.track.artists.map((a) => a.name).join(', '),
+-        albumName: item.track.album.name,
+-        albumImageUrl: item.track.album.images?.[0]?.url,
+-        trackData: JSON.stringify(item.track),
+-      });
+-      toast.success('Saved for later');
+-    } catch {
+-      toast.error('Failed to save');
+-    }
+-  }
+-
+-  // Handle save for later from liked songs
+-  async function handleSaveForLaterLiked(item: SavedTrackItem) {
+-    if (!userId) return;
+-
+-    try {
+-      await saveForLaterMutation({
+-        userId,
+-        trackId: item.track.id,
+-        trackName: item.track.name,
+-        artistName: item.track.artists.map((a) => a.name).join(', '),
+-        albumName: item.track.album.name,
+-        albumImageUrl: item.track.album.images?.[0]?.url,
+-        trackData: JSON.stringify(item.track),
+-      });
+-      toast.success('Saved for later');
+-    } catch {
+-      toast.error('Failed to save');
+-    }
+-  }
+-
+-  // Handle remove from saved
+-  async function handleRemoveSaved(trackId: string) {
+-    try {
+-      await removeSavedForLater({ trackId });
+-    } catch {
+-      toast.error('Failed to remove');
+-    }
+-  }
+-
+   // Handle categorization submission
+   async function handleSubmitCategorization(input: string) {
+     if (!selectedTrack || !activePlaylists?.length) return;
+@@ -620,11 +510,6 @@ export default function SpotifyPlaylisterPage() {
+         return next;
+       });
+ 
+-      // Remove from saved for later if it was saved
+-      if (savedTrackIds.has(selectedTrack.track.id)) {
+-        await removeSavedForLater({ trackId: selectedTrack.track.id });
+-      }
+-
+       toast.success(
+         selectedPlaylistIds.length > 0
+           ? `Added to ${selectedPlaylistIds.length} playlist${selectedPlaylistIds.length !== 1 ? 's' : ''}`
+@@ -1033,31 +918,20 @@ export default function SpotifyPlaylisterPage() {
+           {/* Sidebar */}
+           <div>
+             <TracksPanel
+-              recentTracks={recentTracks}
+-              likedTracks={likedTracks}
+-              likedTracksTotal={likedTracksTotal}
+-              savedTracks={savedForLater}
++              recentTracksQuery={recentTracksQuery}
++              likedTracksQuery={likedTracksQuery}
+               categorizedTracks={categorizations}
+-              isLoadingRecent={isLoadingTracks}
+-              isLoadingLiked={isLoadingLiked}
+-              isLoadingMoreLiked={isLoadingMoreLiked}
+-              isLoadingSaved={savedForLater === undefined}
++              currentlyPlaying={null}
++              isSyncingRecent={isLoadingTracks}
++              isSyncingLiked={isLoadingLiked}
+               isLoadingCategorized={categorizations === undefined}
+               selectedTrackId={selectedTrack?.track.id ?? null}
+               categorizedTrackIds={categorizedTrackIds}
+-              savedTrackIds={savedTrackIds}
+               playerState={playerState}
+               onTogglePlayback={togglePlayback}
+-              onSelectRecentTrack={handleSelectTrack}
+-              onSelectLikedTrack={handleSelectLikedTrack}
+-              onSelectSavedTrack={handleSelectSavedTrack}
+-              onSaveForLater={handleSaveForLater}
+-              onSaveForLaterLiked={handleSaveForLaterLiked}
+-              onRemoveSaved={handleRemoveSaved}
++              onSelectTrack={handleSelectTrack}
+               onRefresh={fetchRecentTracks}
+               onRefreshLiked={fetchLikedTracks}
+-              onLoadMoreLiked={fetchMoreLikedTracks}
+-              onSelectCategorizedTrack={handleSelectCategorizedTrack}
+             />
+           </div>
+         </div>

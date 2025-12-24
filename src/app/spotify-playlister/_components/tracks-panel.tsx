@@ -1,22 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { Play, Pause, Clock, CheckCircle2, Bookmark, X, Heart, Loader2 } from 'lucide-react';
+import { Play, Pause, Clock, CheckCircle2, Heart, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { Button } from '~/components/ui/button';
 import { Skeleton } from '~/components/ui/skeleton';
 import { TrackRow } from './track-row';
-import type { RecentlyPlayedItem, SavedTrackItem, SpotifyTrack, PlayerState } from '../_utils/types';
-
-type SavedTrack = {
-  _id: string;
-  trackId: string;
-  trackName: string;
-  artistName: string;
-  albumName?: string;
-  albumImageUrl?: string;
-  savedAt: number;
-};
+import type { RecentlyPlayedItem, SavedTrackItem, PlayerState } from '../_utils/types';
 
 type CategorizedTrack = {
   _id: string;
@@ -34,67 +24,48 @@ type CategorizedTrack = {
 type TracksPanelProps = {
   recentTracks: RecentlyPlayedItem[] | undefined;
   likedTracks: SavedTrackItem[] | undefined;
-  likedTracksTotal: number;
-  savedTracks: SavedTrack[] | undefined;
   categorizedTracks: CategorizedTrack[] | undefined;
   isLoadingRecent: boolean;
   isLoadingLiked: boolean;
-  isLoadingMoreLiked: boolean;
-  isLoadingSaved: boolean;
   isLoadingCategorized: boolean;
   selectedTrackId: string | null;
+  nowPlayingTrackId: string | null;
   categorizedTrackIds: Set<string>;
-  savedTrackIds: Set<string>;
   playerState: PlayerState;
   onTogglePlayback: (trackUri: string) => void;
   onSelectRecentTrack: (track: RecentlyPlayedItem) => void;
   onSelectLikedTrack: (track: SavedTrackItem) => void;
-  onSelectSavedTrack: (track: SavedTrack) => void;
-  onSaveForLater: (track: RecentlyPlayedItem) => void;
-  onSaveForLaterLiked: (track: SavedTrackItem) => void;
-  onRemoveSaved: (trackId: string) => void;
   onRefresh: () => void;
   onRefreshLiked: () => void;
-  onLoadMoreLiked: () => void;
   onSelectCategorizedTrack?: (track: CategorizedTrack) => void;
 };
 
 export function TracksPanel({
   recentTracks,
   likedTracks,
-  likedTracksTotal,
-  savedTracks,
   categorizedTracks,
   isLoadingRecent,
   isLoadingLiked,
-  isLoadingMoreLiked,
-  isLoadingSaved,
   isLoadingCategorized,
   selectedTrackId,
+  nowPlayingTrackId,
   categorizedTrackIds,
-  savedTrackIds,
   playerState,
   onTogglePlayback,
   onSelectRecentTrack,
   onSelectLikedTrack,
-  onSelectSavedTrack,
-  onSaveForLater,
-  onSaveForLaterLiked,
-  onRemoveSaved,
   onRefresh,
   onRefreshLiked,
-  onLoadMoreLiked,
   onSelectCategorizedTrack,
 }: TracksPanelProps) {
-  const [activeTab, setActiveTab] = useState<'recent' | 'liked' | 'saved' | 'done'>('recent');
+  const [activeTab, setActiveTab] = useState<'recent' | 'liked' | 'done'>('recent');
 
-  // Filter out saved, categorized, and duplicate tracks from recent
+  // Filter out categorized and duplicate tracks from recent
   const filteredRecentTracks = (() => {
     if (!recentTracks) return undefined;
     const seen = new Set<string>();
     return recentTracks.filter((item) => {
       if (seen.has(item.track.id)) return false;
-      if (savedTrackIds.has(item.track.id)) return false;
       if (categorizedTrackIds.has(item.track.id)) return false;
       seen.add(item.track.id);
       return true;
@@ -113,7 +84,6 @@ export function TracksPanel({
     });
   })();
 
-  const savedCount = savedTracks?.length ?? 0;
   const recentCount = filteredRecentTracks?.length ?? 0;
   const likedCount = filteredLikedTracks?.length ?? 0;
   const doneCount = categorizedTracks?.length ?? 0;
@@ -121,14 +91,12 @@ export function TracksPanel({
   const icons = {
     recent: <Clock className="h-5 w-5" />,
     liked: <Heart className="h-5 w-5" />,
-    saved: <Bookmark className="h-5 w-5" />,
     done: <CheckCircle2 className="h-5 w-5" />,
   };
 
   const titles = {
     recent: 'Recently Played',
     liked: 'Liked Songs',
-    saved: 'Saved for Later',
     done: 'Categorized',
   };
 
@@ -199,17 +167,6 @@ export function TracksPanel({
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab('saved')}
-            className={`flex-1 rounded-md px-2 py-1.5 font-medium text-xs transition-colors ${
-              activeTab === 'saved'
-                ? 'bg-background shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            Saved ({savedCount})
-          </button>
-          <button
-            type="button"
             onClick={() => setActiveTab('done')}
             className={`flex-1 rounded-md px-2 py-1.5 font-medium text-xs transition-colors ${
               activeTab === 'done'
@@ -227,36 +184,20 @@ export function TracksPanel({
             tracks={filteredRecentTracks}
             isLoading={isLoadingRecent}
             selectedTrackId={selectedTrackId}
+            nowPlayingTrackId={nowPlayingTrackId}
             playerState={playerState}
             onTogglePlayback={onTogglePlayback}
             onSelectTrack={onSelectRecentTrack}
-            onSaveForLater={onSaveForLater}
           />
         )}
         {activeTab === 'liked' && (
           <LikedTracksList
             tracks={filteredLikedTracks}
-            totalTracks={likedTracksTotal}
-            loadedCount={likedTracks?.length ?? 0}
             isLoading={isLoadingLiked}
-            isLoadingMore={isLoadingMoreLiked}
             selectedTrackId={selectedTrackId}
             playerState={playerState}
             onTogglePlayback={onTogglePlayback}
             onSelectTrack={onSelectLikedTrack}
-            onSaveForLater={onSaveForLaterLiked}
-            onLoadMore={onLoadMoreLiked}
-          />
-        )}
-        {activeTab === 'saved' && (
-          <SavedTracksList
-            tracks={savedTracks}
-            isLoading={isLoadingSaved}
-            selectedTrackId={selectedTrackId}
-            playerState={playerState}
-            onTogglePlayback={onTogglePlayback}
-            onSelectTrack={onSelectSavedTrack}
-            onRemove={onRemoveSaved}
           />
         )}
         {activeTab === 'done' && (
@@ -278,18 +219,18 @@ function RecentTracksList({
   tracks,
   isLoading,
   selectedTrackId,
+  nowPlayingTrackId,
   playerState,
   onTogglePlayback,
   onSelectTrack,
-  onSaveForLater,
 }: {
   tracks: RecentlyPlayedItem[] | undefined;
   isLoading: boolean;
   selectedTrackId: string | null;
+  nowPlayingTrackId: string | null;
   playerState: PlayerState;
   onTogglePlayback: (trackUri: string) => void;
   onSelectTrack: (track: RecentlyPlayedItem) => void;
-  onSaveForLater: (track: RecentlyPlayedItem) => void;
 }) {
   if (isLoading) {
     return <TracksSkeleton />;
@@ -304,16 +245,16 @@ function RecentTracksList({
   }
 
   return (
-    <div className="-mx-1 max-h-[500px] space-y-1 overflow-y-auto px-1">
+    <div className="-mx-1 max-h-[500px] space-y-1 overflow-y-auto px-1 pt-1">
       {tracks.map((item, index) => (
         <TrackRow
           key={`${item.track.id}-${index}`}
           track={item.track}
           isSelected={selectedTrackId === item.track.id}
+          isNowPlaying={item.track.id === nowPlayingTrackId}
           playerState={playerState}
           onSelect={() => onSelectTrack(item)}
           onTogglePlayback={onTogglePlayback}
-          onSaveForLater={() => onSaveForLater(item)}
         />
       ))}
     </div>
@@ -322,28 +263,18 @@ function RecentTracksList({
 
 function LikedTracksList({
   tracks,
-  totalTracks,
-  loadedCount,
   isLoading,
-  isLoadingMore,
   selectedTrackId,
   playerState,
   onTogglePlayback,
   onSelectTrack,
-  onSaveForLater,
-  onLoadMore,
 }: {
   tracks: SavedTrackItem[] | undefined;
-  totalTracks: number;
-  loadedCount: number;
   isLoading: boolean;
-  isLoadingMore: boolean;
   selectedTrackId: string | null;
   playerState: PlayerState;
   onTogglePlayback: (trackUri: string) => void;
   onSelectTrack: (track: SavedTrackItem) => void;
-  onSaveForLater: (track: SavedTrackItem) => void;
-  onLoadMore: () => void;
 }) {
   if (isLoading) {
     return <TracksSkeleton />;
@@ -357,10 +288,8 @@ function LikedTracksList({
     );
   }
 
-  const hasMore = loadedCount < totalTracks;
-
   return (
-    <div className="-mx-1 max-h-[500px] space-y-1 overflow-y-auto px-1">
+    <div className="-mx-1 max-h-[500px] space-y-1 overflow-y-auto px-1 pt-1">
       {tracks.map((item) => (
         <TrackRow
           key={item.track.id}
@@ -369,87 +298,8 @@ function LikedTracksList({
           playerState={playerState}
           onSelect={() => onSelectTrack(item)}
           onTogglePlayback={onTogglePlayback}
-          onSaveForLater={() => onSaveForLater(item)}
         />
       ))}
-      {hasMore && (
-        <div className="pt-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onLoadMore}
-            disabled={isLoadingMore}
-            className="w-full text-muted-foreground"
-          >
-            {isLoadingMore ? 'Loading...' : `Load more (${loadedCount} of ${totalTracks})`}
-          </Button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SavedTracksList({
-  tracks,
-  isLoading,
-  selectedTrackId,
-  playerState,
-  onTogglePlayback,
-  onSelectTrack,
-  onRemove,
-}: {
-  tracks: SavedTrack[] | undefined;
-  isLoading: boolean;
-  selectedTrackId: string | null;
-  playerState: PlayerState;
-  onTogglePlayback: (trackUri: string) => void;
-  onSelectTrack: (track: SavedTrack) => void;
-  onRemove: (trackId: string) => void;
-}) {
-  if (isLoading) {
-    return <TracksSkeleton />;
-  }
-
-  if (!tracks?.length) {
-    return (
-      <p className="py-8 text-center text-muted-foreground">
-        No saved tracks
-      </p>
-    );
-  }
-
-  return (
-    <div className="-mx-1 max-h-[500px] space-y-1 overflow-y-auto px-1">
-      {tracks.map((savedTrack) => {
-        // Convert SavedTrack to SpotifyTrack format
-        const track: SpotifyTrack = {
-          id: savedTrack.trackId,
-          name: savedTrack.trackName,
-          artists: [{ id: '', name: savedTrack.artistName }],
-          album: {
-            id: '',
-            name: savedTrack.albumName ?? '',
-            images: savedTrack.albumImageUrl
-              ? [{ url: savedTrack.albumImageUrl, height: 300, width: 300 }]
-              : [],
-          },
-          duration_ms: 0,
-          external_urls: { spotify: `https://open.spotify.com/track/${savedTrack.trackId}` },
-          preview_url: null,
-        };
-
-        return (
-          <TrackRow
-            key={savedTrack._id}
-            track={track}
-            isSelected={selectedTrackId === savedTrack.trackId}
-            playerState={playerState}
-            onSelect={() => onSelectTrack(savedTrack)}
-            onTogglePlayback={onTogglePlayback}
-            onRemove={() => onRemove(savedTrack.trackId)}
-          />
-        );
-      })}
     </div>
   );
 }
@@ -482,7 +332,7 @@ function CategorizedTracksList({
   }
 
   return (
-    <div className="-mx-1 max-h-[500px] space-y-1 overflow-y-auto px-1">
+    <div className="-mx-1 max-h-[500px] space-y-1 overflow-y-auto px-1 pt-1">
       {tracks.map((track) => {
         const isSelected = selectedTrackId === track.trackId;
         const isPlaying = playerState.currentTrackId === track.trackId && playerState.isPlaying;

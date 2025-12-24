@@ -41,6 +41,29 @@ export type SavedTrackItem = {
   track: SpotifyTrack;
 };
 
+export type SpotifyAlbum = {
+  id: string;
+  name: string;
+  artists: Array<{ id: string; name: string }>;
+  images: Array<{ url: string; height: number; width: number }>;
+  release_date: string;
+  release_date_precision: 'year' | 'month' | 'day';
+  total_tracks: number;
+  genres: string[];
+  external_urls: { spotify: string };
+  tracks: {
+    items: Array<{
+      id: string;
+      name: string;
+      track_number: number;
+      duration_ms: number;
+      artists: Array<{ id: string; name: string }>;
+      external_urls: { spotify: string };
+    }>;
+    total: number;
+  };
+};
+
 export type TokenRefreshResult = {
   access_token: string;
   token_type: string;
@@ -107,6 +130,42 @@ async function spotifyFetch<T>(
   }
 
   return response.json() as Promise<T>;
+}
+
+// ============================================================================
+// Currently Playing
+// ============================================================================
+
+export type CurrentlyPlayingResponse = {
+  is_playing: boolean;
+  item: SpotifyTrack | null;
+  progress_ms: number | null;
+  timestamp: number;
+} | null;
+
+export async function getCurrentlyPlaying(
+  accessToken: string
+): Promise<CurrentlyPlayingResponse> {
+  const response = await fetch(
+    `${SPOTIFY_API_BASE}/me/player/currently-playing`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    }
+  );
+
+  // 204 means nothing is playing
+  if (response.status === 204) {
+    return null;
+  }
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Spotify API error (${response.status}): ${error}`);
+  }
+
+  return response.json() as Promise<CurrentlyPlayingResponse>;
 }
 
 // ============================================================================
@@ -229,6 +288,39 @@ export async function getTracks(
       accessToken
     );
     results.push(...data.tracks);
+  }
+
+  return results;
+}
+
+// ============================================================================
+// Album Info
+// ============================================================================
+
+export async function getAlbum(
+  accessToken: string,
+  albumId: string
+): Promise<SpotifyAlbum> {
+  return spotifyFetch<SpotifyAlbum>(`/albums/${albumId}`, accessToken);
+}
+
+export async function getAlbums(
+  accessToken: string,
+  albumIds: string[]
+): Promise<SpotifyAlbum[]> {
+  // Spotify allows max 20 IDs per request for albums
+  const chunks: string[][] = [];
+  for (let i = 0; i < albumIds.length; i += 20) {
+    chunks.push(albumIds.slice(i, i + 20));
+  }
+
+  const results: SpotifyAlbum[] = [];
+  for (const chunk of chunks) {
+    const data = await spotifyFetch<{ albums: SpotifyAlbum[] }>(
+      `/albums?ids=${chunk.join(',')}`,
+      accessToken
+    );
+    results.push(...data.albums);
   }
 
   return results;

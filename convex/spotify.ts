@@ -233,12 +233,15 @@ export const saveCategorization = mutation({
     finalSelections: v.array(v.string()),
   },
   handler: async (ctx, args) => {
+    const now = Date.now();
+
     // Check if this track was already categorized (for re-categorization)
     const existing = await ctx.db
       .query('spotifySongCategorizations')
       .withIndex('by_trackId', (q) => q.eq('trackId', args.trackId))
       .first();
 
+    let categorizationId;
     if (existing) {
       // Update existing categorization
       await ctx.db.patch(existing._id, {
@@ -247,22 +250,52 @@ export const saveCategorization = mutation({
         finalSelections: args.finalSelections,
         trackData: args.trackData,
       });
-      return existing._id;
+      categorizationId = existing._id;
+    } else {
+      categorizationId = await ctx.db.insert('spotifySongCategorizations', {
+        userId: args.userId,
+        trackId: args.trackId,
+        trackName: args.trackName,
+        artistName: args.artistName,
+        albumName: args.albumName,
+        albumImageUrl: args.albumImageUrl,
+        trackData: args.trackData,
+        userInput: args.userInput,
+        aiSuggestions: args.aiSuggestions,
+        finalSelections: args.finalSelections,
+        createdAt: now,
+      });
     }
 
-    return await ctx.db.insert('spotifySongCategorizations', {
-      userId: args.userId,
-      trackId: args.trackId,
-      trackName: args.trackName,
-      artistName: args.artistName,
-      albumName: args.albumName,
-      albumImageUrl: args.albumImageUrl,
-      trackData: args.trackData,
-      userInput: args.userInput,
-      aiSuggestions: args.aiSuggestions,
-      finalSelections: args.finalSelections,
-      createdAt: Date.now(),
-    });
+    // Also update lastCategorizedAt on the spotifyTracks row
+    const existingTrack = await ctx.db
+      .query('spotifyTracks')
+      .withIndex('by_userId_trackId', (q) =>
+        q.eq('userId', args.userId).eq('trackId', args.trackId)
+      )
+      .first();
+
+    if (existingTrack) {
+      await ctx.db.patch(existingTrack._id, {
+        lastCategorizedAt: now,
+      });
+    } else {
+      // Create a new spotifyTracks row if it doesn't exist
+      await ctx.db.insert('spotifyTracks', {
+        userId: args.userId,
+        trackId: args.trackId,
+        trackName: args.trackName,
+        artistName: args.artistName,
+        albumName: args.albumName,
+        albumImageUrl: args.albumImageUrl,
+        trackData: args.trackData,
+        firstSeenAt: now,
+        lastSeenAt: now,
+        lastCategorizedAt: now,
+      });
+    }
+
+    return categorizationId;
   },
 });
 
@@ -319,82 +352,193 @@ export const searchCategorizations = query({
 });
 
 // ============================================================================
-// Save for Later
+// Spotify Tracks (Unified track storage)
 // ============================================================================
 
-export const saveForLater = mutation({
+export const upsertTracksFromRecentlyPlayed = mutation({
   args: {
     userId: v.string(),
-    trackId: v.string(),
-    trackName: v.string(),
-    artistName: v.string(),
-    albumName: v.optional(v.string()),
-    albumImageUrl: v.optional(v.string()),
-    trackData: v.optional(v.string()), // JSON stringified SpotifyTrack
+    items: v.array(
+      v.object({
+        trackId: v.string(),
+        trackName: v.string(),
+        artistName: v.string(),
+        albumName: v.optional(v.string()),
+        albumImageUrl: v.optional(v.string()),
+        spotifyAlbumId: v.optional(v.string()),
+        trackData: v.optional(v.string()),
+        playedAt: v.number(), // Unix timestamp from Spotify played_at
+      })
+    ),
   },
   handler: async (ctx, args) => {
-    // Check if already saved
-    const existing = await ctx.db
-      .query('spotifySavedForLater')
-      .withIndex('by_trackId', (q) => q.eq('trackId', args.trackId))
-      .first();
+    const now = Date.now();
 
-    if (existing) {
-      return existing._id;
+    for (const item of args.items) {
+      const existing = await ctx.db
+        .query('spotifyTracks')
+        .withIndex('by_userId_trackId', (q) =>
+          q.eq('userId', args.userId).eq('trackId', item.trackId)
+        )
+        .first();
+
+      if (existing) {
+        // Update timestamps - only advance if newer
+        const newLastPlayedAt = Math.max(existing.lastPlayedAt ?? 0, item.playedAt);
+        const newLastSeenAt = Math.max(existing.lastSeenAt, newLastPlayedAt, existing.lastLikedAt ?? 0);
+
+        await ctx.db.patch(existing._id, {
+          trackName: item.trackName,
+          artistName: item.artistName,
+          albumName: item.albumName,
+          albumImageUrl: item.albumImageUrl,
+          spotifyAlbumId: item.spotifyAlbumId,
+          trackData: item.trackData,
+          lastPlayedAt: newLastPlayedAt,
+          lastSeenAt: newLastSeenAt,
+        });
+      } else {
+        // Insert new track
+        await ctx.db.insert('spotifyTracks', {
+          userId: args.userId,
+          trackId: item.trackId,
+          trackName: item.trackName,
+          artistName: item.artistName,
+          albumName: item.albumName,
+          albumImageUrl: item.albumImageUrl,
+          spotifyAlbumId: item.spotifyAlbumId,
+          trackData: item.trackData,
+          firstSeenAt: now,
+          lastSeenAt: item.playedAt,
+          lastPlayedAt: item.playedAt,
+        });
+      }
     }
-
-    return await ctx.db.insert('spotifySavedForLater', {
-      userId: args.userId,
-      trackId: args.trackId,
-      trackName: args.trackName,
-      artistName: args.artistName,
-      albumName: args.albumName,
-      albumImageUrl: args.albumImageUrl,
-      trackData: args.trackData,
-      savedAt: Date.now(),
-    });
   },
 });
 
-export const removeSavedForLater = mutation({
+export const upsertTracksFromLiked = mutation({
   args: {
-    trackId: v.string(),
+    userId: v.string(),
+    items: v.array(
+      v.object({
+        trackId: v.string(),
+        trackName: v.string(),
+        artistName: v.string(),
+        albumName: v.optional(v.string()),
+        albumImageUrl: v.optional(v.string()),
+        spotifyAlbumId: v.optional(v.string()),
+        trackData: v.optional(v.string()),
+        addedAt: v.number(), // Unix timestamp from Spotify added_at
+      })
+    ),
   },
   handler: async (ctx, args) => {
-    const saved = await ctx.db
-      .query('spotifySavedForLater')
-      .withIndex('by_trackId', (q) => q.eq('trackId', args.trackId))
-      .first();
+    const now = Date.now();
 
-    if (saved) {
-      await ctx.db.delete(saved._id);
+    for (const item of args.items) {
+      const existing = await ctx.db
+        .query('spotifyTracks')
+        .withIndex('by_userId_trackId', (q) =>
+          q.eq('userId', args.userId).eq('trackId', item.trackId)
+        )
+        .first();
+
+      if (existing) {
+        // Update timestamps - only advance if newer
+        const newLastLikedAt = Math.max(existing.lastLikedAt ?? 0, item.addedAt);
+        const newLastSeenAt = Math.max(existing.lastSeenAt, newLastLikedAt, existing.lastPlayedAt ?? 0);
+
+        await ctx.db.patch(existing._id, {
+          trackName: item.trackName,
+          artistName: item.artistName,
+          albumName: item.albumName,
+          albumImageUrl: item.albumImageUrl,
+          spotifyAlbumId: item.spotifyAlbumId,
+          trackData: item.trackData,
+          lastLikedAt: newLastLikedAt,
+          lastSeenAt: newLastSeenAt,
+        });
+      } else {
+        // Insert new track
+        await ctx.db.insert('spotifyTracks', {
+          userId: args.userId,
+          trackId: item.trackId,
+          trackName: item.trackName,
+          artistName: item.artistName,
+          albumName: item.albumName,
+          albumImageUrl: item.albumImageUrl,
+          spotifyAlbumId: item.spotifyAlbumId,
+          trackData: item.trackData,
+          firstSeenAt: now,
+          lastSeenAt: item.addedAt,
+          lastLikedAt: item.addedAt,
+        });
+      }
     }
   },
 });
 
-export const getSavedForLater = query({
+export const getRecentlyPlayedTracks = query({
   args: {
     userId: v.string(),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    // Get all tracks for user with lastPlayedAt, then sort client-side
+    const tracks = await ctx.db
+      .query('spotifyTracks')
+      .withIndex('by_userId', (q) => q.eq('userId', args.userId))
+      .collect();
+
+    // Filter to only tracks with lastPlayedAt and sort by it descending
+    const filtered = tracks
+      .filter((t) => t.lastPlayedAt !== undefined)
+      .sort((a, b) => (b.lastPlayedAt ?? 0) - (a.lastPlayedAt ?? 0));
+
+    if (args.limit) {
+      return filtered.slice(0, args.limit);
+    }
+    return filtered;
+  },
+});
+
+export const getLikedTracksHistory = query({
+  args: {
+    userId: v.string(),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    // Get all tracks for user with lastLikedAt, then sort client-side
+    const tracks = await ctx.db
+      .query('spotifyTracks')
+      .withIndex('by_userId', (q) => q.eq('userId', args.userId))
+      .collect();
+
+    // Filter to only tracks with lastLikedAt and sort by it descending
+    const filtered = tracks
+      .filter((t) => t.lastLikedAt !== undefined)
+      .sort((a, b) => (b.lastLikedAt ?? 0) - (a.lastLikedAt ?? 0));
+
+    if (args.limit) {
+      return filtered.slice(0, args.limit);
+    }
+    return filtered;
+  },
+});
+
+export const getTrackByUserAndTrackId = query({
+  args: {
+    userId: v.string(),
+    trackId: v.string(),
   },
   handler: async (ctx, args) => {
     return await ctx.db
-      .query('spotifySavedForLater')
-      .withIndex('by_userId_savedAt', (q) => q.eq('userId', args.userId))
-      .order('desc')
-      .collect();
-  },
-});
-
-export const getSavedTrackIds = query({
-  args: {
-    userId: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const saved = await ctx.db
-      .query('spotifySavedForLater')
-      .withIndex('by_userId', (q) => q.eq('userId', args.userId))
-      .collect();
-    return new Set(saved.map((s) => s.trackId));
+      .query('spotifyTracks')
+      .withIndex('by_userId_trackId', (q) =>
+        q.eq('userId', args.userId).eq('trackId', args.trackId)
+      )
+      .first();
   },
 });
 
@@ -473,15 +617,365 @@ export const clearPendingSuggestions = mutation({
   },
 });
 
-export const getCategorizedTrackIds = query({
+// ============================================================================
+// Sync Logs (for replay/debugging)
+// ============================================================================
+
+export const createSyncLog = mutation({
   args: {
     userId: v.string(),
+    syncType: v.string(),
+    rawResponse: v.string(),
   },
   handler: async (ctx, args) => {
-    const categorized = await ctx.db
-      .query('spotifySongCategorizations')
-      .withIndex('by_userId', (q) => q.eq('userId', args.userId))
+    return await ctx.db.insert('spotifySyncLogs', {
+      userId: args.userId,
+      syncType: args.syncType,
+      rawResponse: args.rawResponse,
+      status: 'pending',
+      createdAt: Date.now(),
+    });
+  },
+});
+
+export const updateSyncLogStatus = mutation({
+  args: {
+    syncLogId: v.id('spotifySyncLogs'),
+    status: v.string(),
+    error: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.syncLogId, {
+      status: args.status,
+      processedAt: Date.now(),
+      ...(args.error ? { error: args.error } : {}),
+    });
+  },
+});
+
+export const getPendingSyncLogs = query({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db
+      .query('spotifySyncLogs')
+      .withIndex('by_status', (q) => q.eq('status', 'pending'))
       .collect();
-    return categorized.map((c) => c.trackId);
+  },
+});
+
+// ============================================================================
+// Sync Runs (detailed stats for each sync)
+// ============================================================================
+
+export const saveSyncRun = mutation({
+  args: {
+    userId: v.string(),
+    source: v.string(),
+    status: v.string(),
+    startedAt: v.number(),
+    completedAt: v.number(),
+    durationMs: v.number(),
+    error: v.optional(v.string()),
+    tracksFromApi: v.number(),
+    uniqueTracksFromApi: v.number(),
+    newTracksAdded: v.number(),
+    existingTracksUpdated: v.number(),
+    uniqueAlbumsFromApi: v.number(),
+    albumsAlreadyInDb: v.number(),
+    newAlbumsDiscovered: v.number(),
+    albumsFetchFailed: v.number(),
+    albumsCheckedForListens: v.number(),
+    albumListensRecorded: v.number(),
+    tracksBackfilledFromAlbums: v.number(),
+    newAlbumNames: v.optional(v.array(v.string())),
+    recordedListenAlbumNames: v.optional(v.array(v.string())),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.insert('spotifySyncRuns', args);
+  },
+});
+
+export const getRecentSyncRuns = query({
+  args: {
+    userId: v.string(),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const runs = await ctx.db
+      .query('spotifySyncRuns')
+      .withIndex('by_userId_startedAt', (q) => q.eq('userId', args.userId))
+      .order('desc')
+      .collect();
+
+    if (args.limit) {
+      return runs.slice(0, args.limit);
+    }
+    return runs;
+  },
+});
+
+export const getAllConnections = query({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db.query('spotifyConnections').collect();
+  },
+});
+
+// ============================================================================
+// Album Management
+// ============================================================================
+
+export const upsertAlbum = mutation({
+  args: {
+    spotifyAlbumId: v.string(),
+    name: v.string(),
+    artistName: v.string(),
+    imageUrl: v.optional(v.string()),
+    releaseDate: v.optional(v.string()),
+    totalTracks: v.number(),
+    genres: v.optional(v.array(v.string())),
+    rawData: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+
+    const existing = await ctx.db
+      .query('spotifyAlbums')
+      .withIndex('by_spotifyAlbumId', (q) => q.eq('spotifyAlbumId', args.spotifyAlbumId))
+      .first();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        name: args.name,
+        artistName: args.artistName,
+        imageUrl: args.imageUrl,
+        releaseDate: args.releaseDate,
+        totalTracks: args.totalTracks,
+        genres: args.genres,
+        rawData: args.rawData,
+        updatedAt: now,
+      });
+      return existing._id;
+    }
+
+    return await ctx.db.insert('spotifyAlbums', {
+      spotifyAlbumId: args.spotifyAlbumId,
+      name: args.name,
+      artistName: args.artistName,
+      imageUrl: args.imageUrl,
+      releaseDate: args.releaseDate,
+      totalTracks: args.totalTracks,
+      genres: args.genres,
+      rawData: args.rawData,
+      createdAt: now,
+      updatedAt: now,
+    });
+  },
+});
+
+export const getAlbumBySpotifyId = query({
+  args: { spotifyAlbumId: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query('spotifyAlbums')
+      .withIndex('by_spotifyAlbumId', (q) => q.eq('spotifyAlbumId', args.spotifyAlbumId))
+      .first();
+  },
+});
+
+export const recordAlbumListen = mutation({
+  args: {
+    userId: v.string(),
+    albumId: v.id('spotifyAlbums'),
+    trackIds: v.array(v.string()),
+    earliestPlayedAt: v.number(),
+    latestPlayedAt: v.number(),
+    source: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+
+    // Check for overlapping listens (dedup)
+    // Get all listens for this user+album and check for time overlap
+    const existingListens = await ctx.db
+      .query('userAlbumListens')
+      .withIndex('by_userId_albumId', (q) =>
+        q.eq('userId', args.userId).eq('albumId', args.albumId)
+      )
+      .collect();
+
+    // Check if any existing listen overlaps with the new one
+    const hasOverlap = existingListens.some((listen) => {
+      // Overlap check: newEarliest <= existingLatest AND newLatest >= existingEarliest
+      return (
+        args.earliestPlayedAt <= listen.latestPlayedAt &&
+        args.latestPlayedAt >= listen.earliestPlayedAt
+      );
+    });
+
+    if (hasOverlap) {
+      return { recorded: false, reason: 'overlapping_listen' };
+    }
+
+    // Create the listen event
+    await ctx.db.insert('userAlbumListens', {
+      userId: args.userId,
+      albumId: args.albumId,
+      listenedAt: now,
+      earliestPlayedAt: args.earliestPlayedAt,
+      latestPlayedAt: args.latestPlayedAt,
+      trackIds: args.trackIds,
+      source: args.source,
+    });
+
+    // Upsert userAlbums record
+    const existingUserAlbum = await ctx.db
+      .query('userAlbums')
+      .withIndex('by_userId_albumId', (q) =>
+        q.eq('userId', args.userId).eq('albumId', args.albumId)
+      )
+      .first();
+
+    if (existingUserAlbum) {
+      await ctx.db.patch(existingUserAlbum._id, {
+        lastListenedAt: now,
+        listenCount: existingUserAlbum.listenCount + 1,
+      });
+    } else {
+      await ctx.db.insert('userAlbums', {
+        userId: args.userId,
+        albumId: args.albumId,
+        firstListenedAt: now,
+        lastListenedAt: now,
+        listenCount: 1,
+      });
+    }
+
+    return { recorded: true };
+  },
+});
+
+export const getUserAlbums = query({
+  args: {
+    userId: v.string(),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const userAlbums = await ctx.db
+      .query('userAlbums')
+      .withIndex('by_userId_lastListenedAt', (q) => q.eq('userId', args.userId))
+      .order('desc')
+      .collect();
+
+    // Fetch album details for each userAlbum
+    const albumsWithDetails = await Promise.all(
+      userAlbums.map(async (ua) => {
+        const album = await ctx.db.get(ua.albumId);
+        return { ...ua, album };
+      })
+    );
+
+    if (args.limit) {
+      return albumsWithDetails.slice(0, args.limit);
+    }
+    return albumsWithDetails;
+  },
+});
+
+export const getUserAlbumListens = query({
+  args: {
+    userId: v.string(),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const listens = await ctx.db
+      .query('userAlbumListens')
+      .withIndex('by_userId_listenedAt', (q) => q.eq('userId', args.userId))
+      .order('desc')
+      .collect();
+
+    // Fetch album details for each listen
+    const listensWithDetails = await Promise.all(
+      listens.map(async (listen) => {
+        const album = await ctx.db.get(listen.albumId);
+        return { ...listen, album };
+      })
+    );
+
+    if (args.limit) {
+      return listensWithDetails.slice(0, args.limit);
+    }
+    return listensWithDetails;
+  },
+});
+
+// Get tracks by album for a user (used for album detection)
+export const getTracksByAlbumId = query({
+  args: {
+    userId: v.string(),
+    spotifyAlbumId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query('spotifyTracks')
+      .withIndex('by_userId_albumId', (q) =>
+        q.eq('userId', args.userId).eq('spotifyAlbumId', args.spotifyAlbumId)
+      )
+      .collect();
+  },
+});
+
+// Backfill tracks with album data (used when an album is discovered)
+export const backfillTracksFromAlbum = mutation({
+  args: {
+    userId: v.string(),
+    spotifyAlbumId: v.string(),
+    albumName: v.string(),
+    albumImageUrl: v.optional(v.string()),
+    tracks: v.array(
+      v.object({
+        trackId: v.string(),
+        trackName: v.string(),
+        artistName: v.string(),
+      })
+    ),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    let addedCount = 0;
+
+    for (const track of args.tracks) {
+      // Check if track already exists for this user
+      const existing = await ctx.db
+        .query('spotifyTracks')
+        .withIndex('by_userId_trackId', (q) =>
+          q.eq('userId', args.userId).eq('trackId', track.trackId)
+        )
+        .first();
+
+      if (!existing) {
+        // Add track without play timestamps (album-sourced)
+        await ctx.db.insert('spotifyTracks', {
+          userId: args.userId,
+          trackId: track.trackId,
+          trackName: track.trackName,
+          artistName: track.artistName,
+          albumName: args.albumName,
+          albumImageUrl: args.albumImageUrl,
+          spotifyAlbumId: args.spotifyAlbumId,
+          firstSeenAt: now,
+          lastSeenAt: now,
+          // No lastPlayedAt - these are album-sourced, not user-played
+        });
+        addedCount++;
+      } else if (!existing.spotifyAlbumId) {
+        // Update existing track with albumId if missing
+        await ctx.db.patch(existing._id, {
+          spotifyAlbumId: args.spotifyAlbumId,
+        });
+      }
+    }
+
+    return { addedCount };
   },
 });
