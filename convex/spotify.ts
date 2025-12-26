@@ -990,6 +990,51 @@ export const getUserAlbumListens = query({
   },
 });
 
+export const deleteAlbumListen = mutation({
+  args: {
+    listenId: v.id('userAlbumListens'),
+  },
+  handler: async (ctx, args) => {
+    // Get the listen to find the associated userAlbum
+    const listen = await ctx.db.get(args.listenId);
+    if (!listen) return;
+
+    // Delete the listen
+    await ctx.db.delete(args.listenId);
+
+    // Update the userAlbums count
+    const userAlbum = await ctx.db
+      .query('userAlbums')
+      .withIndex('by_userId_albumId', (q) =>
+        q.eq('userId', listen.userId).eq('albumId', listen.albumId)
+      )
+      .first();
+
+    if (userAlbum) {
+      const newCount = userAlbum.listenCount - 1;
+      if (newCount <= 0) {
+        // Delete the userAlbum record if no listens remain
+        await ctx.db.delete(userAlbum._id);
+      } else {
+        // Recalculate first/last listened dates
+        const remainingListens = await ctx.db
+          .query('userAlbumListens')
+          .withIndex('by_userId_albumId', (q) =>
+            q.eq('userId', listen.userId).eq('albumId', listen.albumId)
+          )
+          .collect();
+
+        const timestamps = remainingListens.map((l) => l.listenedAt);
+        await ctx.db.patch(userAlbum._id, {
+          listenCount: newCount,
+          firstListenedAt: Math.min(...timestamps),
+          lastListenedAt: Math.max(...timestamps),
+        });
+      }
+    }
+  },
+});
+
 // Get tracks by album for a user (used for album detection)
 export const getTracksByAlbumId = query({
   args: {

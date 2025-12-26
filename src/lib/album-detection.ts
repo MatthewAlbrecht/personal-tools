@@ -26,6 +26,7 @@ const ASCENDING_THRESHOLD = 0.7; // 70% of consecutive pairs must be ascending
 const MAX_SESSION_DURATION_MS = 4 * 60 * 60 * 1000; // 4 hours
 const RESTART_FROM_TRACK = 3; // Consider restart if going to track 1-3
 const RESTART_AFTER_TRACK_PERCENT = 0.7; // Consider restart if coming from track > 70% through album
+const MIN_ALBUM_TRACKS = 4; // Skip singles/EPs - only count albums with 4+ tracks
 
 /**
  * Groups play events by album ID
@@ -160,7 +161,8 @@ export function detectAlbumListenSessions(
   plays: PlayEvent[],
   totalTracks: number
 ): ListenSession[] {
-  if (plays.length === 0 || totalTracks === 0) return [];
+  // Skip singles/EPs - only count proper albums
+  if (plays.length === 0 || totalTracks === 0 || totalTracks < MIN_ALBUM_TRACKS) return [];
 
   // Split into sessions based on track restarts
   const sessions = splitIntoSessions(plays, totalTracks);

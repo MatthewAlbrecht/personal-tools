@@ -2,10 +2,26 @@
 
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation } from 'convex/react';
-import { Disc3 } from 'lucide-react';
+import { Disc3, MoreHorizontal, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '~/components/ui/alert-dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '~/components/ui/dropdown-menu';
 
 import { SpotifyConnection } from '../spotify-playlister/_components/spotify-connection';
 import { SyncAlbumsButton } from '~/components/sync-albums-button';
@@ -56,6 +72,7 @@ export default function AlbumsPage() {
   const updateAlbumRating = useMutation(api.spotify.updateAlbumRating);
   const addManualAlbumListen = useMutation(api.spotify.addManualAlbumListen);
   const upsertAlbum = useMutation(api.spotify.upsertAlbum);
+  const deleteAlbumListen = useMutation(api.spotify.deleteAlbumListen);
 
   // Fetch album listens (last 500)
   const albumListens = useQuery(
@@ -199,6 +216,19 @@ export default function AlbumsPage() {
     } catch (error) {
       console.error('Failed to save rating:', error);
       toast.error('Failed to save rating');
+    }
+  }
+
+  // Handle delete listen
+  async function handleDeleteListen(listenId: string, albumName: string) {
+    try {
+      await deleteAlbumListen({
+        listenId: listenId as Id<'userAlbumListens'>,
+      });
+      toast.success(`Deleted listen for "${albumName}"`);
+    } catch (error) {
+      console.error('Failed to delete listen:', error);
+      toast.error('Failed to delete listen');
     }
   }
 
@@ -347,6 +377,7 @@ export default function AlbumsPage() {
               listenOrdinals={listenOrdinals}
               albumRatings={albumRatings}
               onRateAlbum={handleRateAlbum}
+              onDeleteListen={handleDeleteListen}
               isLoading={albumListens === undefined}
             />
           )}
@@ -413,14 +444,18 @@ function HistoryView({
   listenOrdinals,
   albumRatings,
   onRateAlbum,
+  onDeleteListen,
   isLoading,
 }: {
   listensByMonth: Map<string, HistoryListen[]>;
   listenOrdinals: Map<string, number>;
   albumRatings: Map<string, number>;
   onRateAlbum: (listen: HistoryListen) => void;
+  onDeleteListen: (listenId: string, albumName: string) => void;
   isLoading: boolean;
 }) {
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -444,28 +479,81 @@ function HistoryView({
   }
 
   return (
-    <div className="space-y-8">
-      {Array.from(listensByMonth.entries()).map(([month, listens]) => (
-        <div key={month}>
-          <h2 className="mb-3 font-semibold text-lg">{month}</h2>
-          <div className="space-y-1">
-            {listens.map((listen) => (
-              <AlbumCard
-                key={listen._id}
-                name={listen.album?.name ?? 'Unknown Album'}
-                artistName={listen.album?.artistName ?? 'Unknown Artist'}
-                imageUrl={listen.album?.imageUrl}
-                listenedAt={listen.listenedAt}
-                listenOrdinal={listenOrdinals.get(listen._id)}
-                rating={albumRatings.get(listen.albumId)}
-                showListenDate
-                onRate={() => onRateAlbum(listen)}
-              />
-            ))}
+    <>
+      <div className="space-y-8">
+        {Array.from(listensByMonth.entries()).map(([month, listens]) => (
+          <div key={month}>
+            <h2 className="mb-3 font-semibold text-lg">{month}</h2>
+            <div className="space-y-1">
+              {listens.map((listen) => (
+                <div key={listen._id} className="flex items-center gap-2">
+                  <div className="flex-1 min-w-0">
+                    <AlbumCard
+                      name={listen.album?.name ?? 'Unknown Album'}
+                      artistName={listen.album?.artistName ?? 'Unknown Artist'}
+                      imageUrl={listen.album?.imageUrl}
+                      listenedAt={listen.listenedAt}
+                      listenOrdinal={listenOrdinals.get(listen._id)}
+                      rating={albumRatings.get(listen.albumId)}
+                      showListenDate
+                      onRate={() => onRateAlbum(listen)}
+                    />
+                  </div>
+                  <DropdownMenu modal={false}>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        className="p-1.5 rounded-md text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors"
+                        aria-label="More options"
+                      >
+                        <MoreHorizontal className="h-4 w-4" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-32">
+                      <DropdownMenuItem
+                        variant="destructive"
+                        onSelect={() => setDeleteTarget({
+                          id: listen._id,
+                          name: listen.album?.name ?? 'Unknown Album',
+                        })}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      ))}
-    </div>
+        ))}
+      </div>
+
+      <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this listen?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove the listen for "{deleteTarget?.name}" from your history. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (deleteTarget) {
+                  onDeleteListen(deleteTarget.id, deleteTarget.name);
+                  setDeleteTarget(null);
+                }
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
