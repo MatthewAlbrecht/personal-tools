@@ -76,7 +76,7 @@ function parseReleaseDate(releaseDate: string): {
 } {
   const parts = releaseDate.split('-');
   return {
-    year: Number.parseInt(parts[0], 10),
+    year: Number.parseInt(parts[0] ?? '0', 10),
     month: parts[1] ? Number.parseInt(parts[1], 10) : undefined,
     day: parts[2] ? Number.parseInt(parts[2], 10) : undefined,
   };
