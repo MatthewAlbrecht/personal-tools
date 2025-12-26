@@ -1009,6 +1009,7 @@ type TrackItem = {
   albumImageUrl?: string;
   spotifyAlbumId?: string;
   lastPlayedAt?: number;
+  releaseDate?: string;
 };
 
 function TracksView({

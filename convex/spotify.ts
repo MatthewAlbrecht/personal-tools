@@ -495,9 +495,44 @@ export const getRecentlyPlayedTracks = query({
       .collect();
 
     // Filter out tracks without lastPlayedAt and apply limit
-    return tracks
+    const filteredTracks = tracks
       .filter((track) => track.lastPlayedAt !== undefined)
       .slice(0, limit);
+
+    // Get unique album IDs to batch fetch release dates
+    const albumIds = [
+      ...new Set(
+        filteredTracks
+          .map((t) => t.spotifyAlbumId)
+          .filter((id): id is string => !!id)
+      ),
+    ];
+
+    // Batch fetch albums
+    const albums = await Promise.all(
+      albumIds.map((id) =>
+        ctx.db
+          .query('spotifyAlbums')
+          .withIndex('by_spotifyAlbumId', (q) => q.eq('spotifyAlbumId', id))
+          .first()
+      )
+    );
+
+    // Create a map of albumId -> releaseDate
+    const albumReleaseDates = new Map<string, string | undefined>();
+    for (const album of albums) {
+      if (album) {
+        albumReleaseDates.set(album.spotifyAlbumId, album.releaseDate);
+      }
+    }
+
+    // Enrich tracks with releaseDate
+    return filteredTracks.map((track) => ({
+      ...track,
+      releaseDate: track.spotifyAlbumId
+        ? albumReleaseDates.get(track.spotifyAlbumId)
+        : undefined,
+    }));
   },
 });
 
