@@ -1,8 +1,10 @@
 'use client';
 
+import { forwardRef } from 'react';
 import Image from 'next/image';
-import { Disc3 } from 'lucide-react';
+import { Check, Disc3 } from 'lucide-react';
 import { getRatingColors, getTierShortLabel } from '~/lib/album-tiers';
+import { cn } from '~/lib/utils';
 
 type AlbumCardProps = {
   name: string;
@@ -15,9 +17,12 @@ type AlbumCardProps = {
   showListenDate?: boolean;
   showReleaseYear?: boolean;
   onRate?: () => void;
+  onSelect?: () => void; // Click to select for keyboard navigation
+  isSelected?: boolean; // Keyboard navigation selection state
+  showSaved?: boolean; // Show "Saved" indicator
 };
 
-export function AlbumCard({
+export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(function AlbumCard({
   name,
   artistName,
   imageUrl,
@@ -28,7 +33,10 @@ export function AlbumCard({
   showListenDate = false,
   showReleaseYear = false,
   onRate,
-}: AlbumCardProps) {
+  onSelect,
+  isSelected = false,
+  showSaved = false,
+}, ref) {
   const releaseYear = releaseDate?.substring(0, 4);
 
   const listenDateStr = listenedAt
@@ -42,7 +50,16 @@ export function AlbumCard({
   const isRated = rating !== undefined;
 
   return (
-    <div className="group flex items-center gap-3 rounded-lg p-2 transition-colors hover:bg-muted/50">
+    <div
+      ref={ref}
+      onClick={onSelect}
+      className={cn(
+        "group flex items-center gap-3 rounded-lg p-2 hover:bg-muted/50",
+        isSelected && !showSaved && "ring-2 ring-primary",
+        showSaved && "ring-2 ring-emerald-500/50",
+        !showSaved && "transition-shadow duration-300"
+      )}
+    >
       {/* Album Cover */}
       <div className="relative h-12 w-12 flex-shrink-0 overflow-hidden rounded-md bg-muted">
         {imageUrl ? (
@@ -68,6 +85,17 @@ export function AlbumCard({
 
       {/* Metadata */}
       <div className="flex flex-shrink-0 items-center gap-2">
+        {/* Saved Indicator - instant on, fade out */}
+        <span
+          className={cn(
+            "inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400",
+            showSaved ? "opacity-100" : "opacity-0 pointer-events-none transition-opacity duration-300"
+          )}
+        >
+          <Check className="h-3 w-3" />
+          Saved
+        </span>
+
         {/* Rating Badge or Unranked Button */}
         {isRated && ratingColors ? (
           // Rated - show colored tier badge (display only)
@@ -115,4 +143,4 @@ export function AlbumCard({
       </div>
     </div>
   );
-}
+});

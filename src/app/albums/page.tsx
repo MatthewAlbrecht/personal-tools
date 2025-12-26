@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useQuery, useMutation } from 'convex/react';
-import { Disc3, MoreHorizontal, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Check, Disc3, MoreHorizontal, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
@@ -22,12 +22,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '~/components/ui/dropdown-menu';
+import { Kbd, KbdGroup } from '~/components/ui/kbd';
 
 import { SpotifyConnection } from '../spotify-playlister/_components/spotify-connection';
 import { SyncAlbumsButton } from '~/components/sync-albums-button';
 import { LoginPrompt } from '~/components/login-prompt';
 import { useSpotifyAuth } from '~/lib/hooks/use-spotify-auth';
 import { useSyncHistory } from '~/lib/hooks/use-sync-history';
+import { useDebouncedCallback } from '~/lib/hooks/use-debounced-callback';
 import { AlbumCard } from './_components/album-card';
 import { AlbumRanker } from './_components/album-ranker';
 import { AddListenDrawer } from './_components/add-listen-view';
@@ -390,6 +392,13 @@ export default function AlbumsPage() {
               yearFilter={yearFilter}
               onYearFilterChange={setYearFilter}
               isLoading={userAlbums === undefined}
+              onUpdateRating={(userAlbumId, rating, position) => {
+                updateAlbumRating({
+                  userAlbumId: userAlbumId as Id<'userAlbums'>,
+                  rating,
+                  position,
+                });
+              }}
             />
           )}
 
@@ -557,6 +566,20 @@ function HistoryView({
   );
 }
 
+// Album type for RankingsView
+type RankedAlbumItem = {
+  _id: string;
+  albumId: string;
+  rating?: number;
+  position?: number;
+  album: {
+    name: string;
+    artistName: string;
+    imageUrl?: string;
+    releaseDate?: string;
+  } | null;
+};
+
 // Rankings View Component
 function RankingsView({
   albumsByTier,
@@ -564,13 +587,257 @@ function RankingsView({
   yearFilter,
   onYearFilterChange,
   isLoading,
+  onUpdateRating,
 }: {
-  albumsByTier: Map<TierName, { high: Array<{ album: { name: string; artistName: string; imageUrl?: string; releaseDate?: string } | null }>; low: Array<{ album: { name: string; artistName: string; imageUrl?: string; releaseDate?: string } | null }> }>;
+  albumsByTier: Map<TierName, { high: RankedAlbumItem[]; low: RankedAlbumItem[] }>;
   availableYears: number[];
   yearFilter: string;
   onYearFilterChange: (year: string) => void;
   isLoading: boolean;
+  onUpdateRating: (userAlbumId: string, rating: number, position: number) => void;
 }) {
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [optimisticUpdates, setOptimisticUpdates] = useState<Map<string, { rating: number; position: number }>>(new Map());
+  const [savedAlbumId, setSavedAlbumId] = useState<string | null>(null);
+  const [scrollTrigger, setScrollTrigger] = useState(0); // Triggers scroll-into-view on album move
+  const selectedRowRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const savedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Debounced mutation - waits 800ms after last change before persisting
+  // Don't clear optimistic updates here - let them persist until Convex syncs
+  // (they get cleared on year filter change anyway)
+  const debouncedUpdate = useDebouncedCallback(
+    (userAlbumId: string, rating: number, position: number) => {
+      onUpdateRating(userAlbumId, rating, position);
+      // Show "Saved" indicator on the specific album
+      setSavedAlbumId(userAlbumId);
+      if (savedTimeoutRef.current) clearTimeout(savedTimeoutRef.current);
+      savedTimeoutRef.current = setTimeout(() => setSavedAlbumId(null), 1500);
+    },
+    800
+  );
+
+  // Flatten albums into a single ordered list for keyboard navigation
+  // Order: rating 10 -> 9 -> 8 -> ... -> 1, sorted by position within each rating
+  const flatAlbums = useMemo(() => {
+    // Collect ALL albums from all tiers first
+    const allAlbums: RankedAlbumItem[] = [];
+    for (const tier of TIER_ORDER) {
+      const tierData = albumsByTier.get(tier);
+      if (!tierData) continue;
+      allAlbums.push(...tierData.high, ...tierData.low);
+    }
+
+    // Apply optimistic updates
+    const withOptimistic = allAlbums.map((a) => {
+      const update = optimisticUpdates.get(a._id);
+      if (update) {
+        return { ...a, rating: update.rating, position: update.position };
+      }
+      return a;
+    });
+
+    // Sort by rating (descending) then position (ascending)
+    return withOptimistic.sort((a, b) => {
+      const ratingA = a.rating ?? 0;
+      const ratingB = b.rating ?? 0;
+      if (ratingA !== ratingB) return ratingB - ratingA; // Higher ratings first
+      return (a.position ?? 0) - (b.position ?? 0); // Then by position
+    });
+  }, [albumsByTier, optimisticUpdates]);
+
+  // Re-group for display (respecting optimistic updates)
+  const displayByTier = useMemo(() => {
+    const grouped = new Map<TierName, { high: RankedAlbumItem[]; low: RankedAlbumItem[] }>();
+    for (const tier of TIER_ORDER) {
+      const { high: highRating, low: lowRating } = getRatingsForTier(tier);
+      grouped.set(tier, {
+        high: flatAlbums.filter((a) => a.rating === highRating),
+        low: flatAlbums.filter((a) => a.rating === lowRating),
+      });
+    }
+    return grouped;
+  }, [flatAlbums]);
+
+  // Check if keyboard reordering is enabled (only for specific years)
+  const isReorderingEnabled = yearFilter !== 'all';
+
+  // Move album to a new position
+  const moveAlbum = useCallback(
+    (direction: 'up' | 'down') => {
+      if (selectedIndex === null || !isReorderingEnabled) return;
+      const album = flatAlbums[selectedIndex];
+      if (!album) return;
+
+      const currentRating = album.rating ?? 5;
+      const currentPosition = album.position ?? 0;
+
+      // Find albums in the same rating tier
+      const albumsInSameTier = flatAlbums.filter((a) => a.rating === currentRating && a._id !== album._id);
+      const sortedSameTier = albumsInSameTier.sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+
+      // Find album's position within its tier
+      const albumsAbove = sortedSameTier.filter((a) => (a.position ?? 0) < currentPosition);
+      const albumsBelow = sortedSameTier.filter((a) => (a.position ?? 0) > currentPosition);
+
+      let newRating: number;
+      let newPosition: number;
+      let newSelectedIndex: number;
+
+      if (direction === 'up') {
+        if (albumsAbove.length > 0) {
+          // Move within same tier - swap with album above
+          const albumAbove = albumsAbove[albumsAbove.length - 1]; // Last one is closest above
+          if (!albumAbove) return;
+          
+          const albumAboveThat = albumsAbove.length > 1 ? albumsAbove[albumsAbove.length - 2] : null;
+          
+          newRating = currentRating;
+          if (albumAboveThat) {
+            newPosition = ((albumAboveThat.position ?? 0) + (albumAbove.position ?? 0)) / 2;
+          } else {
+            newPosition = (albumAbove.position ?? 0) - 1;
+          }
+          
+          // Find new index in flat list
+          const newFlatIndex = flatAlbums.findIndex((a) => a._id === albumAbove._id);
+          newSelectedIndex = newFlatIndex >= 0 ? newFlatIndex : selectedIndex;
+        } else {
+          // At top of tier - move to next higher rating
+          if (currentRating >= 10) return; // Already at highest
+          
+          newRating = currentRating + 1;
+          
+          // Join at bottom of the new tier
+          const albumsInNewTier = flatAlbums.filter((a) => a.rating === newRating);
+          if (albumsInNewTier.length > 0) {
+            const lastInNewTier = albumsInNewTier.sort((a, b) => (b.position ?? 0) - (a.position ?? 0))[0];
+            if (!lastInNewTier) return;
+            newPosition = (lastInNewTier.position ?? 0) + 1;
+          } else {
+            newPosition = 0; // Empty tier
+          }
+          
+          // Stay at same visual position when changing tiers
+          newSelectedIndex = selectedIndex;
+        }
+      } else {
+        // Moving down
+        if (albumsBelow.length > 0) {
+          // Move within same tier - swap with album below
+          const albumBelow = albumsBelow[0]; // First one is closest below
+          if (!albumBelow) return;
+          
+          const albumBelowThat = albumsBelow.length > 1 ? albumsBelow[1] : null;
+          
+          newRating = currentRating;
+          if (albumBelowThat) {
+            newPosition = ((albumBelow.position ?? 0) + (albumBelowThat.position ?? 0)) / 2;
+          } else {
+            newPosition = (albumBelow.position ?? 0) + 1;
+          }
+          
+          // Find new index in flat list
+          const newFlatIndex = flatAlbums.findIndex((a) => a._id === albumBelow._id);
+          newSelectedIndex = newFlatIndex >= 0 ? newFlatIndex : selectedIndex;
+        } else {
+          // At bottom of tier - move to next lower rating
+          if (currentRating <= 1) return; // Already at lowest
+          
+          newRating = currentRating - 1;
+          
+          // Join at top of the new tier
+          const albumsInNewTier = flatAlbums.filter((a) => a.rating === newRating);
+          if (albumsInNewTier.length > 0) {
+            const firstInNewTier = albumsInNewTier.sort((a, b) => (a.position ?? 0) - (b.position ?? 0))[0];
+            if (!firstInNewTier) return;
+            newPosition = (firstInNewTier.position ?? 0) - 1;
+          } else {
+            newPosition = 0; // Empty tier
+          }
+          
+          // Stay at same visual position when changing tiers
+          newSelectedIndex = selectedIndex;
+        }
+      }
+
+      // Apply optimistic update immediately
+      setOptimisticUpdates((prev) => {
+        const next = new Map(prev);
+        next.set(album._id, { rating: newRating, position: newPosition });
+        return next;
+      });
+
+      setSelectedIndex(newSelectedIndex);
+      setScrollTrigger((n) => n + 1); // Trigger scroll to follow the album
+
+      // Debounced persist to DB
+      debouncedUpdate(album._id, newRating, newPosition);
+    },
+    [selectedIndex, flatAlbums, isReorderingEnabled, debouncedUpdate]
+  );
+
+  // Keyboard handler
+  useEffect(() => {
+    if (!isReorderingEnabled) return;
+
+    function handleKeyDown(e: KeyboardEvent) {
+      // Only handle if not in an input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) {
+        return;
+      }
+
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        e.preventDefault();
+
+        if (e.altKey) {
+          // Option + Arrow: move album
+          moveAlbum(e.key === 'ArrowUp' ? 'up' : 'down');
+        } else {
+          // Arrow only: move selection
+          setSelectedIndex((prev) => {
+            if (prev === null) return flatAlbums.length > 0 ? 0 : null;
+            const next = e.key === 'ArrowUp' ? prev - 1 : prev + 1;
+            if (next < 0 || next >= flatAlbums.length) return prev;
+            return next;
+          });
+        }
+      } else if (e.key === 'Escape') {
+        setSelectedIndex(null);
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isReorderingEnabled, flatAlbums.length, moveAlbum]);
+
+  // Scroll selected album into view (also triggers when album moves via scrollTrigger)
+  useEffect(() => {
+    // Use requestAnimationFrame to wait for DOM to update after tier change
+    const frameId = requestAnimationFrame(() => {
+      const el = selectedRowRef.current;
+      if (!el) return;
+
+      const padding = 240;
+      const elRect = el.getBoundingClientRect();
+
+      if (elRect.top < padding) {
+        window.scrollBy({ top: elRect.top - padding, behavior: 'smooth' });
+      } else if (elRect.bottom > window.innerHeight - padding) {
+        window.scrollBy({ top: elRect.bottom - window.innerHeight + padding, behavior: 'smooth' });
+      }
+    });
+
+    return () => cancelAnimationFrame(frameId);
+  }, [selectedIndex, scrollTrigger]);
+
+  // Reset selection when year filter changes
+  useEffect(() => {
+    setSelectedIndex(null);
+    setOptimisticUpdates(new Map());
+  }, [yearFilter]);
+
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -580,13 +847,7 @@ function RankingsView({
   }
 
   // Check if there are any rated albums
-  let hasRatedAlbums = false;
-  for (const [, { high, low }] of albumsByTier) {
-    if (high.length > 0 || low.length > 0) {
-      hasRatedAlbums = true;
-      break;
-    }
-  }
+  const hasRatedAlbums = flatAlbums.length > 0;
 
   if (!hasRatedAlbums) {
     return (
@@ -602,78 +863,135 @@ function RankingsView({
     );
   }
 
+  // Build a lookup of album _id to flat index
+  const albumIdToIndex = new Map<string, number>();
+  flatAlbums.forEach((a, i) => albumIdToIndex.set(a._id, i));
+
   return (
-    <div className="space-y-8">
-      {/* Year Filter */}
-      <div className="flex items-center gap-3">
-        <label htmlFor="year-filter" className="text-muted-foreground text-sm">
-          Filter by year:
-        </label>
-        <select
-          id="year-filter"
-          value={yearFilter}
-          onChange={(e) => onYearFilterChange(e.target.value)}
-          className="rounded-md border bg-background px-3 py-1.5 text-sm"
-        >
-          <option value="all">All Years</option>
-          {availableYears.map((year) => (
-            <option key={year} value={year.toString()}>
-              {year}
-            </option>
-          ))}
-        </select>
+    <div ref={containerRef} className="space-y-4">
+      {/* Year Filter + Keyboard hint */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <label htmlFor="year-filter" className="text-muted-foreground text-sm">
+            Filter by year:
+          </label>
+          <select
+            id="year-filter"
+            value={yearFilter}
+            onChange={(e) => onYearFilterChange(e.target.value)}
+            className="rounded-md border bg-background px-3 py-1.5 text-sm"
+          >
+            <option value="all">All Years</option>
+            {availableYears.map((year) => (
+              <option key={year} value={year.toString()}>
+                {year}
+              </option>
+            ))}
+          </select>
+        </div>
+        {isReorderingEnabled && (
+          <div className="flex items-center gap-2 text-muted-foreground text-xs">
+            <KbdGroup>
+              <Kbd>
+                <ArrowUp className="h-3 w-3" />
+              </Kbd>
+              <Kbd>
+                <ArrowDown className="h-3 w-3" />
+              </Kbd>
+            </KbdGroup>
+            <span>Select</span>
+            <span>•</span>
+            <KbdGroup>
+              <Kbd>⌥</Kbd>
+              <span>+</span>
+              <Kbd>
+                <ArrowUp className="h-3 w-3" />
+              </Kbd>
+              <Kbd>
+                <ArrowDown className="h-3 w-3" />
+              </Kbd>
+            </KbdGroup>
+            <span>Move</span>
+            <span>•</span>
+            <KbdGroup>
+              <Kbd>Esc</Kbd>
+            </KbdGroup>
+            <span>Clear</span>
+          </div>
+        )}
       </div>
 
-      {/* Tier Sections */}
+      {/* Tier Sections - always show all tiers for keyboard navigation */}
       {TIER_ORDER.map((tier) => {
-        const albums = albumsByTier.get(tier);
-        if (!albums || (albums.high.length === 0 && albums.low.length === 0)) {
-          return null;
-        }
+        const albums = displayByTier.get(tier) ?? { high: [], low: [] };
 
         return (
-          <div key={tier} className="rounded-lg border p-4">
-            <h2 className="mb-4 font-semibold text-lg">{tier}</h2>
+          <div key={tier} className="rounded-lg border p-3">
+            <h2 className="mb-2 font-semibold text-base">{tier}</h2>
 
-            {albums.high.length > 0 && (
-              <div className="mb-4">
-                <h3 className="mb-2 font-medium text-muted-foreground text-sm">
-                  High
-                </h3>
-                <div className="space-y-1">
-                  {albums.high.map((ua, idx) => (
-                    <AlbumCard
-                      key={`${ua.album?.name}-high-${idx}`}
-                      name={ua.album?.name ?? 'Unknown Album'}
-                      artistName={ua.album?.artistName ?? 'Unknown Artist'}
-                      imageUrl={ua.album?.imageUrl}
-                      releaseDate={ua.album?.releaseDate}
-                      showReleaseYear
-                    />
-                  ))}
-                </div>
+            <div className="mb-3">
+              <h3 className="mb-1 font-medium text-muted-foreground text-xs">
+                High
+              </h3>
+              <div className="space-y-0.5">
+                {albums.high.length > 0 ? (
+                  albums.high.map((ua) => {
+                    const flatIdx = albumIdToIndex.get(ua._id);
+                    const isSelected = flatIdx === selectedIndex;
+                    return (
+                      <AlbumCard
+                        key={ua._id}
+                        ref={isSelected ? selectedRowRef : undefined}
+                        name={ua.album?.name ?? 'Unknown Album'}
+                        artistName={ua.album?.artistName ?? 'Unknown Artist'}
+                        imageUrl={ua.album?.imageUrl}
+                        releaseDate={ua.album?.releaseDate}
+                        showReleaseYear
+                        isSelected={isSelected}
+                        showSaved={ua._id === savedAlbumId}
+                        onSelect={isReorderingEnabled && flatIdx !== undefined ? () => setSelectedIndex(flatIdx) : undefined}
+                      />
+                    );
+                  })
+                ) : (
+                  <div className="rounded-md border border-dashed py-1.5 text-center text-muted-foreground/50 text-xs">
+                    Empty
+                  </div>
+                )}
               </div>
-            )}
+            </div>
 
-            {albums.low.length > 0 && (
-              <div>
-                <h3 className="mb-2 font-medium text-muted-foreground text-sm">
-                  Low
-                </h3>
-                <div className="space-y-1">
-                  {albums.low.map((ua, idx) => (
-                    <AlbumCard
-                      key={`${ua.album?.name}-low-${idx}`}
-                      name={ua.album?.name ?? 'Unknown Album'}
-                      artistName={ua.album?.artistName ?? 'Unknown Artist'}
-                      imageUrl={ua.album?.imageUrl}
-                      releaseDate={ua.album?.releaseDate}
-                      showReleaseYear
-                    />
-                  ))}
-                </div>
+            <div>
+              <h3 className="mb-1 font-medium text-muted-foreground text-xs">
+                Low
+              </h3>
+              <div className="space-y-0.5">
+                {albums.low.length > 0 ? (
+                  albums.low.map((ua) => {
+                    const flatIdx = albumIdToIndex.get(ua._id);
+                    const isSelected = flatIdx === selectedIndex;
+                    return (
+                      <AlbumCard
+                        key={ua._id}
+                        ref={isSelected ? selectedRowRef : undefined}
+                        name={ua.album?.name ?? 'Unknown Album'}
+                        artistName={ua.album?.artistName ?? 'Unknown Artist'}
+                        imageUrl={ua.album?.imageUrl}
+                        releaseDate={ua.album?.releaseDate}
+                        showReleaseYear
+                        isSelected={isSelected}
+                        showSaved={ua._id === savedAlbumId}
+                        onSelect={isReorderingEnabled && flatIdx !== undefined ? () => setSelectedIndex(flatIdx) : undefined}
+                      />
+                    );
+                  })
+                ) : (
+                  <div className="rounded-md border border-dashed py-1.5 text-center text-muted-foreground/50 text-xs">
+                    Empty
+                  </div>
+                )}
               </div>
-            )}
+            </div>
           </div>
         );
       })}
