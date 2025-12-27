@@ -816,6 +816,26 @@ export const getAlbumBySpotifyId = query({
   },
 });
 
+export const getAllAlbums = query({
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    let query = ctx.db
+      .query('spotifyAlbums')
+      .withIndex('by_createdAt');
+    
+    const albums = await query.collect();
+    
+    // Sort descending (most recent first) and apply limit
+    const sorted = albums.sort((a, b) => b.createdAt - a.createdAt);
+    
+    if (args.limit) {
+      return sorted.slice(0, args.limit);
+    }
+    
+    return sorted;
+  },
+});
+
 export const recordAlbumListen = mutation({
   args: {
     userId: v.string(),

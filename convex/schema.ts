@@ -252,7 +252,8 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   })
-    .index('by_spotifyAlbumId', ['spotifyAlbumId']),
+    .index('by_spotifyAlbumId', ['spotifyAlbumId'])
+    .index('by_createdAt', ['createdAt']),
 
   userAlbums: defineTable({
     userId: v.string(),
