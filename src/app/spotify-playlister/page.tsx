@@ -566,9 +566,12 @@ export default function SpotifyPlaylisterPage() {
 			}
 
 			const data = await res.json();
+			const suggestions = Array.isArray(data)
+				? data
+				: data.suggestedPlaylists || [];
 			setReviewState({
 				status: "suggestions",
-				suggestions: data.suggestedPlaylists,
+				suggestions,
 			});
 
 			// Save suggestions to Convex and cache
@@ -578,7 +581,7 @@ export default function SpotifyPlaylisterPage() {
 						userId,
 						trackId: selectedTrack.track.id,
 						userInput: input,
-						suggestions: data.suggestedPlaylists,
+						suggestions,
 					});
 					// Also update local cache for instant access
 					setPendingSuggestionsCache((prev) =>
