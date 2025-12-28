@@ -161,7 +161,7 @@ export default function ArticlesPage() {
 								/>
 								<label
 									htmlFor="select-all"
-									className="cursor-pointer text-sm font-medium"
+									className="cursor-pointer font-medium text-sm"
 								>
 									Select all
 								</label>
@@ -204,12 +204,13 @@ export default function ArticlesPage() {
 													)}
 												</div>
 												{article.excerpt && (
-													<p className="mt-2 text-muted-foreground text-sm line-clamp-2">
+													<p className="mt-2 line-clamp-2 text-muted-foreground text-sm">
 														{article.excerpt}
 													</p>
 												)}
 												<p className="mt-1 text-muted-foreground text-xs">
-													Saved {formatDate(new Date(article.savedAt).toISOString())}
+													Saved{" "}
+													{formatDate(new Date(article.savedAt).toISOString())}
 												</p>
 											</div>
 											<Button
@@ -242,5 +243,3 @@ export default function ArticlesPage() {
 		</main>
 	);
 }
-
-

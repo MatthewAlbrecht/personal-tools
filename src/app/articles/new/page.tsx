@@ -155,11 +155,7 @@ export default function NewArticlePage() {
 						)}
 
 						<div className="flex gap-2">
-							<Button
-								type="submit"
-								disabled={isExtracting}
-								className="flex-1"
-							>
+							<Button type="submit" disabled={isExtracting} className="flex-1">
 								{isExtracting ? (
 									<>
 										<Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -187,5 +183,3 @@ export default function NewArticlePage() {
 		</main>
 	);
 }
-
-

@@ -21,16 +21,19 @@ function calculateReadingTime(text: string): number {
 export async function POST(request: NextRequest) {
 	try {
 		console.log("[Article Extract] Starting extraction...");
-		
+
 		// Import at runtime to avoid bundling issues
 		const { parseHTML } = await import("linkedom");
 		const { Readability } = await import("@mozilla/readability");
 		console.log("[Article Extract] Modules loaded");
-		
+
 		const body = await request.json();
 		const { url, html } = body as { url?: string; html?: string };
 
-		console.log("[Article Extract] Request:", { hasUrl: !!url, hasHtml: !!html });
+		console.log("[Article Extract] Request:", {
+			hasUrl: !!url,
+			hasHtml: !!html,
+		});
 
 		if (!url && !html) {
 			console.log("[Article Extract] Error: No URL or HTML provided");
@@ -53,7 +56,11 @@ export async function POST(request: NextRequest) {
 				},
 			});
 
-			console.log("[Article Extract] Fetch status:", response.status, response.statusText);
+			console.log(
+				"[Article Extract] Fetch status:",
+				response.status,
+				response.statusText,
+			);
 
 			if (!response.ok) {
 				return NextResponse.json(
@@ -63,18 +70,24 @@ export async function POST(request: NextRequest) {
 			}
 
 			htmlContent = await response.text();
-			console.log("[Article Extract] HTML fetched, length:", htmlContent.length);
+			console.log(
+				"[Article Extract] HTML fetched, length:",
+				htmlContent.length,
+			);
 			finalUrl = url;
 		} else {
 			htmlContent = html!;
-			console.log("[Article Extract] Using pasted HTML, length:", htmlContent.length);
+			console.log(
+				"[Article Extract] Using pasted HTML, length:",
+				htmlContent.length,
+			);
 			finalUrl = "pasted-content";
 		}
 
 		// Parse with linkedom (lightweight JSDOM alternative)
 		console.log("[Article Extract] Parsing with linkedom...");
 		const { document } = parseHTML(htmlContent);
-		
+
 		console.log("[Article Extract] Extracting with Readability...");
 		const reader = new Readability(document);
 		const article = reader.parse();
@@ -96,18 +109,30 @@ export async function POST(request: NextRequest) {
 
 		// Get metadata from the DOM
 		const siteName =
-			document.querySelector('meta[property="og:site_name"]')?.getAttribute("content") ||
-			document.querySelector('meta[name="application-name"]')?.getAttribute("content") ||
+			document
+				.querySelector('meta[property="og:site_name"]')
+				?.getAttribute("content") ||
+			document
+				.querySelector('meta[name="application-name"]')
+				?.getAttribute("content") ||
 			null;
 
 		const publishedDate =
-			document.querySelector('meta[property="article:published_time"]')?.getAttribute("content") ||
-			document.querySelector('meta[name="publish_date"]')?.getAttribute("content") ||
+			document
+				.querySelector('meta[property="article:published_time"]')
+				?.getAttribute("content") ||
+			document
+				.querySelector('meta[name="publish_date"]')
+				?.getAttribute("content") ||
 			null;
 
 		const readingTime = calculateReadingTime(article.textContent ?? "");
 
-		console.log("[Article Extract] Metadata:", { siteName, publishedDate, readingTime });
+		console.log("[Article Extract] Metadata:", {
+			siteName,
+			publishedDate,
+			readingTime,
+		});
 
 		const extracted: ExtractedArticle = {
 			title: article.title ?? "Untitled",
@@ -125,7 +150,10 @@ export async function POST(request: NextRequest) {
 		return NextResponse.json(extracted);
 	} catch (error) {
 		console.error("[Article Extract] ERROR:", error);
-		console.error("[Article Extract] Error stack:", error instanceof Error ? error.stack : "No stack");
+		console.error(
+			"[Article Extract] Error stack:",
+			error instanceof Error ? error.stack : "No stack",
+		);
 		return NextResponse.json(
 			{
 				error: "Failed to extract article",
@@ -135,4 +163,3 @@ export async function POST(request: NextRequest) {
 		);
 	}
 }
-

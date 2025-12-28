@@ -24,12 +24,15 @@ export function SiteHeader() {
 							<Link href="/lyrics" className="text-sm hover:underline">
 								Lyrics
 							</Link>
-						<Link href="/spotify-playlister" className="text-sm hover:underline">
-							Playlister
-						</Link>
-						<Link href="/albums" className="text-sm hover:underline">
-							Albums
-						</Link>
+							<Link
+								href="/spotify-playlister"
+								className="text-sm hover:underline"
+							>
+								Playlister
+							</Link>
+							<Link href="/albums" className="text-sm hover:underline">
+								Albums
+							</Link>
 						</nav>
 					)}
 				</div>

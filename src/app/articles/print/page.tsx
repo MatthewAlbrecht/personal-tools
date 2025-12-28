@@ -28,9 +28,7 @@ function PrintContent() {
 	const searchParams = useSearchParams();
 	const idsParam = searchParams?.get("ids") ?? null;
 
-	const articleIds = idsParam
-		? (idsParam.split(",") as Id<"articles">[])
-		: [];
+	const articleIds = idsParam ? (idsParam.split(",") as Id<"articles">[]) : [];
 
 	const articles = useQuery(
 		api.articles.getArticlesByIds,
@@ -310,7 +308,7 @@ function PrintContent() {
 				{/* Title Page */}
 				<div className="print-title-page">
 					<h1 className="mb-4 font-bold text-4xl">Article Collection</h1>
-					<p className="text-muted-foreground text-lg">
+					<p className="text-lg text-muted-foreground">
 						{formatDate(new Date(oldestDate).toISOString())} —{" "}
 						{formatDate(new Date(newestDate).toISOString())}
 					</p>
@@ -334,7 +332,10 @@ function PrintContent() {
 								<div>{article.readingTime} minute read</div>
 							)}
 							<div className="mt-1 text-xs">
-								Source: {article.url !== "pasted-content" ? article.url : "Pasted content"}
+								Source:{" "}
+								{article.url !== "pasted-content"
+									? article.url
+									: "Pasted content"}
 							</div>
 						</div>
 
@@ -362,5 +363,3 @@ export default function PrintPage() {
 		</Suspense>
 	);
 }
-
-
