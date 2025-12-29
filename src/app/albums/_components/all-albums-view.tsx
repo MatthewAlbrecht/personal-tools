@@ -159,7 +159,7 @@ export function AllAlbumsView({
 							className="rounded border bg-background"
 						/>
 						<label htmlFor="hide-singles" className="font-medium text-sm">
-							Hide singles (&lt;3 tracks)
+							Hide singles
 						</label>
 					</div>
 				</div>
