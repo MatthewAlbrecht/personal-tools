@@ -13,7 +13,7 @@ import type { RankedAlbumItem } from "../_utils/types";
 import { AlbumCard } from "./album-card";
 
 type RankingsViewProps = {
-	albumsByTier: Map<TierName, { high: RankedAlbumItem[]; low: RankedAlbumItem[] }>;
+	albumsByTier: Map<TierName, { high: RankedAlbumItem[]; med: RankedAlbumItem[]; low: RankedAlbumItem[] }>;
 	availableYears: number[];
 	yearFilter: string;
 	onYearFilterChange: (year: string) => void;
@@ -56,7 +56,7 @@ export function RankingsView({
 		for (const tier of TIER_ORDER) {
 			const tierData = albumsByTier.get(tier);
 			if (!tierData) continue;
-			allAlbums.push(...tierData.high, ...tierData.low);
+			allAlbums.push(...tierData.high, ...tierData.med, ...tierData.low);
 		}
 
 		// Apply optimistic updates
@@ -81,12 +81,13 @@ export function RankingsView({
 	const displayByTier = useMemo(() => {
 		const grouped = new Map<
 			TierName,
-			{ high: RankedAlbumItem[]; low: RankedAlbumItem[] }
+			{ high: RankedAlbumItem[]; med: RankedAlbumItem[]; low: RankedAlbumItem[] }
 		>();
 		for (const tier of TIER_ORDER) {
-			const { high: highRating, low: lowRating } = getRatingsForTier(tier);
+			const { high: highRating, med: medRating, low: lowRating } = getRatingsForTier(tier);
 			grouped.set(tier, {
 				high: flatAlbums.filter((a) => a.rating === highRating),
+				med: flatAlbums.filter((a) => a.rating === medRating),
 				low: flatAlbums.filter((a) => a.rating === lowRating),
 			});
 		}
@@ -103,7 +104,7 @@ export function RankingsView({
 			const album = flatAlbums[selectedIndex];
 			if (!album) return;
 
-			const currentRating = album.rating ?? 5;
+			const currentRating = album.rating ?? 8;
 			const currentPosition = album.position ?? 0;
 
 			// Find albums in the same rating tier
@@ -146,7 +147,7 @@ export function RankingsView({
 					);
 					newSelectedIndex = newFlatIndex >= 0 ? newFlatIndex : selectedIndex;
 				} else {
-					if (currentRating >= 10) return;
+					if (currentRating >= 15) return;
 
 					newRating = currentRating + 1;
 
@@ -372,7 +373,7 @@ export function RankingsView({
 
 			{/* Tier Sections */}
 			{TIER_ORDER.map((tier) => {
-				const albums = displayByTier.get(tier) ?? { high: [], low: [] };
+				const albums = displayByTier.get(tier) ?? { high: [], med: [], low: [] };
 
 				return (
 					<div key={tier} className="rounded-lg border p-2">
@@ -388,6 +389,45 @@ export function RankingsView({
 							<div className="space-y-0.5">
 								{albums.high.length > 0 ? (
 									albums.high.map((ua) => {
+										const flatIdx = albumIdToIndex.get(ua._id);
+										const isSelected = flatIdx === selectedIndex;
+										return (
+											<AlbumCard
+												key={ua._id}
+												ref={isSelected ? selectedRowRef : undefined}
+												name={ua.album?.name ?? "Unknown Album"}
+												artistName={ua.album?.artistName ?? "Unknown Artist"}
+												imageUrl={ua.album?.imageUrl}
+												releaseDate={ua.album?.releaseDate}
+												showReleaseYear
+												isSelected={isSelected}
+												showSaved={ua._id === savedAlbumId}
+												onSelect={
+													isReorderingEnabled && flatIdx !== undefined
+														? () => setSelectedIndex(flatIdx)
+														: undefined
+												}
+											/>
+										);
+									})
+								) : (
+									<div className="rounded-md border border-dashed py-1.5 text-center text-muted-foreground/50 text-xs">
+										Empty
+									</div>
+								)}
+							</div>
+						</div>
+
+						<div className="mb-1.5">
+							<h3 className="mb-0.5 font-medium text-muted-foreground text-sm">
+								Med
+								{albums.med.length > 0 && (
+									<span className="ml-1">({albums.med.length})</span>
+								)}
+							</h3>
+							<div className="space-y-0.5">
+								{albums.med.length > 0 ? (
+									albums.med.map((ua) => {
 										const flatIdx = albumIdToIndex.get(ua._id);
 										const isSelected = flatIdx === selectedIndex;
 										return (
@@ -461,4 +501,3 @@ export function RankingsView({
 		</div>
 	);
 }
-

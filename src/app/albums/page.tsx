@@ -161,12 +161,13 @@ export default function AlbumsPage() {
 
 		const byTier = new Map<
 			TierName,
-			{ high: typeof filtered; low: typeof filtered }
+			{ high: typeof filtered; med: typeof filtered; low: typeof filtered }
 		>();
 		for (const tier of TIER_ORDER) {
 			const ratings = getRatingsForTier(tier);
 			byTier.set(tier, {
 				high: filtered.filter((ua) => ua.rating === ratings.high),
+				med: filtered.filter((ua) => ua.rating === ratings.med),
 				low: filtered.filter((ua) => ua.rating === ratings.low),
 			});
 		}

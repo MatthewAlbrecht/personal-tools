@@ -54,8 +54,8 @@ type AlbumRankerProps = {
 	onSave: (rating: number, position: number) => void;
 };
 
-// All possible slots: 10 ratings (Holy Moly High=10 down to Actively Bad Low=1)
-const ALL_RATINGS = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1] as const;
+// All possible slots: 15 ratings (Holy Moly High=15 down to Actively Bad Low=1)
+const ALL_RATINGS = [15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1] as const;
 
 export function AlbumRanker({
 	albumToRate,
@@ -64,8 +64,8 @@ export function AlbumRanker({
 	onOpenChange,
 	onSave,
 }: AlbumRankerProps) {
-	// Current rating for the new album (starts at top = 10)
-	const [currentRating, setCurrentRating] = useState(10);
+	// Current rating for the new album (starts at top = 15)
+	const [currentRating, setCurrentRating] = useState(15);
 	// Position within the current rating's list (0 = top)
 	const [positionInRating, setPositionInRating] = useState(0);
 
@@ -78,12 +78,13 @@ export function AlbumRanker({
 	// Reset state only when a different album is selected
 	useEffect(() => {
 		if (albumToRateId) {
-			setCurrentRating(10);
+			setCurrentRating(15);
 			setPositionInRating(0);
 		}
 	}, [albumToRateId]);
 
 	// Scroll the new album row into view when position changes (with padding)
+	// biome-ignore lint/correctness/useExhaustiveDependencies: dependencies trigger scroll on position change
 	useEffect(() => {
 		const el = newAlbumRowRef.current;
 		const container = containerRef.current;
@@ -176,7 +177,7 @@ export function AlbumRanker({
 		}
 	}, [positionInRating, maxPositionInRating, currentRating]);
 
-	// Jump to next/prev sub-tier (High/Low boundary)
+	// Jump to next/prev sub-tier (High/Med/Low boundary)
 	const jumpToTier = useCallback(
 		(direction: "up" | "down") => {
 			const currentTierInfo = getTierInfo(currentRating);
@@ -186,12 +187,17 @@ export function AlbumRanker({
 
 			if (direction === "up") {
 				if (currentTierInfo.subTier === "Low") {
+					// Move to same tier's Med
+					const medRating = getRatingsForTier(currentTierInfo.tier).med;
+					setCurrentRating(medRating);
+					setPositionInRating(0);
+				} else if (currentTierInfo.subTier === "Med") {
 					// Move to same tier's High
 					const highRating = getRatingsForTier(currentTierInfo.tier).high;
 					setCurrentRating(highRating);
 					setPositionInRating(0);
 				} else if (currentTierIdx > 0) {
-					// At a tier's High - move to prev tier's Low first (so we step through in order)
+					// At a tier's High - move to prev tier's Low
 					const prevTier = TIER_ORDER[currentTierIdx - 1];
 					if (prevTier) {
 						const lowRating = getRatingsForTier(prevTier).low;
@@ -201,12 +207,17 @@ export function AlbumRanker({
 				}
 			} else {
 				if (currentTierInfo.subTier === "High") {
+					// Move to same tier's Med
+					const medRating = getRatingsForTier(currentTierInfo.tier).med;
+					setCurrentRating(medRating);
+					setPositionInRating(0);
+				} else if (currentTierInfo.subTier === "Med") {
 					// Move to same tier's Low
 					const lowRating = getRatingsForTier(currentTierInfo.tier).low;
 					setCurrentRating(lowRating);
 					setPositionInRating(0);
 				} else if (currentTierIdx < TIER_ORDER.length - 1) {
-					// At a tier's Low - move to next tier's High first (so we step through in order)
+					// At a tier's Low - move to next tier's High
 					const nextTier = TIER_ORDER[currentTierIdx + 1];
 					if (nextTier) {
 						const highRating = getRatingsForTier(nextTier).high;
@@ -322,9 +333,10 @@ export function AlbumRanker({
 					{/* All tiers - always show the template */}
 					<div className="space-y-4">
 						{TIER_ORDER.map((tier) => {
-							const { high: highRating, low: lowRating } =
+							const { high: highRating, med: medRating, low: lowRating } =
 								getRatingsForTier(tier);
 							const highAlbums = groups.get(highRating) ?? [];
+							const medAlbums = groups.get(medRating) ?? [];
 							const lowAlbums = groups.get(lowRating) ?? [];
 
 							return (
@@ -338,6 +350,21 @@ export function AlbumRanker({
 											<TierSlot
 												albums={highAlbums}
 												rating={highRating}
+												currentRating={currentRating}
+												positionInRating={positionInRating}
+												newAlbum={albumToRate}
+												newAlbumRef={newAlbumRowRef}
+											/>
+										</div>
+									</div>
+
+									{/* Med sub-tier */}
+									<div className="mb-3">
+										<p className="mb-1.5 text-muted-foreground text-xs">Med</p>
+										<div className="min-h-[40px] space-y-1">
+											<TierSlot
+												albums={medAlbums}
+												rating={medRating}
 												currentRating={currentRating}
 												positionInRating={positionInRating}
 												newAlbum={albumToRate}
