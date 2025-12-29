@@ -380,44 +380,40 @@ export default function AlbumsPage() {
 						<button
 							type="button"
 							onClick={() => setActiveTab("history")}
-							className={`flex-1 rounded-md px-4 py-2 font-medium text-sm transition-colors ${
-								activeTab === "history"
-									? "bg-background text-foreground shadow-sm"
-									: "text-muted-foreground hover:text-foreground"
-							}`}
+							className={`flex-1 rounded-md px-4 py-2 font-medium text-sm transition-colors ${activeTab === "history"
+								? "bg-background text-foreground shadow-sm"
+								: "text-muted-foreground hover:text-foreground"
+								}`}
 						>
 							History
 						</button>
 						<button
 							type="button"
 							onClick={() => setActiveTab("rankings")}
-							className={`flex-1 rounded-md px-4 py-2 font-medium text-sm transition-colors ${
-								activeTab === "rankings"
-									? "bg-background text-foreground shadow-sm"
-									: "text-muted-foreground hover:text-foreground"
-							}`}
+							className={`flex-1 rounded-md px-4 py-2 font-medium text-sm transition-colors ${activeTab === "rankings"
+								? "bg-background text-foreground shadow-sm"
+								: "text-muted-foreground hover:text-foreground"
+								}`}
 						>
 							Rankings
 						</button>
 						<button
 							type="button"
 							onClick={() => setActiveTab("tracks")}
-							className={`flex-1 rounded-md px-4 py-2 font-medium text-sm transition-colors ${
-								activeTab === "tracks"
-									? "bg-background text-foreground shadow-sm"
-									: "text-muted-foreground hover:text-foreground"
-							}`}
+							className={`flex-1 rounded-md px-4 py-2 font-medium text-sm transition-colors ${activeTab === "tracks"
+								? "bg-background text-foreground shadow-sm"
+								: "text-muted-foreground hover:text-foreground"
+								}`}
 						>
 							Tracks
 						</button>
 						<button
 							type="button"
 							onClick={() => setActiveTab("albums")}
-							className={`flex-1 rounded-md px-4 py-2 font-medium text-sm transition-colors ${
-								activeTab === "albums"
-									? "bg-background text-foreground shadow-sm"
-									: "text-muted-foreground hover:text-foreground"
-							}`}
+							className={`flex-1 rounded-md px-4 py-2 font-medium text-sm transition-colors ${activeTab === "albums"
+								? "bg-background text-foreground shadow-sm"
+								: "text-muted-foreground hover:text-foreground"
+								}`}
 						>
 							Albums
 						</button>
@@ -481,13 +477,13 @@ export default function AlbumsPage() {
 						? trackToAddListen
 						: albumToAddListen
 							? {
-									trackName: albumToAddListen.name,
-									artistName: albumToAddListen.artistName,
-									albumName: albumToAddListen.name,
-									albumImageUrl: albumToAddListen.imageUrl,
-									spotifyAlbumId: albumToAddListen.spotifyAlbumId,
-									releaseDate: albumToAddListen.releaseDate,
-								}
+								trackName: albumToAddListen.name,
+								artistName: albumToAddListen.artistName,
+								albumName: albumToAddListen.name,
+								albumImageUrl: albumToAddListen.imageUrl,
+								spotifyAlbumId: albumToAddListen.spotifyAlbumId,
+								releaseDate: albumToAddListen.releaseDate,
+							}
 							: null
 				}
 				open={trackToAddListen !== null || albumToAddListen !== null}
@@ -549,6 +545,22 @@ function HistoryView({
 		id: string;
 		name: string;
 	} | null>(null);
+	const [onlyUnranked, setOnlyUnranked] = useState(false);
+
+	// Filter listens to only show unranked albums if toggle is on
+	const filteredListensByMonth = useMemo(() => {
+		if (!onlyUnranked) return listensByMonth;
+		const filtered = new Map<string, HistoryListen[]>();
+		for (const [month, listens] of listensByMonth.entries()) {
+			const unrankedListens = listens.filter(
+				(listen) => !albumRatings.has(listen.albumId),
+			);
+			if (unrankedListens.length > 0) {
+				filtered.set(month, unrankedListens);
+			}
+		}
+		return filtered;
+	}, [listensByMonth, albumRatings, onlyUnranked]);
 
 	if (isLoading) {
 		return (
@@ -574,56 +586,78 @@ function HistoryView({
 
 	return (
 		<>
-			<div className="space-y-8">
-				{Array.from(listensByMonth.entries()).map(([month, listens]) => (
-					<div key={month}>
-						<h2 className="mb-3 font-semibold text-lg">{month}</h2>
-						<div className="space-y-1">
-							{listens.map((listen) => (
-								<div key={listen._id} className="flex items-center gap-2">
-									<div className="min-w-0 flex-1">
-										<AlbumCard
-											name={listen.album?.name ?? "Unknown Album"}
-											artistName={listen.album?.artistName ?? "Unknown Artist"}
-											imageUrl={listen.album?.imageUrl}
-											listenedAt={listen.listenedAt}
-											listenOrdinal={listenOrdinals.get(listen._id)}
-											rating={albumRatings.get(listen.albumId)}
-											showListenDate
-											onRate={() => onRateAlbum(listen)}
-										/>
-									</div>
-									<DropdownMenu modal={false}>
-										<DropdownMenuTrigger asChild>
-											<button
-												type="button"
-												className="rounded-md p-1.5 text-muted-foreground/40 transition-colors hover:bg-muted hover:text-muted-foreground"
-												aria-label="More options"
-											>
-												<MoreHorizontal className="h-4 w-4" />
-											</button>
-										</DropdownMenuTrigger>
-										<DropdownMenuContent align="end" className="w-32">
-											<DropdownMenuItem
-												variant="destructive"
-												onSelect={() =>
-													setDeleteTarget({
-														id: listen._id,
-														name: listen.album?.name ?? "Unknown Album",
-													})
-												}
-											>
-												<Trash2 className="h-4 w-4" />
-												Delete
-											</DropdownMenuItem>
-										</DropdownMenuContent>
-									</DropdownMenu>
-								</div>
-							))}
-						</div>
-					</div>
-				))}
+			{/* Filter Controls */}
+			<div className="mb-4 flex items-center gap-2">
+				<input
+					type="checkbox"
+					id="only-unranked"
+					checked={onlyUnranked}
+					onChange={(e) => setOnlyUnranked(e.target.checked)}
+					className="rounded border bg-background"
+				/>
+				<label htmlFor="only-unranked" className="font-medium text-sm">
+					Only unranked
+				</label>
 			</div>
+
+			{filteredListensByMonth.size === 0 ? (
+				<div className="flex h-32 items-center justify-center rounded-lg border border-dashed">
+					<p className="text-muted-foreground text-sm">
+						No unranked albums in history
+					</p>
+				</div>
+			) : (
+				<div className="space-y-8">
+					{Array.from(filteredListensByMonth.entries()).map(([month, listens]) => (
+						<div key={month}>
+							<h2 className="mb-3 font-semibold text-lg">{month}</h2>
+							<div className="space-y-1">
+								{listens.map((listen) => (
+									<div key={listen._id} className="flex items-center gap-2">
+										<div className="min-w-0 flex-1">
+											<AlbumCard
+												name={listen.album?.name ?? "Unknown Album"}
+												artistName={listen.album?.artistName ?? "Unknown Artist"}
+												imageUrl={listen.album?.imageUrl}
+												listenedAt={listen.listenedAt}
+												listenOrdinal={listenOrdinals.get(listen._id)}
+												rating={albumRatings.get(listen.albumId)}
+												showListenDate
+												onRate={() => onRateAlbum(listen)}
+											/>
+										</div>
+										<DropdownMenu modal={false}>
+											<DropdownMenuTrigger asChild>
+												<button
+													type="button"
+													className="rounded-md p-1.5 text-muted-foreground/40 transition-colors hover:bg-muted hover:text-muted-foreground"
+													aria-label="More options"
+												>
+													<MoreHorizontal className="h-4 w-4" />
+												</button>
+											</DropdownMenuTrigger>
+											<DropdownMenuContent align="end" className="w-32">
+												<DropdownMenuItem
+													variant="destructive"
+													onSelect={() =>
+														setDeleteTarget({
+															id: listen._id,
+															name: listen.album?.name ?? "Unknown Album",
+														})
+													}
+												>
+													<Trash2 className="h-4 w-4" />
+													Delete
+												</DropdownMenuItem>
+											</DropdownMenuContent>
+										</DropdownMenu>
+									</div>
+								))}
+							</div>
+						</div>
+					))}
+				</div>
+			)}
 
 			<AlertDialog
 				open={deleteTarget !== null}
@@ -1001,9 +1035,9 @@ function RankingsView({
 	flatAlbums.forEach((a, i) => albumIdToIndex.set(a._id, i));
 
 	return (
-		<div ref={containerRef} className="space-y-4">
+		<div ref={containerRef} className="space-y-2">
 			{/* Year Filter + Keyboard hint */}
-			<div className="flex items-center justify-between gap-3">
+			<div className="flex items-center justify-between gap-2">
 				<div className="flex items-center gap-3">
 					<label
 						htmlFor="year-filter"
@@ -1025,6 +1059,9 @@ function RankingsView({
 						))}
 					</select>
 				</div>
+				<span className="text-muted-foreground text-sm">
+					{flatAlbums.length} albums
+				</span>
 				{isReorderingEnabled && (
 					<div className="flex items-center gap-2 text-muted-foreground text-xs">
 						<KbdGroup>
@@ -1062,12 +1099,15 @@ function RankingsView({
 				const albums = displayByTier.get(tier) ?? { high: [], low: [] };
 
 				return (
-					<div key={tier} className="rounded-lg border p-3">
-						<h2 className="mb-2 font-semibold text-base">{tier}</h2>
+					<div key={tier} className="rounded-lg border p-2">
+						<h2 className="mb-1.5 font-semibold text-base">{tier}</h2>
 
-						<div className="mb-3">
-							<h3 className="mb-1 font-medium text-muted-foreground text-xs">
+						<div className="mb-1.5">
+							<h3 className="mb-0.5 font-medium text-muted-foreground text-sm">
 								High
+								{albums.high.length > 0 && (
+									<span className="ml-1">({albums.high.length})</span>
+								)}
 							</h3>
 							<div className="space-y-0.5">
 								{albums.high.length > 0 ? (
@@ -1102,8 +1142,11 @@ function RankingsView({
 						</div>
 
 						<div>
-							<h3 className="mb-1 font-medium text-muted-foreground text-xs">
+							<h3 className="mb-0.5 font-medium text-muted-foreground text-sm">
 								Low
+								{albums.low.length > 0 && (
+									<span className="ml-1">({albums.low.length})</span>
+								)}
 							</h3>
 							<div className="space-y-0.5">
 								{albums.low.length > 0 ? (
@@ -1482,8 +1525,8 @@ function AllAlbumsView({
 							album={album}
 							userAlbum={
 								userAlbumsMap.get(album.spotifyAlbumId) as
-									| UserAlbumData
-									| undefined
+								| UserAlbumData
+								| undefined
 							}
 							onAddListen={() => onAddListen(album)}
 						/>

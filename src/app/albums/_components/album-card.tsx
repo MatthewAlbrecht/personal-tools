@@ -58,26 +58,26 @@ export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
 				ref={ref}
 				onClick={onSelect}
 				className={cn(
-					"group flex items-center gap-3 rounded-lg p-2 hover:bg-muted/50",
+					"group flex items-center gap-2 rounded-md p-1 hover:bg-muted/50",
 					isSelected && !showSaved && "ring-2 ring-primary",
 					showSaved && "ring-2 ring-emerald-500/50",
 					!showSaved && "transition-shadow duration-300",
 				)}
 			>
 				{/* Album Cover */}
-				<div className="relative h-12 w-12 flex-shrink-0 overflow-hidden rounded-md bg-muted">
+				<div className="relative h-9 w-9 flex-shrink-0 overflow-hidden rounded bg-muted">
 					{imageUrl ? (
 						<Image
 							src={imageUrl}
 							alt={name}
 							fill
 							className="object-cover"
-							sizes="48px"
+							sizes="36px"
 						/>
 					) : (
-						<div className="flex h-full w-full items-center justify-center">
-							<Disc3 className="h-6 w-6 text-muted-foreground" />
-						</div>
+					<div className="flex h-full w-full items-center justify-center">
+						<Disc3 className="h-4 w-4 text-muted-foreground" />
+					</div>
 					)}
 				</div>
 
