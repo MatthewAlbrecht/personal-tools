@@ -466,6 +466,7 @@ export default function AlbumsPage() {
 					{activeTab === "albums" && (
 						<AllAlbumsView
 							albums={allAlbums ?? []}
+							userAlbums={userAlbums ?? []}
 							isLoading={allAlbums === undefined}
 							onAddListen={(album) => setAlbumToAddListen(album)}
 						/>
@@ -1289,6 +1290,16 @@ function formatRelativeTime(timestamp: number): string {
 	});
 }
 
+// Build a map from spotifyAlbums._id to userAlbums record
+
+// Type for user album data
+type UserAlbumData = {
+	listenCount?: number;
+	lastListenedAt?: number;
+	firstListenedAt?: number;
+	rating?: number;
+};
+
 // Albums View Component
 type AlbumItem = {
 	_id: string;
@@ -1297,29 +1308,88 @@ type AlbumItem = {
 	artistName: string;
 	imageUrl?: string;
 	releaseDate?: string;
+	totalTracks?: number;
 	createdAt: number;
 };
 
 function AllAlbumsView({
 	albums,
+	userAlbums,
 	isLoading,
 	onAddListen,
 }: {
 	albums: AlbumItem[];
+	userAlbums: any;
 	isLoading: boolean;
 	onAddListen: (album: AlbumItem) => void;
 }) {
 	const [searchQuery, setSearchQuery] = useState("");
+	const [hideSingles, setHideSingles] = useState(true);
+	const [listenFilter, setListenFilter] = useState<
+		"all" | "listened" | "unlistened"
+	>("all");
+
+	// Type for user album data
+	type UserAlbumData = {
+		listenCount?: number;
+		lastListenedAt?: number;
+		firstListenedAt?: number;
+		rating?: number;
+	};
+
+	// Create a map for user album data lookup (keyed by spotifyAlbumId)
+	const userAlbumsMap = useMemo(() => {
+		const map = new Map(
+			userAlbums
+				.filter((ua: any) => ua.album?.spotifyAlbumId)
+				.map((ua: any) => [ua.album.spotifyAlbumId, ua]),
+		);
+		return map;
+	}, [userAlbums]);
 
 	const filteredAlbums = useMemo(() => {
-		if (!searchQuery.trim()) return albums;
-		const query = searchQuery.toLowerCase();
-		return albums.filter(
-			(album) =>
-				album.name.toLowerCase().includes(query) ||
-				album.artistName.toLowerCase().includes(query),
-		);
-	}, [albums, searchQuery]);
+		let result = albums;
+
+		// Filter by listen status
+		if (listenFilter === "listened") {
+			result = result.filter((album) => {
+				const userAlbumData = userAlbumsMap.get(
+					album.spotifyAlbumId,
+				) as UserAlbumData;
+				return userAlbumData?.listenCount && userAlbumData.listenCount > 0;
+			});
+		} else if (listenFilter === "unlistened") {
+			result = result.filter((album) => {
+				const userAlbumData = userAlbumsMap.get(
+					album.spotifyAlbumId,
+				) as UserAlbumData;
+				return (
+					!userAlbumData ||
+					!userAlbumData?.listenCount ||
+					userAlbumData.listenCount === 0
+				);
+			});
+		}
+
+		// Filter out singles if enabled
+		if (hideSingles) {
+			result = result.filter(
+				(album) => !album.totalTracks || album.totalTracks >= 3,
+			);
+		}
+
+		// Apply search filter
+		if (searchQuery.trim()) {
+			const query = searchQuery.toLowerCase();
+			result = result.filter(
+				(album) =>
+					album.name.toLowerCase().includes(query) ||
+					album.artistName.toLowerCase().includes(query),
+			);
+		}
+
+		return result;
+	}, [albums, userAlbumsMap, listenFilter, hideSingles, searchQuery]);
 
 	if (isLoading) {
 		return (
@@ -1345,15 +1415,56 @@ function AllAlbumsView({
 
 	return (
 		<div className="space-y-4">
-			{/* Search Input */}
-			<div>
-				<input
-					type="text"
-					placeholder="Search albums by name or artist..."
-					value={searchQuery}
-					onChange={(e) => setSearchQuery(e.target.value)}
-					className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-				/>
+			{/* Filters */}
+			<div className="space-y-3">
+				{/* Search Input */}
+				<div>
+					<input
+						type="text"
+						placeholder="Search albums by name or artist..."
+						value={searchQuery}
+						onChange={(e) => setSearchQuery(e.target.value)}
+						className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+					/>
+				</div>
+
+				{/* Filter Controls */}
+				<div className="flex flex-wrap items-center gap-4">
+					{/* Listen Status Filter */}
+					<div className="flex items-center gap-2">
+						<label htmlFor="listen-filter" className="font-medium text-sm">
+							Show:
+						</label>
+						<select
+							id="listen-filter"
+							value={listenFilter}
+							onChange={(e) =>
+								setListenFilter(
+									e.target.value as "all" | "listened" | "unlistened",
+								)
+							}
+							className="rounded-md border bg-background px-2 py-1 text-sm"
+						>
+							<option value="all">All Albums</option>
+							<option value="listened">Listened</option>
+							<option value="unlistened">Unlistened</option>
+						</select>
+					</div>
+
+					{/* Hide Singles Checkbox */}
+					<div className="flex items-center gap-2">
+						<input
+							type="checkbox"
+							id="hide-singles"
+							checked={hideSingles}
+							onChange={(e) => setHideSingles(e.target.checked)}
+							className="rounded border bg-background"
+						/>
+						<label htmlFor="hide-singles" className="font-medium text-sm">
+							Hide singles (&lt;3 tracks)
+						</label>
+					</div>
+				</div>
 			</div>
 
 			{/* Albums List */}
@@ -1369,6 +1480,11 @@ function AllAlbumsView({
 						<AlbumCardRow
 							key={album._id}
 							album={album}
+							userAlbum={
+								userAlbumsMap.get(album.spotifyAlbumId) as
+									| UserAlbumData
+									| undefined
+							}
 							onAddListen={() => onAddListen(album)}
 						/>
 					))
@@ -1380,9 +1496,11 @@ function AllAlbumsView({
 
 function AlbumCardRow({
 	album,
+	userAlbum,
 	onAddListen,
 }: {
 	album: AlbumItem;
+	userAlbum?: UserAlbumData;
 	onAddListen: () => void;
 }) {
 	return (
@@ -1416,18 +1534,33 @@ function AlbumCardRow({
 				</p>
 			</div>
 
-			{/* Add Listen Button */}
-			<button
-				type="button"
-				onClick={(e) => {
-					e.stopPropagation();
-					onAddListen();
-				}}
-				className="inline-flex items-center rounded-full border border-muted-foreground/20 border-dashed px-2 py-0.5 font-medium text-[10px] text-muted-foreground/40 transition-all hover:border-muted-foreground/50 hover:text-muted-foreground"
-				title="Add album listen"
-			>
-				+ Listen
-			</button>
+			{/* Listen Info */}
+			<div className="flex flex-shrink-0 items-center gap-2">
+				{userAlbum?.lastListenedAt && (
+					<span className="flex-shrink-0 text-muted-foreground text-xs">
+						{formatRelativeTime(userAlbum.lastListenedAt)}
+					</span>
+				)}
+
+				{userAlbum?.listenCount && userAlbum.listenCount > 0 && (
+					<span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 font-medium text-primary text-xs">
+						{userAlbum.listenCount}×
+					</span>
+				)}
+
+				{/* Add Listen Button */}
+				<button
+					type="button"
+					onClick={(e) => {
+						e.stopPropagation();
+						onAddListen();
+					}}
+					className="inline-flex items-center rounded-full border border-muted-foreground/20 border-dashed px-2 py-0.5 font-medium text-[10px] text-muted-foreground/40 transition-all hover:border-muted-foreground/50 hover:text-muted-foreground"
+					title="Add album listen"
+				>
+					+ Listen
+				</button>
+			</div>
 		</div>
 	);
 }
