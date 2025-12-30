@@ -1,7 +1,7 @@
 "use client";
 
-import { api } from "convex/_generated/api";
-import type { Id } from "convex/_generated/dataModel";
+import { api } from "../../../convex/_generated/api";
+import type { Id } from "../../../convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
 import { ListMusic } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
