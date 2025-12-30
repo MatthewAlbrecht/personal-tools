@@ -254,6 +254,7 @@ export function getTierColors(tier: TierName): {
 export function getTierShortLabel(rating: number): string {
 	const info = getTierInfo(rating);
 	if (!info) return "Unrated";
-	const arrow = info.subTier === "High" ? "↑" : info.subTier === "Med" ? "→" : "↓";
+	const arrow =
+		info.subTier === "High" ? "↑" : info.subTier === "Med" ? "→" : "↓";
 	return `${info.tier} ${arrow}`;
 }

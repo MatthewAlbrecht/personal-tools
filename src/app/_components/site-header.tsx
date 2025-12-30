@@ -30,10 +30,13 @@ export function SiteHeader() {
 							>
 								Playlister
 							</Link>
-							<Link href="/albums" className="text-sm hover:underline">
-								Albums
-							</Link>
-						</nav>
+						<Link href="/albums" className="text-sm hover:underline">
+							Albums
+						</Link>
+						<Link href="/robs-rankings" className="text-sm hover:underline">
+							Rob's Rankings
+						</Link>
+					</nav>
 					)}
 				</div>
 				<nav className="flex items-center gap-3">

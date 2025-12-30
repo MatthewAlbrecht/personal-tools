@@ -91,10 +91,7 @@ export default function AlbumsPage() {
 	);
 
 	// Fetch all albums (for albums tab)
-	const allAlbums = useQuery(
-		api.spotify.getAllAlbums,
-		{},
-	);
+	const allAlbums = useQuery(api.spotify.getAllAlbums, {});
 
 	// Build a map of albumId -> rating for quick lookup
 	const albumRatings = useMemo(() => {
@@ -332,40 +329,44 @@ export default function AlbumsPage() {
 						<button
 							type="button"
 							onClick={() => setActiveTab("history")}
-							className={`flex-1 rounded-md px-4 py-2 font-medium text-sm transition-colors ${activeTab === "history"
+							className={`flex-1 rounded-md px-4 py-2 font-medium text-sm transition-colors ${
+								activeTab === "history"
 									? "bg-background text-foreground shadow-sm"
 									: "text-muted-foreground hover:text-foreground"
-								}`}
+							}`}
 						>
 							History
 						</button>
 						<button
 							type="button"
 							onClick={() => setActiveTab("rankings")}
-							className={`flex-1 rounded-md px-4 py-2 font-medium text-sm transition-colors ${activeTab === "rankings"
+							className={`flex-1 rounded-md px-4 py-2 font-medium text-sm transition-colors ${
+								activeTab === "rankings"
 									? "bg-background text-foreground shadow-sm"
 									: "text-muted-foreground hover:text-foreground"
-								}`}
+							}`}
 						>
 							Rankings
 						</button>
 						<button
 							type="button"
 							onClick={() => setActiveTab("tracks")}
-							className={`flex-1 rounded-md px-4 py-2 font-medium text-sm transition-colors ${activeTab === "tracks"
+							className={`flex-1 rounded-md px-4 py-2 font-medium text-sm transition-colors ${
+								activeTab === "tracks"
 									? "bg-background text-foreground shadow-sm"
 									: "text-muted-foreground hover:text-foreground"
-								}`}
+							}`}
 						>
 							Tracks
 						</button>
 						<button
 							type="button"
 							onClick={() => setActiveTab("albums")}
-							className={`flex-1 rounded-md px-4 py-2 font-medium text-sm transition-colors ${activeTab === "albums"
+							className={`flex-1 rounded-md px-4 py-2 font-medium text-sm transition-colors ${
+								activeTab === "albums"
 									? "bg-background text-foreground shadow-sm"
 									: "text-muted-foreground hover:text-foreground"
-								}`}
+							}`}
 						>
 							Albums
 						</button>
@@ -429,13 +430,13 @@ export default function AlbumsPage() {
 						? trackToAddListen
 						: albumToAddListen
 							? {
-								trackName: albumToAddListen.name,
-								artistName: albumToAddListen.artistName,
-								albumName: albumToAddListen.name,
-								albumImageUrl: albumToAddListen.imageUrl,
-								spotifyAlbumId: albumToAddListen.spotifyAlbumId,
-								releaseDate: albumToAddListen.releaseDate,
-							}
+									trackName: albumToAddListen.name,
+									artistName: albumToAddListen.artistName,
+									albumName: albumToAddListen.name,
+									albumImageUrl: albumToAddListen.imageUrl,
+									spotifyAlbumId: albumToAddListen.spotifyAlbumId,
+									releaseDate: albumToAddListen.releaseDate,
+								}
 							: null
 				}
 				open={trackToAddListen !== null || albumToAddListen !== null}

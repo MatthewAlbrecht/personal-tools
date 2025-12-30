@@ -69,4 +69,3 @@ export type AlbumToRate = {
 	imageUrl?: string;
 	releaseDate?: string;
 };
-

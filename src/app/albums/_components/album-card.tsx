@@ -45,9 +45,9 @@ export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
 
 		const listenDateStr = listenedAt
 			? new Date(listenedAt).toLocaleDateString("en-US", {
-				month: "short",
-				day: "numeric",
-			})
+					month: "short",
+					day: "numeric",
+				})
 			: null;
 
 		const ratingColors = rating ? getRatingColors(rating) : null;

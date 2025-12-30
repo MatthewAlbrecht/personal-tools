@@ -329,4 +329,24 @@ export default defineSchema({
 	})
 		.index("by_userId", ["userId"])
 		.index("by_userId_startedAt", ["userId", "startedAt"]),
+
+	// Rob's Rankings - guessing yearly top 50 album lists
+	robRankingYears: defineTable({
+		userId: v.string(),
+		year: v.number(),
+		createdAt: v.number(),
+		updatedAt: v.number(),
+	}).index("by_userId_year", ["userId", "year"]),
+
+	robRankingAlbums: defineTable({
+		userId: v.string(),
+		yearId: v.id("robRankingYears"),
+		albumId: v.id("spotifyAlbums"),
+		position: v.number(), // 1-50
+		status: v.string(), // "none" | "locked" | "confirmed"
+		createdAt: v.number(),
+		updatedAt: v.number(),
+	})
+		.index("by_yearId", ["yearId"])
+		.index("by_yearId_position", ["yearId", "position"]),
 });

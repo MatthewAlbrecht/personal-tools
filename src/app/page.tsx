@@ -37,6 +37,18 @@ export default async function Home() {
 						>
 							Spotify Playlister →
 						</Link>
+						<Link
+							className="rounded-lg bg-white/10 px-6 py-3 text-center font-semibold transition hover:bg-white/20"
+							href="/albums"
+						>
+							Albums →
+						</Link>
+						<Link
+							className="rounded-lg bg-white/10 px-6 py-3 text-center font-semibold transition hover:bg-white/20"
+							href="/robs-rankings"
+						>
+							Rob's Rankings →
+						</Link>
 					</div>
 				) : (
 					<p className="text-white/60">Sign in to access tools</p>

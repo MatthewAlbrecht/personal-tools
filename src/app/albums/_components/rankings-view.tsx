@@ -13,12 +13,19 @@ import type { RankedAlbumItem } from "../_utils/types";
 import { AlbumCard } from "./album-card";
 
 type RankingsViewProps = {
-	albumsByTier: Map<TierName, { high: RankedAlbumItem[]; med: RankedAlbumItem[]; low: RankedAlbumItem[] }>;
+	albumsByTier: Map<
+		TierName,
+		{ high: RankedAlbumItem[]; med: RankedAlbumItem[]; low: RankedAlbumItem[] }
+	>;
 	availableYears: number[];
 	yearFilter: string;
 	onYearFilterChange: (year: string) => void;
 	isLoading: boolean;
-	onUpdateRating: (userAlbumId: string, rating: number, position: number) => void;
+	onUpdateRating: (
+		userAlbumId: string,
+		rating: number,
+		position: number,
+	) => void;
 };
 
 export function RankingsView({
@@ -81,10 +88,18 @@ export function RankingsView({
 	const displayByTier = useMemo(() => {
 		const grouped = new Map<
 			TierName,
-			{ high: RankedAlbumItem[]; med: RankedAlbumItem[]; low: RankedAlbumItem[] }
+			{
+				high: RankedAlbumItem[];
+				med: RankedAlbumItem[];
+				low: RankedAlbumItem[];
+			}
 		>();
 		for (const tier of TIER_ORDER) {
-			const { high: highRating, med: medRating, low: lowRating } = getRatingsForTier(tier);
+			const {
+				high: highRating,
+				med: medRating,
+				low: lowRating,
+			} = getRatingsForTier(tier);
 			grouped.set(tier, {
 				high: flatAlbums.filter((a) => a.rating === highRating),
 				med: flatAlbums.filter((a) => a.rating === medRating),
@@ -373,7 +388,11 @@ export function RankingsView({
 
 			{/* Tier Sections */}
 			{TIER_ORDER.map((tier) => {
-				const albums = displayByTier.get(tier) ?? { high: [], med: [], low: [] };
+				const albums = displayByTier.get(tier) ?? {
+					high: [],
+					med: [],
+					low: [],
+				};
 
 				return (
 					<div key={tier} className="rounded-lg border p-2">

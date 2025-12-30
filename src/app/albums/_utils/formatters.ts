@@ -21,4 +21,3 @@ export function formatRelativeTime(timestamp: number): string {
 		day: "numeric",
 	});
 }
-

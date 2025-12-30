@@ -55,7 +55,9 @@ type AlbumRankerProps = {
 };
 
 // All possible slots: 15 ratings (Holy Moly High=15 down to Actively Bad Low=1)
-const ALL_RATINGS = [15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1] as const;
+const ALL_RATINGS = [
+	15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1,
+] as const;
 
 export function AlbumRanker({
 	albumToRate,
@@ -333,8 +335,11 @@ export function AlbumRanker({
 					{/* All tiers - always show the template */}
 					<div className="space-y-4">
 						{TIER_ORDER.map((tier) => {
-							const { high: highRating, med: medRating, low: lowRating } =
-								getRatingsForTier(tier);
+							const {
+								high: highRating,
+								med: medRating,
+								low: lowRating,
+							} = getRatingsForTier(tier);
 							const highAlbums = groups.get(highRating) ?? [];
 							const medAlbums = groups.get(medRating) ?? [];
 							const lowAlbums = groups.get(lowRating) ?? [];

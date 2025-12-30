@@ -10,7 +10,11 @@ type TracksViewProps = {
 	onAddListen: (track: TrackItem) => void;
 };
 
-export function TracksView({ tracks, isLoading, onAddListen }: TracksViewProps) {
+export function TracksView({
+	tracks,
+	isLoading,
+	onAddListen,
+}: TracksViewProps) {
 	if (isLoading) {
 		return (
 			<div className="flex h-64 items-center justify-center">
@@ -114,4 +118,3 @@ function TrackCard({
 		</div>
 	);
 }
-
