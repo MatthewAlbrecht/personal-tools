@@ -262,6 +262,13 @@ export function AlbumPicker({
 							placeholder="Search albums..."
 							value={searchQuery}
 							onChange={(e) => setSearchQuery(e.target.value)}
+							onKeyDown={(e) => {
+								if (e.key === "Enter" && filteredAvailable[0] && selectedAlbums.length < 50) {
+									e.preventDefault();
+									onAddAlbum(filteredAvailable[0]._id);
+									setSearchQuery("");
+								}
+							}}
 							className="w-full rounded-md border bg-background px-3 py-1.5 text-sm"
 						/>
 					</div>
