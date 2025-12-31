@@ -32,6 +32,7 @@ export function AllAlbumsView({
 	const [listenFilter, setListenFilter] = useState<
 		"all" | "listened" | "unlistened"
 	>("all");
+	const [yearFilter, setYearFilter] = useState<string>("all");
 
 	// Create a map for user album data lookup (keyed by spotifyAlbumId)
 	const userAlbumsMap = useMemo(() => {
@@ -49,8 +50,27 @@ export function AllAlbumsView({
 		return map;
 	}, [userAlbums]);
 
+	// Extract available years from albums
+	const availableYears = useMemo(() => {
+		const years = new Set<number>();
+		for (const album of albums) {
+			const year = extractReleaseYear(album.releaseDate);
+			if (year) years.add(year);
+		}
+		return Array.from(years).sort((a, b) => b - a);
+	}, [albums]);
+
 	const filteredAlbums = useMemo(() => {
 		let result = albums;
+
+		// Filter by release year
+		if (yearFilter !== "all") {
+			const filterYear = Number.parseInt(yearFilter, 10);
+			result = result.filter((album) => {
+				const year = extractReleaseYear(album.releaseDate);
+				return year === filterYear;
+			});
+		}
 
 		// Filter by listen status
 		if (listenFilter === "listened") {
@@ -87,7 +107,7 @@ export function AllAlbumsView({
 		}
 
 		return result;
-	}, [albums, userAlbumsMap, listenFilter, hideSingles, searchQuery]);
+	}, [albums, userAlbumsMap, yearFilter, listenFilter, hideSingles, searchQuery]);
 
 	if (isLoading) {
 		return (
@@ -128,6 +148,26 @@ export function AllAlbumsView({
 
 				{/* Filter Controls */}
 				<div className="flex flex-wrap items-center gap-4">
+					{/* Release Year Filter */}
+					<div className="flex items-center gap-2">
+						<label htmlFor="year-filter" className="font-medium text-sm">
+							Year:
+						</label>
+						<select
+							id="year-filter"
+							value={yearFilter}
+							onChange={(e) => setYearFilter(e.target.value)}
+							className="rounded-md border bg-background px-2 py-1 text-sm"
+						>
+							<option value="all">All Years</option>
+							{availableYears.map((year) => (
+								<option key={year} value={year.toString()}>
+									{year}
+								</option>
+							))}
+						</select>
+					</div>
+
 					{/* Listen Status Filter */}
 					<div className="flex items-center gap-2">
 						<label htmlFor="listen-filter" className="font-medium text-sm">
