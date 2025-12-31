@@ -1,10 +1,12 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import { ArrowLeft, Printer } from "lucide-react";
+import { ArrowLeft, Columns2, Printer } from "lucide-react";
 import Link from "next/link";
-import React from "react";
+import React, { useState } from "react";
 import { Button } from "~/components/ui/button";
+import { Checkbox } from "~/components/ui/checkbox";
+import { Label } from "~/components/ui/label";
 import { Skeleton } from "~/components/ui/skeleton";
 import { api } from "../../../../../convex/_generated/api";
 
@@ -100,6 +102,8 @@ export default function PublicAlbumLyricsPage({
 	const slug = unwrappedParams.slug;
 
 	const albumData = useQuery(api.geniusAlbums.getAlbumBySlug, { slug });
+	const [isCompact, setIsCompact] = useState(false);
+	const [showGeniusInfo, setShowGeniusInfo] = useState(true);
 
 	if (albumData === undefined) {
 		return <AlbumSkeleton />;
@@ -117,11 +121,19 @@ export default function PublicAlbumLyricsPage({
 	}
 
 	function handlePrint() {
-		window.print();
+		setIsCompact(false);
+		setTimeout(() => window.print(), 50);
+	}
+
+	function handleCompactPrint() {
+		setIsCompact(true);
+		setTimeout(() => window.print(), 50);
 	}
 
 	return (
-		<div className="mx-auto max-w-4xl px-4 py-10">
+		<div
+			className={`mx-auto max-w-4xl px-4 py-10 ${isCompact ? "print-compact" : ""}`}
+		>
 			{/* Back button - hidden when printing */}
 			<div className="mb-6 print:hidden">
 				<Button asChild variant="ghost">
@@ -133,37 +145,57 @@ export default function PublicAlbumLyricsPage({
 			</div>
 
 			{/* Header */}
-			<header className="mb-12 text-center print:mb-8">
+			<header className="mb-8 text-center print:mb-12">
 				<h1 className="mb-2 font-bold text-4xl print:text-5xl">
 					{albumData.album.albumTitle}
 				</h1>
-				<p className="mb-4 text-muted-foreground text-xl print:text-2xl">
+				<h2 className="text-2xl text-muted-foreground print:text-3xl">
 					{albumData.album.artistName}
-				</p>
-				<p className="text-muted-foreground text-sm print:text-base">
+				</h2>
+				<p className="mt-2 text-muted-foreground text-sm print:hidden">
 					{albumData.album.totalSongs} songs
 				</p>
-
-				{/* Print button - hidden when printing */}
-				<div className="mt-6 print:hidden">
-					<Button variant="outline" onClick={handlePrint}>
-						<Printer className="mr-2 h-4 w-4" />
-						Print Lyrics
-					</Button>
-				</div>
 			</header>
 
+			{/* Print options - hidden when printing */}
+			<div className="mb-8 flex flex-col items-center gap-3 print:hidden">
+				<div className="flex items-center gap-2">
+					<Checkbox
+						id="genius-info"
+						checked={showGeniusInfo}
+						onCheckedChange={(checked) => setShowGeniusInfo(checked === true)}
+					/>
+					<Label htmlFor="genius-info" className="cursor-pointer text-sm">
+						Show Genius info
+					</Label>
+				</div>
+				<div className="flex gap-2">
+					<Button variant="outline" onClick={handlePrint}>
+						<Printer className="mr-2 h-4 w-4" />
+						Print
+					</Button>
+					<Button variant="outline" onClick={handleCompactPrint}>
+						<Columns2 className="mr-2 h-4 w-4" />
+						2-Column
+					</Button>
+				</div>
+			</div>
+
 			{/* Songs */}
-			<div className="space-y-12 print:space-y-8">
+			<div className="lyrics-content space-y-12 print:space-y-8">
 				{albumData.songs.map((song) => (
 					<article key={song._id} className="print:mb-12">
+						{/* Track Number */}
+						<span className="text-muted-foreground text-sm print:text-xs">
+							Track {song.trackNumber}
+						</span>
 						{/* Song Title */}
 						<h3 className="mb-4 font-semibold text-2xl print:text-3xl">
-							{song.trackNumber}. {song.songTitle}
+							{song.songTitle}
 						</h3>
 
 						{/* About Section (if exists) */}
-						{song.about && (
+						{song.about && showGeniusInfo && (
 							<div className="mb-6 rounded-lg bg-muted p-4 text-sm leading-relaxed print:mb-8 print:border print:border-gray-300 print:bg-gray-50 print:text-base">
 								{song.about.split("\n\n").map((paragraph, idx) => (
 									<p key={idx} className="mb-2 last:mb-0">
