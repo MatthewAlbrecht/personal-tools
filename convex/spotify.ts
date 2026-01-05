@@ -761,6 +761,17 @@ export const getRecentSyncRuns = query({
   },
 });
 
+export const getLastSyncRun = query({
+  args: { userId: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query('spotifySyncRuns')
+      .withIndex('by_userId_startedAt', (q) => q.eq('userId', args.userId))
+      .order('desc')
+      .first();
+  },
+});
+
 export const getAllConnections = query({
   args: {},
   handler: async (ctx) => {

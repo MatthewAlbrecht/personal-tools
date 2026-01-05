@@ -54,6 +54,12 @@ export default function AlbumsPage() {
 		getValidAccessToken,
 	});
 
+	// Fetch last sync run for display
+	const lastSyncRun = useQuery(
+		api.spotify.getLastSyncRun,
+		userId ? { userId } : "skip",
+	);
+
 	// Mutations
 	const updateAlbumRating = useMutation(api.spotify.updateAlbumRating);
 	const addManualAlbumListen = useMutation(api.spotify.addManualAlbumListen);
@@ -315,6 +321,7 @@ export default function AlbumsPage() {
 						isSyncing={isSyncing}
 						onSync={syncHistory}
 						variant="outline"
+						lastSyncedAt={lastSyncRun?.completedAt}
 					/>
 				)}
 			</div>
