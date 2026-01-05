@@ -311,13 +311,38 @@ export function RankingsView({
 
 	if (!hasRatedAlbums) {
 		return (
-			<div className="flex h-64 items-center justify-center rounded-lg border border-dashed">
-				<div className="text-center">
-					<Disc3 className="mx-auto h-12 w-12 text-muted-foreground/50" />
-					<p className="mt-4 text-muted-foreground">No rated albums yet</p>
-					<p className="mt-1 text-muted-foreground text-sm">
-						Rate albums to see them organized by tier
-					</p>
+			<div className="space-y-2">
+				{/* Year Filter */}
+				<div className="flex items-center gap-3">
+					<label
+						htmlFor="year-filter"
+						className="text-muted-foreground text-sm"
+					>
+						Filter by year:
+					</label>
+					<select
+						id="year-filter"
+						value={yearFilter}
+						onChange={(e) => onYearFilterChange(e.target.value)}
+						className="rounded-md border bg-background px-3 py-1.5 text-sm"
+					>
+						<option value="all">All Years</option>
+						{availableYears.map((year) => (
+							<option key={year} value={year.toString()}>
+								{year}
+							</option>
+						))}
+					</select>
+				</div>
+
+				<div className="flex h-64 items-center justify-center rounded-lg border border-dashed">
+					<div className="text-center">
+						<Disc3 className="mx-auto h-12 w-12 text-muted-foreground/50" />
+						<p className="mt-4 text-muted-foreground">No rated albums for {yearFilter === "all" ? "any year" : yearFilter}</p>
+						<p className="mt-1 text-muted-foreground text-sm">
+							Rate albums to see them organized by tier
+						</p>
+					</div>
 				</div>
 			</div>
 		);

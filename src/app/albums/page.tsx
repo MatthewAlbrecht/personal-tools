@@ -38,9 +38,7 @@ export default function AlbumsPage() {
 	const { userId, isLoading, connection, isConnected, getValidAccessToken } =
 		useSpotifyAuth();
 	const [activeTab, setActiveTab] = useState<TabValue>("history");
-	const [yearFilter, setYearFilter] = useState<string>(() => {
-		return new Date().getFullYear().toString();
-	});
+	const [yearFilter, setYearFilter] = useState<string | null>(null);
 	const [albumToRate, setAlbumToRate] = useState<AlbumToRate | null>(null);
 	const [trackToAddListen, setTrackToAddListen] = useState<TrackItem | null>(
 		null,
@@ -149,11 +147,14 @@ export default function AlbumsPage() {
 		}
 		const sortedYears = Array.from(years).sort((a, b) => b - a);
 
+		// Determine effective year filter - use most recent year with rated albums if not set
+		const effectiveYearFilter = yearFilter ?? sortedYears[0]?.toString() ?? "all";
+
 		const filtered = userAlbums.filter((ua) => {
 			if (!ua.rating) return false;
-			if (yearFilter === "all") return true;
+			if (effectiveYearFilter === "all") return true;
 			const year = extractReleaseYear(ua.album?.releaseDate);
-			return year?.toString() === yearFilter;
+			return year?.toString() === effectiveYearFilter;
 		});
 
 		const byTier = new Map<
@@ -171,6 +172,9 @@ export default function AlbumsPage() {
 
 		return { albumsByTier: byTier, availableYears: sortedYears };
 	}, [userAlbums, yearFilter]);
+
+	// Initialize yearFilter to most recent year once we have data
+	const resolvedYearFilter = yearFilter ?? availableYears[0]?.toString() ?? "all";
 
 	function handleDisconnect() {
 		window.location.href = "/spotify-playlister";
@@ -389,7 +393,7 @@ export default function AlbumsPage() {
 						<RankingsView
 							albumsByTier={albumsByTier}
 							availableYears={availableYears}
-							yearFilter={yearFilter}
+							yearFilter={resolvedYearFilter}
 							onYearFilterChange={setYearFilter}
 							isLoading={userAlbums === undefined}
 							onUpdateRating={(userAlbumId, rating, position) => {
