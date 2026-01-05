@@ -74,7 +74,7 @@ export default function AlbumsPage() {
 
 	// Fetch rated albums for the selected year (for the ranker)
 	const currentYear =
-		yearFilter === "all"
+		yearFilter === "all" || yearFilter === null
 			? new Date().getFullYear()
 			: Number.parseInt(yearFilter, 10);
 	const ratedAlbumsForYear = useQuery(
