@@ -263,13 +263,19 @@ export function AlbumPicker({
 							value={searchQuery}
 							onChange={(e) => setSearchQuery(e.target.value)}
 							onKeyDown={(e) => {
-								if (e.key === "Enter" && filteredAvailable[availableIndex] && selectedAlbums.length < 50) {
+								if (
+									e.key === "Enter" &&
+									filteredAvailable[availableIndex] &&
+									selectedAlbums.length < 50
+								) {
 									e.preventDefault();
 									onAddAlbum(filteredAvailable[availableIndex]._id);
 									setSearchQuery("");
 								} else if (e.key === "ArrowDown") {
 									e.preventDefault();
-									setAvailableIndex(Math.min(filteredAvailable.length - 1, availableIndex + 1));
+									setAvailableIndex(
+										Math.min(filteredAvailable.length - 1, availableIndex + 1),
+									);
 								} else if (e.key === "ArrowUp") {
 									e.preventDefault();
 									setAvailableIndex(Math.max(0, availableIndex - 1));

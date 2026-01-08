@@ -338,7 +338,10 @@ export function RankingsView({
 				<div className="flex h-64 items-center justify-center rounded-lg border border-dashed">
 					<div className="text-center">
 						<Disc3 className="mx-auto h-12 w-12 text-muted-foreground/50" />
-						<p className="mt-4 text-muted-foreground">No rated albums for {yearFilter === "all" ? "any year" : yearFilter}</p>
+						<p className="mt-4 text-muted-foreground">
+							No rated albums for{" "}
+							{yearFilter === "all" ? "any year" : yearFilter}
+						</p>
 						<p className="mt-1 text-muted-foreground text-sm">
 							Rate albums to see them organized by tier
 						</p>

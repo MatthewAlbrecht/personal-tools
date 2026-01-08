@@ -1,0 +1,14 @@
+{
+	"permissions": {
+		"allow": [
+			"Bash(cat:*)",
+			"Bash(pnpm typecheck:*)",
+			"Bash(npx tsc:*)",
+			"Bash(pnpm check:*)",
+			"Bash(pnpm check:write:*)",
+			"Bash(pnpm build:*)",
+			"Bash(find:*)",
+			"Bash(ls:*)"
+		]
+	}
+}

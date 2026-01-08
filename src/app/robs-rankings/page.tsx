@@ -1,12 +1,12 @@
 "use client";
 
-import { api } from "../../../convex/_generated/api";
-import type { Id } from "../../../convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
 import { ListMusic } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { LoginPrompt } from "~/components/login-prompt";
 import { useAuthToken } from "~/lib/hooks/use-auth-token";
+import { api } from "../../../convex/_generated/api";
+import type { Id } from "../../../convex/_generated/dataModel";
 import { AlbumPicker } from "./_components/album-picker";
 import { RankingBoard } from "./_components/ranking-board";
 
@@ -23,7 +23,9 @@ export default function RobsRankingsPage() {
 	const getOrCreateYear = useMutation(api.robRankings.getOrCreateYear);
 	const addAlbumToYear = useMutation(api.robRankings.addAlbumToYear);
 	const removeAlbumFromYear = useMutation(api.robRankings.removeAlbumFromYear);
-	const updateAlbumPosition = useMutation(api.robRankings.updateAlbumPosition);
+	const batchUpdatePositions = useMutation(
+		api.robRankings.batchUpdatePositions,
+	);
 	const updateAlbumStatus = useMutation(api.robRankings.updateAlbumStatus);
 
 	// Queries - only run if we have a yearId
@@ -190,10 +192,15 @@ export default function RobsRankingsPage() {
 			) : (
 				<RankingBoard
 					albums={albums}
-					onUpdatePosition={(rankingAlbumId, newPosition) => {
-						updateAlbumPosition({
-							rankingAlbumId: rankingAlbumId as Id<"robRankingAlbums">,
-							newPosition,
+					yearId={yearId}
+					onBatchUpdatePositions={(positions) => {
+						if (!yearId) return;
+						batchUpdatePositions({
+							yearId,
+							positions: positions.map((p) => ({
+								rankingAlbumId: p.rankingAlbumId as Id<"robRankingAlbums">,
+								position: p.position,
+							})),
 						});
 					}}
 					onUpdateStatus={(rankingAlbumId, status) => {

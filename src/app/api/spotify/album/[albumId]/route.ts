@@ -37,11 +37,3 @@ export async function GET(
 		);
 	}
 }
-
-
-
-
-
-
-
-

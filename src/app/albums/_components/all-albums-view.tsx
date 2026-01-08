@@ -107,7 +107,14 @@ export function AllAlbumsView({
 		}
 
 		return result;
-	}, [albums, userAlbumsMap, yearFilter, listenFilter, hideSingles, searchQuery]);
+	}, [
+		albums,
+		userAlbumsMap,
+		yearFilter,
+		listenFilter,
+		hideSingles,
+		searchQuery,
+	]);
 
 	if (isLoading) {
 		return (

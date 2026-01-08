@@ -12,31 +12,45 @@ import {
 } from "../_utils/types";
 import { RankingAlbumCard } from "./ranking-album-card";
 
+type PositionUpdate = {
+	rankingAlbumId: string;
+	position: number;
+};
+
 type RankingBoardProps = {
 	albums: RankingAlbum[];
-	onUpdatePosition: (rankingAlbumId: string, newPosition: number) => void;
+	yearId: string | null;
+	onBatchUpdatePositions: (positions: PositionUpdate[]) => void;
 	onUpdateStatus: (rankingAlbumId: string, status: string) => void;
 };
 
 export function RankingBoard({
 	albums,
-	onUpdatePosition,
+	yearId,
+	onBatchUpdatePositions,
 	onUpdateStatus,
 }: RankingBoardProps) {
 	const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 	const [optimisticUpdates, setOptimisticUpdates] = useState<
 		Map<string, { position: number; status?: RankingStatus }>
 	>(new Map());
+	// Track all pending position changes since last save
+	const pendingPositionChanges = useRef<Map<string, number>>(new Map());
 	const selectedRowRef = useRef<HTMLDivElement>(null);
 	const containerRef = useRef<HTMLDivElement>(null);
 
-	// Debounced position update - waits 800ms after last change before persisting
-	const debouncedPositionUpdate = useDebouncedCallback(
-		(rankingAlbumId: string, newPosition: number) => {
-			onUpdatePosition(rankingAlbumId, newPosition);
-		},
-		800,
-	);
+	// Debounced batch save - waits 800ms after last change, then saves ALL pending changes
+	const debouncedBatchSave = useDebouncedCallback(() => {
+		if (pendingPositionChanges.current.size === 0) return;
+
+		const positions: PositionUpdate[] = [];
+		pendingPositionChanges.current.forEach((position, rankingAlbumId) => {
+			positions.push({ rankingAlbumId, position });
+		});
+
+		onBatchUpdatePositions(positions);
+		pendingPositionChanges.current.clear();
+	}, 800);
 
 	// Apply optimistic updates to albums
 	const displayAlbums = useMemo(() => {
@@ -128,48 +142,54 @@ export function RankingBoard({
 			);
 			if (newPosition === null) return;
 
-		const targetAlbum = displayAlbums.find((a) => a.position === newPosition);
+			const targetAlbum = displayAlbums.find((a) => a.position === newPosition);
 
-		// Optimistic swap - update both albums' positions
-		setOptimisticUpdates((prev) => {
-			const next = new Map(prev);
-			next.set(album._id, {
-				position: newPosition,
-				status: album.status,
-			});
-			if (targetAlbum) {
-				next.set(targetAlbum._id, {
-					position: album.position,
-					status: targetAlbum.status,
+			// Optimistic swap - update both albums' positions
+			setOptimisticUpdates((prev) => {
+				const next = new Map(prev);
+				next.set(album._id, {
+					position: newPosition,
+					status: album.status,
 				});
+				if (targetAlbum) {
+					next.set(targetAlbum._id, {
+						position: album.position,
+						status: targetAlbum.status,
+					});
+				}
+				return next;
+			});
+
+			// Track BOTH position changes for batch save
+			pendingPositionChanges.current.set(album._id, newPosition);
+			if (targetAlbum) {
+				pendingPositionChanges.current.set(targetAlbum._id, album.position);
 			}
-			return next;
-		});
 
-		// Update selected index to follow the moved album to its new position
-		// We need to find what index corresponds to newPosition after the swap
-		// Since we're swapping, the album will be at the index where targetAlbum currently is
-		const targetIndex = displayAlbums.findIndex(
-			(a) => a.position === newPosition,
-		);
-		if (targetIndex !== -1) {
-			setSelectedIndex(targetIndex);
-		} else if (direction === "up") {
-			setSelectedIndex(Math.max(0, selectedIndex - 1));
-		} else {
-			setSelectedIndex(Math.min(displayAlbums.length - 1, selectedIndex + 1));
-		}
+			// Update selected index to follow the moved album to its new position
+			// We need to find what index corresponds to newPosition after the swap
+			// Since we're swapping, the album will be at the index where targetAlbum currently is
+			const targetIndex = displayAlbums.findIndex(
+				(a) => a.position === newPosition,
+			);
+			if (targetIndex !== -1) {
+				setSelectedIndex(targetIndex);
+			} else if (direction === "up") {
+				setSelectedIndex(Math.max(0, selectedIndex - 1));
+			} else {
+				setSelectedIndex(Math.min(displayAlbums.length - 1, selectedIndex + 1));
+			}
 
-		// Debounced persist - only fires after motion stops
-		debouncedPositionUpdate(album._id, newPosition);
-	},
-	[
-		selectedIndex,
-		displayAlbums,
-		findNextAvailablePosition,
-		debouncedPositionUpdate,
-	],
-);
+			// Debounced batch save - saves ALL pending changes after motion stops
+			debouncedBatchSave();
+		},
+		[
+			selectedIndex,
+			displayAlbums,
+			findNextAvailablePosition,
+			debouncedBatchSave,
+		],
+	);
 
 	// Toggle status
 	const toggleConfirmed = useCallback(() => {
@@ -330,9 +350,7 @@ export function RankingBoard({
 
 					return (
 						<div key={bucket.label} className="rounded-lg border p-3">
-							<h3 className="mb-2 font-semibold text-sm">
-								{bucket.label}
-							</h3>
+							<h3 className="mb-2 font-semibold text-sm">{bucket.label}</h3>
 
 							{bucketAlbums.length === 0 ? (
 								<div className="rounded-md border border-dashed py-4 text-center text-muted-foreground text-sm">

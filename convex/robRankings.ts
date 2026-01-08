@@ -250,6 +250,58 @@ export const updateAlbumStatus = mutation({
 	},
 });
 
+// Batch update album positions - applies all position changes atomically
+export const batchUpdatePositions = mutation({
+	args: {
+		yearId: v.id("robRankingYears"),
+		positions: v.array(
+			v.object({
+				rankingAlbumId: v.id("robRankingAlbums"),
+				position: v.number(),
+			}),
+		),
+	},
+	handler: async (ctx, args) => {
+		const now = Date.now();
+
+		// Validate all albums belong to this year and collect current state
+		const albumsToUpdate = await Promise.all(
+			args.positions.map(async ({ rankingAlbumId }) => {
+				const album = await ctx.db.get(rankingAlbumId);
+				if (!album) throw new Error(`Album ${rankingAlbumId} not found`);
+				if (album.yearId !== args.yearId) {
+					throw new Error(
+						`Album ${rankingAlbumId} does not belong to this year`,
+					);
+				}
+				return album;
+			}),
+		);
+
+		// Check for confirmed albums being moved
+		for (let i = 0; i < albumsToUpdate.length; i++) {
+			const album = albumsToUpdate[i];
+			const update = args.positions[i];
+			if (
+				album &&
+				update &&
+				album.status === "confirmed" &&
+				album.position !== update.position
+			) {
+				throw new Error("Cannot move confirmed album");
+			}
+		}
+
+		// Apply all position updates atomically
+		for (const { rankingAlbumId, position } of args.positions) {
+			await ctx.db.patch(rankingAlbumId, {
+				position,
+				updatedAt: now,
+			});
+		}
+	},
+});
+
 // Randomize order of unconfirmed albums
 export const randomizeOrder = mutation({
 	args: {

@@ -38,7 +38,7 @@ export const RankingAlbumCard = forwardRef<
 			className={cn(
 				"group flex items-center gap-2 rounded-md border p-1 hover:bg-muted/50",
 				isSelected && "ring-2 ring-primary",
-				status === "confirmed" && "bg-emerald-500/10 border-transparent",
+				status === "confirmed" && "border-transparent bg-emerald-500/10",
 				status === "locked" && "border-amber-500/30",
 				status === "none" && "border-transparent",
 			)}
