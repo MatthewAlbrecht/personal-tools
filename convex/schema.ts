@@ -282,6 +282,18 @@ export default defineSchema({
 		.index("by_userId_albumId", ["userId", "albumId"])
 		.index("by_userId_listenedAt", ["userId", "listenedAt"]),
 
+	ratingHistory: defineTable({
+		userId: v.string(),
+		userAlbumId: v.id("userAlbums"),
+		albumId: v.id("spotifyAlbums"),
+		rating: v.number(), // New rating (1-15)
+		previousRating: v.optional(v.number()), // Previous rating (undefined if first rating)
+		ratedAt: v.number(), // Timestamp when rating was set
+	})
+		.index("by_userId", ["userId"])
+		.index("by_userAlbumId", ["userAlbumId"])
+		.index("by_userAlbumId_ratedAt", ["userAlbumId", "ratedAt"]),
+
 	spotifySyncLogs: defineTable({
 		userId: v.string(),
 		syncType: v.string(), // "recently_played" | "liked_tracks"

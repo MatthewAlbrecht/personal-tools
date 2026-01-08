@@ -184,6 +184,8 @@ export function AlbumsProvider({ children }: { children: React.ReactNode }) {
 				artistName: listen.album.artistName,
 				imageUrl: listen.album.imageUrl,
 				releaseDate: listen.album.releaseDate,
+				currentRating: userAlbum.rating,
+				currentPosition: userAlbum.position,
 			});
 		},
 		[userAlbumsMap],

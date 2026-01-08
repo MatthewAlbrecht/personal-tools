@@ -44,6 +44,8 @@ type AlbumToRate = {
 	artistName: string;
 	imageUrl?: string;
 	releaseDate?: string;
+	currentRating?: number;
+	currentPosition?: number;
 };
 
 type AlbumRankerProps = {
@@ -77,13 +79,44 @@ export function AlbumRanker({
 	// Memoize albumToRate id to detect when a NEW album is being rated
 	const albumToRateId = albumToRate?.userAlbumId;
 
-	// Reset state only when a different album is selected
+	// Reset state when a different album is selected
+	// If the album has an existing rating, start at that position
 	useEffect(() => {
-		if (albumToRateId) {
-			setCurrentRating(15);
-			setPositionInRating(0);
+		if (albumToRateId && albumToRate) {
+			if (albumToRate.currentRating !== undefined) {
+				// Re-ranking: start at current rating
+				setCurrentRating(albumToRate.currentRating);
+
+				// Find position in the list based on currentPosition
+				if (albumToRate.currentPosition !== undefined) {
+					const albumsAtRating = existingRankedAlbums
+						.filter(
+							(a) =>
+								a.rating === albumToRate.currentRating &&
+								a._id !== albumToRate.userAlbumId,
+						)
+						.sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+
+					// Find where this album's position fits in the sorted list
+					let posIdx = 0;
+					for (const album of albumsAtRating) {
+						if ((album.position ?? 0) < albumToRate.currentPosition) {
+							posIdx++;
+						} else {
+							break;
+						}
+					}
+					setPositionInRating(posIdx);
+				} else {
+					setPositionInRating(0);
+				}
+			} else {
+				// New rating: start at top
+				setCurrentRating(15);
+				setPositionInRating(0);
+			}
 		}
-	}, [albumToRateId]);
+	}, [albumToRateId, albumToRate, existingRankedAlbums]);
 
 	// Scroll the new album row into view when position changes (with padding)
 	// biome-ignore lint/correctness/useExhaustiveDependencies: dependencies trigger scroll on position change
@@ -111,13 +144,17 @@ export function AlbumRanker({
 		}
 	}, [currentRating, positionInRating]);
 
-	// Group existing albums by rating
+	// Group existing albums by rating (excluding the album being re-ranked)
 	const albumsByRating = useCallback(() => {
 		const groups = new Map<number, RankedAlbum[]>();
 		for (const rating of ALL_RATINGS) {
 			groups.set(rating, []);
 		}
 		for (const album of existingRankedAlbums) {
+			// Skip the album being re-ranked (it will show as the "new album" row)
+			if (albumToRate && album._id === albumToRate.userAlbumId) {
+				continue;
+			}
 			if (album.rating !== undefined) {
 				const list = groups.get(album.rating) ?? [];
 				list.push(album);
@@ -130,7 +167,7 @@ export function AlbumRanker({
 			groups.set(rating, albums);
 		}
 		return groups;
-	}, [existingRankedAlbums]);
+	}, [existingRankedAlbums, albumToRate]);
 
 	const groups = albumsByRating();
 

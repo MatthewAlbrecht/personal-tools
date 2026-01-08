@@ -24,6 +24,7 @@ import type * as folioSocietyReleases from "../folioSocietyReleases.js";
 import type * as geniusAlbums from "../geniusAlbums.js";
 import type * as migrations_backfillCategorizedAt from "../migrations/backfillCategorizedAt.js";
 import type * as migrations_backfillSpotifyAlbumId from "../migrations/backfillSpotifyAlbumId.js";
+import type * as migrations_initializeRatingHistory from "../migrations/initializeRatingHistory.js";
 import type * as migrations_migrateRatingsToThreeTier from "../migrations/migrateRatingsToThreeTier.js";
 import type * as robRankings from "../robRankings.js";
 import type * as s3Helper from "../s3Helper.js";
@@ -49,6 +50,7 @@ declare const fullApi: ApiFromModules<{
   geniusAlbums: typeof geniusAlbums;
   "migrations/backfillCategorizedAt": typeof migrations_backfillCategorizedAt;
   "migrations/backfillSpotifyAlbumId": typeof migrations_backfillSpotifyAlbumId;
+  "migrations/initializeRatingHistory": typeof migrations_initializeRatingHistory;
   "migrations/migrateRatingsToThreeTier": typeof migrations_migrateRatingsToThreeTier;
   robRankings: typeof robRankings;
   s3Helper: typeof s3Helper;

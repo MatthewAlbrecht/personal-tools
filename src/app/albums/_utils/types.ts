@@ -68,4 +68,6 @@ export type AlbumToRate = {
 	artistName: string;
 	imageUrl?: string;
 	releaseDate?: string;
+	currentRating?: number; // Existing rating for re-ranking
+	currentPosition?: number; // Existing position for re-ranking
 };

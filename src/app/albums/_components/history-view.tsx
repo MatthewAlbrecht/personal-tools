@@ -25,6 +25,7 @@ type HistoryViewProps = {
 	listensByMonth: Map<string, HistoryListen[]>;
 	listenOrdinals: Map<string, number>;
 	albumRatings: Map<string, number>;
+	latestRatingTimestamps: Record<string, number>;
 	onRateAlbum: (listen: HistoryListen) => void;
 	onDeleteListen: (listenId: string, albumName: string) => void;
 	isLoading: boolean;
@@ -34,6 +35,7 @@ export function HistoryView({
 	listensByMonth,
 	listenOrdinals,
 	albumRatings,
+	latestRatingTimestamps,
 	onRateAlbum,
 	onDeleteListen,
 	isLoading,
@@ -110,49 +112,63 @@ export function HistoryView({
 							<div key={month}>
 								<h2 className="mb-3 font-semibold text-lg">{month}</h2>
 								<div className="space-y-1">
-									{listens.map((listen) => (
-										<div key={listen._id} className="flex items-center gap-2">
-											<div className="min-w-0 flex-1">
-												<AlbumCard
-													name={listen.album?.name ?? "Unknown Album"}
-													artistName={
-														listen.album?.artistName ?? "Unknown Artist"
-													}
-													imageUrl={listen.album?.imageUrl}
-													listenedAt={listen.listenedAt}
-													listenOrdinal={listenOrdinals.get(listen._id)}
-													rating={albumRatings.get(listen.albumId)}
-													showListenDate
-													onRate={() => onRateAlbum(listen)}
-												/>
-											</div>
-											<DropdownMenu modal={false}>
-												<DropdownMenuTrigger asChild>
-													<button
-														type="button"
-														className="rounded-md p-1.5 text-muted-foreground/40 transition-colors hover:bg-muted hover:text-muted-foreground"
-														aria-label="More options"
-													>
-														<MoreHorizontal className="h-4 w-4" />
-													</button>
-												</DropdownMenuTrigger>
-												<DropdownMenuContent align="end" className="w-32">
-													<DropdownMenuItem
-														variant="destructive"
-														onSelect={() =>
-															setDeleteTarget({
-																id: listen._id,
-																name: listen.album?.name ?? "Unknown Album",
-															})
+									{listens.map((listen) => {
+										const albumIdKey = String(listen.albumId);
+										const lastRatedAt = latestRatingTimestamps[albumIdKey];
+										// Show indicator if listen happened on a later DAY than the last rating
+										// Compare dates only (not time) to avoid same-day timing issues
+										const listenDate = new Date(listen.listenedAt).setHours(0, 0, 0, 0);
+										const ratedDate = lastRatedAt
+											? new Date(lastRatedAt).setHours(0, 0, 0, 0)
+											: 0;
+										const listenedAgain =
+											lastRatedAt !== undefined && listenDate > ratedDate;
+
+										return (
+											<div key={listen._id} className="flex items-center gap-2">
+												<div className="min-w-0 flex-1">
+													<AlbumCard
+														name={listen.album?.name ?? "Unknown Album"}
+														artistName={
+															listen.album?.artistName ?? "Unknown Artist"
 														}
-													>
-														<Trash2 className="h-4 w-4" />
-														Delete
-													</DropdownMenuItem>
-												</DropdownMenuContent>
-											</DropdownMenu>
-										</div>
-									))}
+														imageUrl={listen.album?.imageUrl}
+														listenedAt={listen.listenedAt}
+														listenOrdinal={listenOrdinals.get(listen._id)}
+														rating={albumRatings.get(listen.albumId)}
+														listenedAgain={listenedAgain}
+														showListenDate
+														onRate={() => onRateAlbum(listen)}
+													/>
+												</div>
+												<DropdownMenu modal={false}>
+													<DropdownMenuTrigger asChild>
+														<button
+															type="button"
+															className="rounded-md p-1.5 text-muted-foreground/40 transition-colors hover:bg-muted hover:text-muted-foreground"
+															aria-label="More options"
+														>
+															<MoreHorizontal className="h-4 w-4" />
+														</button>
+													</DropdownMenuTrigger>
+													<DropdownMenuContent align="end" className="w-32">
+														<DropdownMenuItem
+															variant="destructive"
+															onSelect={() =>
+																setDeleteTarget({
+																	id: listen._id,
+																	name: listen.album?.name ?? "Unknown Album",
+																})
+															}
+														>
+															<Trash2 className="h-4 w-4" />
+															Delete
+														</DropdownMenuItem>
+													</DropdownMenuContent>
+												</DropdownMenu>
+											</div>
+										);
+									})}
 								</div>
 							</div>
 						),

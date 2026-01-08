@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Disc3 } from "lucide-react";
+import { Check, Disc3, RefreshCw } from "lucide-react";
 import Image from "next/image";
 import { forwardRef } from "react";
 import { getRatingColors, getTierShortLabel } from "~/lib/album-tiers";
@@ -13,13 +13,14 @@ type AlbumCardProps = {
 	releaseDate?: string;
 	listenedAt?: number;
 	listenOrdinal?: number; // Which listen this was (1 = first, 2 = second, etc.)
-	rating?: number; // 1-10 rating if rated
+	rating?: number; // 1-15 rating if rated
 	showListenDate?: boolean;
 	showReleaseYear?: boolean;
 	onRate?: () => void;
 	onSelect?: () => void; // Click to select for keyboard navigation
 	isSelected?: boolean; // Keyboard navigation selection state
 	showSaved?: boolean; // Show "Saved" indicator
+	listenedAgain?: boolean; // Show indicator when listened after last rating
 };
 
 export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
@@ -38,6 +39,7 @@ export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
 			onSelect,
 			isSelected = false,
 			showSaved = false,
+			listenedAgain = false,
 		},
 		ref,
 	) {
@@ -103,12 +105,26 @@ export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
 
 					{/* Rating Badge or Unranked Button */}
 					{isRated && ratingColors ? (
-						// Rated - show colored tier badge (display only)
-						<span
-							className={`inline-flex items-center rounded-full border px-2 py-0.5 font-medium text-[10px] ${ratingColors.bg} ${ratingColors.text} ${ratingColors.border}`}
-						>
-							{getTierShortLabel(rating)}
-						</span>
+						// Rated - show colored tier badge (clickable if onRate provided)
+						onRate ? (
+							<button
+								type="button"
+								onClick={(e) => {
+									e.stopPropagation();
+									onRate();
+								}}
+								className={`inline-flex items-center rounded-full border px-2 py-0.5 font-medium text-[10px] transition-opacity hover:opacity-80 ${ratingColors.bg} ${ratingColors.text} ${ratingColors.border}`}
+								title="Re-rank this album"
+							>
+								{getTierShortLabel(rating)}
+							</button>
+						) : (
+							<span
+								className={`inline-flex items-center rounded-full border px-2 py-0.5 font-medium text-[10px] ${ratingColors.bg} ${ratingColors.text} ${ratingColors.border}`}
+							>
+								{getTierShortLabel(rating)}
+							</span>
+						)
 					) : (
 						// Unranked - show subtle ghost button (only if onRate is provided)
 						onRate && (
@@ -124,6 +140,16 @@ export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
 								Unranked
 							</button>
 						)
+					)}
+
+					{/* Listened Again Indicator */}
+					{listenedAgain && isRated && (
+						<span
+							className="inline-flex items-center rounded-full bg-amber-500/15 px-1.5 py-0.5 text-amber-600 dark:text-amber-400"
+							title="Listened again since last rating"
+						>
+							<RefreshCw className="h-3 w-3" />
+						</span>
 					)}
 
 					{/* Listen ordinal */}

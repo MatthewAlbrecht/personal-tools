@@ -18,6 +18,12 @@ export default function HistoryPage() {
 		userId ? { userId, limit: 500 } : "skip",
 	);
 
+	// Fetch latest rating timestamps for "listened again" indicator
+	const latestRatingTimestamps = useQuery(
+		api.spotify.getLatestRatingTimestamps,
+		userId ? { userId } : "skip",
+	);
+
 	// Compute listen ordinals and group by month
 	const { listensByMonth, listenOrdinals } = useMemo(() => {
 		if (!albumListens)
@@ -48,6 +54,7 @@ export default function HistoryPage() {
 			listensByMonth={listensByMonth}
 			listenOrdinals={listenOrdinals}
 			albumRatings={albumRatings}
+			latestRatingTimestamps={latestRatingTimestamps ?? {}}
 			onRateAlbum={openRatingDrawer}
 			onDeleteListen={deleteAlbumListen}
 			isLoading={albumListens === undefined}

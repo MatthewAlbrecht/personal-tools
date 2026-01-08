@@ -1195,14 +1195,63 @@ export const backfillTracksFromAlbum = mutation({
 export const updateAlbumRating = mutation({
 	args: {
 		userAlbumId: v.id("userAlbums"),
-		rating: v.number(), // 1-10
+		rating: v.number(), // 1-15
 		position: v.number(), // Float for ordering
 	},
 	handler: async (ctx, args) => {
+		// Get current album to capture previous rating
+		const userAlbum = await ctx.db.get(args.userAlbumId);
+		if (!userAlbum) throw new Error("Album not found");
+
+		// Only record history if the rating actually changed
+		if (userAlbum.rating !== args.rating) {
+			const historyId = await ctx.db.insert("ratingHistory", {
+				userId: userAlbum.userId,
+				userAlbumId: args.userAlbumId,
+				albumId: userAlbum.albumId,
+				rating: args.rating,
+				previousRating: userAlbum.rating,
+				ratedAt: Date.now(),
+			});
+			console.log("Created rating history:", historyId, {
+				from: userAlbum.rating,
+				to: args.rating,
+			});
+		} else {
+			console.log("Rating unchanged, skipping history:", args.rating);
+		}
+
+		// Update the rating (always update position even if rating unchanged)
 		await ctx.db.patch(args.userAlbumId, {
 			rating: args.rating,
 			position: args.position,
 		});
+	},
+});
+
+export const getLatestRatingTimestamps = query({
+	args: { userId: v.string() },
+	handler: async (ctx, args) => {
+		// Get all rating history for user
+		const history = await ctx.db
+			.query("ratingHistory")
+			.withIndex("by_userId", (q) => q.eq("userId", args.userId))
+			.collect();
+
+		console.log("Rating history entries:", history.length);
+
+		// Build map of albumId → latest ratedAt
+		// Use string keys to ensure consistent lookup from frontend
+		const latestByAlbum: Record<string, number> = {};
+		for (const entry of history) {
+			const albumId = String(entry.albumId);
+			const existing = latestByAlbum[albumId];
+			if (!existing || entry.ratedAt > existing) {
+				latestByAlbum[albumId] = entry.ratedAt;
+			}
+		}
+		console.log("Returning timestamps for albums:", Object.keys(latestByAlbum).length);
+		return latestByAlbum;
 	},
 });
 
