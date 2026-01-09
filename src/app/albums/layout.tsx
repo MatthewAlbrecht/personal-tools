@@ -117,7 +117,14 @@ function AlbumsLayoutContent({ children }: { children: React.ReactNode }) {
 			<AddListenDrawer
 				track={
 					trackToAddListen
-						? trackToAddListen
+						? {
+								trackName: trackToAddListen.track.trackName,
+								artistName: trackToAddListen.track.artistName,
+								albumName: trackToAddListen.track.albumName,
+								albumImageUrl: trackToAddListen.track.albumImageUrl,
+								spotifyAlbumId: trackToAddListen.track.spotifyAlbumId,
+								releaseDate: trackToAddListen.releaseDate,
+							}
 						: albumToAddListen
 							? {
 									trackName: albumToAddListen.name,

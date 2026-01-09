@@ -99,7 +99,7 @@ function TrackGroupCard({
 					) : (
 						<>
 							<p className="truncate font-medium text-sm">
-								{firstTrack?.trackName}
+								{firstTrack?.track.trackName}
 							</p>
 							<p className="truncate text-muted-foreground text-xs">
 								{group.artistName}
@@ -153,9 +153,9 @@ function TrackGroupCard({
 			{/* Expanded Track List */}
 			{isExpanded && isMultiple && (
 				<div className="border-muted-foreground/10 border-t pr-2 pb-2 pl-16">
-					{group.tracks.map((track) => (
-						<div key={track._id} className="py-1 text-muted-foreground text-xs">
-							{track.trackName}
+					{group.tracks.map((userTrack) => (
+						<div key={userTrack._id} className="py-1 text-muted-foreground text-xs">
+							{userTrack.track.trackName}
 						</div>
 					))}
 				</div>

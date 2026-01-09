@@ -14,15 +14,18 @@ import { TrackRow } from "./track-row";
 
 type CategorizedTrack = {
 	_id: string;
-	trackId: string;
-	trackName: string;
-	artistName: string;
-	albumName?: string;
-	albumImageUrl?: string;
-	trackData?: string;
+	spotifyTrackId: string;
 	userInput: string;
 	finalSelections: string[];
 	createdAt: number;
+	track: {
+		spotifyTrackId: string;
+		trackName: string;
+		artistName: string;
+		albumName?: string;
+		albumImageUrl?: string;
+		rawData?: string;
+	};
 };
 
 type TracksPanelProps = {
@@ -365,27 +368,27 @@ function CategorizedTracksList({
 
 	return (
 		<div className="-mx-1 max-h-[500px] space-y-1 overflow-y-auto px-1 pt-1">
-			{tracks.map((track) => {
-				const isSelected = selectedTrackId === track.trackId;
+			{tracks.map((cat) => {
+				const isSelected = selectedTrackId === cat.spotifyTrackId;
 				const isPlaying =
-					playerState.currentTrackId === track.trackId && playerState.isPlaying;
-				const isCurrentTrack = playerState.currentTrackId === track.trackId;
+					playerState.currentTrackId === cat.spotifyTrackId && playerState.isPlaying;
+				const isCurrentTrack = playerState.currentTrackId === cat.spotifyTrackId;
 				const isPending =
-					playerState.isPending && playerState.pendingTrackId === track.trackId;
+					playerState.isPending && playerState.pendingTrackId === cat.spotifyTrackId;
 
 				return (
 					<div
-						key={track._id}
+						key={cat._id}
 						className={`group flex w-full items-center gap-3 overflow-hidden rounded-lg p-2 transition-colors hover:bg-muted/50 ${
 							isSelected ? "bg-primary/10 ring-1 ring-primary" : ""
 						}`}
 					>
 						{/* Album art with play button overlay */}
 						<div className="relative h-10 w-10 flex-shrink-0 overflow-hidden rounded">
-							{track.albumImageUrl ? (
+							{cat.track.albumImageUrl ? (
 								<img
-									src={track.albumImageUrl}
-									alt={track.albumName ?? track.trackName}
+									src={cat.track.albumImageUrl}
+									alt={cat.track.albumName ?? cat.track.trackName}
 									className="h-full w-full object-cover"
 								/>
 							) : (
@@ -397,8 +400,8 @@ function CategorizedTracksList({
 							<button
 								type="button"
 								onClick={() => {
-									onTogglePlayback(`spotify:track:${track.trackId}`);
-									onSelectTrack?.(track);
+									onTogglePlayback(`spotify:track:${cat.spotifyTrackId}`);
+									onSelectTrack?.(cat);
 								}}
 								disabled={!playerState.isReady || isPending}
 								className={`absolute inset-0 flex items-center justify-center bg-black/40 transition-opacity ${
@@ -434,19 +437,19 @@ function CategorizedTracksList({
 						{/* Track info - clickable to select */}
 						<button
 							type="button"
-							onClick={() => onSelectTrack?.(track)}
+							onClick={() => onSelectTrack?.(cat)}
 							className="min-w-0 flex-1 text-left"
 						>
 							<p
 								className={`truncate font-medium text-sm ${isCurrentTrack ? "text-green-500" : ""}`}
 							>
-								{track.trackName}
+								{cat.track.trackName}
 							</p>
 							<p className="truncate text-muted-foreground text-xs">
-								{track.artistName}
+								{cat.track.artistName}
 							</p>
 							<p className="truncate text-muted-foreground/60 text-xs italic">
-								&quot;{track.userInput}&quot;
+								&quot;{cat.userInput}&quot;
 							</p>
 						</button>
 					</div>

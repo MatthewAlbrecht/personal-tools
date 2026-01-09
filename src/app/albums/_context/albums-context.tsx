@@ -236,8 +236,11 @@ export function AlbumsProvider({ children }: { children: React.ReactNode }) {
 
 	const handleAddListen = useCallback(
 		async (listenedAt: number) => {
-			const albumToUse = trackToAddListen || albumToAddListen;
-			if (!albumToUse?.spotifyAlbumId || !userId) return;
+			// Get the spotifyAlbumId from the appropriate source
+			const spotifyAlbumId = trackToAddListen
+				? trackToAddListen.track.spotifyAlbumId
+				: albumToAddListen?.spotifyAlbumId;
+			if (!spotifyAlbumId || !userId) return;
 
 			setIsAddingListen(true);
 			try {
@@ -248,7 +251,7 @@ export function AlbumsProvider({ children }: { children: React.ReactNode }) {
 				}
 
 				const albumResponse = await fetch(
-					`/api/spotify/album/${albumToUse.spotifyAlbumId}`,
+					`/api/spotify/album/${spotifyAlbumId}`,
 					{ headers: { "X-Access-Token": accessToken } },
 				);
 
@@ -270,7 +273,7 @@ export function AlbumsProvider({ children }: { children: React.ReactNode }) {
 
 				const result = await addManualAlbumListen({
 					userId,
-					spotifyAlbumId: albumToUse.spotifyAlbumId,
+					spotifyAlbumId,
 					listenedAt,
 				});
 

@@ -117,15 +117,16 @@ export default function SpotifyPlaylisterPage() {
 	const categorizedTrackIds = new Set(
 		[...(recentTracksFromDb ?? []), ...(likedTracksFromDb ?? [])]
 			.filter((t) => t.lastCategorizedAt !== undefined)
-			.map((t) => t.trackId),
+			.map((t) => t.spotifyTrackId),
 	);
 
 	// Convert Convex track data to UI format, with currently playing at top
 	const recentTracks: RecentlyPlayedItem[] | undefined = (() => {
 		const dbTracks = recentTracksFromDb?.map((t) => ({
-			track: t.trackData
-				? (JSON.parse(t.trackData) as SpotifyTrack)
-				: createMinimalTrackFromDb(t),
+			track:
+				"rawData" in t.track && t.track.rawData
+					? (JSON.parse(t.track.rawData) as SpotifyTrack)
+					: createMinimalTrackFromDb(t.track),
 			played_at: new Date(t.lastPlayedAt ?? t.lastSeenAt).toISOString(),
 		}));
 
@@ -149,23 +150,26 @@ export default function SpotifyPlaylisterPage() {
 
 	const likedTracks: SavedTrackItem[] | undefined = likedTracksFromDb?.map(
 		(t) => ({
-			track: t.trackData
-				? (JSON.parse(t.trackData) as SpotifyTrack)
-				: createMinimalTrackFromDb(t),
+			track:
+				"rawData" in t.track && t.track.rawData
+					? (JSON.parse(t.track.rawData) as SpotifyTrack)
+					: createMinimalTrackFromDb(t.track),
 			added_at: new Date(t.lastLikedAt ?? t.lastSeenAt).toISOString(),
 		}),
 	);
 
-	// Helper to create minimal track from DB record
+	// Helper to create minimal track from canonical track record
 	function createMinimalTrackFromDb(t: {
-		trackId: string;
+		spotifyTrackId: string;
 		trackName: string;
 		artistName: string;
 		albumName?: string;
 		albumImageUrl?: string;
+		durationMs?: number;
+		trackNumber?: number;
 	}): SpotifyTrack {
 		return {
-			id: t.trackId,
+			id: t.spotifyTrackId,
 			name: t.trackName,
 			artists: [{ id: "", name: t.artistName }],
 			album: {
@@ -175,10 +179,10 @@ export default function SpotifyPlaylisterPage() {
 					? [{ url: t.albumImageUrl, height: 300, width: 300 }]
 					: [],
 			},
-			duration_ms: 0,
-			external_urls: { spotify: `https://open.spotify.com/track/${t.trackId}` },
+			duration_ms: t.durationMs ?? 0,
+			external_urls: { spotify: `https://open.spotify.com/track/${t.spotifyTrackId}` },
 			preview_url: null,
-			track_number: 0,
+			track_number: t.trackNumber ?? 0,
 		};
 	}
 
@@ -462,17 +466,20 @@ export default function SpotifyPlaylisterPage() {
 
 	// Handle selecting a categorized track for re-categorization
 	function handleSelectCategorizedTrack(cat: {
-		trackId: string;
-		trackName: string;
-		artistName: string;
-		albumName?: string;
-		albumImageUrl?: string;
-		trackData?: string;
+		spotifyTrackId: string;
 		userInput: string;
+		track: {
+			spotifyTrackId: string;
+			trackName: string;
+			artistName: string;
+			albumName?: string;
+			albumImageUrl?: string;
+			rawData?: string;
+		};
 	}) {
 		// Don't reset if it's the same track and we're already showing it
 		if (
-			selectedTrack?.track.id === cat.trackId &&
+			selectedTrack?.track.id === cat.spotifyTrackId &&
 			reviewState.status !== "idle"
 		) {
 			return;
@@ -481,20 +488,32 @@ export default function SpotifyPlaylisterPage() {
 		// Use full track data if available, otherwise create minimal object
 		let track: SpotifyTrack;
 
-		if (cat.trackData) {
+		if ("rawData" in cat.track && cat.track.rawData) {
 			try {
-				track = JSON.parse(cat.trackData) as SpotifyTrack;
+				track = JSON.parse(cat.track.rawData) as SpotifyTrack;
 			} catch {
-				track = createMinimalTrack(cat);
+				track = createMinimalTrack({
+					trackId: cat.track.spotifyTrackId,
+					trackName: cat.track.trackName,
+					artistName: cat.track.artistName,
+					albumName: cat.track.albumName,
+					albumImageUrl: cat.track.albumImageUrl,
+				});
 			}
 		} else {
-			track = createMinimalTrack(cat);
+			track = createMinimalTrack({
+				trackId: cat.track.spotifyTrackId,
+				trackName: cat.track.trackName,
+				artistName: cat.track.artistName,
+				albumName: cat.track.albumName,
+				albumImageUrl: cat.track.albumImageUrl,
+			});
 		}
 
 		setSelectedTrack({ track, played_at: "" });
 
 		// Check for pending suggestions in cache, otherwise prefill with previous input
-		const cached = pendingSuggestionsCache.get(cat.trackId);
+		const cached = pendingSuggestionsCache.get(cat.spotifyTrackId);
 		if (cached) {
 			setUserInput(cached.userInput);
 			setReviewState({
@@ -843,8 +862,8 @@ export default function SpotifyPlaylisterPage() {
 		console.log(
 			"[Backfill] Sample categorizations:",
 			categorizations.slice(0, 3).map((c) => ({
-				trackId: c.trackId,
-				trackName: c.trackName,
+				trackId: c.spotifyTrackId,
+				trackName: c.track.trackName,
 			})),
 		);
 
@@ -867,9 +886,9 @@ export default function SpotifyPlaylisterPage() {
 					description: playlist.description,
 				},
 				categorizations: categorizations.map((c) => ({
-					trackId: c.trackId,
-					trackName: c.trackName,
-					artistName: c.artistName,
+					trackId: c.spotifyTrackId,
+					trackName: c.track.trackName,
+					artistName: c.track.artistName,
 					userInput: c.userInput,
 				})),
 				accessToken,

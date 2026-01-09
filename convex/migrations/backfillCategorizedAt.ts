@@ -22,11 +22,18 @@ export const run = mutation({
 		let skipped = 0;
 
 		for (const cat of categorizations) {
+			// Use spotifyTrackId (new field) or fall back to trackId (legacy)
+			const spotifyTrackId = cat.spotifyTrackId ?? cat.trackId;
+			if (!spotifyTrackId) {
+				skipped++;
+				continue;
+			}
+
 			// Find existing spotifyTracks row for this user + track
 			const existingTrack = await ctx.db
 				.query("spotifyTracks")
 				.withIndex("by_userId_trackId", (q) =>
-					q.eq("userId", cat.userId).eq("trackId", cat.trackId),
+					q.eq("userId", cat.userId).eq("trackId", spotifyTrackId),
 				)
 				.first();
 
@@ -45,12 +52,12 @@ export const run = mutation({
 				}
 			} else {
 				// Track doesn't exist - create it with categorization data
-				const now = Date.now();
+				// Use non-null assertions with fallbacks for now-optional fields
 				await ctx.db.insert("spotifyTracks", {
 					userId: cat.userId,
-					trackId: cat.trackId,
-					trackName: cat.trackName,
-					artistName: cat.artistName,
+					trackId: spotifyTrackId,
+					trackName: cat.trackName ?? "Unknown Track",
+					artistName: cat.artistName ?? "Unknown Artist",
 					albumName: cat.albumName,
 					albumImageUrl: cat.albumImageUrl,
 					trackData: cat.trackData,

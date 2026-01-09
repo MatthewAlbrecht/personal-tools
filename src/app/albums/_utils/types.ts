@@ -27,16 +27,32 @@ export type RankedAlbumItem = {
 	album: AlbumInfo | null;
 };
 
-// Track item for tracks view
-export type TrackItem = {
-	_id: string;
-	trackId: string;
+// Canonical track data (from spotifyTracksCanonical)
+export type CanonicalTrack = {
+	spotifyTrackId: string;
 	trackName: string;
 	artistName: string;
 	albumName?: string;
 	albumImageUrl?: string;
 	spotifyAlbumId?: string;
+	durationMs?: number;
+	trackNumber?: number;
+	isExplicit?: boolean;
+	previewUrl?: string;
+	rawData?: string;
+};
+
+// Track item for tracks view (user track with nested canonical data)
+export type TrackItem = {
+	_id: string;
+	userId: string;
+	spotifyTrackId: string;
+	firstSeenAt: number;
+	lastSeenAt: number;
 	lastPlayedAt?: number;
+	lastLikedAt?: number;
+	lastCategorizedAt?: number;
+	track: CanonicalTrack;
 	releaseDate?: string;
 };
 

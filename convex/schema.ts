@@ -179,12 +179,15 @@ export default defineSchema({
 
 	spotifySongCategorizations: defineTable({
 		userId: v.string(),
-		trackId: v.string(), // Spotify track ID
-		trackName: v.string(),
-		artistName: v.string(),
-		albumName: v.optional(v.string()),
-		albumImageUrl: v.optional(v.string()),
-		trackData: v.optional(v.string()), // JSON stringified SpotifyTrack for re-categorization
+		canonicalTrackId: v.optional(v.id("spotifyTracksCanonical")), // Reference to canonical (optional during migration)
+		spotifyTrackId: v.optional(v.string()), // Spotify track ID (optional during migration, use trackId as fallback)
+		// Legacy denormalized fields - kept during migration
+		trackId: v.optional(v.string()), // @deprecated - use spotifyTrackId
+		trackName: v.optional(v.string()), // @deprecated - use canonical
+		artistName: v.optional(v.string()), // @deprecated - use canonical
+		albumName: v.optional(v.string()), // @deprecated - use canonical
+		albumImageUrl: v.optional(v.string()), // @deprecated - use canonical
+		trackData: v.optional(v.string()), // @deprecated - use canonical rawData
 		userInput: v.string(), // What user typed about the song's vibe
 		aiSuggestions: v.array(
 			v.object({
@@ -198,9 +201,27 @@ export default defineSchema({
 		createdAt: v.number(),
 	})
 		.index("by_userId", ["userId"])
-		.index("by_trackId", ["trackId"])
+		.index("by_spotifyTrackId", ["spotifyTrackId"])
+		.index("by_trackId", ["trackId"]) // Legacy index
 		.index("by_userId_createdAt", ["userId", "createdAt"]),
 
+	// User-specific track data (references spotifyTracksCanonical for metadata)
+	userTracks: defineTable({
+		userId: v.string(),
+		trackId: v.id("spotifyTracksCanonical"), // Reference to canonical track
+		spotifyTrackId: v.string(), // Denormalized for easy lookups
+		firstSeenAt: v.number(),
+		lastSeenAt: v.number(),
+		lastPlayedAt: v.optional(v.number()),
+		lastLikedAt: v.optional(v.number()),
+		lastCategorizedAt: v.optional(v.number()),
+	})
+		.index("by_userId", ["userId"])
+		.index("by_userId_spotifyTrackId", ["userId", "spotifyTrackId"])
+		.index("by_userId_lastSeenAt", ["userId", "lastSeenAt"])
+		.index("by_userId_lastPlayedAt", ["userId", "lastPlayedAt"]),
+
+	// Legacy table - kept during migration, will be removed after data is migrated
 	spotifyTracks: defineTable({
 		userId: v.string(),
 		trackId: v.string(),
@@ -208,8 +229,8 @@ export default defineSchema({
 		artistName: v.string(),
 		albumName: v.optional(v.string()),
 		albumImageUrl: v.optional(v.string()),
-		spotifyAlbumId: v.optional(v.string()), // Spotify's album ID for grouping
-		trackData: v.optional(v.string()), // JSON stringified SpotifyTrack
+		spotifyAlbumId: v.optional(v.string()),
+		trackData: v.optional(v.string()),
 		firstSeenAt: v.number(),
 		lastSeenAt: v.number(),
 		lastPlayedAt: v.optional(v.number()),
@@ -238,6 +259,26 @@ export default defineSchema({
 	})
 		.index("by_trackId", ["trackId"])
 		.index("by_userId", ["userId"]),
+
+	// Canonical Spotify track data (global, shared across users)
+	spotifyTracksCanonical: defineTable({
+		spotifyTrackId: v.string(), // Spotify's track ID (unique)
+		trackName: v.string(),
+		artistName: v.string(),
+		albumName: v.optional(v.string()),
+		albumImageUrl: v.optional(v.string()),
+		spotifyAlbumId: v.optional(v.string()),
+		// Extracted from Spotify API response:
+		durationMs: v.optional(v.number()),
+		trackNumber: v.optional(v.number()),
+		isExplicit: v.optional(v.boolean()),
+		previewUrl: v.optional(v.string()),
+		rawData: v.optional(v.string()), // JSON stringified full Spotify track object
+		createdAt: v.number(),
+		updatedAt: v.number(),
+	})
+		.index("by_spotifyTrackId", ["spotifyTrackId"])
+		.index("by_spotifyAlbumId", ["spotifyAlbumId"]),
 
 	// Spotify Album tracking tables
 	spotifyAlbums: defineTable({

@@ -16,10 +16,10 @@ export type TrackGroup = {
  * Uses album name only - featured artists on tracks shouldn't break grouping.
  */
 function getAlbumKey(track: TrackItem): string | null {
-	if (!track.albumName) return null;
+	if (!track.track.albumName) return null;
 	// Normalize: lowercase, trim - just use album name
 	// This handles cases where tracks have different featured artists
-	return track.albumName.toLowerCase().trim();
+	return track.track.albumName.toLowerCase().trim();
 }
 
 /**
@@ -93,10 +93,10 @@ export function groupTracksByAlbum(tracks: TrackItem[]): TrackGroup[] {
 			flushCurrentGroup();
 			currentGroup = {
 				id: `group-${pendingTrack._id}`,
-				spotifyAlbumId: pendingTrack.spotifyAlbumId,
-				albumName: pendingTrack.albumName,
-				artistName: pendingTrack.artistName,
-				albumImageUrl: pendingTrack.albumImageUrl,
+				spotifyAlbumId: pendingTrack.track.spotifyAlbumId,
+				albumName: pendingTrack.track.albumName,
+				artistName: pendingTrack.track.artistName,
+				albumImageUrl: pendingTrack.track.albumImageUrl,
 				tracks: [pendingTrack, track],
 				startTime: pendingTrack.lastPlayedAt ?? 0,
 				endTime: trackTime,
@@ -123,10 +123,10 @@ export function groupTracksByAlbum(tracks: TrackItem[]): TrackGroup[] {
 		// Start a new group
 		currentGroup = {
 			id: `group-${track._id}`,
-			spotifyAlbumId: track.spotifyAlbumId,
-			albumName: track.albumName,
-			artistName: track.artistName,
-			albumImageUrl: track.albumImageUrl,
+			spotifyAlbumId: track.track.spotifyAlbumId,
+			albumName: track.track.albumName,
+			artistName: track.track.artistName,
+			albumImageUrl: track.track.albumImageUrl,
 			tracks: [track],
 			startTime: trackTime,
 			endTime: trackTime,
@@ -144,10 +144,10 @@ export function groupTracksByAlbum(tracks: TrackItem[]): TrackGroup[] {
 function createGroup(track: TrackItem): TrackGroup {
 	return {
 		id: `group-${track._id}`,
-		spotifyAlbumId: track.spotifyAlbumId,
-		albumName: track.albumName,
-		artistName: track.artistName,
-		albumImageUrl: track.albumImageUrl,
+		spotifyAlbumId: track.track.spotifyAlbumId,
+		albumName: track.track.albumName,
+		artistName: track.track.artistName,
+		albumImageUrl: track.track.albumImageUrl,
 		tracks: [track],
 		startTime: track.lastPlayedAt ?? 0,
 		endTime: track.lastPlayedAt ?? 0,
