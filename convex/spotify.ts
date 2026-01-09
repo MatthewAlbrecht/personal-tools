@@ -402,34 +402,6 @@ export const saveCategorization = mutation({
 			});
 		}
 
-		// Legacy: Also update lastCategorizedAt on the spotifyTracks row
-		const existingTrack = await ctx.db
-			.query("spotifyTracks")
-			.withIndex("by_userId_trackId", (q) =>
-				q.eq("userId", args.userId).eq("trackId", args.trackId),
-			)
-			.first();
-
-		if (existingTrack) {
-			await ctx.db.patch(existingTrack._id, {
-				lastCategorizedAt: now,
-			});
-		} else {
-			// Create a new spotifyTracks row if it doesn't exist
-			await ctx.db.insert("spotifyTracks", {
-				userId: args.userId,
-				trackId: args.trackId,
-				trackName: args.trackName,
-				artistName: args.artistName,
-				albumName: args.albumName,
-				albumImageUrl: args.albumImageUrl,
-				trackData: args.trackData,
-				firstSeenAt: now,
-				lastSeenAt: now,
-				lastCategorizedAt: now,
-			});
-		}
-
 		return categorizationId;
 	},
 });
@@ -686,53 +658,6 @@ export const upsertTracksFromRecentlyPlayed = mutation({
 					lastPlayedAt: item.playedAt,
 				});
 			}
-
-			// Legacy: Continue with existing spotifyTracks storage (will be removed)
-			const existing = await ctx.db
-				.query("spotifyTracks")
-				.withIndex("by_userId_trackId", (q) =>
-					q.eq("userId", args.userId).eq("trackId", item.trackId),
-				)
-				.first();
-
-			if (existing) {
-				// Update timestamps - only advance if newer
-				const newLastPlayedAt = Math.max(
-					existing.lastPlayedAt ?? 0,
-					item.playedAt,
-				);
-				const newLastSeenAt = Math.max(
-					existing.lastSeenAt,
-					newLastPlayedAt,
-					existing.lastLikedAt ?? 0,
-				);
-
-				await ctx.db.patch(existing._id, {
-					trackName: item.trackName,
-					artistName: item.artistName,
-					albumName: item.albumName,
-					albumImageUrl: item.albumImageUrl,
-					spotifyAlbumId: item.spotifyAlbumId,
-					trackData: item.trackData,
-					lastPlayedAt: newLastPlayedAt,
-					lastSeenAt: newLastSeenAt,
-				});
-			} else {
-				// Insert new track
-				await ctx.db.insert("spotifyTracks", {
-					userId: args.userId,
-					trackId: item.trackId,
-					trackName: item.trackName,
-					artistName: item.artistName,
-					albumName: item.albumName,
-					albumImageUrl: item.albumImageUrl,
-					spotifyAlbumId: item.spotifyAlbumId,
-					trackData: item.trackData,
-					firstSeenAt: now,
-					lastSeenAt: item.playedAt,
-					lastPlayedAt: item.playedAt,
-				});
-			}
 		}
 	},
 });
@@ -802,53 +727,6 @@ export const upsertTracksFromLiked = mutation({
 					lastLikedAt: item.addedAt,
 				});
 			}
-
-			// Legacy: Continue with existing spotifyTracks storage (will be removed)
-			const existing = await ctx.db
-				.query("spotifyTracks")
-				.withIndex("by_userId_trackId", (q) =>
-					q.eq("userId", args.userId).eq("trackId", item.trackId),
-				)
-				.first();
-
-			if (existing) {
-				// Update timestamps - only advance if newer
-				const newLastLikedAt = Math.max(
-					existing.lastLikedAt ?? 0,
-					item.addedAt,
-				);
-				const newLastSeenAt = Math.max(
-					existing.lastSeenAt,
-					newLastLikedAt,
-					existing.lastPlayedAt ?? 0,
-				);
-
-				await ctx.db.patch(existing._id, {
-					trackName: item.trackName,
-					artistName: item.artistName,
-					albumName: item.albumName,
-					albumImageUrl: item.albumImageUrl,
-					spotifyAlbumId: item.spotifyAlbumId,
-					trackData: item.trackData,
-					lastLikedAt: newLastLikedAt,
-					lastSeenAt: newLastSeenAt,
-				});
-			} else {
-				// Insert new track
-				await ctx.db.insert("spotifyTracks", {
-					userId: args.userId,
-					trackId: item.trackId,
-					trackName: item.trackName,
-					artistName: item.artistName,
-					albumName: item.albumName,
-					albumImageUrl: item.albumImageUrl,
-					spotifyAlbumId: item.spotifyAlbumId,
-					trackData: item.trackData,
-					firstSeenAt: now,
-					lastSeenAt: item.addedAt,
-					lastLikedAt: item.addedAt,
-				});
-			}
 		}
 	},
 });
@@ -863,7 +741,7 @@ export const getRecentlyPlayedTracks = query({
 
 		// Query user tracks with lastPlayedAt, ordered by most recent using the index
 		const userTracks = await ctx.db
-			.query("spotifyTracks")
+			.query("userTracks")
 			.withIndex("by_userId_lastPlayedAt", (q) => q.eq("userId", args.userId))
 			.order("desc")
 			.collect();
@@ -873,19 +751,9 @@ export const getRecentlyPlayedTracks = query({
 			.filter((track) => track.lastPlayedAt !== undefined)
 			.slice(0, limit);
 
-		// Get unique Spotify track IDs for batch fetch
-		const spotifyTrackIds = [
-			...new Set(filteredTracks.map((t) => t.trackId)),
-		];
-
-		// Batch fetch canonical tracks
+		// Batch fetch canonical tracks using the trackId reference
 		const canonicalTracks = await Promise.all(
-			spotifyTrackIds.map((id) =>
-				ctx.db
-					.query("spotifyTracksCanonical")
-					.withIndex("by_spotifyTrackId", (q) => q.eq("spotifyTrackId", id))
-					.first(),
-			),
+			filteredTracks.map((t) => ctx.db.get(t.trackId)),
 		);
 
 		// Create a map of spotifyTrackId -> canonical track
@@ -902,8 +770,8 @@ export const getRecentlyPlayedTracks = query({
 		// Get unique album IDs to batch fetch release dates
 		const albumIds = [
 			...new Set(
-				filteredTracks
-					.map((t) => t.spotifyAlbumId)
+				canonicalTracks
+					.map((t) => t?.spotifyAlbumId)
 					.filter((id): id is string => !!id),
 			),
 		];
@@ -927,28 +795,27 @@ export const getRecentlyPlayedTracks = query({
 		}
 
 		// Return user tracks with nested canonical track data
-		return filteredTracks.map((userTrack) => ({
-			_id: userTrack._id,
-			userId: userTrack.userId,
-			spotifyTrackId: userTrack.trackId,
-			firstSeenAt: userTrack.firstSeenAt,
-			lastSeenAt: userTrack.lastSeenAt,
-			lastPlayedAt: userTrack.lastPlayedAt,
-			lastLikedAt: userTrack.lastLikedAt,
-			lastCategorizedAt: userTrack.lastCategorizedAt,
-			track: canonicalTrackMap.get(userTrack.trackId) ?? {
-				// Fallback to user track data if canonical doesn't exist yet
-				spotifyTrackId: userTrack.trackId,
-				trackName: userTrack.trackName,
-				artistName: userTrack.artistName,
-				albumName: userTrack.albumName,
-				albumImageUrl: userTrack.albumImageUrl,
-				spotifyAlbumId: userTrack.spotifyAlbumId,
-			},
-			releaseDate: userTrack.spotifyAlbumId
-				? albumReleaseDates.get(userTrack.spotifyAlbumId)
-				: undefined,
-		}));
+		return filteredTracks.map((userTrack) => {
+			const canonical = canonicalTrackMap.get(userTrack.spotifyTrackId);
+			return {
+				_id: userTrack._id,
+				userId: userTrack.userId,
+				spotifyTrackId: userTrack.spotifyTrackId,
+				firstSeenAt: userTrack.firstSeenAt,
+				lastSeenAt: userTrack.lastSeenAt,
+				lastPlayedAt: userTrack.lastPlayedAt,
+				lastLikedAt: userTrack.lastLikedAt,
+				lastCategorizedAt: userTrack.lastCategorizedAt,
+				track: canonical ?? {
+					spotifyTrackId: userTrack.spotifyTrackId,
+					trackName: "Unknown Track",
+					artistName: "Unknown Artist",
+				},
+				releaseDate: canonical?.spotifyAlbumId
+					? albumReleaseDates.get(canonical.spotifyAlbumId)
+					: undefined,
+			};
+		});
 	},
 });
 
@@ -960,7 +827,7 @@ export const getLikedTracksHistory = query({
 	handler: async (ctx, args) => {
 		// Get all user tracks with lastLikedAt, then sort
 		const userTracks = await ctx.db
-			.query("spotifyTracks")
+			.query("userTracks")
 			.withIndex("by_userId", (q) => q.eq("userId", args.userId))
 			.collect();
 
@@ -971,17 +838,9 @@ export const getLikedTracksHistory = query({
 
 		const limitedTracks = args.limit ? filtered.slice(0, args.limit) : filtered;
 
-		// Get unique Spotify track IDs for batch fetch
-		const spotifyTrackIds = [...new Set(limitedTracks.map((t) => t.trackId))];
-
-		// Batch fetch canonical tracks
+		// Batch fetch canonical tracks using the trackId reference
 		const canonicalTracks = await Promise.all(
-			spotifyTrackIds.map((id) =>
-				ctx.db
-					.query("spotifyTracksCanonical")
-					.withIndex("by_spotifyTrackId", (q) => q.eq("spotifyTrackId", id))
-					.first(),
-			),
+			limitedTracks.map((t) => ctx.db.get(t.trackId)),
 		);
 
 		// Create a map of spotifyTrackId -> canonical track
@@ -999,20 +858,16 @@ export const getLikedTracksHistory = query({
 		return limitedTracks.map((userTrack) => ({
 			_id: userTrack._id,
 			userId: userTrack.userId,
-			spotifyTrackId: userTrack.trackId,
+			spotifyTrackId: userTrack.spotifyTrackId,
 			firstSeenAt: userTrack.firstSeenAt,
 			lastSeenAt: userTrack.lastSeenAt,
 			lastPlayedAt: userTrack.lastPlayedAt,
 			lastLikedAt: userTrack.lastLikedAt,
 			lastCategorizedAt: userTrack.lastCategorizedAt,
-			track: canonicalTrackMap.get(userTrack.trackId) ?? {
-				// Fallback to user track data if canonical doesn't exist yet
-				spotifyTrackId: userTrack.trackId,
-				trackName: userTrack.trackName,
-				artistName: userTrack.artistName,
-				albumName: userTrack.albumName,
-				albumImageUrl: userTrack.albumImageUrl,
-				spotifyAlbumId: userTrack.spotifyAlbumId,
+			track: canonicalTrackMap.get(userTrack.spotifyTrackId) ?? {
+				spotifyTrackId: userTrack.spotifyTrackId,
+				trackName: "Unknown Track",
+				artistName: "Unknown Artist",
 			},
 		}));
 	},
@@ -1025,9 +880,9 @@ export const getTrackByUserAndTrackId = query({
 	},
 	handler: async (ctx, args) => {
 		return await ctx.db
-			.query("spotifyTracks")
-			.withIndex("by_userId_trackId", (q) =>
-				q.eq("userId", args.userId).eq("trackId", args.trackId),
+			.query("userTracks")
+			.withIndex("by_userId_spotifyTrackId", (q) =>
+				q.eq("userId", args.userId).eq("spotifyTrackId", args.trackId),
 			)
 			.first();
 	},
@@ -1641,56 +1496,53 @@ export const getTracksByAlbumId = query({
 		spotifyAlbumId: v.string(),
 	},
 	handler: async (ctx, args) => {
-		const userTracks = await ctx.db
-			.query("spotifyTracks")
-			.withIndex("by_userId_albumId", (q) =>
-				q.eq("userId", args.userId).eq("spotifyAlbumId", args.spotifyAlbumId),
+		// First get canonical tracks for this album
+		const canonicalTracks = await ctx.db
+			.query("spotifyTracksCanonical")
+			.withIndex("by_spotifyAlbumId", (q) =>
+				q.eq("spotifyAlbumId", args.spotifyAlbumId),
 			)
 			.collect();
 
-		// Get unique Spotify track IDs for batch fetch
-		const spotifyTrackIds = [...new Set(userTracks.map((t) => t.trackId))];
+		if (canonicalTracks.length === 0) {
+			return [];
+		}
 
-		// Batch fetch canonical tracks
-		const canonicalTracks = await Promise.all(
-			spotifyTrackIds.map((id) =>
+		// Get the user's tracks that match these canonical tracks
+		const userTracks = await Promise.all(
+			canonicalTracks.map((ct) =>
 				ctx.db
-					.query("spotifyTracksCanonical")
-					.withIndex("by_spotifyTrackId", (q) => q.eq("spotifyTrackId", id))
+					.query("userTracks")
+					.withIndex("by_userId_spotifyTrackId", (q) =>
+						q.eq("userId", args.userId).eq("spotifyTrackId", ct.spotifyTrackId),
+					)
 					.first(),
 			),
 		);
 
 		// Create a map of spotifyTrackId -> canonical track
-		const canonicalTrackMap = new Map<
-			string,
-			(typeof canonicalTracks)[number]
-		>();
-		for (const track of canonicalTracks) {
-			if (track) {
-				canonicalTrackMap.set(track.spotifyTrackId, track);
-			}
-		}
+		const canonicalTrackMap = new Map(
+			canonicalTracks.map((ct) => [ct.spotifyTrackId, ct]),
+		);
 
 		// Return user tracks with nested canonical track data
-		return userTracks.map((userTrack) => ({
-			_id: userTrack._id,
-			userId: userTrack.userId,
-			spotifyTrackId: userTrack.trackId,
-			firstSeenAt: userTrack.firstSeenAt,
-			lastSeenAt: userTrack.lastSeenAt,
-			lastPlayedAt: userTrack.lastPlayedAt,
-			lastLikedAt: userTrack.lastLikedAt,
-			lastCategorizedAt: userTrack.lastCategorizedAt,
-			track: canonicalTrackMap.get(userTrack.trackId) ?? {
-				spotifyTrackId: userTrack.trackId,
-				trackName: userTrack.trackName,
-				artistName: userTrack.artistName,
-				albumName: userTrack.albumName,
-				albumImageUrl: userTrack.albumImageUrl,
-				spotifyAlbumId: userTrack.spotifyAlbumId,
-			},
-		}));
+		return userTracks
+			.filter((ut) => ut !== null)
+			.map((userTrack) => ({
+				_id: userTrack._id,
+				userId: userTrack.userId,
+				spotifyTrackId: userTrack.spotifyTrackId,
+				firstSeenAt: userTrack.firstSeenAt,
+				lastSeenAt: userTrack.lastSeenAt,
+				lastPlayedAt: userTrack.lastPlayedAt,
+				lastLikedAt: userTrack.lastLikedAt,
+				lastCategorizedAt: userTrack.lastCategorizedAt,
+				track: canonicalTrackMap.get(userTrack.spotifyTrackId) ?? {
+					spotifyTrackId: userTrack.spotifyTrackId,
+					trackName: "Unknown Track",
+					artistName: "Unknown Artist",
+				},
+			}));
 	},
 });
 
@@ -1741,36 +1593,7 @@ export const backfillTracksFromAlbum = mutation({
 					lastSeenAt: now,
 					// No lastPlayedAt - these are album-sourced, not user-played
 				});
-			}
-
-			// Legacy: Check if track already exists for this user in old table
-			const existing = await ctx.db
-				.query("spotifyTracks")
-				.withIndex("by_userId_trackId", (q) =>
-					q.eq("userId", args.userId).eq("trackId", track.trackId),
-				)
-				.first();
-
-			if (!existing) {
-				// Add track without play timestamps (album-sourced)
-				await ctx.db.insert("spotifyTracks", {
-					userId: args.userId,
-					trackId: track.trackId,
-					trackName: track.trackName,
-					artistName: track.artistName,
-					albumName: args.albumName,
-					albumImageUrl: args.albumImageUrl,
-					spotifyAlbumId: args.spotifyAlbumId,
-					firstSeenAt: now,
-					lastSeenAt: now,
-					// No lastPlayedAt - these are album-sourced, not user-played
-				});
 				addedCount++;
-			} else if (!existing.spotifyAlbumId) {
-				// Update existing track with albumId if missing
-				await ctx.db.patch(existing._id, {
-					spotifyAlbumId: args.spotifyAlbumId,
-				});
 			}
 		}
 
@@ -1892,23 +1715,30 @@ export const getRatedAlbumsForYear = query({
 	},
 });
 
-// Debug query to check userId distribution in spotifyTracks
+// Debug query to check userId distribution in userTracks
 export const debugTrackUserIds = query({
 	args: {},
 	handler: async (ctx) => {
-		const tracks = await ctx.db.query("spotifyTracks").collect();
+		const tracks = await ctx.db.query("userTracks").collect();
 		const userIdCounts: Record<string, number> = {};
 		for (const track of tracks) {
 			userIdCounts[track.userId] = (userIdCounts[track.userId] ?? 0) + 1;
 		}
+		// Get sample canonical tracks for display
+		const sampleTracks = await Promise.all(
+			tracks.slice(0, 5).map(async (t) => {
+				const canonical = await ctx.db.get(t.trackId);
+				return {
+					userId: t.userId,
+					trackName: canonical?.trackName ?? "Unknown",
+					artistName: canonical?.artistName ?? "Unknown",
+				};
+			}),
+		);
 		return {
 			totalTracks: tracks.length,
 			userIdCounts,
-			sampleTracks: tracks.slice(0, 5).map((t) => ({
-				userId: t.userId,
-				trackName: t.trackName,
-				artistName: t.artistName,
-			})),
+			sampleTracks,
 		};
 	},
 });
