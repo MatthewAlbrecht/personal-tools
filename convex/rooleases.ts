@@ -476,17 +476,73 @@ export const bulkAddArtistsToYear = mutation({
 // ============================================================================
 
 export const backfillArtistsFromTracks = action({
-	args: {
-		accessToken: v.string(),
-	},
-	handler: async (ctx, args): Promise<{
+	args: {},
+	handler: async (ctx): Promise<{
 		tracksScanned: number;
 		uniqueArtistsFound: number;
 		alreadyExisted: number;
 		newArtistsAdded: number;
 		fetchErrors: number;
 	}> => {
+		const userId = process.env.SPOTIFY_SYNC_USER_ID;
+
+		if (!userId) {
+			throw new Error("SPOTIFY_SYNC_USER_ID not configured");
+		}
+
 		console.log("🎵 Backfilling artists from canonical tracks...");
+
+		// Get Spotify connection and refresh token if needed
+		const connection = await ctx.runQuery(api.spotify.getConnection, {
+			userId,
+		});
+
+		if (!connection) {
+			throw new Error(`No Spotify connection found for user: ${userId}`);
+		}
+
+		let accessToken = connection.accessToken;
+		const now = Date.now();
+		const isExpired = connection.expiresAt < now + 5 * 60 * 1000;
+
+		if (isExpired) {
+			console.log("🔑 Refreshing access token...");
+			const clientId = process.env.SPOTIFY_CLIENT_ID;
+			const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
+
+			if (!clientId || !clientSecret) {
+				throw new Error("Missing SPOTIFY_CLIENT_ID or SPOTIFY_CLIENT_SECRET");
+			}
+
+			const tokenResponse = await fetch(
+				"https://accounts.spotify.com/api/token",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+						Authorization: `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
+					},
+					body: new URLSearchParams({
+						grant_type: "refresh_token",
+						refresh_token: connection.refreshToken,
+					}),
+				},
+			);
+
+			if (!tokenResponse.ok) {
+				throw new Error(`Failed to refresh token: ${await tokenResponse.text()}`);
+			}
+
+			const tokens = await tokenResponse.json();
+			accessToken = tokens.access_token;
+
+			await ctx.runMutation(api.spotify.updateTokens, {
+				userId,
+				accessToken: tokens.access_token,
+				expiresIn: tokens.expires_in,
+				refreshToken: tokens.refresh_token,
+			});
+		}
 
 		// Get all canonical tracks
 		const tracks = await ctx.runQuery(api.spotify.getAllCanonicalTracks, {});
@@ -565,7 +621,7 @@ export const backfillArtistsFromTracks = action({
 				const response = await fetch(
 					`https://api.spotify.com/v1/artists?ids=${batch.join(",")}`,
 					{
-						headers: { Authorization: `Bearer ${args.accessToken}` },
+						headers: { Authorization: `Bearer ${accessToken}` },
 					},
 				);
 

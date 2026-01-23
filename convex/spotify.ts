@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import type { MutationCtx } from "./_generated/server";
-import { mutation, query } from "./_generated/server";
+import { action, mutation, query } from "./_generated/server";
+import { api } from "./_generated/api";
 
 // ============================================================================
 // Internal Helpers
@@ -1213,6 +1214,121 @@ export const getAllCanonicalTracks = query({
 	},
 });
 
+// Get canonical tracks missing rawData - uses index
+export const getCanonicalTracksMissingRawData = query({
+	args: { limit: v.optional(v.number()) },
+	handler: async (ctx, args) => {
+		const limit = args.limit ?? 50;
+
+		const tracks = await ctx.db
+			.query("spotifyTracksCanonical")
+			.withIndex("by_hasRawData", (q) => q.eq("hasRawData", false))
+			.take(limit);
+
+		return tracks.map((t) => ({
+			_id: t._id,
+			spotifyTrackId: t.spotifyTrackId,
+		}));
+	},
+});
+
+// Mark tracks that need rawData backfill - just marks ALL as false, backfill will check
+export const markTracksNeedingRawDataBatch = mutation({
+	args: { afterId: v.optional(v.id("spotifyTracksCanonical")) },
+	handler: async (ctx, args) => {
+		const batchSize = 200;
+
+		// Get tracks after cursor, oldest first
+		let tracks = await ctx.db
+			.query("spotifyTracksCanonical")
+			.order("asc")
+			.take(batchSize);
+
+		if (args.afterId) {
+			const afterDoc = await ctx.db.get(args.afterId);
+			if (afterDoc) {
+				tracks = await ctx.db
+					.query("spotifyTracksCanonical")
+					.order("asc")
+					.filter((q) => q.gt(q.field("_creationTime"), afterDoc._creationTime))
+					.take(batchSize);
+			} else {
+				tracks = [];
+			}
+		}
+
+		let marked = 0;
+		let lastId: string | null = null;
+
+		for (const track of tracks) {
+			if (track.hasRawData === undefined) {
+				// Just mark as false - backfill will check actual rawData
+				await ctx.db.patch(track._id, { hasRawData: false });
+				marked++;
+			}
+			lastId = track._id;
+		}
+
+		return {
+			marked,
+			lastId,
+			hasMore: tracks.length === batchSize,
+		};
+	},
+});
+
+// Action that loops until all tracks are marked
+export const markAllTracksNeedingRawData = action({
+	args: {},
+	handler: async (ctx): Promise<{
+		totalMarked: number;
+		iterations: number;
+	}> => {
+		let totalMarked = 0;
+		let iterations = 0;
+		let lastId: string | undefined;
+
+		console.log("🏷️ Marking tracks as needing rawData check...");
+
+		while (true) {
+			iterations++;
+			const result = await ctx.runMutation(
+				api.spotify.markTracksNeedingRawDataBatch,
+				lastId ? { afterId: lastId as any } : {},
+			);
+
+			totalMarked += result.marked;
+			lastId = result.lastId ?? undefined;
+
+			if (iterations % 20 === 0) {
+				console.log(`   Iteration ${iterations}: ${totalMarked} marked so far`);
+			}
+
+			if (!result.hasMore) {
+				break;
+			}
+		}
+
+		console.log(`✅ Done! Marked ${totalMarked} tracks (${iterations} iterations)`);
+		return { totalMarked, iterations };
+	},
+});
+
+// Update canonical track rawData
+export const updateCanonicalTrackRawData = mutation({
+	args: {
+		trackId: v.id("spotifyTracksCanonical"),
+		rawData: v.string(),
+	},
+	handler: async (ctx, args) => {
+		await ctx.db.patch(args.trackId, {
+			rawData: args.rawData,
+			hasRawData: true,
+			updatedAt: Date.now(),
+		});
+	},
+});
+
 export const getAlbumBySpotifyId = query({
 	args: { spotifyAlbumId: v.string() },
 	handler: async (ctx, args) => {
@@ -1747,6 +1863,248 @@ export const debugTrackUserIds = query({
 			totalTracks: tracks.length,
 			userIdCounts,
 			sampleTracks,
+		};
+	},
+});
+
+// ============================================================================
+// Backfill Actions
+// ============================================================================
+
+// Count tracks marked as needing rawData (uses index)
+export const countTracksMissingRawData = query({
+	args: {},
+	handler: async (ctx) => {
+		const tracks = await ctx.db
+			.query("spotifyTracksCanonical")
+			.withIndex("by_hasRawData", (q) => q.eq("hasRawData", false))
+			.take(10000);
+		return tracks.length;
+	},
+});
+
+// Count tracks that still haven't been marked
+export const countUnmarkedTracks = query({
+	args: {},
+	handler: async (ctx) => {
+		// Check how many still have hasRawData undefined
+		const sample = await ctx.db
+			.query("spotifyTracksCanonical")
+			.take(500);
+		
+		const unmarked = sample.filter((t) => t.hasRawData === undefined);
+		const needsRawData = sample.filter((t) => !t.rawData);
+		
+		return {
+			sampleSize: sample.length,
+			unmarkedInSample: unmarked.length,
+			needsRawDataInSample: needsRawData.length,
+		};
+	},
+});
+
+// Get a batch of track IDs only (minimal data) - uses hasRawData boolean field
+export const getTrackIdsBatch = query({
+	args: { afterTime: v.optional(v.number()) },
+	handler: async (ctx, args) => {
+		const tracks = await ctx.db
+			.query("spotifyTracksCanonical")
+			.order("asc")
+			.filter((q) =>
+				args.afterTime
+					? q.gt(q.field("_creationTime"), args.afterTime)
+					: true,
+			)
+			.take(25);
+
+		// Use the hasRawData FIELD (not !!t.rawData) to avoid loading rawData into memory
+		return tracks.map((t) => ({
+			_id: t._id,
+			spotifyTrackId: t.spotifyTrackId,
+			hasRawData: t.hasRawData === true, // Only true if explicitly set
+			creationTime: t._creationTime,
+		}));
+	},
+});
+
+// Simple backfill - iterates through ALL tracks
+export const backfillCanonicalTrackRawData = action({
+	args: {
+		continueFrom: v.optional(v.number()),
+	},
+	handler: async (ctx, args): Promise<{
+		totalScanned: number;
+		totalUpdated: number;
+		totalSkipped: number;
+		totalErrors: number;
+		done: boolean;
+		continueFrom: number | null;
+	}> => {
+		const userId = process.env.SPOTIFY_SYNC_USER_ID;
+		if (!userId) throw new Error("SPOTIFY_SYNC_USER_ID not configured");
+
+		console.log("🔄 Backfilling rawData on ALL canonical tracks...");
+
+		// Get Spotify connection and refresh token if needed
+		const connection = await ctx.runQuery(api.spotify.getConnection, {
+			userId,
+		});
+
+		if (!connection) {
+			throw new Error(`No Spotify connection found for user: ${userId}`);
+		}
+
+		let accessToken = connection.accessToken;
+		const now = Date.now();
+		const isExpired = connection.expiresAt < now + 5 * 60 * 1000;
+
+		if (isExpired) {
+			console.log("🔑 Refreshing access token...");
+			const clientId = process.env.SPOTIFY_CLIENT_ID;
+			const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
+
+			if (!clientId || !clientSecret) {
+				throw new Error("Missing SPOTIFY_CLIENT_ID or SPOTIFY_CLIENT_SECRET");
+			}
+
+			const tokenResponse = await fetch(
+				"https://accounts.spotify.com/api/token",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+						Authorization: `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
+					},
+					body: new URLSearchParams({
+						grant_type: "refresh_token",
+						refresh_token: connection.refreshToken,
+					}),
+				},
+			);
+
+			if (!tokenResponse.ok) {
+				throw new Error(`Failed to refresh token: ${await tokenResponse.text()}`);
+			}
+
+			const tokens = await tokenResponse.json();
+			accessToken = tokens.access_token;
+
+			await ctx.runMutation(api.spotify.updateTokens, {
+				userId,
+				accessToken: tokens.access_token,
+				expiresIn: tokens.expires_in,
+				refreshToken: tokens.refresh_token,
+			});
+		}
+
+		// Spotify track type
+		type SpotifyTrack = {
+			id: string;
+			name: string;
+			artists: Array<{ id: string; name: string }>;
+			album: { id: string; name: string; images: Array<{ url: string }> };
+			duration_ms: number;
+			track_number: number;
+			explicit: boolean;
+			preview_url: string | null;
+		};
+
+		let totalScanned = 0;
+		let totalUpdated = 0;
+		let totalSkipped = 0;
+		let totalErrors = 0;
+		let iteration = 0;
+		let lastCreationTime: number | undefined = args.continueFrom;
+		const maxIterations = 30; // Stop before hitting byte limit
+
+		if (args.continueFrom) {
+			console.log(`📍 Continuing from timestamp ${args.continueFrom}`);
+		}
+
+		// Iterate through tracks using pagination
+		while (iteration < maxIterations) {
+			iteration++;
+
+			// Get next batch of tracks (just IDs)
+			const batch = await ctx.runQuery(api.spotify.getTrackIdsBatch, {
+				afterTime: lastCreationTime,
+			});
+
+			if (batch.length === 0) {
+				console.log("✅ Reached end of all tracks!");
+				return {
+					totalScanned,
+					totalUpdated,
+					totalSkipped,
+					totalErrors,
+					done: true,
+					continueFrom: null,
+				};
+			}
+
+			// Filter to only tracks missing rawData
+			const needsUpdate = batch.filter((t) => !t.hasRawData);
+			totalSkipped += batch.length - needsUpdate.length;
+
+			if (needsUpdate.length > 0) {
+				// Fetch from Spotify
+				const spotifyTrackIds = needsUpdate.map((t) => t.spotifyTrackId);
+
+				try {
+					const response = await fetch(
+						`https://api.spotify.com/v1/tracks?ids=${spotifyTrackIds.join(",")}`,
+						{ headers: { Authorization: `Bearer ${accessToken}` } },
+					);
+
+					if (response.ok) {
+						const data = await response.json();
+						const trackDataMap = new Map<string, SpotifyTrack>();
+						for (const track of data.tracks) {
+							if (track) trackDataMap.set(track.id, track);
+						}
+
+						// Update each track
+						for (const track of needsUpdate) {
+							const spotifyData = trackDataMap.get(track.spotifyTrackId);
+							if (spotifyData) {
+								await ctx.runMutation(api.spotify.updateCanonicalTrackRawData, {
+									trackId: track._id,
+									rawData: JSON.stringify(spotifyData),
+								});
+								totalUpdated++;
+							}
+						}
+					} else {
+						console.error(`Spotify API error: ${await response.text()}`);
+						totalErrors++;
+					}
+				} catch (error) {
+					console.error(`Error: ${error}`);
+					totalErrors++;
+				}
+			}
+
+			totalScanned += batch.length;
+			lastCreationTime = batch[batch.length - 1]?.creationTime;
+
+			if (iteration % 20 === 0) {
+				console.log(
+					`📊 Progress: ${totalScanned} scanned, ${totalUpdated} updated, ${totalSkipped} skipped`,
+				);
+			}
+		}
+
+		console.log(
+			`\n⏸️ Pausing to avoid limits. ${totalScanned} scanned, ${totalUpdated} updated. Run again to continue.`,
+		);
+
+		return {
+			totalScanned,
+			totalUpdated,
+			totalSkipped,
+			totalErrors,
+			done: false,
+			continueFrom: lastCreationTime ?? null,
 		};
 	},
 });

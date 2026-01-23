@@ -274,11 +274,13 @@ export default defineSchema({
 		isExplicit: v.optional(v.boolean()),
 		previewUrl: v.optional(v.string()),
 		rawData: v.optional(v.string()), // JSON stringified full Spotify track object
+		hasRawData: v.optional(v.boolean()), // For efficient querying
 		createdAt: v.number(),
 		updatedAt: v.number(),
 	})
 		.index("by_spotifyTrackId", ["spotifyTrackId"])
-		.index("by_spotifyAlbumId", ["spotifyAlbumId"]),
+		.index("by_spotifyAlbumId", ["spotifyAlbumId"])
+		.index("by_hasRawData", ["hasRawData"]),
 
 	// Spotify Album tracking tables
 	spotifyAlbums: defineTable({
