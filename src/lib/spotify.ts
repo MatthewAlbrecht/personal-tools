@@ -261,6 +261,58 @@ export async function createPlaylist(
 	});
 }
 
+export type PlaylistTrackItem = {
+	added_at: string;
+	track: SpotifyTrack | null; // Can be null for local files
+};
+
+export async function getPlaylistTracks(
+	accessToken: string,
+	playlistId: string,
+	limit = 100,
+	offset = 0,
+): Promise<{ items: PlaylistTrackItem[]; total: number; next: string | null }> {
+	return spotifyFetch<{
+		items: PlaylistTrackItem[];
+		total: number;
+		next: string | null;
+	}>(
+		`/playlists/${playlistId}/tracks?limit=${limit}&offset=${offset}`,
+		accessToken,
+	);
+}
+
+export async function getAllPlaylistTracks(
+	accessToken: string,
+	playlistId: string,
+): Promise<SpotifyTrack[]> {
+	const allTracks: SpotifyTrack[] = [];
+	let offset = 0;
+	const limit = 100;
+
+	while (true) {
+		const response = await getPlaylistTracks(
+			accessToken,
+			playlistId,
+			limit,
+			offset,
+		);
+
+		for (const item of response.items) {
+			if (item.track) {
+				allTracks.push(item.track);
+			}
+		}
+
+		if (!response.next) {
+			break;
+		}
+		offset += limit;
+	}
+
+	return allTracks;
+}
+
 // ============================================================================
 // Track Info
 // ============================================================================
@@ -292,6 +344,67 @@ export async function getTracks(
 	}
 
 	return results;
+}
+
+// ============================================================================
+// Artist Info
+// ============================================================================
+
+export type SpotifyArtist = {
+	id: string;
+	name: string;
+	images: Array<{ url: string; height: number; width: number }>;
+	genres: string[];
+	popularity: number;
+	external_urls: { spotify: string };
+};
+
+export async function getArtists(
+	accessToken: string,
+	artistIds: string[],
+): Promise<SpotifyArtist[]> {
+	// Spotify allows max 50 IDs per request
+	const chunks: string[][] = [];
+	for (let i = 0; i < artistIds.length; i += 50) {
+		chunks.push(artistIds.slice(i, i + 50));
+	}
+
+	const results: SpotifyArtist[] = [];
+	for (const chunk of chunks) {
+		const data = await spotifyFetch<{ artists: SpotifyArtist[] }>(
+			`/artists?ids=${chunk.join(",")}`,
+			accessToken,
+		);
+		results.push(...data.artists);
+	}
+
+	return results;
+}
+
+export type SpotifyArtistAlbum = {
+	id: string;
+	name: string;
+	album_type: "album" | "single" | "compilation";
+	artists: Array<{ id: string; name: string }>;
+	images: Array<{ url: string; height: number; width: number }>;
+	release_date: string;
+	release_date_precision: "year" | "month" | "day";
+	total_tracks: number;
+	external_urls: { spotify: string };
+};
+
+export async function getArtistAlbums(
+	accessToken: string,
+	artistId: string,
+	includeGroups: string[] = ["album", "single"],
+	limit = 20,
+): Promise<SpotifyArtistAlbum[]> {
+	const groups = includeGroups.join(",");
+	const data = await spotifyFetch<{ items: SpotifyArtistAlbum[] }>(
+		`/artists/${artistId}/albums?include_groups=${groups}&limit=${limit}`,
+		accessToken,
+	);
+	return data.items;
 }
 
 // ============================================================================

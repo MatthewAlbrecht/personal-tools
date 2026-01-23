@@ -402,4 +402,59 @@ export default defineSchema({
 	})
 		.index("by_yearId", ["yearId"])
 		.index("by_yearId_position", ["yearId", "position"]),
+
+	// ============================================================================
+	// Rooleases - Festival New Releases Tracker
+	// ============================================================================
+
+	// Canonical artist storage (populated from track syncs and playlist imports)
+	spotifyArtists: defineTable({
+		spotifyArtistId: v.string(),
+		name: v.string(),
+		imageUrl: v.optional(v.string()),
+		genres: v.optional(v.array(v.string())),
+		popularity: v.optional(v.number()),
+		rawData: v.optional(v.string()), // JSON stringified full Spotify artist object
+		createdAt: v.number(),
+		updatedAt: v.number(),
+	})
+		.index("by_spotifyArtistId", ["spotifyArtistId"])
+		.index("by_name", ["name"]),
+
+	// Festival year configuration
+	rooYears: defineTable({
+		year: v.number(),
+		targetPlaylistId: v.string(), // Spotify playlist to add new tracks
+		targetPlaylistName: v.string(),
+		isDefault: v.boolean(),
+		lastCheckedAt: v.optional(v.number()),
+		createdAt: v.number(),
+	})
+		.index("by_year", ["year"])
+		.index("by_isDefault", ["isDefault"]),
+
+	// Artists tracked for a given year
+	rooArtists: defineTable({
+		yearId: v.id("rooYears"),
+		artistId: v.id("spotifyArtists"),
+		spotifyArtistId: v.string(), // Denormalized for API calls
+		addedAt: v.number(),
+	})
+		.index("by_yearId", ["yearId"])
+		.index("by_artistId", ["artistId"])
+		.index("by_yearId_artistId", ["yearId", "artistId"]),
+
+	// Tracks already added to playlist (dedup)
+	rooTracksAdded: defineTable({
+		yearId: v.id("rooYears"),
+		spotifyTrackId: v.string(),
+		spotifyArtistId: v.string(),
+		trackName: v.string(),
+		albumName: v.string(),
+		releaseDate: v.string(),
+		addedAt: v.number(),
+	})
+		.index("by_yearId", ["yearId"])
+		.index("by_spotifyTrackId", ["spotifyTrackId"])
+		.index("by_yearId_addedAt", ["yearId", "addedAt"]),
 });

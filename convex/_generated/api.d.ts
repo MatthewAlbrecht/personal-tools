@@ -29,6 +29,7 @@ import type * as migrations_backfillUserTracks from "../migrations/backfillUserT
 import type * as migrations_initializeRatingHistory from "../migrations/initializeRatingHistory.js";
 import type * as migrations_migrateRatingsToThreeTier from "../migrations/migrateRatingsToThreeTier.js";
 import type * as robRankings from "../robRankings.js";
+import type * as rooleases from "../rooleases.js";
 import type * as s3Helper from "../s3Helper.js";
 import type * as spotify from "../spotify.js";
 
@@ -57,6 +58,7 @@ declare const fullApi: ApiFromModules<{
   "migrations/initializeRatingHistory": typeof migrations_initializeRatingHistory;
   "migrations/migrateRatingsToThreeTier": typeof migrations_migrateRatingsToThreeTier;
   robRankings: typeof robRankings;
+  rooleases: typeof rooleases;
   s3Helper: typeof s3Helper;
   spotify: typeof spotify;
 }>;

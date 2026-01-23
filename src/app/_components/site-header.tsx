@@ -33,9 +33,12 @@ export function SiteHeader() {
 							<Link href="/albums" className="text-sm hover:underline">
 								Albums
 							</Link>
-							<Link href="/robs-rankings" className="text-sm hover:underline">
-								Rob's Rankings
-							</Link>
+						<Link href="/robs-rankings" className="text-sm hover:underline">
+							Rob's Rankings
+						</Link>
+						<Link href="/rooleases" className="text-sm hover:underline">
+							Rooleases
+						</Link>
 						</nav>
 					)}
 				</div>

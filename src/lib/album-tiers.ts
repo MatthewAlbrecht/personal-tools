@@ -214,9 +214,7 @@ const RATING_COLORS: Record<
 		text: "text-red-600 dark:text-red-400",
 		border: "border-red-500/30",
 	},
-};
-
-/**
+};/**
  * Get color classes for a specific rating (1-15)
  * Uses spectrum from fuchsia (15) to red (1)
  * Returns { bg, text, border } Tailwind classes
@@ -233,9 +231,7 @@ export function getRatingColors(rating: number): {
 			border: "border-dashed",
 		}
 	);
-}
-
-/**
+}/**
  * @deprecated Use getRatingColors(rating) instead for per-rating colors
  * Get color classes for a tier (for badges/pills)
  */
@@ -246,9 +242,7 @@ export function getTierColors(tier: TierName): {
 } {
 	const ratings = getRatingsForTier(tier);
 	return getRatingColors(ratings.high);
-}
-
-/**
+}/**
  * Get a short label for display (e.g., "Holy Moly ↑" or "Holy Moly →" or "Holy Moly ↓")
  */
 export function getTierShortLabel(rating: number): string {

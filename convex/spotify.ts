@@ -1205,6 +1205,14 @@ export const getCanonicalTrackBySpotifyId = query({
 	},
 });
 
+// Get all canonical tracks (for backfill scripts)
+export const getAllCanonicalTracks = query({
+	args: {},
+	handler: async (ctx) => {
+		return await ctx.db.query("spotifyTracksCanonical").collect();
+	},
+});
+
 export const getAlbumBySpotifyId = query({
 	args: { spotifyAlbumId: v.string() },
 	handler: async (ctx, args) => {
