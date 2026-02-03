@@ -1,7 +1,7 @@
 import { ConvexHttpClient } from "convex/browser";
-import { type NextRequest, NextResponse } from "next/server";
-import { api } from "../../../../../convex/_generated/api";
-import type { Id } from "../../../../../convex/_generated/dataModel";
+import type { NextApiRequest, NextApiResponse } from "next";
+import { api } from "../../../../convex/_generated/api";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import { env } from "~/env";
 import {
 	addTracksToPlaylist,
@@ -11,10 +11,19 @@ import {
 	trackToUri,
 } from "~/lib/spotify";
 
-type CheckNewTracksRequest = {
-	yearId: string;
-	accessToken: string;
-	days?: number;
+type CronResponse = {
+	success?: boolean;
+	error?: string;
+	message?: string;
+	stats?: {
+		artistsChecked: number;
+		albumsFound: number;
+		tracksFound: number;
+		tracksAdded: number;
+		tracksSkipped: number;
+		errors: number;
+	};
+	timestamp?: string;
 };
 
 function normalizeReleaseDate(
@@ -30,54 +39,119 @@ function normalizeReleaseDate(
 	return releaseDate;
 }
 
-export async function POST(request: NextRequest): Promise<NextResponse> {
+function getQueryParam(
+	value: string | string[] | undefined,
+): string | undefined {
+	if (!value) return undefined;
+	if (Array.isArray(value)) return value[0];
+	return value;
+}
+
+export default async function handler(
+	req: NextApiRequest,
+	res: NextApiResponse<CronResponse>,
+) {
+	// Only allow GET or POST (QStash defaults to GET)
+	if (req.method !== "GET" && req.method !== "POST") {
+		return res.status(405).json({ error: "Method not allowed" });
+	}
+
+	// Verify this is a legitimate cron request
+	const authHeader = req.headers.authorization;
+	const expectedAuth = `Bearer ${env.CRON_SECRET}`;
+
+	if (!authHeader || authHeader !== expectedAuth) {
+		return res.status(401).json({ error: "Unauthorized" });
+	}
+
+	const queryYearId = getQueryParam(req.query.yearId);
+	const queryDays = getQueryParam(req.query.days);
+	const queryUserId = getQueryParam(req.query.user);
+
+	const body =
+		req.method === "POST" && req.body && typeof req.body === "object"
+			? (req.body as { yearId?: string; days?: number; userId?: string })
+			: null;
+
+	const days =
+		typeof body?.days === "number"
+			? body.days
+			: queryDays
+				? Number(queryDays)
+				: 30;
+
+	const userId =
+		(body?.userId?.trim() ||
+			(queryUserId ? queryUserId.trim() : "") ||
+			env.SPOTIFY_SYNC_USER_ID) ?? "";
+
+	if (!userId) {
+		return res.status(400).json({ error: "Missing Spotify user id" });
+	}
+
 	try {
-		const body = (await request.json()) as CheckNewTracksRequest;
-		const { yearId, accessToken, days = 30 } = body;
-
-		if (!yearId || !accessToken) {
-			return NextResponse.json(
-				{ error: "Missing required fields: yearId, accessToken" },
-				{ status: 400 },
-			);
-		}
-
-		console.log(`🎪 Starting manual check for new tracks (last ${days} days)...`);
-
 		const convex = new ConvexHttpClient(env.NEXT_PUBLIC_CONVEX_URL);
 
-		// Get the year
-		const year = await convex.query(api.rooleases.getYearById, {
-			yearId: yearId as Id<"rooYears">,
-		});
+		// Resolve year
+		const yearId = body?.yearId ?? queryYearId;
+		const year = yearId
+			? await convex.query(api.rooleases.getYearById, {
+					yearId: yearId as Id<"rooYears">,
+				})
+			: await convex.query(api.rooleases.getDefaultYear, {});
 
 		if (!year) {
-			return NextResponse.json({ error: "Year not found" }, { status: 404 });
+			return res.status(404).json({ error: "Year not found" });
 		}
 
-		console.log(`📅 Processing year ${year.year} → ${year.targetPlaylistName}`);
+		// Get connection for token refresh
+		const connection = await convex.query(api.spotify.getConnection, {
+			userId,
+		});
+
+		if (!connection) {
+			return res.status(404).json({ error: "No Spotify connection found" });
+		}
+
+		let accessToken = connection.accessToken;
+		const now = Date.now();
+		const isExpired = connection.expiresAt < now + 5 * 60 * 1000;
+
+		if (isExpired) {
+			const newTokens = await refreshAccessToken(connection.refreshToken);
+			await convex.mutation(api.spotify.updateTokens, {
+				userId,
+				accessToken: newTokens.access_token,
+				expiresIn: newTokens.expires_in,
+				refreshToken: newTokens.refresh_token,
+			});
+			accessToken = newTokens.access_token;
+		}
 
 		// Get artists for this year
 		const artists = await convex.query(api.rooleases.getArtistsForYear, {
-			yearId: yearId as Id<"rooYears">,
+			yearId: year._id,
 		});
 
 		if (artists.length === 0) {
-			return NextResponse.json({
+			return res.status(200).json({
 				success: true,
 				message: "No artists configured",
-				stats: { artistsChecked: 0, tracksAdded: 0 },
+				stats: {
+					artistsChecked: 0,
+					albumsFound: 0,
+					tracksFound: 0,
+					tracksAdded: 0,
+					tracksSkipped: 0,
+					errors: 0,
+				},
+				timestamp: new Date().toISOString(),
 			});
 		}
 
-		console.log(`🎤 Checking ${artists.length} artists for new releases...`);
-
-		// Calculate the cutoff date
 		const cutoffDate = new Date();
 		cutoffDate.setDate(cutoffDate.getDate() - days);
 		const cutoffDateStr = cutoffDate.toISOString().split("T")[0] ?? "";
-
-		console.log(`📆 Looking for releases after ${cutoffDateStr}`);
 
 		const stats = {
 			artistsChecked: 0,
@@ -98,13 +172,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 			artistId: string;
 		}> = [];
 
-		// Check each artist for new releases
 		for (const rooArtist of artists) {
 			if (!rooArtist.artist) continue;
 
 			try {
 				stats.artistsChecked++;
-
 				const albums = await getArtistAlbums(
 					accessToken,
 					rooArtist.spotifyArtistId,
@@ -112,7 +184,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 					10,
 				);
 
-				// Filter to recent releases
 				const recentAlbums = albums.filter((album) => {
 					const releaseDate = album.release_date;
 					if (album.release_date_precision === "day") {
@@ -126,7 +197,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
 				stats.albumsFound += recentAlbums.length;
 
-				// Get tracks from each recent album
 				for (const albumSummary of recentAlbums) {
 					try {
 						const album = await getAlbum(accessToken, albumSummary.id);
@@ -137,7 +207,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 						const releaseDateSort = Date.parse(normalizedReleaseDate);
 
 						for (const track of album.tracks.items) {
-							// Check if already added
 							const isAdded = await convex.query(api.rooleases.isTrackAdded, {
 								spotifyTrackId: track.id,
 							});
@@ -164,7 +233,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 					}
 				}
 
-				// Small delay to avoid rate limiting
 				await new Promise((resolve) => setTimeout(resolve, 100));
 			} catch (artistError) {
 				console.error(`Error checking artist ${rooArtist.artist?.name}:`, artistError);
@@ -172,9 +240,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 			}
 		}
 
-		console.log(`🎵 Found ${newTracks.length} new tracks to add`);
-
-		// Sort by release date (oldest first)
 		newTracks.sort((a, b) => {
 			if (a.releaseDateSort !== b.releaseDateSort) {
 				return a.releaseDateSort - b.releaseDateSort;
@@ -184,10 +249,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 			return a.trackName.localeCompare(b.trackName);
 		});
 
-		// Add tracks to playlist and record in DB
 		if (newTracks.length > 0) {
 			const trackUris = newTracks.map((t) => trackToUri(t.trackId));
-
 			for (let i = 0; i < trackUris.length; i += 100) {
 				const batch = trackUris.slice(i, i + 100);
 				await addTracksToPlaylist(accessToken, year.targetPlaylistId, batch);
@@ -195,7 +258,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
 			for (const track of newTracks) {
 				await convex.mutation(api.rooleases.addTrackToYear, {
-					yearId: yearId as Id<"rooYears">,
+					yearId: year._id,
 					spotifyTrackId: track.trackId,
 					spotifyArtistId: track.artistId,
 					trackName: track.trackName,
@@ -206,27 +269,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 			}
 		}
 
-		// Update last checked timestamp
 		await convex.mutation(api.rooleases.updateYearLastChecked, {
-			yearId: yearId as Id<"rooYears">,
+			yearId: year._id,
 		});
 
-		console.log("✅ Check completed:", stats);
-
-		return NextResponse.json({
+		return res.status(200).json({
 			success: true,
 			stats,
-			newTracks: newTracks.map((t) => ({
-				name: t.trackName,
-				artist: t.artistName,
-				album: t.albumName,
-			})),
+			timestamp: new Date().toISOString(),
 		});
 	} catch (error) {
-		console.error("❌ Check failed:", error);
-		return NextResponse.json(
-			{ error: error instanceof Error ? error.message : "Unknown error" },
-			{ status: 500 },
-		);
+		console.error("❌ Cron check failed:", error);
+		return res.status(500).json({
+			error: "Check failed",
+			message: error instanceof Error ? error.message : "Unknown error",
+			timestamp: new Date().toISOString(),
+		});
 	}
 }
