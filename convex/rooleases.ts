@@ -13,7 +13,6 @@ export const upsertArtist = mutation({
 		imageUrl: v.optional(v.string()),
 		genres: v.optional(v.array(v.string())),
 		popularity: v.optional(v.number()),
-		rawData: v.optional(v.string()),
 	},
 	handler: async (ctx, args) => {
 		const now = Date.now();
@@ -31,7 +30,6 @@ export const upsertArtist = mutation({
 				imageUrl: args.imageUrl,
 				genres: args.genres,
 				popularity: args.popularity,
-				rawData: args.rawData,
 				updatedAt: now,
 			});
 			return existing._id;
@@ -43,7 +41,6 @@ export const upsertArtist = mutation({
 			imageUrl: args.imageUrl,
 			genres: args.genres,
 			popularity: args.popularity,
-			rawData: args.rawData,
 			createdAt: now,
 			updatedAt: now,
 		});
@@ -89,6 +86,28 @@ export const searchArtists = query({
 		return allArtists
 			.filter((artist) => artist.name.toLowerCase().includes(term))
 			.slice(0, 20);
+	},
+});
+
+export const getArtistsPage = query({
+	args: {
+		cursor: v.optional(v.string()),
+		numItems: v.optional(v.number()),
+	},
+	handler: async (ctx, args) => {
+		const result = await ctx.db
+			.query("spotifyArtists")
+			.order("asc")
+			.paginate({
+				numItems: args.numItems ?? 200,
+				cursor: (args.cursor as any) ?? null,
+			});
+
+		return {
+			page: result.page,
+			continueCursor: result.continueCursor,
+			isDone: result.isDone,
+		};
 	},
 });
 
@@ -361,7 +380,10 @@ export const bulkUpsertArtists = mutation({
 				imageUrl: v.optional(v.string()),
 				genres: v.optional(v.array(v.string())),
 				popularity: v.optional(v.number()),
-				rawData: v.optional(v.string()),
+				followersTotal: v.optional(v.number()),
+				spotifyUrl: v.optional(v.string()),
+				uri: v.optional(v.string()),
+				lastFetchedAt: v.optional(v.number()),
 			}),
 		),
 	},
@@ -383,7 +405,10 @@ export const bulkUpsertArtists = mutation({
 					imageUrl: artist.imageUrl,
 					genres: artist.genres,
 					popularity: artist.popularity,
-					rawData: artist.rawData,
+					followersTotal: artist.followersTotal,
+					spotifyUrl: artist.spotifyUrl,
+					uri: artist.uri,
+					lastFetchedAt: artist.lastFetchedAt,
 					updatedAt: now,
 				});
 				results.updated++;
@@ -394,7 +419,10 @@ export const bulkUpsertArtists = mutation({
 					imageUrl: artist.imageUrl,
 					genres: artist.genres,
 					popularity: artist.popularity,
-					rawData: artist.rawData,
+					followersTotal: artist.followersTotal,
+					spotifyUrl: artist.spotifyUrl,
+					uri: artist.uri,
+					lastFetchedAt: artist.lastFetchedAt,
 					createdAt: now,
 					updatedAt: now,
 				});
@@ -548,27 +576,31 @@ export const backfillArtistsFromTracks = action({
 		const tracks = await ctx.runQuery(api.spotify.getAllCanonicalTracks, {});
 		console.log(`📚 Found ${tracks.length} canonical tracks`);
 
-		// Extract unique artist IDs from rawData
+		// Extract unique artist IDs from artistIds field (or fall back to artistName)
 		const artistMap = new Map<string, { id: string; name: string }>();
 
 		for (const track of tracks) {
-			if (!track.rawData) continue;
-
-			try {
-				const data = JSON.parse(track.rawData);
-				if (data.artists && Array.isArray(data.artists)) {
-					for (const artist of data.artists) {
-						if (artist.id && artist.name && !artistMap.has(artist.id)) {
-							artistMap.set(artist.id, { id: artist.id, name: artist.name });
-						}
+			// Use artistIds if available
+			if (track.artistIds && track.artistIds.length > 0) {
+				// We only have IDs, not names - use artistName for primary artist
+				const primaryArtistId = track.artistIds[0];
+				if (primaryArtistId && !artistMap.has(primaryArtistId)) {
+					artistMap.set(primaryArtistId, { 
+						id: primaryArtistId, 
+						name: track.artistName 
+					});
+				}
+				// For other artists, we'll fetch names from Spotify
+				for (let i = 1; i < track.artistIds.length; i++) {
+					const artistId = track.artistIds[i];
+					if (artistId && !artistMap.has(artistId)) {
+						artistMap.set(artistId, { id: artistId, name: '' }); // Name will be fetched
 					}
 				}
-			} catch {
-				// Skip tracks with invalid rawData
 			}
 		}
 
-		console.log(`🎤 Found ${artistMap.size} unique artists in track data`);
+		console.log(`🎤 Found ${artistMap.size} unique artists from track artistIds`);
 
 		// Check which artists already exist
 		const artistIds = Array.from(artistMap.keys());
@@ -651,7 +683,6 @@ export const backfillArtistsFromTracks = action({
 			imageUrl: artist.images[0]?.url,
 			genres: artist.genres,
 			popularity: artist.popularity,
-			rawData: JSON.stringify(artist),
 		}));
 
 		// Batch insert
@@ -670,6 +701,217 @@ export const backfillArtistsFromTracks = action({
 			alreadyExisted: existingArtistIds.size,
 			newArtistsAdded: allArtistDetails.length,
 			fetchErrors,
+		};
+	},
+});
+
+export const enrichSpotifyArtists = action({
+	args: {
+		batchSize: v.optional(v.number()),
+	},
+	handler: async (
+		ctx,
+		args,
+	): Promise<{
+		scanned: number;
+		missing: number;
+		artistRowsUpserted: number;
+		spotifyErrors: number;
+		done: boolean;
+	}> => {
+		const batchSize = args.batchSize ?? 200;
+		const key = "enrich-spotify-artists";
+
+		const progress = await ctx.runQuery(api.spotify.getBackfillProgress, {
+			key,
+		});
+
+		const pageResult = await ctx.runQuery(api.rooleases.getArtistsPage, {
+			cursor: progress?.cursorStr ?? undefined,
+			numItems: batchSize,
+		});
+
+		if (pageResult.page.length === 0) {
+			if (progress) {
+				await ctx.runMutation(api.spotify.setBackfillProgress, {
+					key,
+					cursorStr: undefined,
+				});
+			}
+			return {
+				scanned: 0,
+				missing: 0,
+				artistRowsUpserted: 0,
+				spotifyErrors: 0,
+				done: true,
+			};
+		}
+
+		const artistsNeedingEnrichment = pageResult.page.filter((artist) => {
+			return (
+				!artist.imageUrl ||
+				!artist.genres ||
+				artist.genres.length === 0 ||
+				artist.popularity === undefined ||
+				artist.followersTotal === undefined ||
+				!artist.spotifyUrl ||
+				!artist.uri ||
+				!artist.lastFetchedAt
+			);
+		});
+
+		if (artistsNeedingEnrichment.length === 0) {
+			await ctx.runMutation(api.spotify.setBackfillProgress, {
+				key,
+				cursorStr: pageResult.isDone ? undefined : pageResult.continueCursor,
+			});
+			return {
+				scanned: pageResult.page.length,
+				missing: 0,
+				artistRowsUpserted: 0,
+				spotifyErrors: 0,
+				done: pageResult.isDone,
+			};
+		}
+
+		const userId = process.env.SPOTIFY_SYNC_USER_ID;
+		if (!userId) {
+			throw new Error("SPOTIFY_SYNC_USER_ID not configured");
+		}
+
+		const connection = await ctx.runQuery(api.spotify.getConnection, {
+			userId,
+		});
+
+		if (!connection) {
+			throw new Error(`No Spotify connection found for user: ${userId}`);
+		}
+
+		let accessToken = connection.accessToken;
+		const now = Date.now();
+		const isExpired = connection.expiresAt < now + 5 * 60 * 1000;
+
+		if (isExpired) {
+			const clientId = process.env.SPOTIFY_CLIENT_ID;
+			const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
+
+			if (!clientId || !clientSecret) {
+				throw new Error("Missing SPOTIFY_CLIENT_ID or SPOTIFY_CLIENT_SECRET");
+			}
+
+			const tokenResponse = await fetch(
+				"https://accounts.spotify.com/api/token",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+						Authorization: `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
+					},
+					body: new URLSearchParams({
+						grant_type: "refresh_token",
+						refresh_token: connection.refreshToken,
+					}),
+				},
+			);
+
+			if (!tokenResponse.ok) {
+				throw new Error(`Failed to refresh token: ${await tokenResponse.text()}`);
+			}
+
+			const tokens = await tokenResponse.json();
+			accessToken = tokens.access_token;
+
+			await ctx.runMutation(api.spotify.updateTokens, {
+				userId,
+				accessToken: tokens.access_token,
+				expiresIn: tokens.expires_in,
+				refreshToken: tokens.refresh_token,
+			});
+		}
+
+		type SpotifyArtist = {
+			id: string;
+			name: string;
+			images: Array<{ url: string }>;
+			genres: string[];
+			popularity: number;
+			followers: { total: number };
+			external_urls?: { spotify?: string };
+			uri?: string;
+		};
+
+		const artistIds = artistsNeedingEnrichment.map(
+			(artist) => artist.spotifyArtistId,
+		);
+		let spotifyErrors = 0;
+		const enrichedArtists: Array<{
+			spotifyArtistId: string;
+			name: string;
+			imageUrl?: string;
+			genres?: string[];
+			popularity?: number;
+			followersTotal?: number;
+			spotifyUrl?: string;
+			uri?: string;
+			lastFetchedAt?: number;
+		}> = [];
+
+		for (let i = 0; i < artistIds.length; i += 50) {
+			const batch = artistIds.slice(i, i + 50);
+			const response = await fetch(
+				`https://api.spotify.com/v1/artists?ids=${batch.join(",")}`,
+				{
+					headers: {
+						Authorization: `Bearer ${accessToken}`,
+					},
+				},
+			);
+
+			if (!response.ok) {
+				spotifyErrors++;
+				continue;
+			}
+
+			const data = (await response.json()) as {
+				artists: Array<SpotifyArtist | null>;
+			};
+
+			for (const artist of data.artists ?? []) {
+				if (!artist) continue;
+				enrichedArtists.push({
+					spotifyArtistId: artist.id,
+					name: artist.name,
+					imageUrl: artist.images?.[0]?.url,
+					genres: artist.genres,
+					popularity: artist.popularity,
+					followersTotal: artist.followers?.total,
+					spotifyUrl: artist.external_urls?.spotify,
+					uri: artist.uri,
+					lastFetchedAt: now,
+				});
+			}
+		}
+
+		let artistRowsUpserted = 0;
+		if (enrichedArtists.length > 0) {
+			const upsertResult = await ctx.runMutation(
+				api.rooleases.bulkUpsertArtists,
+				{ artists: enrichedArtists },
+			);
+			artistRowsUpserted = upsertResult.added + upsertResult.updated;
+		}
+
+		await ctx.runMutation(api.spotify.setBackfillProgress, {
+			key,
+			cursorStr: pageResult.isDone ? undefined : pageResult.continueCursor,
+		});
+
+		return {
+			scanned: pageResult.page.length,
+			missing: artistsNeedingEnrichment.length,
+			artistRowsUpserted,
+			spotifyErrors,
+			done: pageResult.isDone,
 		};
 	},
 });

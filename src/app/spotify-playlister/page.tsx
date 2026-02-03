@@ -123,10 +123,7 @@ export default function SpotifyPlaylisterPage() {
 	// Convert Convex track data to UI format, with currently playing at top
 	const recentTracks: RecentlyPlayedItem[] | undefined = (() => {
 		const dbTracks = recentTracksFromDb?.map((t) => ({
-			track:
-				"rawData" in t.track && t.track.rawData
-					? (JSON.parse(t.track.rawData) as SpotifyTrack)
-					: createMinimalTrackFromDb(t.track),
+			track: createMinimalTrackFromDb(t.track),
 			played_at: new Date(t.lastPlayedAt ?? t.lastSeenAt).toISOString(),
 		}));
 
@@ -150,10 +147,7 @@ export default function SpotifyPlaylisterPage() {
 
 	const likedTracks: SavedTrackItem[] | undefined = likedTracksFromDb?.map(
 		(t) => ({
-			track:
-				"rawData" in t.track && t.track.rawData
-					? (JSON.parse(t.track.rawData) as SpotifyTrack)
-					: createMinimalTrackFromDb(t.track),
+			track: createMinimalTrackFromDb(t.track),
 			added_at: new Date(t.lastLikedAt ?? t.lastSeenAt).toISOString(),
 		}),
 	);
@@ -485,30 +479,14 @@ export default function SpotifyPlaylisterPage() {
 			return;
 		}
 
-		// Use full track data if available, otherwise create minimal object
-		let track: SpotifyTrack;
-
-		if ("rawData" in cat.track && cat.track.rawData) {
-			try {
-				track = JSON.parse(cat.track.rawData) as SpotifyTrack;
-			} catch {
-				track = createMinimalTrack({
-					trackId: cat.track.spotifyTrackId,
-					trackName: cat.track.trackName,
-					artistName: cat.track.artistName,
-					albumName: cat.track.albumName,
-					albumImageUrl: cat.track.albumImageUrl,
-				});
-			}
-		} else {
-			track = createMinimalTrack({
-				trackId: cat.track.spotifyTrackId,
-				trackName: cat.track.trackName,
-				artistName: cat.track.artistName,
-				albumName: cat.track.albumName,
-				albumImageUrl: cat.track.albumImageUrl,
-			});
-		}
+		// Create track from canonical fields
+		const track = createMinimalTrack({
+			trackId: cat.track.spotifyTrackId,
+			trackName: cat.track.trackName,
+			artistName: cat.track.artistName,
+			albumName: cat.track.albumName,
+			albumImageUrl: cat.track.albumImageUrl,
+		});
 
 		setSelectedTrack({ track, played_at: "" });
 

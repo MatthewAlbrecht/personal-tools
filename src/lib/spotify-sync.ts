@@ -271,6 +271,10 @@ async function detectAlbumListens(
 				trackId: t.id,
 				trackName: t.name,
 				artistName: t.artists.map((a) => a.name).join(", "),
+				artists: t.artists.map((artist) => ({
+					id: artist.id,
+					name: artist.name,
+				})),
 			}));
 
 			const backfillResult = await convex.mutation(

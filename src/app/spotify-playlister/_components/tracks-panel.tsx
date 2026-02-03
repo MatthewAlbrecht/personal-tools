@@ -181,33 +181,30 @@ export function TracksPanel({
 					<button
 						type="button"
 						onClick={() => setActiveTab("recent")}
-						className={`flex-1 rounded-md px-2 py-1.5 font-medium text-xs transition-colors ${
-							activeTab === "recent"
+						className={`flex-1 rounded-md px-2 py-1.5 font-medium text-xs transition-colors ${activeTab === "recent"
 								? "bg-background shadow-sm"
 								: "text-muted-foreground hover:text-foreground"
-						}`}
+							}`}
 					>
 						Recent ({recentCount})
 					</button>
 					<button
 						type="button"
 						onClick={() => setActiveTab("liked")}
-						className={`flex-1 rounded-md px-2 py-1.5 font-medium text-xs transition-colors ${
-							activeTab === "liked"
+						className={`flex-1 rounded-md px-2 py-1.5 font-medium text-xs transition-colors ${activeTab === "liked"
 								? "bg-background shadow-sm"
 								: "text-muted-foreground hover:text-foreground"
-						}`}
+							}`}
 					>
 						Liked ({likedCount})
 					</button>
 					<button
 						type="button"
 						onClick={() => setActiveTab("done")}
-						className={`flex-1 rounded-md px-2 py-1.5 font-medium text-xs transition-colors ${
-							activeTab === "done"
+						className={`flex-1 rounded-md px-2 py-1.5 font-medium text-xs transition-colors ${activeTab === "done"
 								? "bg-background shadow-sm"
 								: "text-muted-foreground hover:text-foreground"
-						}`}
+							}`}
 					>
 						Done ({doneCount})
 					</button>
@@ -379,9 +376,8 @@ function CategorizedTracksList({
 				return (
 					<div
 						key={cat._id}
-						className={`group flex w-full items-center gap-3 overflow-hidden rounded-lg p-2 transition-colors hover:bg-muted/50 ${
-							isSelected ? "bg-primary/10 ring-1 ring-primary" : ""
-						}`}
+						className={`group flex w-full items-center gap-3 overflow-hidden rounded-lg p-2 transition-colors hover:bg-muted/50 ${isSelected ? "bg-primary/10 ring-1 ring-primary" : ""
+							}`}
 					>
 						{/* Album art with play button overlay */}
 						<div className="relative h-10 w-10 flex-shrink-0 overflow-hidden rounded">
@@ -404,11 +400,10 @@ function CategorizedTracksList({
 									onSelectTrack?.(cat);
 								}}
 								disabled={!playerState.isReady || isPending}
-								className={`absolute inset-0 flex items-center justify-center bg-black/40 transition-opacity ${
-									isCurrentTrack || isPending
+								className={`absolute inset-0 flex items-center justify-center bg-black/40 transition-opacity ${isCurrentTrack || isPending
 										? "opacity-100"
 										: "opacity-0 group-hover:opacity-100"
-								} ${!playerState.isReady ? "cursor-not-allowed" : ""}`}
+									} ${!playerState.isReady ? "cursor-not-allowed" : ""}`}
 								title={
 									playerState.isReady
 										? isPlaying

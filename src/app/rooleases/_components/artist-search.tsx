@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery } from "convex/react";
 import { Plus, Search } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -22,6 +22,7 @@ export function ArtistSearch({
 		300,
 	);
 	const [addingArtistId, setAddingArtistId] = useState<string | null>(null);
+	const searchInputRef = useRef<HTMLInputElement>(null);
 
 	const searchResults = useQuery(
 		api.rooleases.searchArtists,
@@ -54,19 +55,31 @@ export function ArtistSearch({
 			toast.error("Failed to add artist");
 		} finally {
 			setAddingArtistId(null);
+			searchInputRef.current?.focus();
 		}
 	}
 
 	const results = searchResults ?? [];
+	const firstResult = results[0];
+	const canQuickAdd = debouncedSearch.length >= 2 && !addingArtistId;
 
 	return (
 		<div className="relative">
 			<div className="relative">
 				<Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
 				<Input
+					ref={searchInputRef}
 					placeholder="Search artists to add..."
 					value={searchInput}
 					onChange={(e) => setSearchInput(e.target.value)}
+					onKeyDownCapture={(event) => {
+						if (event.key !== "Enter") return;
+						if (!canQuickAdd) return;
+						if (!firstResult) return;
+						event.preventDefault();
+						event.stopPropagation();
+						void handleAddArtist(firstResult);
+					}}
 					className="pl-9"
 				/>
 			</div>

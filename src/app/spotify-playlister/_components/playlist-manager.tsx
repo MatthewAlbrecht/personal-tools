@@ -671,9 +671,8 @@ export function PlaylistManager({
 						{localPlaylists.map((playlist) => (
 							<div
 								key={playlist._id}
-								className={`rounded-lg border p-3 ${
-									!playlist.isActive ? "opacity-50" : ""
-								}`}
+								className={`rounded-lg border p-3 ${!playlist.isActive ? "opacity-50" : ""
+									}`}
 							>
 								{editingId === playlist._id ? (
 									<div className="space-y-3">
@@ -800,11 +799,10 @@ export function PlaylistManager({
 															}
 														>
 															<Power
-																className={`h-4 w-4 ${
-																	playlist.isActive
+																className={`h-4 w-4 ${playlist.isActive
 																		? "text-green-500"
 																		: "text-muted-foreground"
-																}`}
+																	}`}
 															/>
 														</Button>
 													</TooltipTrigger>

@@ -264,7 +264,8 @@ export default defineSchema({
 	spotifyTracksCanonical: defineTable({
 		spotifyTrackId: v.string(), // Spotify's track ID (unique)
 		trackName: v.string(),
-		artistName: v.string(),
+		artistName: v.string(), // Primary artist display name
+		artistIds: v.optional(v.array(v.string())), // Spotify artist IDs for all artists
 		albumName: v.optional(v.string()),
 		albumImageUrl: v.optional(v.string()),
 		spotifyAlbumId: v.optional(v.string()),
@@ -273,14 +274,14 @@ export default defineSchema({
 		trackNumber: v.optional(v.number()),
 		isExplicit: v.optional(v.boolean()),
 		previewUrl: v.optional(v.string()),
-		rawData: v.optional(v.string()), // JSON stringified full Spotify track object
-		hasRawData: v.optional(v.boolean()), // For efficient querying
+		// Legacy fields - kept for existing data, not written anymore
+		rawData: v.optional(v.string()),
+		hasRawData: v.optional(v.boolean()),
 		createdAt: v.number(),
 		updatedAt: v.number(),
 	})
 		.index("by_spotifyTrackId", ["spotifyTrackId"])
-		.index("by_spotifyAlbumId", ["spotifyAlbumId"])
-		.index("by_hasRawData", ["hasRawData"]),
+		.index("by_spotifyAlbumId", ["spotifyAlbumId"]),
 
 	// Spotify Album tracking tables
 	spotifyAlbums: defineTable({
@@ -416,7 +417,11 @@ export default defineSchema({
 		imageUrl: v.optional(v.string()),
 		genres: v.optional(v.array(v.string())),
 		popularity: v.optional(v.number()),
-		rawData: v.optional(v.string()), // JSON stringified full Spotify artist object
+		followersTotal: v.optional(v.number()),
+		spotifyUrl: v.optional(v.string()),
+		uri: v.optional(v.string()),
+		rawData: v.optional(v.string()), // Legacy - not written anymore, kept for existing data
+		lastFetchedAt: v.optional(v.number()),
 		createdAt: v.number(),
 		updatedAt: v.number(),
 	})
@@ -445,6 +450,14 @@ export default defineSchema({
 		.index("by_yearId", ["yearId"])
 		.index("by_artistId", ["artistId"])
 		.index("by_yearId_artistId", ["yearId", "artistId"]),
+
+	// Backfill progress tracking
+	backfillProgress: defineTable({
+		key: v.string(), // e.g., "clear-rawdata"
+		cursor: v.number(), // legacy
+		cursorStr: v.optional(v.string()), // Convex pagination cursor
+		updatedAt: v.number(),
+	}).index("by_key", ["key"]),
 
 	// Tracks already added to playlist (dedup)
 	rooTracksAdded: defineTable({

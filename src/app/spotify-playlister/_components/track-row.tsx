@@ -26,9 +26,8 @@ export function TrackRow({
 
 	return (
 		<div
-			className={`group flex w-full items-center gap-3 overflow-hidden rounded-lg p-2 transition-colors hover:bg-muted/50 ${
-				isSelected ? "bg-primary/10 ring-1 ring-primary" : ""
-			} ${isNowPlaying ? "bg-green-500/10 ring-1 ring-green-500/50" : ""}`}
+			className={`group flex w-full items-center gap-3 overflow-hidden rounded-lg p-2 transition-colors hover:bg-muted/50 ${isSelected ? "bg-primary/10 ring-1 ring-primary" : ""
+				} ${isNowPlaying ? "bg-green-500/10 ring-1 ring-green-500/50" : ""}`}
 		>
 			{/* Album art with play button overlay */}
 			<div className="relative h-10 w-10 flex-shrink-0 overflow-hidden rounded">
@@ -51,11 +50,10 @@ export function TrackRow({
 						onSelect();
 					}}
 					disabled={!playerState.isReady || isPending}
-					className={`absolute inset-0 flex items-center justify-center bg-black/40 transition-opacity ${
-						isCurrentTrack || isPending
+					className={`absolute inset-0 flex items-center justify-center bg-black/40 transition-opacity ${isCurrentTrack || isPending
 							? "opacity-100"
 							: "opacity-0 group-hover:opacity-100"
-					} ${!playerState.isReady ? "cursor-not-allowed" : ""}`}
+						} ${!playerState.isReady ? "cursor-not-allowed" : ""}`}
 					title={
 						playerState.isReady
 							? isPlaying
