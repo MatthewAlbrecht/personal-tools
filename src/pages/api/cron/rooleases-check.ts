@@ -39,6 +39,12 @@ function normalizeReleaseDate(
 	return releaseDate;
 }
 
+function sleep(ms: number): Promise<void> {
+	return new Promise((resolve) => {
+		setTimeout(resolve, ms);
+	});
+}
+
 function getQueryParam(
 	value: string | string[] | undefined,
 ): string | undefined {
@@ -250,13 +256,10 @@ export default async function handler(
 		});
 
 		if (newTracks.length > 0) {
-			const trackUris = newTracks.map((t) => trackToUri(t.trackId));
-			for (let i = 0; i < trackUris.length; i += 100) {
-				const batch = trackUris.slice(i, i + 100);
-				await addTracksToPlaylist(accessToken, year.targetPlaylistId, batch);
-			}
-
-			for (const track of newTracks) {
+			for (const [index, track] of newTracks.entries()) {
+				await addTracksToPlaylist(accessToken, year.targetPlaylistId, [
+					trackToUri(track.trackId),
+				]);
 				await convex.mutation(api.rooleases.addTrackToYear, {
 					yearId: year._id,
 					spotifyTrackId: track.trackId,
@@ -266,6 +269,10 @@ export default async function handler(
 					releaseDate: track.releaseDate,
 				});
 				stats.tracksAdded++;
+
+				if (index < newTracks.length - 1) {
+					await sleep(1000);
+				}
 			}
 		}
 

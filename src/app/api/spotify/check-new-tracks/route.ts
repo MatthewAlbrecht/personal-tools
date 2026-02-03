@@ -30,6 +30,12 @@ function normalizeReleaseDate(
 	return releaseDate;
 }
 
+function sleep(ms: number): Promise<void> {
+	return new Promise((resolve) => {
+		setTimeout(resolve, ms);
+	});
+}
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
 	try {
 		const body = (await request.json()) as CheckNewTracksRequest;
@@ -186,14 +192,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
 		// Add tracks to playlist and record in DB
 		if (newTracks.length > 0) {
-			const trackUris = newTracks.map((t) => trackToUri(t.trackId));
-
-			for (let i = 0; i < trackUris.length; i += 100) {
-				const batch = trackUris.slice(i, i + 100);
-				await addTracksToPlaylist(accessToken, year.targetPlaylistId, batch);
-			}
-
-			for (const track of newTracks) {
+			for (const [index, track] of newTracks.entries()) {
+				await addTracksToPlaylist(accessToken, year.targetPlaylistId, [
+					trackToUri(track.trackId),
+				]);
 				await convex.mutation(api.rooleases.addTrackToYear, {
 					yearId: yearId as Id<"rooYears">,
 					spotifyTrackId: track.trackId,
@@ -203,6 +205,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 					releaseDate: track.releaseDate,
 				});
 				stats.tracksAdded++;
+
+				if (index < newTracks.length - 1) {
+					await sleep(1000);
+				}
 			}
 		}
 
