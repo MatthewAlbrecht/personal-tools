@@ -384,6 +384,7 @@ export const bulkUpsertArtists = mutation({
 				spotifyUrl: v.optional(v.string()),
 				uri: v.optional(v.string()),
 				lastFetchedAt: v.optional(v.number()),
+				rawData: v.optional(v.string()),
 			}),
 		),
 	},
@@ -409,6 +410,7 @@ export const bulkUpsertArtists = mutation({
 					spotifyUrl: artist.spotifyUrl,
 					uri: artist.uri,
 					lastFetchedAt: artist.lastFetchedAt,
+					rawData: artist.rawData,
 					updatedAt: now,
 				});
 				results.updated++;
@@ -423,6 +425,7 @@ export const bulkUpsertArtists = mutation({
 					spotifyUrl: artist.spotifyUrl,
 					uri: artist.uri,
 					lastFetchedAt: artist.lastFetchedAt,
+					rawData: artist.rawData,
 					createdAt: now,
 					updatedAt: now,
 				});
