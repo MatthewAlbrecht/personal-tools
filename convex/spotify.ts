@@ -1,7 +1,8 @@
 import { v } from 'convex/values';
+import { api } from './_generated/api';
 import type { MutationCtx } from './_generated/server';
 import { action, mutation, query } from './_generated/server';
-import { api } from './_generated/api';
+import { buildSpotifyAlbumListItems } from './_utils/spotify-album-list';
 
 // ============================================================================
 // Internal Helpers
@@ -1848,18 +1849,18 @@ export const getAlbumBySpotifyId = query({
 export const getAllAlbums = query({
   args: { limit: v.optional(v.number()) },
   handler: async (ctx, args) => {
-    const query = ctx.db.query('spotifyAlbums').withIndex('by_createdAt');
+    const albums = await ctx.db
+      .query('spotifyAlbums')
+      .withIndex('by_createdAt')
+      .collect();
 
-    const albums = await query.collect();
-
-    // Sort descending (most recent first) and apply limit
-    const sorted = albums.sort((a, b) => b.createdAt - a.createdAt);
+    const list = buildSpotifyAlbumListItems(albums);
 
     if (args.limit) {
-      return sorted.slice(0, args.limit);
+      return list.slice(0, args.limit);
     }
 
-    return sorted;
+    return list;
   },
 });
 

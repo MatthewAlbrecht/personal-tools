@@ -1,7 +1,8 @@
 "use client";
 
-import { Disc3 } from "lucide-react";
+import { Copy, Disc3 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import { extractReleaseYear } from "~/lib/album-tiers";
 import { formatRelativeTime } from "../_utils/formatters";
 import type { AlbumItem, UserAlbumData } from "../_utils/types";
@@ -244,13 +245,15 @@ function AlbumCardRow({
 	userAlbum?: UserAlbumData;
 	onAddListen: () => void;
 }) {
+	const artworkUrl = album.imageUrl;
+
 	return (
 		<div className="group flex items-center gap-3 rounded-lg p-2 transition-colors hover:bg-muted/50">
 			{/* Album Cover */}
 			<div className="relative h-10 w-10 flex-shrink-0 overflow-hidden rounded bg-muted">
-				{album.imageUrl ? (
+				{artworkUrl ? (
 					<img
-						src={album.imageUrl}
+						src={artworkUrl}
 						alt={album.name}
 						className="h-full w-full object-cover"
 					/>
@@ -289,6 +292,22 @@ function AlbumCardRow({
 					</span>
 				)}
 
+				{artworkUrl ? (
+					<button
+						type="button"
+						onClick={(e) => {
+							e.stopPropagation();
+							void copyArtworkUrl(artworkUrl);
+						}}
+						className="inline-flex items-center gap-1 rounded-full border border-muted-foreground/20 px-2 py-0.5 font-medium text-[10px] text-muted-foreground/50 transition-all hover:border-muted-foreground/40 hover:text-muted-foreground"
+						title="Copy artwork URL"
+						aria-label="Copy artwork URL"
+					>
+						<Copy className="h-3 w-3" />
+						Copy art
+					</button>
+				) : null}
+
 				{/* Add Listen Button */}
 				<button
 					type="button"
@@ -304,4 +323,13 @@ function AlbumCardRow({
 			</div>
 		</div>
 	);
+}
+
+async function copyArtworkUrl(url: string): Promise<void> {
+	try {
+		await navigator.clipboard.writeText(url);
+		toast.success("Artwork URL copied");
+	} catch {
+		toast.error("Could not copy artwork URL");
+	}
 }
