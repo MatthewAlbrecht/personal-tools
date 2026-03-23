@@ -2,7 +2,7 @@ import { v } from 'convex/values';
 import { api } from './_generated/api';
 import type { MutationCtx } from './_generated/server';
 import { action, mutation, query } from './_generated/server';
-import { buildSpotifyAlbumListItems } from './_utils/spotify-album-list';
+import { buildSpotifyAlbumListItems } from './_utils/spotify_album_list';
 
 // ============================================================================
 // Internal Helpers
@@ -1388,7 +1388,6 @@ export const upsertAlbum = mutation({
         releaseDate: args.releaseDate,
         totalTracks: args.totalTracks,
         genres: args.genres,
-        rawData: args.rawData,
         updatedAt: now,
       });
       return existing._id;
@@ -1402,7 +1401,6 @@ export const upsertAlbum = mutation({
       releaseDate: args.releaseDate,
       totalTracks: args.totalTracks,
       genres: args.genres,
-      rawData: args.rawData,
       createdAt: now,
       updatedAt: now,
     });

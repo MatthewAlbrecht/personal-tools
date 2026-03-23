@@ -14,7 +14,7 @@ import type {
   FunctionReference,
 } from "convex/server";
 import type * as _utils_geniusParser from "../_utils/geniusParser.js";
-import type * as _utils_spotify_album_list from "../_utils/spotify-album-list.js";
+import type * as _utils_spotify_album_list from "../_utils/spotify_album_list.js";
 import type * as articles from "../articles.js";
 import type * as auth from "../auth.js";
 import type * as bookSearch from "../bookSearch.js";
@@ -43,7 +43,7 @@ import type * as spotify from "../spotify.js";
  */
 declare const fullApi: ApiFromModules<{
   "_utils/geniusParser": typeof _utils_geniusParser;
-  "_utils/spotify-album-list": typeof _utils_spotify_album_list;
+  "_utils/spotify_album_list": typeof _utils_spotify_album_list;
   articles: typeof articles;
   auth: typeof auth;
   bookSearch: typeof bookSearch;

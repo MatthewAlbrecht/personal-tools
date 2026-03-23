@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildSpotifyAlbumListItems } from "./spotify-album-list";
+import { buildSpotifyAlbumListItems } from "./spotify_album_list";
 
 test("buildSpotifyAlbumListItems omits heavy rawData and sorts newest first", () => {
 	const albums = [
