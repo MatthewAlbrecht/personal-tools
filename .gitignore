@@ -44,3 +44,6 @@ example-html/
 
 # roberts-records (separate repo)
 roberts-records/
+
+# local git worktrees
+.worktrees/
