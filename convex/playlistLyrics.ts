@@ -1,19 +1,9 @@
 import { v } from "convex/values";
-import { api } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server";
-import { action, mutation, query } from "./_generated/server";
-import {
-	extractAbout,
-	extractAlbumMetadata,
-	extractLyrics,
-	extractSongTitle,
-	slugify,
-} from "./_utils/geniusParser";
-import {
-	normalizeGeniusSongUrl,
-	sortPlaylistItems,
-} from "./_utils/playlistLyrics";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
+import { slugify } from "./_utils/geniusParser";
+import { sortPlaylistItems } from "./_utils/playlistLyrics";
 import { requireAuth } from "./auth";
 
 const playlistStatusValidator = v.union(v.literal("draft"), v.literal("ready"));
@@ -45,6 +35,7 @@ const scrapeValidator = v.object({
 	songTitle: v.string(),
 	artistName: v.string(),
 	albumTitle: v.optional(v.string()),
+	albumYear: v.optional(v.string()),
 	lyrics: v.string(),
 	about: v.optional(v.string()),
 	scrapeStatus: scrapeStatusValidator,
@@ -75,6 +66,7 @@ const syncScrapeInputValidator = v.object({
 	songTitle: v.string(),
 	artistName: v.string(),
 	albumTitle: v.optional(v.string()),
+	albumYear: v.optional(v.string()),
 	lyrics: v.string(),
 	about: v.optional(v.string()),
 	lastScrapedAt: v.optional(v.number()),
@@ -101,46 +93,12 @@ type ScrapeUpsertInput = {
 	songTitle: string;
 	artistName: string;
 	albumTitle?: string;
+	albumYear?: string;
 	lyrics: string;
 	about?: string;
 	lastScrapedAt?: number;
 	createdAt?: number;
 	updatedAt?: number;
-};
-
-type AddSongFromUrlResult = {
-	itemId: Id<"playlistLyricsItems">;
-	scrapeId: Id<"geniusLyricScrapes">;
-	canonicalUrl: string;
-	reused: boolean;
-};
-
-type RescrapeItemResult = {
-	itemId: Id<"playlistLyricsItems">;
-	scrapeId: Id<"geniusLyricScrapes">;
-	canonicalUrl: string;
-};
-
-const geniusFetchHeaders = {
-	"User-Agent":
-		"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-	Accept:
-		"text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-	"Accept-Language": "en-US,en;q=0.9",
-	"Accept-Encoding": "gzip, deflate, br",
-	Referer: "https://www.google.com/",
-	DNT: "1",
-	Connection: "keep-alive",
-	"Upgrade-Insecure-Requests": "1",
-	"Sec-Fetch-Dest": "document",
-	"Sec-Fetch-Mode": "navigate",
-	"Sec-Fetch-Site": "cross-site",
-	"Sec-Fetch-User": "?1",
-	"Sec-Ch-Ua":
-		'"Not A(Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"',
-	"Sec-Ch-Ua-Mobile": "?0",
-	"Sec-Ch-Ua-Platform": '"macOS"',
-	"Cache-Control": "max-age=0",
 };
 
 export const list = query({
@@ -340,6 +298,7 @@ export const upsertScrape = mutation({
 		songTitle: v.string(),
 		artistName: v.string(),
 		albumTitle: v.optional(v.string()),
+		albumYear: v.optional(v.string()),
 		lyrics: v.string(),
 		about: v.optional(v.string()),
 	},
@@ -570,145 +529,6 @@ export const reorderItems = mutation({
 	},
 });
 
-export const addSongFromUrl = action({
-	args: {
-		playlistId: v.id("playlistLyrics"),
-		url: v.string(),
-	},
-	returns: v.object({
-		itemId: v.id("playlistLyricsItems"),
-		scrapeId: v.id("geniusLyricScrapes"),
-		canonicalUrl: v.string(),
-		reused: v.boolean(),
-	}),
-	handler: async (
-		ctx: ActionCtx,
-		args: { playlistId: Id<"playlistLyrics">; url: string },
-	): Promise<AddSongFromUrlResult> => {
-		requireAuth(ctx);
-
-		let pendingUrl = args.url.trim();
-
-		try {
-			const canonicalUrl = normalizeGeniusSongUrl(args.url);
-			pendingUrl = canonicalUrl;
-
-			const existingScrape: Doc<"geniusLyricScrapes"> | null =
-				await ctx.runQuery(api.playlistLyrics.getScrapeByCanonicalUrl, {
-					canonicalUrl,
-				});
-
-			if (existingScrape) {
-				const itemId: Id<"playlistLyricsItems"> = await ctx.runMutation(
-					api.playlistLyrics.addScrapeToPlaylist,
-					{
-						playlistId: args.playlistId,
-						lyricScrapeId: existingScrape._id,
-						reused: true,
-					},
-				);
-
-				return {
-					itemId,
-					scrapeId: existingScrape._id,
-					canonicalUrl,
-					reused: true,
-				};
-			}
-
-			const scrapedSong = await scrapeGeniusSong(canonicalUrl);
-			const scrapeId: Id<"geniusLyricScrapes"> = await ctx.runMutation(
-				api.playlistLyrics.upsertScrape,
-				scrapedSong,
-			);
-			const itemId: Id<"playlistLyricsItems"> = await ctx.runMutation(
-				api.playlistLyrics.addScrapeToPlaylist,
-				{
-					playlistId: args.playlistId,
-					lyricScrapeId: scrapeId,
-					reused: false,
-				},
-			);
-
-			return {
-				itemId,
-				scrapeId,
-				canonicalUrl,
-				reused: false,
-			};
-		} catch (error) {
-			if (
-				error instanceof Error &&
-				error.message === "Song is already in this playlist"
-			) {
-				throw error;
-			}
-
-			await recordFailedPlaylistItem(ctx, args.playlistId, pendingUrl);
-			throw error;
-		}
-	},
-});
-
-export const rescrapeItem = action({
-	args: {
-		itemId: v.id("playlistLyricsItems"),
-	},
-	returns: v.object({
-		itemId: v.id("playlistLyricsItems"),
-		scrapeId: v.id("geniusLyricScrapes"),
-		canonicalUrl: v.string(),
-	}),
-	handler: async (
-		ctx: ActionCtx,
-		args: { itemId: Id<"playlistLyricsItems"> },
-	): Promise<RescrapeItemResult> => {
-		requireAuth(ctx);
-
-		const item = await ctx.runQuery(api.playlistLyrics.getItemForRescrape, {
-			itemId: args.itemId,
-		});
-		if (!item) {
-			throw new Error("Playlist item not found");
-		}
-
-		let pendingUrl = getKnownRescrapeUrl(item);
-		if (!pendingUrl) {
-			throw new Error("Playlist item does not have a Genius URL to scrape");
-		}
-
-		try {
-			const canonicalUrl = item.scrape?.canonicalUrl
-				? item.scrape.canonicalUrl
-				: normalizeGeniusSongUrl(pendingUrl);
-			pendingUrl = canonicalUrl;
-
-			const scrapedSong = await scrapeGeniusSong(canonicalUrl);
-			const scrapeId: Id<"geniusLyricScrapes"> = await ctx.runMutation(
-				api.playlistLyrics.upsertScrape,
-				scrapedSong,
-			);
-
-			await ctx.runMutation(api.playlistLyrics.markItemScrapeReady, {
-				itemId: args.itemId,
-				lyricScrapeId: scrapeId,
-			});
-
-			return {
-				itemId: args.itemId,
-				scrapeId,
-				canonicalUrl: scrapedSong.canonicalUrl,
-			};
-		} catch (error) {
-			await ctx.runMutation(api.playlistLyrics.markItemScrapeFailed, {
-				itemId: args.itemId,
-				pendingUrl,
-			});
-			throw error;
-		}
-	},
-});
-
 export const listForSync = query({
 	args: {},
 	returns: v.array(
@@ -902,6 +722,7 @@ async function upsertScrapeRow(
 		songTitle: input.songTitle,
 		artistName: input.artistName,
 		albumTitle: normalizeOptionalString(input.albumTitle),
+		albumYear: normalizeOptionalString(input.albumYear),
 		lyrics: input.lyrics,
 		about: normalizeOptionalString(input.about),
 		scrapeStatus: "ready" as const,
@@ -918,58 +739,6 @@ async function upsertScrapeRow(
 		...scrape,
 		createdAt: input.createdAt ?? now,
 	});
-}
-
-async function scrapeGeniusSong(
-	canonicalUrl: string,
-): Promise<ScrapeUpsertInput> {
-	const response = await fetch(canonicalUrl, {
-		headers: geniusFetchHeaders,
-	});
-
-	if (!response.ok) {
-		throw new Error(
-			`Failed to fetch Genius page: ${response.status} ${response.statusText}`,
-		);
-	}
-
-	const html = await response.text();
-	const songTitle = extractSongTitle(html);
-	const metadata = extractAlbumMetadata(html);
-	const lyrics = extractLyrics(html);
-	const about = extractAbout(html);
-
-	if (!songTitle || !metadata?.artistName || !lyrics) {
-		throw new Error("Could not extract song metadata and lyrics from Genius");
-	}
-
-	return {
-		canonicalUrl,
-		songTitle,
-		artistName: metadata.artistName,
-		albumTitle: metadata.albumTitle,
-		lyrics,
-		about,
-	};
-}
-
-function getKnownRescrapeUrl(item: ItemWithScrape): string {
-	return item.scrape?.canonicalUrl ?? item.pendingUrl?.trim() ?? "";
-}
-
-async function recordFailedPlaylistItem(
-	ctx: ActionCtx,
-	playlistId: Id<"playlistLyrics">,
-	pendingUrl: string,
-): Promise<void> {
-	try {
-		await ctx.runMutation(api.playlistLyrics.createFailedItem, {
-			playlistId,
-			pendingUrl,
-		});
-	} catch (error) {
-		console.error("Failed to record failed playlist item", error);
-	}
 }
 
 function normalizeOptionalString(

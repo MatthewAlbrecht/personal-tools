@@ -151,6 +151,7 @@ export default defineSchema({
 		songTitle: v.string(),
 		artistName: v.string(),
 		albumTitle: v.optional(v.string()),
+		albumYear: v.optional(v.string()),
 		lyrics: v.string(),
 		about: v.optional(v.string()),
 		scrapeStatus: v.union(v.literal("ready"), v.literal("failed")),

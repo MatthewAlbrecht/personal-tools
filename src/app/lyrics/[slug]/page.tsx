@@ -103,7 +103,7 @@ export default function AlbumLyricsPage({
 	const slug = unwrappedParams.slug;
 	const albumData = useQuery(api.geniusAlbums.getAlbumBySlug, { slug });
 	const [isCompact, setIsCompact] = useState(false);
-	const [showGeniusInfo, setShowGeniusInfo] = useState(true);
+	const [showGeniusInfo, setShowGeniusInfo] = useState(false);
 
 	function handlePrint() {
 		setIsCompact(false);

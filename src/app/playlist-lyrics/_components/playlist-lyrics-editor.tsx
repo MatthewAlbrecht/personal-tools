@@ -1,6 +1,6 @@
 "use client";
 
-import { useAction, useMutation, useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ClipboardEvent, FormEvent, ReactElement } from "react";
@@ -43,10 +43,8 @@ export function PlaylistLyricsEditor({ slug }: { slug: string }): ReactElement {
 	const router = useRouter();
 	const data = useQuery(api.playlistLyrics.getBySlug, { slug });
 	const updatePlaylist = useMutation(api.playlistLyrics.updatePlaylist);
-	const addSongFromUrl = useAction(api.playlistLyrics.addSongFromUrl);
 	const updateItem = useMutation(api.playlistLyrics.updateItem);
 	const deleteItem = useMutation(api.playlistLyrics.deleteItem);
-	const rescrapeItem = useAction(api.playlistLyrics.rescrapeItem);
 
 	const [playlistFields, setPlaylistFields] = useState<PlaylistFields>({
 		title: "",
@@ -58,6 +56,7 @@ export function PlaylistLyricsEditor({ slug }: { slug: string }): ReactElement {
 		useState<PlaylistFieldName | null>(null);
 	const [songUrl, setSongUrl] = useState("");
 	const [isAddingSong, setIsAddingSong] = useState(false);
+	const [isRescrapingAll, setIsRescrapingAll] = useState(false);
 	const [busyItems, setBusyItems] = useState<Record<string, ItemBusyAction>>(
 		{},
 	);
@@ -161,11 +160,10 @@ export function PlaylistLyricsEditor({ slug }: { slug: string }): ReactElement {
 
 		setIsAddingSong(true);
 		try {
-			await addSongFromUrl({
+			await postPlaylistLyricsRoute("/api/playlist-lyrics/add-song", {
 				playlistId: data.playlist._id,
 				url,
 			});
-			setSongUrl("");
 			toast.success("Song added");
 		} catch (error) {
 			console.error("Failed to add song:", error);
@@ -173,6 +171,7 @@ export function PlaylistLyricsEditor({ slug }: { slug: string }): ReactElement {
 				error instanceof Error ? error.message : "Failed to add song",
 			);
 		} finally {
+			setSongUrl("");
 			setIsAddingSong(false);
 		}
 	}
@@ -229,7 +228,9 @@ export function PlaylistLyricsEditor({ slug }: { slug: string }): ReactElement {
 	): Promise<void> {
 		setItemBusy(itemId, "rescrape");
 		try {
-			await rescrapeItem({ itemId });
+			await postPlaylistLyricsRoute("/api/playlist-lyrics/rescrape-song", {
+				itemId,
+			});
 			toast.success("Song rescraped");
 		} catch (error) {
 			console.error("Failed to rescrape song:", error);
@@ -239,6 +240,58 @@ export function PlaylistLyricsEditor({ slug }: { slug: string }): ReactElement {
 		} finally {
 			clearItemBusy(itemId);
 		}
+	}
+
+	async function handleRescrapeAll(): Promise<void> {
+		if (!data) return;
+
+		const rescrapableItems = data.songs.filter(hasRescrapeSource);
+		if (rescrapableItems.length === 0) {
+			toast.error("No songs have a Genius URL to rescrape");
+			return;
+		}
+
+		const nextBusyItems: Record<string, ItemBusyAction> = {};
+		for (const item of rescrapableItems) {
+			nextBusyItems[item._id] = "rescrape";
+		}
+
+		setIsRescrapingAll(true);
+		setBusyItems((current) => ({
+			...current,
+			...nextBusyItems,
+		}));
+
+		let succeeded = 0;
+		let failed = 0;
+
+		for (const item of rescrapableItems) {
+			try {
+				await postPlaylistLyricsRoute("/api/playlist-lyrics/rescrape-song", {
+					itemId: item._id,
+				});
+				succeeded++;
+			} catch (error) {
+				failed++;
+				console.error(`Failed to rescrape ${getDisplayTitle(item)}:`, error);
+			}
+		}
+
+		setBusyItems((current) => {
+			const next = { ...current };
+			for (const item of rescrapableItems) {
+				delete next[item._id];
+			}
+			return next;
+		});
+		setIsRescrapingAll(false);
+
+		if (failed > 0) {
+			toast.error(`Rescraped ${succeeded} songs; ${failed} failed`);
+			return;
+		}
+
+		toast.success(`Rescraped ${succeeded} songs`);
 	}
 
 	function setItemBusy(
@@ -286,6 +339,7 @@ export function PlaylistLyricsEditor({ slug }: { slug: string }): ReactElement {
 
 	const { playlist, songs } = data;
 	const currentSlug = playlist.slug;
+	const rescrapableSongCount = songs.filter(hasRescrapeSource).length;
 
 	return (
 		<main className="mx-auto max-w-5xl space-y-6 px-4 py-10">
@@ -409,12 +463,26 @@ export function PlaylistLyricsEditor({ slug }: { slug: string }): ReactElement {
 			</Card>
 
 			<section className="space-y-4">
-				<div>
-					<h2 className="font-semibold text-2xl">Songs</h2>
-					<p className="text-muted-foreground text-sm">
-						{songs.length} {songs.length === 1 ? "song" : "songs"} in this
-						playlist.
-					</p>
+				<div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+					<div>
+						<h2 className="font-semibold text-2xl">Songs</h2>
+						<p className="text-muted-foreground text-sm">
+							{songs.length} {songs.length === 1 ? "song" : "songs"} in this
+							playlist.
+						</p>
+					</div>
+					<Button
+						type="button"
+						variant="outline"
+						disabled={isRescrapingAll || rescrapableSongCount === 0}
+						onClick={() => {
+							void handleRescrapeAll();
+						}}
+					>
+						{isRescrapingAll
+							? "Rescraping all..."
+							: `Rescrape all (${rescrapableSongCount})`}
+					</Button>
 				</div>
 
 				{songs.length === 0 ? (
@@ -444,6 +512,34 @@ export function PlaylistLyricsEditor({ slug }: { slug: string }): ReactElement {
 	);
 }
 
+async function postPlaylistLyricsRoute(
+	path: string,
+	body: Record<string, string>,
+): Promise<void> {
+	const response = await fetch(path, {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+		},
+		body: JSON.stringify(body),
+	});
+
+	if (response.ok) return;
+
+	throw new Error(await readPlaylistLyricsRouteError(response));
+}
+
+async function readPlaylistLyricsRouteError(
+	response: Response,
+): Promise<string> {
+	try {
+		const body = (await response.json()) as { error?: string };
+		return body.error || "Playlist lyrics request failed";
+	} catch {
+		return "Playlist lyrics request failed";
+	}
+}
+
 function PlaylistSongCard({
 	item,
 	busyAction,
@@ -463,6 +559,7 @@ function PlaylistSongCard({
 }): ReactElement {
 	const sourceUrl = item.scrape?.canonicalUrl ?? item.pendingUrl;
 	const isBusy = busyAction !== undefined;
+	const displayMetadata = getDisplayMetadataParts(item);
 
 	return (
 		<Card>
@@ -472,10 +569,7 @@ function PlaylistSongCard({
 						<CardTitle>
 							{item.position}. {getDisplayTitle(item)}
 						</CardTitle>
-						<CardDescription>
-							{getDisplayArtist(item)}
-							{getDisplayAlbum(item) ? ` - ${getDisplayAlbum(item)}` : ""}
-						</CardDescription>
+						<CardDescription>{displayMetadata.join(" - ")}</CardDescription>
 					</div>
 					<div className="flex gap-2">
 						<Button
@@ -524,7 +618,11 @@ function PlaylistSongCard({
 					/>
 					<MetadataRow
 						label="Scraped album"
-						value={item.scrape?.albumTitle ?? "Unavailable"}
+						value={getScrapedAlbumTitle(item) ?? "Unavailable"}
+					/>
+					<MetadataRow
+						label="Scraped year"
+						value={getScrapedAlbumYear(item) ?? "Unavailable"}
 					/>
 					<MetadataRow label="Pending URL" value={item.pendingUrl ?? "None"} />
 					{sourceUrl ? (
@@ -580,7 +678,7 @@ function PlaylistSongCard({
 						<Input
 							id={`song-album-${item._id}`}
 							defaultValue={item.albumTitleOverride ?? ""}
-							placeholder={item.scrape?.albumTitle ?? "Album"}
+							placeholder={getScrapedAlbumTitle(item) ?? "Album"}
 							disabled={isBusy}
 							onBlur={(event) => {
 								void onItemFieldBlur(
@@ -685,7 +783,69 @@ function getDisplayArtist(item: PlaylistLyricsItem): string {
 }
 
 function getDisplayAlbum(item: PlaylistLyricsItem): string {
-	return item.albumTitleOverride ?? item.scrape?.albumTitle ?? "";
+	const album = splitAlbumTitleAndYear(
+		item.albumTitleOverride ?? item.scrape?.albumTitle,
+	);
+
+	return album.title ?? "";
+}
+
+function getDisplayMetadataParts(item: PlaylistLyricsItem): string[] {
+	const parts = [getDisplayArtist(item)];
+	const album = getDisplayAlbum(item);
+	const year = getScrapedAlbumYear(item);
+
+	if (album) {
+		parts.push(album);
+	}
+
+	if (year) {
+		parts.push(year);
+	}
+
+	return parts;
+}
+
+function getScrapedAlbumTitle(item: PlaylistLyricsItem): string | undefined {
+	return splitAlbumTitleAndYear(item.scrape?.albumTitle).title;
+}
+
+function getScrapedAlbumYear(item: PlaylistLyricsItem): string | undefined {
+	return (
+		item.scrape?.albumYear ??
+		splitAlbumTitleAndYear(item.scrape?.albumTitle).year
+	);
+}
+
+function hasRescrapeSource(item: PlaylistLyricsItem): boolean {
+	return Boolean(item.scrape?.canonicalUrl || item.pendingUrl?.trim());
+}
+
+function splitAlbumTitleAndYear(albumTitle: string | undefined): {
+	title: string | undefined;
+	year: string | undefined;
+} {
+	if (!albumTitle) {
+		return { title: undefined, year: undefined };
+	}
+
+	let year: string | undefined;
+	const title = albumTitle
+		.replace(/\(([^)]*)\)/g, (_match, parenthetical: string) => {
+			const trimmedParenthetical = parenthetical.trim();
+			if (!year && /^\d{4}$/.test(trimmedParenthetical)) {
+				year = trimmedParenthetical;
+			}
+
+			return "";
+		})
+		.replace(/\s{2,}/g, " ")
+		.trim();
+
+	return {
+		title: title || undefined,
+		year,
+	};
 }
 
 function formatDate(timestamp: number): string {

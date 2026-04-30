@@ -103,7 +103,7 @@ export default function PublicAlbumLyricsPage({
 
 	const albumData = useQuery(api.geniusAlbums.getAlbumBySlug, { slug });
 	const [isCompact, setIsCompact] = useState(false);
-	const [showGeniusInfo, setShowGeniusInfo] = useState(true);
+	const [showGeniusInfo, setShowGeniusInfo] = useState(false);
 
 	if (albumData === undefined) {
 		return <AlbumSkeleton />;
