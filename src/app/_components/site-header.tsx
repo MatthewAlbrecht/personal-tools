@@ -24,6 +24,9 @@ export function SiteHeader() {
 							<Link href="/lyrics" className="text-sm hover:underline">
 								Lyrics
 							</Link>
+							<Link href="/playlist-lyrics" className="text-sm hover:underline">
+								Playlist Lyrics
+							</Link>
 							<Link
 								href="/spotify-playlister"
 								className="text-sm hover:underline"
@@ -33,12 +36,12 @@ export function SiteHeader() {
 							<Link href="/albums" className="text-sm hover:underline">
 								Albums
 							</Link>
-						<Link href="/robs-rankings" className="text-sm hover:underline">
-							Rob's Rankings
-						</Link>
-						<Link href="/rooleases" className="text-sm hover:underline">
-							Rooleases
-						</Link>
+							<Link href="/robs-rankings" className="text-sm hover:underline">
+								Rob's Rankings
+							</Link>
+							<Link href="/rooleases" className="text-sm hover:underline">
+								Rooleases
+							</Link>
 						</nav>
 					)}
 				</div>

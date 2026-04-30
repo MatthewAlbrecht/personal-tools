@@ -14,6 +14,7 @@ import type {
   FunctionReference,
 } from "convex/server";
 import type * as _utils_geniusParser from "../_utils/geniusParser.js";
+import type * as _utils_playlistLyrics from "../_utils/playlistLyrics.js";
 import type * as _utils_spotify_album_list from "../_utils/spotify_album_list.js";
 import type * as articles from "../articles.js";
 import type * as auth from "../auth.js";
@@ -28,6 +29,7 @@ import type * as migrations_backfillSpotifyAlbumId from "../migrations/backfillS
 import type * as migrations_backfillUserTracks from "../migrations/backfillUserTracks.js";
 import type * as migrations_initializeRatingHistory from "../migrations/initializeRatingHistory.js";
 import type * as migrations_migrateRatingsToThreeTier from "../migrations/migrateRatingsToThreeTier.js";
+import type * as playlistLyrics from "../playlistLyrics.js";
 import type * as robRankings from "../robRankings.js";
 import type * as rooleases from "../rooleases.js";
 import type * as s3Helper from "../s3Helper.js";
@@ -43,6 +45,7 @@ import type * as spotify from "../spotify.js";
  */
 declare const fullApi: ApiFromModules<{
   "_utils/geniusParser": typeof _utils_geniusParser;
+  "_utils/playlistLyrics": typeof _utils_playlistLyrics;
   "_utils/spotify_album_list": typeof _utils_spotify_album_list;
   articles: typeof articles;
   auth: typeof auth;
@@ -57,6 +60,7 @@ declare const fullApi: ApiFromModules<{
   "migrations/backfillUserTracks": typeof migrations_backfillUserTracks;
   "migrations/initializeRatingHistory": typeof migrations_initializeRatingHistory;
   "migrations/migrateRatingsToThreeTier": typeof migrations_migrateRatingsToThreeTier;
+  playlistLyrics: typeof playlistLyrics;
   robRankings: typeof robRankings;
   rooleases: typeof rooleases;
   s3Helper: typeof s3Helper;

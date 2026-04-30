@@ -132,6 +132,58 @@ export default defineSchema({
 		.index("by_albumId", ["albumId"]) // For fetching songs by album
 		.index("by_trackNumber", ["trackNumber"]), // For ordering songs
 
+	playlistLyrics: defineTable({
+		title: v.string(),
+		slug: v.string(),
+		theme: v.optional(v.string()),
+		description: v.optional(v.string()),
+		notes: v.optional(v.string()),
+		status: v.union(v.literal("draft"), v.literal("ready")),
+		createdAt: v.number(),
+		updatedAt: v.number(),
+	})
+		.index("by_slug", ["slug"])
+		.index("by_updatedAt", ["updatedAt"])
+		.index("by_status", ["status"]),
+
+	geniusLyricScrapes: defineTable({
+		canonicalUrl: v.string(),
+		songTitle: v.string(),
+		artistName: v.string(),
+		albumTitle: v.optional(v.string()),
+		lyrics: v.string(),
+		about: v.optional(v.string()),
+		scrapeStatus: v.union(v.literal("ready"), v.literal("failed")),
+		lastScrapedAt: v.number(),
+		createdAt: v.number(),
+		updatedAt: v.number(),
+	})
+		.index("by_canonicalUrl", ["canonicalUrl"])
+		.index("by_updatedAt", ["updatedAt"])
+		.index("by_scrapeStatus", ["scrapeStatus"]),
+
+	playlistLyricsItems: defineTable({
+		playlistId: v.id("playlistLyrics"),
+		lyricScrapeId: v.optional(v.id("geniusLyricScrapes")),
+		position: v.number(),
+		userNote: v.optional(v.string()),
+		songTitleOverride: v.optional(v.string()),
+		artistNameOverride: v.optional(v.string()),
+		albumTitleOverride: v.optional(v.string()),
+		pendingUrl: v.optional(v.string()),
+		scrapeState: v.union(
+			v.literal("scraping"),
+			v.literal("ready"),
+			v.literal("failed"),
+			v.literal("reused"),
+		),
+		createdAt: v.number(),
+		updatedAt: v.number(),
+	})
+		.index("by_playlistId", ["playlistId"])
+		.index("by_playlistId_position", ["playlistId", "position"])
+		.index("by_lyricScrapeId", ["lyricScrapeId"]),
+
 	articles: defineTable({
 		userId: v.string(),
 		url: v.string(),
