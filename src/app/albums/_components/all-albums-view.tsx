@@ -1,6 +1,6 @@
 "use client";
 
-import { Copy, Disc3 } from "lucide-react";
+import { Copy, Disc3, Download } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { extractReleaseYear } from "~/lib/album-tiers";
@@ -293,19 +293,34 @@ function AlbumCardRow({
 				)}
 
 				{artworkUrl ? (
-					<button
-						type="button"
-						onClick={(e) => {
-							e.stopPropagation();
-							void copyArtworkUrl(artworkUrl);
-						}}
-						className="inline-flex items-center gap-1 rounded-full border border-muted-foreground/20 px-2 py-0.5 font-medium text-[10px] text-muted-foreground/50 transition-all hover:border-muted-foreground/40 hover:text-muted-foreground"
-						title="Copy artwork URL"
-						aria-label="Copy artwork URL"
-					>
-						<Copy className="h-3 w-3" />
-						Copy art
-					</button>
+					<>
+						<button
+							type="button"
+							onClick={(e) => {
+								e.stopPropagation();
+								void copyArtworkUrl(artworkUrl);
+							}}
+							className="inline-flex items-center gap-1 rounded-full border border-muted-foreground/20 px-2 py-0.5 font-medium text-[10px] text-muted-foreground/50 transition-all hover:border-muted-foreground/40 hover:text-muted-foreground"
+							title="Copy artwork URL"
+							aria-label="Copy artwork URL"
+						>
+							<Copy className="h-3 w-3" />
+							Copy art
+						</button>
+						<button
+							type="button"
+							onClick={(e) => {
+								e.stopPropagation();
+								void downloadArtwork(artworkUrl, album);
+							}}
+							className="inline-flex items-center gap-1 rounded-full border border-muted-foreground/20 px-2 py-0.5 font-medium text-[10px] text-muted-foreground/50 transition-all hover:border-muted-foreground/40 hover:text-muted-foreground"
+							title="Download artwork"
+							aria-label="Download artwork"
+						>
+							<Download className="h-3 w-3" />
+							Download
+						</button>
+					</>
 				) : null}
 
 				{/* Add Listen Button */}
@@ -332,4 +347,42 @@ async function copyArtworkUrl(url: string): Promise<void> {
 	} catch {
 		toast.error("Could not copy artwork URL");
 	}
+}
+
+async function downloadArtwork(url: string, album: AlbumItem): Promise<void> {
+	try {
+		const response = await fetch(url);
+		if (!response.ok) {
+			throw new Error("Could not fetch artwork");
+		}
+
+		const blob = await response.blob();
+		const objectUrl = URL.createObjectURL(blob);
+		const link = document.createElement("a");
+		link.href = objectUrl;
+		link.download = getArtworkFilename(album, blob.type);
+		document.body.appendChild(link);
+		link.click();
+		link.remove();
+		URL.revokeObjectURL(objectUrl);
+		toast.success("Artwork download started");
+	} catch {
+		toast.error("Could not download artwork");
+	}
+}
+
+function getArtworkFilename(album: AlbumItem, contentType: string): string {
+	const extension = getImageExtension(contentType);
+	const name = `${album.artistName}-${album.name}`
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-+|-+$/g, "");
+
+	return `${name || "album-artwork"}.${extension}`;
+}
+
+function getImageExtension(contentType: string): string {
+	if (contentType.includes("png")) return "png";
+	if (contentType.includes("webp")) return "webp";
+	return "jpg";
 }

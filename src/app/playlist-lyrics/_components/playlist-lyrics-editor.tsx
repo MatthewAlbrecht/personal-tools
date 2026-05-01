@@ -2,7 +2,6 @@
 
 import { useMutation, useQuery } from "convex/react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import type { ClipboardEvent, FormEvent, ReactElement } from "react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -40,7 +39,6 @@ type PlaylistLyricsItem = Doc<"playlistLyricsItems"> & {
 type ItemBusyAction = "delete" | "rescrape" | "save";
 
 export function PlaylistLyricsEditor({ slug }: { slug: string }): ReactElement {
-	const router = useRouter();
 	const data = useQuery(api.playlistLyrics.getBySlug, { slug });
 	const updatePlaylist = useMutation(api.playlistLyrics.updatePlaylist);
 	const updateItem = useMutation(api.playlistLyrics.updateItem);
@@ -106,10 +104,6 @@ export function PlaylistLyricsEditor({ slug }: { slug: string }): ReactElement {
 								});
 
 			toast.success("Playlist saved");
-
-			if (field === "title" && result.slug !== data.playlist.slug) {
-				router.replace(`/playlist-lyrics/${result.slug}/edit`);
-			}
 		} catch (error) {
 			console.error("Failed to save playlist:", error);
 			toast.error(

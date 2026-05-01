@@ -6,7 +6,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
@@ -143,15 +142,6 @@ export function PlaylistLyricsList() {
 												</Link>
 											</Button>
 											<div className="mt-2 flex flex-wrap items-center gap-2 text-muted-foreground text-sm">
-												<Badge
-													variant={
-														playlist.status === "ready"
-															? "secondary"
-															: "outline"
-													}
-												>
-													{playlist.status}
-												</Badge>
 												<span>Updated {formatDate(playlist.updatedAt)}</span>
 											</div>
 											{playlist.description && (
@@ -183,8 +173,8 @@ export function PlaylistLyricsList() {
 							<ListMusic className="mb-4 h-12 w-12 text-muted-foreground" />
 							<h2 className="mb-2 font-medium text-lg">No playlists yet</h2>
 							<p className="mb-4 max-w-sm text-muted-foreground text-sm">
-								Create a draft playlist to start collecting songs for a
-								printable lyric sheet.
+								Create a playlist to start collecting songs for a printable
+								lyric sheet.
 							</p>
 							<Button onClick={handleCreatePlaylist} disabled={isCreating}>
 								{isCreating ? (

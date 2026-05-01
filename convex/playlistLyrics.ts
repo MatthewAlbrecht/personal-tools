@@ -2,7 +2,6 @@ import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
-import { slugify } from "./_utils/geniusParser";
 import { sortPlaylistItems } from "./_utils/playlistLyrics";
 import { requireAuth } from "./auth";
 
@@ -80,7 +79,6 @@ type ItemWithScrape = Doc<"playlistLyricsItems"> & {
 
 type PlaylistPatch = {
 	title?: string;
-	slug?: string;
 	theme?: string;
 	description?: string;
 	notes?: string;
@@ -235,17 +233,6 @@ export const updatePlaylist = mutation({
 			}
 
 			updates.title = title;
-			if (title !== playlist.title) {
-				updates.slug = slugify(title) || `playlist-${now}`;
-				const existingWithSlug = await ctx.db
-					.query("playlistLyrics")
-					.withIndex("by_slug", (q) => q.eq("slug", updates.slug ?? ""))
-					.first();
-
-				if (existingWithSlug && existingWithSlug._id !== args.playlistId) {
-					throw new Error("A playlist with this title already exists");
-				}
-			}
 		}
 
 		if (args.theme !== undefined) {
@@ -263,7 +250,7 @@ export const updatePlaylist = mutation({
 
 		await ctx.db.patch(args.playlistId, updates);
 
-		return { slug: updates.slug ?? playlist.slug };
+		return { slug: playlist.slug };
 	},
 });
 
