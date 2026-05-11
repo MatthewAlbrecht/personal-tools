@@ -9,6 +9,7 @@
 		"check:unsafe": "biome check --write --unsafe .",
 		"check:write": "biome check --write .",
 		"dev": "PORT=1333 next dev --turbo -p 1333",
+		"dev:all": "pnpm dev & npx convex dev",
 		"preview": "next build && PORT=1333 next start -p 1333",
 		"start": "PORT=1333 next start -p 1333",
 		"typecheck": "tsc --noEmit",

@@ -6,6 +6,7 @@ import type { Id } from "../../../../../convex/_generated/dataModel";
 import {
 	isDuplicatePlaylistSongError,
 	normalizeGeniusSongUrl,
+	shouldRefreshScrapeBeforePlaylistReuse,
 } from "../../../../../convex/_utils/playlistLyrics";
 import {
 	createPlaylistLyricsConvexClient,
@@ -56,18 +57,27 @@ export async function POST(request: NextRequest) {
 		);
 
 		if (existingScrape) {
+			let scrapeId = existingScrape._id;
+			if (shouldRefreshScrapeBeforePlaylistReuse(existingScrape)) {
+				const scrapedSong = await fetchGeniusSongScrape(canonicalUrl);
+				scrapeId = await convex.mutation(
+					api.playlistLyrics.upsertScrape,
+					scrapedSong,
+				);
+			}
+
 			const itemId = await convex.mutation(
 				api.playlistLyrics.addScrapeToPlaylist,
 				{
 					playlistId,
-					lyricScrapeId: existingScrape._id,
+					lyricScrapeId: scrapeId,
 					reused: true,
 				},
 			);
 
 			return NextResponse.json({
 				itemId,
-				scrapeId: existingScrape._id,
+				scrapeId,
 				canonicalUrl,
 				reused: true,
 			});

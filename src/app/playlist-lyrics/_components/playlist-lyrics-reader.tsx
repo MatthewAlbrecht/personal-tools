@@ -9,20 +9,85 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { Label } from "~/components/ui/label";
 import { Skeleton } from "~/components/ui/skeleton";
 import { api } from "../../../../convex/_generated/api";
-import type { Doc } from "../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import { LyricsRenderer } from "./lyrics-renderer";
 
-type PlaylistLyricsItemWithScrape = Doc<"playlistLyricsItems"> & {
-	scrape?: Doc<"geniusLyricScrapes">;
+type PlaylistLyricsItemForReader = {
+	_id: Id<"playlistLyricsItems">;
+	position: number;
+	userNote?: string;
+	songTitleOverride?: string;
+	artistNameOverride?: string;
+	albumTitleOverride?: string;
+	albumArtUrlOverride?: string;
+	scrape?: {
+		songTitle: string;
+		artistName: string;
+		albumTitle?: string;
+		albumYear?: string;
+		albumArtUrl?: string;
+		lyrics: string;
+		about?: string;
+	};
 };
+type PlaylistForReader = {
+	title: string;
+	slug: string;
+	theme?: string;
+	description?: string;
+	notes?: string;
+};
+type PlaylistLyricsData =
+	| {
+			playlist: PlaylistForReader;
+			songs: PlaylistLyricsItemForReader[];
+	  }
+	| null
+	| undefined;
 
 export function PlaylistLyricsReader({ slug }: { slug: string }) {
 	const playlistData = useQuery(api.playlistLyrics.getBySlug, { slug });
+
+	return (
+		<PlaylistLyricsReaderContent
+			slug={slug}
+			playlistData={playlistData}
+			variant="private"
+		/>
+	);
+}
+
+export function PublicPlaylistLyricsReader({ slug }: { slug: string }) {
+	const playlistData = useQuery(api.playlistLyrics.getPublicBySlug, { slug });
+
+	return (
+		<PlaylistLyricsReaderContent
+			slug={slug}
+			playlistData={playlistData}
+			variant="public"
+		/>
+	);
+}
+
+function PlaylistLyricsReaderContent({
+	slug,
+	playlistData,
+	variant,
+}: {
+	slug: string;
+	playlistData: PlaylistLyricsData;
+	variant: "private" | "public";
+}) {
 	const [isCompact, setIsCompact] = useState(false);
 	const [showGeniusInfo, setShowGeniusInfo] = useState(false);
 	const [showArtist, setShowArtist] = useState(true);
 	const [showAlbum, setShowAlbum] = useState(true);
 	const [showYear, setShowYear] = useState(true);
+	const [showAlbumArt, setShowAlbumArt] = useState(false);
+	const backHref =
+		variant === "public" ? "/public/playlist-lyrics" : "/playlist-lyrics";
+	const backLabel =
+		variant === "public" ? "Back to Playlists" : "Back to Playlist Lyrics";
 
 	function handlePrint() {
 		setIsCompact(false);
@@ -46,9 +111,9 @@ export function PlaylistLyricsReader({ slug }: { slug: string }) {
 					The playlist you're looking for doesn't exist or has been deleted.
 				</p>
 				<Button asChild>
-					<Link href="/playlist-lyrics">
+					<Link href={backHref}>
 						<ArrowLeft className="mr-2 h-4 w-4" />
-						Back to Playlist Lyrics
+						{backLabel}
 					</Link>
 				</Button>
 			</div>
@@ -64,18 +129,20 @@ export function PlaylistLyricsReader({ slug }: { slug: string }) {
 			<div className="no-print mb-6 rounded-lg border bg-card p-4 shadow-sm">
 				<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 					<Button asChild variant="ghost" className="self-start">
-						<Link href="/playlist-lyrics">
+						<Link href={backHref}>
 							<ArrowLeft className="mr-2 h-4 w-4" />
-							Back to Playlist Lyrics
+							{backLabel}
 						</Link>
 					</Button>
 					<div className="flex flex-wrap gap-2">
-						<Button asChild variant="outline">
-							<Link href={`/playlist-lyrics/${slug}/edit`}>
-								<Edit className="mr-2 h-4 w-4" />
-								Edit
-							</Link>
-						</Button>
+						{variant === "private" && (
+							<Button asChild variant="outline">
+								<Link href={`/playlist-lyrics/${slug}/edit`}>
+									<Edit className="mr-2 h-4 w-4" />
+									Edit
+								</Link>
+							</Button>
+						)}
 						<Button onClick={handlePrint} variant="outline">
 							<Printer className="mr-2 h-4 w-4" />
 							Print
@@ -89,7 +156,7 @@ export function PlaylistLyricsReader({ slug }: { slug: string }) {
 
 				<div className="mt-4 border-t pt-4">
 					<p className="mb-3 font-medium text-sm">Display options</p>
-					<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+					<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
 						<ToggleControl
 							id="show-artist"
 							checked={showArtist}
@@ -107,6 +174,12 @@ export function PlaylistLyricsReader({ slug }: { slug: string }) {
 							checked={showYear}
 							onCheckedChange={setShowYear}
 							label="Show year"
+						/>
+						<ToggleControl
+							id="show-album-art"
+							checked={showAlbumArt}
+							onCheckedChange={setShowAlbumArt}
+							label="Show album art"
 						/>
 						<ToggleControl
 							id="genius-info"
@@ -132,7 +205,7 @@ export function PlaylistLyricsReader({ slug }: { slug: string }) {
 						{playlist.description}
 					</p>
 				)}
-				{playlist.notes && (
+				{variant === "private" && playlist.notes && (
 					<div className="mx-auto mt-6 max-w-3xl rounded-lg bg-muted p-4 text-left text-sm leading-relaxed print:border print:border-gray-300 print:bg-gray-50 print:text-base">
 						<p className="whitespace-pre-line">{playlist.notes}</p>
 					</div>
@@ -154,12 +227,20 @@ export function PlaylistLyricsReader({ slug }: { slug: string }) {
 							showArtist,
 							showYear,
 						});
+						const albumArtUrl = getAlbumArtUrl(song);
 
 						return (
 							<article
 								key={song._id}
 								className="page-break-inside-avoid print:mb-16"
 							>
+								{showAlbumArt && albumArtUrl ? (
+									<img
+										src={albumArtUrl}
+										alt={`${getSongTitle(song)} album art`}
+										className="mb-4 h-32 w-32 rounded-md object-cover print:mb-3 print:h-28 print:w-28"
+									/>
+								) : null}
 								<span className="text-muted-foreground text-sm print:text-xs">
 									Track {song.position}
 								</span>
@@ -246,20 +327,24 @@ function PlaylistLyricsReaderSkeleton() {
 	);
 }
 
-function getSongTitle(song: PlaylistLyricsItemWithScrape): string {
+function getSongTitle(song: PlaylistLyricsItemForReader): string {
 	return song.songTitleOverride ?? song.scrape?.songTitle ?? "Untitled song";
 }
 
-function getArtistName(song: PlaylistLyricsItemWithScrape): string {
+function getArtistName(song: PlaylistLyricsItemForReader): string {
 	return song.artistNameOverride ?? song.scrape?.artistName ?? "Unknown artist";
 }
 
-function getAlbumTitle(song: PlaylistLyricsItemWithScrape): string | undefined {
+function getAlbumTitle(song: PlaylistLyricsItemForReader): string | undefined {
 	return song.albumTitleOverride ?? song.scrape?.albumTitle;
 }
 
+function getAlbumArtUrl(song: PlaylistLyricsItemForReader): string | undefined {
+	return song.albumArtUrlOverride?.trim() || song.scrape?.albumArtUrl?.trim();
+}
+
 function getMetadataParts(
-	song: PlaylistLyricsItemWithScrape,
+	song: PlaylistLyricsItemForReader,
 	options: {
 		showArtist: boolean;
 		showAlbum: boolean;
@@ -284,7 +369,7 @@ function getMetadataParts(
 	return parts;
 }
 
-function getAlbumMetadata(song: PlaylistLyricsItemWithScrape): {
+function getAlbumMetadata(song: PlaylistLyricsItemForReader): {
 	title: string | undefined;
 	year: string | undefined;
 } {

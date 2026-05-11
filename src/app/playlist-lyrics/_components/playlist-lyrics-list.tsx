@@ -1,7 +1,14 @@
 "use client";
 
 import { useMutation, useQuery } from "convex/react";
-import { CloudUpload, ListMusic, Loader2, Pencil, Plus } from "lucide-react";
+import {
+	CloudUpload,
+	Link as LinkIcon,
+	ListMusic,
+	Loader2,
+	Pencil,
+	Plus,
+} from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -70,6 +77,12 @@ export function PlaylistLyricsList() {
 		}
 	}
 
+	function handleCopyPublicLink(playlist: Playlist): void {
+		const publicUrl = `${window.location.origin}/public/playlist-lyrics/${playlist.slug}`;
+		navigator.clipboard.writeText(publicUrl);
+		toast.success("Public link copied to clipboard!");
+	}
+
 	return (
 		<main className="mx-auto max-w-4xl px-4 py-10">
 			<Card>
@@ -123,50 +136,66 @@ export function PlaylistLyricsList() {
 						<PlaylistLyricsListSkeleton />
 					) : playlists && playlists.length > 0 ? (
 						<ul className="space-y-3">
-							{playlists.map((playlist: Playlist) => (
-								<li
-									key={playlist._id}
-									className="rounded-lg border p-4 transition-colors hover:bg-muted/50"
-								>
-									<div className="flex items-start justify-between gap-3">
-										<div className="min-w-0 flex-1">
-											<Button
-												variant="ghost"
-												className="h-auto justify-start px-0 py-0 text-left"
-												asChild
-											>
-												<Link href={`/playlist-lyrics/${playlist.slug}`}>
-													<span className="block truncate font-semibold text-lg">
-														{playlist.title}
-													</span>
-												</Link>
-											</Button>
-											<div className="mt-2 flex flex-wrap items-center gap-2 text-muted-foreground text-sm">
-												<span>Updated {formatDate(playlist.updatedAt)}</span>
+							{playlists.map((playlist: Playlist) => {
+								const isPublic = playlist.status === "ready";
+
+								return (
+									<li
+										key={playlist._id}
+										className="rounded-lg border p-4 transition-colors hover:bg-muted/50"
+									>
+										<div className="flex items-start justify-between gap-3">
+											<div className="min-w-0 flex-1">
+												<Button
+													variant="ghost"
+													className="h-auto justify-start px-0 py-0 text-left"
+													asChild
+												>
+													<Link href={`/playlist-lyrics/${playlist.slug}`}>
+														<span className="block truncate font-semibold text-lg">
+															{playlist.title}
+														</span>
+													</Link>
+												</Button>
+												<div className="mt-2 flex flex-wrap items-center gap-2 text-muted-foreground text-sm">
+													<span>Updated {formatDate(playlist.updatedAt)}</span>
+													<span>{isPublic ? "Public" : "Draft"}</span>
+												</div>
+												{playlist.description && (
+													<p className="mt-2 line-clamp-2 text-muted-foreground text-sm">
+														{playlist.description}
+													</p>
+												)}
+												{playlist.theme && (
+													<p className="mt-1 text-muted-foreground text-xs">
+														Theme: {playlist.theme}
+													</p>
+												)}
 											</div>
-											{playlist.description && (
-												<p className="mt-2 line-clamp-2 text-muted-foreground text-sm">
-													{playlist.description}
-												</p>
-											)}
-											{playlist.theme && (
-												<p className="mt-1 text-muted-foreground text-xs">
-													Theme: {playlist.theme}
-												</p>
-											)}
+											<div className="flex gap-2">
+												<Button
+													variant="outline"
+													size="icon"
+													onClick={() => handleCopyPublicLink(playlist)}
+													aria-label={`Copy public link for ${playlist.title}`}
+													title={`Copy public link for ${playlist.title}`}
+												>
+													<LinkIcon className="h-4 w-4" />
+												</Button>
+												<Button variant="outline" size="icon" asChild>
+													<Link
+														href={`/playlist-lyrics/${playlist.slug}/edit`}
+														aria-label={`Edit ${playlist.title}`}
+														title={`Edit ${playlist.title}`}
+													>
+														<Pencil className="h-4 w-4" />
+													</Link>
+												</Button>
+											</div>
 										</div>
-										<Button variant="outline" size="icon" asChild>
-											<Link
-												href={`/playlist-lyrics/${playlist.slug}/edit`}
-												aria-label={`Edit ${playlist.title}`}
-												title={`Edit ${playlist.title}`}
-											>
-												<Pencil className="h-4 w-4" />
-											</Link>
-										</Button>
-									</div>
-								</li>
-							))}
+									</li>
+								);
+							})}
 						</ul>
 					) : (
 						<div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 text-center">

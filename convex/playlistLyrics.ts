@@ -2,7 +2,10 @@ import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
-import { sortPlaylistItems } from "./_utils/playlistLyrics";
+import {
+	isPublicPlaylistStatus,
+	sortPlaylistItems,
+} from "./_utils/playlistLyrics";
 import { requireAuth } from "./auth";
 
 const playlistStatusValidator = v.union(v.literal("draft"), v.literal("ready"));
@@ -27,6 +30,13 @@ const playlistValidator = v.object({
 	updatedAt: v.number(),
 });
 
+const publicPlaylistValidator = v.object({
+	title: v.string(),
+	slug: v.string(),
+	theme: v.optional(v.string()),
+	description: v.optional(v.string()),
+});
+
 const scrapeValidator = v.object({
 	_id: v.id("geniusLyricScrapes"),
 	_creationTime: v.number(),
@@ -35,12 +45,23 @@ const scrapeValidator = v.object({
 	artistName: v.string(),
 	albumTitle: v.optional(v.string()),
 	albumYear: v.optional(v.string()),
+	albumArtUrl: v.optional(v.string()),
 	lyrics: v.string(),
 	about: v.optional(v.string()),
 	scrapeStatus: scrapeStatusValidator,
 	lastScrapedAt: v.number(),
 	createdAt: v.number(),
 	updatedAt: v.number(),
+});
+
+const publicScrapeValidator = v.object({
+	songTitle: v.string(),
+	artistName: v.string(),
+	albumTitle: v.optional(v.string()),
+	albumYear: v.optional(v.string()),
+	albumArtUrl: v.optional(v.string()),
+	lyrics: v.string(),
+	about: v.optional(v.string()),
 });
 
 const itemWithScrapeValidator = v.object({
@@ -53,11 +74,23 @@ const itemWithScrapeValidator = v.object({
 	songTitleOverride: v.optional(v.string()),
 	artistNameOverride: v.optional(v.string()),
 	albumTitleOverride: v.optional(v.string()),
+	albumArtUrlOverride: v.optional(v.string()),
 	pendingUrl: v.optional(v.string()),
 	scrapeState: itemScrapeStateValidator,
 	createdAt: v.number(),
 	updatedAt: v.number(),
 	scrape: v.optional(scrapeValidator),
+});
+
+const publicItemWithScrapeValidator = v.object({
+	_id: v.id("playlistLyricsItems"),
+	position: v.number(),
+	userNote: v.optional(v.string()),
+	songTitleOverride: v.optional(v.string()),
+	artistNameOverride: v.optional(v.string()),
+	albumTitleOverride: v.optional(v.string()),
+	albumArtUrlOverride: v.optional(v.string()),
+	scrape: v.optional(publicScrapeValidator),
 });
 
 const syncScrapeInputValidator = v.object({
@@ -66,6 +99,7 @@ const syncScrapeInputValidator = v.object({
 	artistName: v.string(),
 	albumTitle: v.optional(v.string()),
 	albumYear: v.optional(v.string()),
+	albumArtUrl: v.optional(v.string()),
 	lyrics: v.string(),
 	about: v.optional(v.string()),
 	lastScrapedAt: v.optional(v.number()),
@@ -92,6 +126,7 @@ type ScrapeUpsertInput = {
 	artistName: string;
 	albumTitle?: string;
 	albumYear?: string;
+	albumArtUrl?: string;
 	lyrics: string;
 	about?: string;
 	lastScrapedAt?: number;
@@ -112,6 +147,24 @@ export const list = query({
 			.withIndex("by_updatedAt")
 			.order("desc")
 			.take(args.limit ?? 100);
+	},
+});
+
+export const listPublic = query({
+	args: {
+		limit: v.optional(v.number()),
+	},
+	returns: v.array(publicPlaylistValidator),
+	handler: async (ctx, args) => {
+		const playlists = await ctx.db
+			.query("playlistLyrics")
+			.withIndex("by_status", (q) => q.eq("status", "ready"))
+			.collect();
+
+		return playlists
+			.sort((a, b) => b.updatedAt - a.updatedAt)
+			.slice(0, args.limit ?? 100)
+			.map(toPublicPlaylist);
 	},
 });
 
@@ -145,6 +198,40 @@ export const getBySlug = query({
 		const songs = await attachScrapes(ctx, sortPlaylistItems(items));
 
 		return { playlist, songs };
+	},
+});
+
+export const getPublicBySlug = query({
+	args: {
+		slug: v.string(),
+	},
+	returns: v.union(
+		v.object({
+			playlist: publicPlaylistValidator,
+			songs: v.array(publicItemWithScrapeValidator),
+		}),
+		v.null(),
+	),
+	handler: async (ctx, args) => {
+		const playlist = await ctx.db
+			.query("playlistLyrics")
+			.withIndex("by_slug", (q) => q.eq("slug", args.slug))
+			.first();
+
+		if (!playlist || !isPublicPlaylistStatus(playlist.status)) return null;
+
+		const items = await ctx.db
+			.query("playlistLyricsItems")
+			.withIndex("by_playlistId_position", (q) =>
+				q.eq("playlistId", playlist._id),
+			)
+			.collect();
+		const songs = await attachScrapes(ctx, sortPlaylistItems(items));
+
+		return {
+			playlist: toPublicPlaylist(playlist),
+			songs: songs.map(toPublicItemWithScrape),
+		};
 	},
 });
 
@@ -286,6 +373,7 @@ export const upsertScrape = mutation({
 		artistName: v.string(),
 		albumTitle: v.optional(v.string()),
 		albumYear: v.optional(v.string()),
+		albumArtUrl: v.optional(v.string()),
 		lyrics: v.string(),
 		about: v.optional(v.string()),
 	},
@@ -349,6 +437,7 @@ export const updateItem = mutation({
 		songTitleOverride: v.optional(v.string()),
 		artistNameOverride: v.optional(v.string()),
 		albumTitleOverride: v.optional(v.string()),
+		albumArtUrlOverride: v.optional(v.string()),
 	},
 	returns: v.id("playlistLyricsItems"),
 	handler: async (ctx, args) => {
@@ -364,6 +453,7 @@ export const updateItem = mutation({
 			songTitleOverride?: string;
 			artistNameOverride?: string;
 			albumTitleOverride?: string;
+			albumArtUrlOverride?: string;
 			updatedAt: number;
 		} = {
 			updatedAt: Date.now(),
@@ -385,6 +475,11 @@ export const updateItem = mutation({
 		if (args.albumTitleOverride !== undefined) {
 			updates.albumTitleOverride = normalizeOptionalString(
 				args.albumTitleOverride,
+			);
+		}
+		if (args.albumArtUrlOverride !== undefined) {
+			updates.albumArtUrlOverride = normalizeOptionalString(
+				args.albumArtUrlOverride,
 			);
 		}
 
@@ -602,6 +697,7 @@ export const replaceItemsForSync = mutation({
 				songTitleOverride: v.optional(v.string()),
 				artistNameOverride: v.optional(v.string()),
 				albumTitleOverride: v.optional(v.string()),
+				albumArtUrlOverride: v.optional(v.string()),
 				pendingUrl: v.optional(v.string()),
 				scrapeState: itemScrapeStateValidator,
 				createdAt: v.optional(v.number()),
@@ -639,6 +735,7 @@ export const replaceItemsForSync = mutation({
 				songTitleOverride: normalizeOptionalString(item.songTitleOverride),
 				artistNameOverride: normalizeOptionalString(item.artistNameOverride),
 				albumTitleOverride: normalizeOptionalString(item.albumTitleOverride),
+				albumArtUrlOverride: normalizeOptionalString(item.albumArtUrlOverride),
 				pendingUrl: normalizeOptionalString(item.pendingUrl),
 				scrapeState: item.scrapeState,
 				createdAt: item.createdAt ?? now,
@@ -665,6 +762,38 @@ async function attachScrapes(
 	}
 
 	return songs;
+}
+
+function toPublicPlaylist(playlist: Doc<"playlistLyrics">) {
+	return {
+		title: playlist.title,
+		slug: playlist.slug,
+		theme: playlist.theme,
+		description: playlist.description,
+	};
+}
+
+function toPublicItemWithScrape(item: ItemWithScrape) {
+	return {
+		_id: item._id,
+		position: item.position,
+		userNote: item.userNote,
+		songTitleOverride: item.songTitleOverride,
+		artistNameOverride: item.artistNameOverride,
+		albumTitleOverride: item.albumTitleOverride,
+		albumArtUrlOverride: item.albumArtUrlOverride,
+		scrape: item.scrape
+			? {
+					songTitle: item.scrape.songTitle,
+					artistName: item.scrape.artistName,
+					albumTitle: item.scrape.albumTitle,
+					albumYear: item.scrape.albumYear,
+					albumArtUrl: item.scrape.albumArtUrl,
+					lyrics: item.scrape.lyrics,
+					about: item.scrape.about,
+				}
+			: undefined,
+	};
 }
 
 async function requirePlaylist(
@@ -710,6 +839,7 @@ async function upsertScrapeRow(
 		artistName: input.artistName,
 		albumTitle: normalizeOptionalString(input.albumTitle),
 		albumYear: normalizeOptionalString(input.albumYear),
+		albumArtUrl: normalizeOptionalString(input.albumArtUrl),
 		lyrics: input.lyrics,
 		about: normalizeOptionalString(input.about),
 		scrapeStatus: "ready" as const,

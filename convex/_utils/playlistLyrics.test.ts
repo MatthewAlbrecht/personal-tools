@@ -3,8 +3,11 @@ import test from "node:test";
 import {
 	buildGeniusSongScrape,
 	buildPlaylistSongDisplay,
+	getPlaylistSongAlbumArtUrl,
 	isDuplicatePlaylistSongError,
+	isPublicPlaylistStatus,
 	normalizeGeniusSongUrl,
+	shouldRefreshScrapeBeforePlaylistReuse,
 	sortPlaylistItems,
 } from "./playlistLyrics";
 
@@ -65,6 +68,34 @@ test("buildPlaylistSongDisplay uses overrides without mutating scrape defaults",
 	});
 });
 
+test("getPlaylistSongAlbumArtUrl prefers item override over scraped artwork", () => {
+	const result = getPlaylistSongAlbumArtUrl({
+		scrape: {
+			albumArtUrl: "https://images.genius.com/scraped.jpg",
+		},
+		item: {
+			albumArtUrlOverride: "https://example.com/override.jpg",
+		},
+	});
+
+	assert.equal(result, "https://example.com/override.jpg");
+});
+
+test("shouldRefreshScrapeBeforePlaylistReuse refreshes cached scrapes without album art", () => {
+	assert.equal(
+		shouldRefreshScrapeBeforePlaylistReuse({
+			albumArtUrl: undefined,
+		}),
+		true,
+	);
+	assert.equal(
+		shouldRefreshScrapeBeforePlaylistReuse({
+			albumArtUrl: "https://images.genius.com/scraped.jpg",
+		}),
+		false,
+	);
+});
+
 test("sortPlaylistItems orders by position ascending", () => {
 	const items = [
 		{ id: "third", position: 30 },
@@ -78,6 +109,11 @@ test("sortPlaylistItems orders by position ascending", () => {
 		result.map((item) => item.id),
 		["first", "second", "third"],
 	);
+});
+
+test("isPublicPlaylistStatus only allows ready playlists", () => {
+	assert.equal(isPublicPlaylistStatus("ready"), true);
+	assert.equal(isPublicPlaylistStatus("draft"), false);
 });
 
 test("buildGeniusSongScrape extracts ready scrape input from Genius HTML", () => {
@@ -106,6 +142,70 @@ test("buildGeniusSongScrape extracts ready scrape input from Genius HTML", () =>
 			"It's okay to just admit that you're jealous of me\nYeah, I heard you talk about me",
 		about: "A lead single from BRAT.",
 	});
+});
+
+test("buildGeniusSongScrape extracts album art from the Genius cover art block", () => {
+	const html = `
+		<h1 class="SongHeader__Title"><span>Pink Moon</span></h1>
+		<h2 class="SongHeader__Title">
+			<div class="HoverMarquee"><span>Nick Drake</span></div>
+		</h2>
+		<a class="PrimaryAlbum__Title" href="/albums/Nick-drake/Pink-moon">Pink Moon</a>
+		<a class="SongHeader-desktop__CoverArt-sc-cb565fd5-8 kHXMtw" href="/albums/Nick-drake/Pink-moon">
+			<img src="https://images.genius.com/pink-moon.jpg" alt="Pink Moon album art" />
+		</a>
+		<div data-lyrics-container="true">Saw it written and I saw it say</div>
+	`;
+
+	const result = buildGeniusSongScrape({
+		canonicalUrl: "https://genius.com/Nick-drake-pink-moon-lyrics",
+		html,
+	});
+
+	assert.equal(result.albumArtUrl, "https://images.genius.com/pink-moon.jpg");
+});
+
+test("buildGeniusSongScrape falls back to data-src for lazy cover art images", () => {
+	const html = `
+		<h1 class="SongHeader__Title"><span>Big Time</span></h1>
+		<h2 class="SongHeader__Title">
+			<div class="HoverMarquee"><span>Angel Olsen</span></div>
+		</h2>
+		<a class="PrimaryAlbum__Title" href="/albums/Angel-olsen/Big-time">Big Time</a>
+		<a class="SongHeader-desktop__CoverArt-sc-cb565fd5-8 kHXMtw" href="/albums/Angel-olsen/Big-time">
+			<img src="" data-src="https://images.genius.com/big-time.jpg" alt="Big Time album art" />
+		</a>
+		<div data-lyrics-container="true">Good morning kisses giving you all mine</div>
+	`;
+
+	const result = buildGeniusSongScrape({
+		canonicalUrl: "https://genius.com/Angel-olsen-big-time-lyrics",
+		html,
+	});
+
+	assert.equal(result.albumArtUrl, "https://images.genius.com/big-time.jpg");
+});
+
+test("buildGeniusSongScrape extracts direct album art from real Genius proxy markup", () => {
+	const html = `
+		<h1 class="SongHeader__Title"><span>For Want Of</span></h1>
+		<h2 class="SongHeader__Title">
+			<div class="HoverMarquee"><span>Rites Of Spring</span></div>
+		</h2>
+		<a class="PrimaryAlbum__Title" href="/albums/Rites-of-spring/Rites-of-spring">Rites of Spring</a>
+		<div class="SongHeader-desktop__CoverArt-sc-cb565fd5-8 kHXMtw"><img alt="Cover art for For Want Of by Rites Of Spring" class="SizedImage__Image-sc-1c7d8bda-1 kBSoCx SongHeader-desktop__SizedImage-sc-cb565fd5-15 dkyPVu" src="https://t2.genius.com/unsafe/689x689/https%3A%2F%2Fimages.genius.com%2F698d9f350b778224a19414bc84e52c53.600x600x1.jpg" data-visible="true"></div>
+		<div data-lyrics-container="true">I woke up this morning with a piece of past caught in my throat</div>
+	`;
+
+	const result = buildGeniusSongScrape({
+		canonicalUrl: "https://genius.com/Rites-of-spring-for-want-of-lyrics",
+		html,
+	});
+
+	assert.equal(
+		result.albumArtUrl,
+		"https://images.genius.com/698d9f350b778224a19414bc84e52c53.600x600x1.jpg",
+	);
 });
 
 test("buildGeniusSongScrape extracts album year from parenthetical album title", () => {

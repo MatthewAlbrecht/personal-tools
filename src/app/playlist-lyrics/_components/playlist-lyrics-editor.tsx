@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery } from "convex/react";
+import { Link as LinkIcon } from "lucide-react";
 import Link from "next/link";
 import type { ClipboardEvent, FormEvent, ReactElement } from "react";
 import { useEffect, useState } from "react";
@@ -32,6 +33,7 @@ type PlaylistItemFieldName =
 	| "songTitleOverride"
 	| "artistNameOverride"
 	| "albumTitleOverride"
+	| "albumArtUrlOverride"
 	| "userNote";
 type PlaylistLyricsItem = Doc<"playlistLyricsItems"> & {
 	scrape?: Doc<"geniusLyricScrapes">;
@@ -55,6 +57,7 @@ export function PlaylistLyricsEditor({ slug }: { slug: string }): ReactElement {
 	const [songUrl, setSongUrl] = useState("");
 	const [isAddingSong, setIsAddingSong] = useState(false);
 	const [isRescrapingAll, setIsRescrapingAll] = useState(false);
+	const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 	const [busyItems, setBusyItems] = useState<Record<string, ItemBusyAction>>(
 		{},
 	);
@@ -124,6 +127,39 @@ export function PlaylistLyricsEditor({ slug }: { slug: string }): ReactElement {
 		}));
 	}
 
+	async function handleTogglePublicStatus(): Promise<void> {
+		if (!data) return;
+
+		const nextStatus = data.playlist.status === "ready" ? "draft" : "ready";
+		setIsUpdatingStatus(true);
+		try {
+			await updatePlaylist({
+				playlistId: data.playlist._id,
+				status: nextStatus,
+			});
+			toast.success(
+				nextStatus === "ready" ? "Playlist is public" : "Playlist is draft",
+			);
+		} catch (error) {
+			console.error("Failed to update playlist status:", error);
+			toast.error(
+				error instanceof Error
+					? error.message
+					: "Failed to update playlist status",
+			);
+		} finally {
+			setIsUpdatingStatus(false);
+		}
+	}
+
+	function handleCopyPublicLink(): void {
+		if (!data) return;
+
+		const publicUrl = `${window.location.origin}/public/playlist-lyrics/${data.playlist.slug}`;
+		navigator.clipboard.writeText(publicUrl);
+		toast.success("Public link copied to clipboard!");
+	}
+
 	async function handleAddSong(
 		event: FormEvent<HTMLFormElement>,
 	): Promise<void> {
@@ -185,6 +221,8 @@ export function PlaylistLyricsEditor({ slug }: { slug: string }): ReactElement {
 				await updateItem({ itemId: item._id, artistNameOverride: value });
 			} else if (field === "albumTitleOverride") {
 				await updateItem({ itemId: item._id, albumTitleOverride: value });
+			} else if (field === "albumArtUrlOverride") {
+				await updateItem({ itemId: item._id, albumArtUrlOverride: value });
 			} else {
 				await updateItem({ itemId: item._id, userNote: value });
 			}
@@ -333,6 +371,7 @@ export function PlaylistLyricsEditor({ slug }: { slug: string }): ReactElement {
 
 	const { playlist, songs } = data;
 	const currentSlug = playlist.slug;
+	const isPublic = playlist.status === "ready";
 	const rescrapableSongCount = songs.filter(hasRescrapeSource).length;
 
 	return (
@@ -343,6 +382,29 @@ export function PlaylistLyricsEditor({ slug }: { slug: string }): ReactElement {
 					<h1 className="font-bold text-3xl">Edit Playlist</h1>
 				</div>
 				<div className="flex gap-2">
+					<Button
+						type="button"
+						variant="outline"
+						onClick={() => {
+							void handleTogglePublicStatus();
+						}}
+						disabled={isUpdatingStatus}
+					>
+						{isUpdatingStatus
+							? "Saving..."
+							: isPublic
+								? "Make Draft"
+								: "Make Public"}
+					</Button>
+					<Button
+						type="button"
+						variant="outline"
+						onClick={handleCopyPublicLink}
+						title="Copy public link"
+					>
+						<LinkIcon className="mr-2 h-4 w-4" />
+						Copy Public Link
+					</Button>
 					<Button asChild variant="outline">
 						<Link href={`/playlist-lyrics/${currentSlug}`}>Print view</Link>
 					</Button>
@@ -554,6 +616,15 @@ function PlaylistSongCard({
 	const sourceUrl = item.scrape?.canonicalUrl ?? item.pendingUrl;
 	const isBusy = busyAction !== undefined;
 	const displayMetadata = getDisplayMetadataParts(item);
+	const [albumArtUrlOverride, setAlbumArtUrlOverride] = useState(
+		item.albumArtUrlOverride ?? "",
+	);
+	const albumArtPreviewUrl =
+		albumArtUrlOverride.trim() || item.scrape?.albumArtUrl?.trim();
+
+	useEffect(() => {
+		setAlbumArtUrlOverride(item.albumArtUrlOverride ?? "");
+	}, [item.albumArtUrlOverride]);
 
 	return (
 		<Card>
@@ -615,6 +686,10 @@ function PlaylistSongCard({
 						value={getScrapedAlbumTitle(item) ?? "Unavailable"}
 					/>
 					<MetadataRow
+						label="Scraped album art"
+						value={item.scrape?.albumArtUrl ?? "Unavailable"}
+					/>
+					<MetadataRow
 						label="Scraped year"
 						value={getScrapedAlbumYear(item) ?? "Unavailable"}
 					/>
@@ -634,7 +709,7 @@ function PlaylistSongCard({
 					) : null}
 				</div>
 
-				<div className="grid gap-4 sm:grid-cols-3">
+				<div className="grid gap-4 sm:grid-cols-2">
 					<div className="space-y-2">
 						<Label htmlFor={`song-title-${item._id}`}>Title override</Label>
 						<Input
@@ -682,6 +757,49 @@ function PlaylistSongCard({
 								);
 							}}
 						/>
+					</div>
+					<div className="space-y-2">
+						<Label htmlFor={`song-album-art-${item._id}`}>
+							Album art URL override
+						</Label>
+						<Input
+							id={`song-album-art-${item._id}`}
+							type="url"
+							value={albumArtUrlOverride}
+							placeholder={item.scrape?.albumArtUrl ?? "Album art URL"}
+							disabled={isBusy}
+							onChange={(event) =>
+								setAlbumArtUrlOverride(event.currentTarget.value)
+							}
+							onBlur={(event) => {
+								void onItemFieldBlur(
+									item,
+									"albumArtUrlOverride",
+									event.currentTarget.value,
+								);
+							}}
+						/>
+						{albumArtPreviewUrl ? (
+							<div className="flex items-center gap-3 rounded-md border bg-muted/30 p-3">
+								<img
+									src={albumArtPreviewUrl}
+									alt={`${getDisplayTitle(item)} album art preview`}
+									className="h-16 w-16 rounded-md object-cover"
+								/>
+								<div className="min-w-0 text-sm">
+									<div className="font-medium">Album art preview</div>
+									<div className="text-muted-foreground text-xs">
+										{albumArtUrlOverride.trim()
+											? "Using override URL"
+											: "Using scraped art"}
+									</div>
+								</div>
+							</div>
+						) : (
+							<p className="text-muted-foreground text-sm">
+								No album art available.
+							</p>
+						)}
 					</div>
 				</div>
 
@@ -765,6 +883,7 @@ function getItemFieldValue(
 	if (field === "songTitleOverride") return item.songTitleOverride ?? "";
 	if (field === "artistNameOverride") return item.artistNameOverride ?? "";
 	if (field === "albumTitleOverride") return item.albumTitleOverride ?? "";
+	if (field === "albumArtUrlOverride") return item.albumArtUrlOverride ?? "";
 	return item.userNote ?? "";
 }
 

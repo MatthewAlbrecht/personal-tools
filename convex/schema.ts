@@ -152,6 +152,7 @@ export default defineSchema({
 		artistName: v.string(),
 		albumTitle: v.optional(v.string()),
 		albumYear: v.optional(v.string()),
+		albumArtUrl: v.optional(v.string()),
 		lyrics: v.string(),
 		about: v.optional(v.string()),
 		scrapeStatus: v.union(v.literal("ready"), v.literal("failed")),
@@ -171,6 +172,7 @@ export default defineSchema({
 		songTitleOverride: v.optional(v.string()),
 		artistNameOverride: v.optional(v.string()),
 		albumTitleOverride: v.optional(v.string()),
+		albumArtUrlOverride: v.optional(v.string()),
 		pendingUrl: v.optional(v.string()),
 		scrapeState: v.union(
 			v.literal("scraping"),

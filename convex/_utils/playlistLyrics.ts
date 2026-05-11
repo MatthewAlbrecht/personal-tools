@@ -7,12 +7,21 @@ export type ScrapeDisplayFields = {
 	artistName: string;
 	albumTitle?: string;
 	albumYear?: string;
+	albumArtUrl?: string;
 };
 
 export type PlaylistDisplayOverrides = {
 	songTitleOverride?: string;
 	artistNameOverride?: string;
 	albumTitleOverride?: string;
+	albumArtUrlOverride?: string;
+};
+
+export type PlaylistSongDisplay = {
+	songTitle: string;
+	artistName: string;
+	albumTitle: string;
+	albumYear: string;
 };
 
 export type GeniusSongScrapeInput = {
@@ -21,6 +30,7 @@ export type GeniusSongScrapeInput = {
 	artistName: string;
 	albumTitle?: string;
 	albumYear?: string;
+	albumArtUrl?: string;
 	lyrics: string;
 	about?: string;
 };
@@ -59,6 +69,7 @@ export function buildGeniusSongScrape({
 	const metadata = extractAlbumMetadata(html);
 	const lyrics = extractLyricsFromHTML(html);
 	const about = extractAboutFromHTML(html);
+	const albumArtUrl = extractAlbumArtUrlFromHTML(html);
 
 	if (!songTitle || !metadata?.artistName || !lyrics) {
 		throw new Error("Could not extract song metadata and lyrics from Genius");
@@ -72,6 +83,7 @@ export function buildGeniusSongScrape({
 		artistName: metadata.artistName,
 		albumTitle: album.albumTitle,
 		albumYear: album.albumYear,
+		...(albumArtUrl ? { albumArtUrl } : {}),
 		lyrics,
 		about,
 	};
@@ -170,11 +182,46 @@ function extractAboutFromHTML(html: string): string | undefined {
 	return aboutText;
 }
 
+function extractAlbumArtUrlFromHTML(html: string): string | undefined {
+	const root = parseHTML(html);
+	const coverArt = root.querySelector(
+		'[class*="SongHeader-desktop__CoverArt"]',
+	);
+	const image = coverArt?.querySelector("img");
+	const src = normalizeOptionalString(image?.getAttribute("src"));
+	const dataSrc = normalizeOptionalString(image?.getAttribute("data-src"));
+
+	return normalizeGeniusImageProxyUrl(src ?? dataSrc);
+}
+
 export function isDuplicatePlaylistSongError(error: unknown): boolean {
 	return (
 		error instanceof Error &&
 		error.message.includes("Song is already in this playlist")
 	);
+}
+
+export function isPublicPlaylistStatus(status: "draft" | "ready"): boolean {
+	return status === "ready";
+}
+
+export function getPlaylistSongAlbumArtUrl({
+	scrape,
+	item,
+}: {
+	scrape: Pick<ScrapeDisplayFields, "albumArtUrl">;
+	item: Pick<PlaylistDisplayOverrides, "albumArtUrlOverride">;
+}): string | undefined {
+	return (
+		normalizeOptionalString(item.albumArtUrlOverride) ??
+		normalizeOptionalString(scrape.albumArtUrl)
+	);
+}
+
+export function shouldRefreshScrapeBeforePlaylistReuse(
+	scrape: Pick<ScrapeDisplayFields, "albumArtUrl">,
+): boolean {
+	return !normalizeOptionalString(scrape.albumArtUrl);
 }
 
 export function buildPlaylistSongDisplay({
@@ -183,7 +230,7 @@ export function buildPlaylistSongDisplay({
 }: {
 	scrape: ScrapeDisplayFields;
 	item: PlaylistDisplayOverrides;
-}): Required<ScrapeDisplayFields> {
+}): PlaylistSongDisplay {
 	return {
 		songTitle: item.songTitleOverride?.trim() || scrape.songTitle,
 		artistName: item.artistNameOverride?.trim() || scrape.artistName,
@@ -196,6 +243,36 @@ export function sortPlaylistItems<T extends { position: number }>(
 	items: T[],
 ): T[] {
 	return [...items].sort((a, b) => a.position - b.position);
+}
+
+function normalizeOptionalString(
+	value: string | undefined,
+): string | undefined {
+	const trimmed = value?.trim();
+	return trimmed || undefined;
+}
+
+function normalizeGeniusImageProxyUrl(
+	value: string | undefined,
+): string | undefined {
+	if (!value) return undefined;
+
+	try {
+		const url = new URL(value);
+		const encodedImageUrl = url.pathname
+			.split("/")
+			.find(
+				(segment) =>
+					segment.startsWith("https%3A%2F%2F") ||
+					segment.startsWith("http%3A%2F%2F"),
+			);
+
+		if (!encodedImageUrl) return value;
+
+		return new URL(decodeURIComponent(encodedImageUrl)).href;
+	} catch {
+		return value;
+	}
 }
 
 function splitAlbumTitleAndYear(albumTitle: string | undefined): {
