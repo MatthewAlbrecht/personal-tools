@@ -1,6 +1,9 @@
 import { ConvexHttpClient } from "convex/browser";
 import { env } from "~/env.js";
-import { buildGeniusSongScrape } from "../../../../convex/_utils/playlistLyrics";
+import {
+	buildGeniusSongScrape,
+	getGeniusAlbumArtDebugInfo,
+} from "../../../../convex/_utils/playlistLyrics";
 import type { GeniusSongScrapeInput } from "../../../../convex/_utils/playlistLyrics";
 
 const geniusFetchHeaders = {
@@ -43,7 +46,16 @@ export async function fetchGeniusSongScrape(
 	}
 
 	const html = await response.text();
-	return buildGeniusSongScrape({ canonicalUrl, html });
+	const scrapedSong = buildGeniusSongScrape({ canonicalUrl, html });
+	const albumArtDebugInfo = getGeniusAlbumArtDebugInfo(html);
+
+	console.info("[playlist-lyrics] Genius album art scrape debug", {
+		canonicalUrl,
+		albumArtUrl: scrapedSong.albumArtUrl ?? null,
+		...albumArtDebugInfo,
+	});
+
+	return scrapedSong;
 }
 
 export function getRouteErrorMessage(error: unknown): string {

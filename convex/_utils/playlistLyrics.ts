@@ -35,6 +35,16 @@ export type GeniusSongScrapeInput = {
 	about?: string;
 };
 
+export type GeniusAlbumArtDebugInfo = {
+	htmlLength: number;
+	coverArtHtml?: string;
+	rawImageSrc?: string;
+	rawImageDataSrc?: string;
+	rawMetaImageUrl?: string;
+	normalizedAlbumArtUrl?: string;
+	fallbackHtmlSnippet?: string;
+};
+
 export function normalizeGeniusSongUrl(input: string): string {
 	let url: URL;
 
@@ -69,7 +79,7 @@ export function buildGeniusSongScrape({
 	const metadata = extractAlbumMetadata(html);
 	const lyrics = extractLyricsFromHTML(html);
 	const about = extractAboutFromHTML(html);
-	const albumArtUrl = extractAlbumArtUrlFromHTML(html);
+	const albumArtUrl = getGeniusAlbumArtDebugInfo(html).normalizedAlbumArtUrl;
 
 	if (!songTitle || !metadata?.artistName || !lyrics) {
 		throw new Error("Could not extract song metadata and lyrics from Genius");
@@ -182,7 +192,9 @@ function extractAboutFromHTML(html: string): string | undefined {
 	return aboutText;
 }
 
-function extractAlbumArtUrlFromHTML(html: string): string | undefined {
+export function getGeniusAlbumArtDebugInfo(
+	html: string,
+): GeniusAlbumArtDebugInfo {
 	const root = parseHTML(html);
 	const coverArt = root.querySelector(
 		'[class*="SongHeader-desktop__CoverArt"]',
@@ -190,8 +202,23 @@ function extractAlbumArtUrlFromHTML(html: string): string | undefined {
 	const image = coverArt?.querySelector("img");
 	const src = normalizeOptionalString(image?.getAttribute("src"));
 	const dataSrc = normalizeOptionalString(image?.getAttribute("data-src"));
+	const fallbackUrl =
+		extractAlbumArtUrlFromMetadata(root) ?? extractAlbumArtUrlFromText(html);
+	const normalizedAlbumArtUrl = normalizeGeniusImageProxyUrl(
+		src ?? dataSrc ?? fallbackUrl,
+	);
 
-	return normalizeGeniusImageProxyUrl(src ?? dataSrc);
+	return {
+		htmlLength: html.length,
+		coverArtHtml: coverArt?.toString(),
+		rawImageSrc: src,
+		rawImageDataSrc: dataSrc,
+		rawMetaImageUrl: fallbackUrl,
+		normalizedAlbumArtUrl,
+		fallbackHtmlSnippet: normalizedAlbumArtUrl
+			? undefined
+			: getAlbumArtFallbackSnippet(html),
+	};
 }
 
 export function isDuplicatePlaylistSongError(error: unknown): boolean {
@@ -256,9 +283,11 @@ function normalizeGeniusImageProxyUrl(
 	value: string | undefined,
 ): string | undefined {
 	if (!value) return undefined;
+	const normalizedValue = value.replace(/\\\//g, "/");
 
 	try {
-		const url = new URL(value);
+		const url = new URL(normalizedValue);
+		url.protocol = "https:";
 		const encodedImageUrl = url.pathname
 			.split("/")
 			.find(
@@ -267,12 +296,64 @@ function normalizeGeniusImageProxyUrl(
 					segment.startsWith("http%3A%2F%2F"),
 			);
 
-		if (!encodedImageUrl) return value;
+		if (!encodedImageUrl) return url.href;
 
 		return new URL(decodeURIComponent(encodedImageUrl)).href;
 	} catch {
-		return value;
+		return normalizedValue;
 	}
+}
+
+function extractAlbumArtUrlFromMetadata(root: HTMLElement): string | undefined {
+	const selectors = [
+		'meta[property="og:image"]',
+		'meta[property="twitter:image"]',
+		'meta[name="twitter:image"]',
+		'link[rel="image_src"]',
+	];
+
+	for (const selector of selectors) {
+		const element = root.querySelector(selector);
+		const value = normalizeOptionalString(
+			element?.getAttribute("content") ?? element?.getAttribute("href"),
+		);
+
+		if (value) return value;
+	}
+
+	return undefined;
+}
+
+function extractAlbumArtUrlFromText(html: string): string | undefined {
+	const normalizedHtml = html.replace(/\\\//g, "/");
+	const match =
+		normalizedHtml.match(
+			/https:\/\/t\d+\.genius\.com\/unsafe\/[^"'<>\s]+https%3A%2F%2Fimages\.genius\.com%2F[^"'<>\s]+/i,
+		) ??
+		normalizedHtml.match(
+			/https:\/\/images\.genius\.com\/[^"'<>\s]+\.(?:jpg|jpeg|png|webp)/i,
+		);
+
+	return normalizeOptionalString(match?.[0]);
+}
+
+function getAlbumArtFallbackSnippet(html: string): string | undefined {
+	const needles = [
+		"SongHeader-desktop__CoverArt",
+		"SizedImage",
+		"images.genius",
+	];
+	const matchIndex = needles
+		.map((needle) => html.indexOf(needle))
+		.filter((index) => index >= 0)
+		.sort((a, b) => a - b)[0];
+
+	if (matchIndex === undefined) return undefined;
+
+	const start = Math.max(matchIndex - 500, 0);
+	const end = Math.min(matchIndex + 1_500, html.length);
+
+	return html.slice(start, end);
 }
 
 function splitAlbumTitleAndYear(albumTitle: string | undefined): {

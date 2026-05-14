@@ -1,0 +1,30 @@
+{
+	"manifest_version": 3,
+	"name": "RYM release capture (local)",
+	"version": "0.1.0",
+	"description": "Locally saves Rate Your Music album/EP metadata when you open a release page.",
+	"permissions": ["storage"],
+	"optional_host_permissions": ["http://*/*", "https://*/*"],
+	"host_permissions": [
+		"https://rateyourmusic.com/*",
+		"http://127.0.0.1:1333/*",
+		"http://localhost:1333/*"
+	],
+	"options_ui": {
+		"page": "options.html",
+		"open_in_tab": true
+	},
+	"background": {
+		"service_worker": "service-worker.js"
+	},
+	"content_scripts": [
+		{
+			"matches": [
+				"https://rateyourmusic.com/release/album/*",
+				"https://rateyourmusic.com/release/ep/*"
+			],
+			"js": ["content.js"],
+			"run_at": "document_idle"
+		}
+	]
+}

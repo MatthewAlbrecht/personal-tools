@@ -527,4 +527,62 @@ export default defineSchema({
 		.index("by_yearId", ["yearId"])
 		.index("by_spotifyTrackId", ["spotifyTrackId"])
 		.index("by_yearId_addedAt", ["yearId", "addedAt"]),
+
+	// Rate Your Music taxonomy (keys: trim + lowercase; labels: pretty / first-seen)
+	rateYourMusicGenres: defineTable({
+		key: v.string(),
+		label: v.string(),
+		href: v.optional(v.string()),
+		createdAt: v.number(),
+	})
+		.index("by_key", ["key"])
+		.index("by_createdAt", ["createdAt"]),
+
+	rateYourMusicDescriptors: defineTable({
+		key: v.string(),
+		label: v.string(),
+		createdAt: v.number(),
+	})
+		.index("by_key", ["key"])
+		.index("by_createdAt", ["createdAt"]),
+
+	// Rate Your Music release scrapes (album / EP pages — extension or API)
+	rateYourMusicScrapes: defineTable({
+		/** Canonical https URL for this release (normalized for dedupe) */
+		rymUrl: v.string(),
+		releaseKind: v.union(v.literal("album"), v.literal("ep")),
+		/** Label from RYM "Type" row, e.g. "Album" | "EP" */
+		releaseTypeLabel: v.optional(v.string()),
+		albumTitle: v.string(),
+		artists: v.array(
+			v.object({
+				name: v.string(),
+				href: v.optional(v.string()),
+			}),
+		),
+		spotifyAlbumId: v.optional(v.string()),
+		spotifyAlbumUrl: v.optional(v.string()),
+		spotifyAlbumConvexId: v.optional(v.id("spotifyAlbums")),
+		lastScrapedAt: v.number(),
+		createdAt: v.number(),
+		updatedAt: v.number(),
+	})
+		.index("by_rymUrl", ["rymUrl"])
+		.index("by_spotifyAlbumId", ["spotifyAlbumId"])
+		.index("by_updatedAt", ["updatedAt"]),
+
+	rateYourMusicReleaseGenres: defineTable({
+		scrapeId: v.id("rateYourMusicScrapes"),
+		genreId: v.id("rateYourMusicGenres"),
+		role: v.union(v.literal("primary"), v.literal("secondary")),
+	})
+		.index("by_scrapeId", ["scrapeId"])
+		.index("by_genreId", ["genreId"]),
+
+	rateYourMusicReleaseDescriptors: defineTable({
+		scrapeId: v.id("rateYourMusicScrapes"),
+		descriptorId: v.id("rateYourMusicDescriptors"),
+	})
+		.index("by_scrapeId", ["scrapeId"])
+		.index("by_descriptorId", ["descriptorId"]),
 });

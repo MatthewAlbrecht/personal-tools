@@ -28,6 +28,8 @@ export const env = createEnv({
 		OPENAI_API_KEY: z.string().min(1),
 		// Spotify Sync Cron
 		SPOTIFY_SYNC_USER_ID: z.string().min(1),
+		/** Bearer token for Chrome extension → `/api/rate-your-music/scrape` (omit or use 8+ chars locally). */
+		RYM_EXTENSION_INGEST_SECRET: z.string().min(8).optional(),
 	},
 
 	/**
@@ -63,6 +65,7 @@ export const env = createEnv({
 		SPOTIFY_CLIENT_SECRET: process.env.SPOTIFY_CLIENT_SECRET,
 		OPENAI_API_KEY: process.env.OPENAI_API_KEY,
 		SPOTIFY_SYNC_USER_ID: process.env.SPOTIFY_SYNC_USER_ID,
+		RYM_EXTENSION_INGEST_SECRET: process.env.RYM_EXTENSION_INGEST_SECRET,
 	},
 	/**
 	 * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially

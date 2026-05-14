@@ -3,6 +3,7 @@ import test from "node:test";
 import {
 	buildGeniusSongScrape,
 	buildPlaylistSongDisplay,
+	getGeniusAlbumArtDebugInfo,
 	getPlaylistSongAlbumArtUrl,
 	isDuplicatePlaylistSongError,
 	isPublicPlaylistStatus,
@@ -163,6 +164,52 @@ test("buildGeniusSongScrape extracts album art from the Genius cover art block",
 	});
 
 	assert.equal(result.albumArtUrl, "https://images.genius.com/pink-moon.jpg");
+});
+
+test("getGeniusAlbumArtDebugInfo reports cover art markup and normalized URL", () => {
+	const html = `
+		<div class="SongHeader-desktop__CoverArt-sc-cb565fd5-8 kHXMtw"><img alt="Cover art for For Want Of by Rites Of Spring" class="SizedImage__Image-sc-1c7d8bda-1 kBSoCx SongHeader-desktop__SizedImage-sc-cb565fd5-15 dkyPVu" src="https://t2.genius.com/unsafe/689x689/https%3A%2F%2Fimages.genius.com%2F698d9f350b778224a19414bc84e52c53.600x600x1.jpg" data-visible="true"></div>
+	`;
+
+	const result = getGeniusAlbumArtDebugInfo(html);
+
+	assert.equal(
+		result.normalizedAlbumArtUrl,
+		"https://images.genius.com/698d9f350b778224a19414bc84e52c53.600x600x1.jpg",
+	);
+	assert.match(result.coverArtHtml ?? "", /SongHeader-desktop__CoverArt/);
+	assert.equal(
+		result.rawImageSrc,
+		"https://t2.genius.com/unsafe/689x689/https%3A%2F%2Fimages.genius.com%2F698d9f350b778224a19414bc84e52c53.600x600x1.jpg",
+	);
+});
+
+test("buildGeniusSongScrape falls back to og image when cover art image is unloaded", () => {
+	const html = `
+		<meta content="http://images.genius.com/698d9f350b778224a19414bc84e52c53.600x600x1.jpg" property="og:image" />
+		<h1 class="SongHeader__Title"><span>For Want Of</span></h1>
+		<h2 class="SongHeader__Title">
+			<div class="HoverMarquee"><span>Rites Of Spring</span></div>
+		</h2>
+		<a class="PrimaryAlbum__Title" href="/albums/Rites-of-spring/Rites-of-spring">Rites of Spring</a>
+		<div class="SongHeader-desktop__CoverArtContainer-sc-cb565fd5-7 hA-DXaF"><div class="SongHeader-desktop__CoverArt-sc-cb565fd5-8 kHXMtw"><img alt="Cover art for For Want Of by Rites Of Spring" class="SizedImage__Image-sc-1c7d8bda-1 kBSoCx SongHeader-desktop__SizedImage-sc-cb565fd5-15 dkyPVu"></div></div>
+		<div data-lyrics-container="true">I woke up this morning with a piece of past caught in my throat</div>
+	`;
+
+	const result = buildGeniusSongScrape({
+		canonicalUrl: "https://genius.com/Rites-of-spring-for-want-of-lyrics",
+		html,
+	});
+	const debugInfo = getGeniusAlbumArtDebugInfo(html);
+
+	assert.equal(
+		result.albumArtUrl,
+		"https://images.genius.com/698d9f350b778224a19414bc84e52c53.600x600x1.jpg",
+	);
+	assert.equal(
+		debugInfo.rawMetaImageUrl,
+		"http://images.genius.com/698d9f350b778224a19414bc84e52c53.600x600x1.jpg",
+	);
 });
 
 test("buildGeniusSongScrape falls back to data-src for lazy cover art images", () => {
