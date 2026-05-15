@@ -20,6 +20,7 @@ type ExtensionPayload = {
 	spotifyAlbumId?: string | null;
 	spotifyAlbumUrl?: string | null;
 	capturedAt?: number;
+	tracklistingTotalSeconds?: number;
 };
 
 function normalizeNamedLinks(items: NamedLink[] | undefined) {
@@ -90,6 +91,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 		);
 	}
 
+	let tracklistingTotalSeconds: number | undefined;
+	if (
+		typeof body.tracklistingTotalSeconds === "number" &&
+		Number.isFinite(body.tracklistingTotalSeconds)
+	) {
+		const n = Math.round(body.tracklistingTotalSeconds);
+		if (n > 0 && n <= 24 * 3600) {
+			tracklistingTotalSeconds = n;
+		}
+	}
+
 	const convex = new ConvexHttpClient(env.NEXT_PUBLIC_CONVEX_URL);
 
 	try {
@@ -118,6 +130,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 						: String(body.spotifyAlbumUrl).trim() || undefined,
 				lastScrapedAt:
 					typeof body.capturedAt === "number" ? body.capturedAt : undefined,
+				...(tracklistingTotalSeconds !== undefined
+					? { tracklistingTotalSeconds }
+					: {}),
 			},
 		);
 

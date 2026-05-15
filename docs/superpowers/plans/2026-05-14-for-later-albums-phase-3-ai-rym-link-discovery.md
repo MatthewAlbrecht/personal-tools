@@ -1,9 +1,11 @@
 # For Later Albums Phase 3 AI RYM Link Discovery Implementation Plan
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-**Goal:** Build the Phase 3 API path that searches for likely Rate Your Music album/EP release URLs for active unmatched For Later album backlog items and stores discovery status on `forLaterAlbumItems`.
-**Policy:** Discovery runs only when this route (or the Phase 4 UI that calls it) is invoked. Playlist sync and Phase 5 cron must never enqueue items (`queued`) or call discovery automatically.
-**Architecture:** Keep URL validation in one shared pure helper, add thin Convex query/mutation functions for candidate selection and status writes, put mockable orchestration in `src/lib/rym-link-discovery.ts`, and make the Next route only parse HTTP input, wire Convex, and call OpenAI web search. The discovered URL remains only a candidate on `forLaterAlbumItems`; it does not create a RYM scrape row.
-**Tech Stack:** Next.js 15 App Router API route, Convex queries/mutations, AI SDK 5 with `@ai-sdk/openai`, Zod, `node:test`, TypeScript, Biome.
+> **Goal:** Build the Phase 3 API path that searches for likely Rate Your Music album/EP release URLs for active unmatched For Later album backlog items and stores discovery status on `forLaterAlbumItems`.
+> **Policy:** Discovery runs only when this route (or the Phase 4 UI that calls it) is invoked. Playlist sync and Phase 5 cron must never enqueue items (`queued`) or call discovery automatically.
+> **Architecture:** Keep URL validation in one shared pure helper, add thin Convex query/mutation functions for candidate selection and status writes, put mockable orchestration in `src/lib/rym-link-discovery.ts`, and make the Next route only parse HTTP input, wire Convex, and call OpenAI web search. The discovered URL remains only a candidate on `forLaterAlbumItems`; it does not create a RYM scrape row.
+> **Tech Stack:** Next.js 15 App Router API route, Convex queries/mutations, AI SDK 5 with `@ai-sdk/openai`, Zod, `node:test`, TypeScript, Biome.
+
 ---
 
 ## File Structure
@@ -20,11 +22,11 @@
 ## Task 1: Shared RYM Release URL Validation
 
 **Files:**
+
 - Create: `convex/_utils/rateYourMusicReleaseUrl.test.ts`
 - Create: `convex/_utils/rateYourMusicReleaseUrl.ts`
 - Modify: `convex/rateYourMusicScrapes.ts`
-
-- [ ] **Step 1: Write the failing URL validation tests**
+- **Step 1: Write the failing URL validation tests**
 
 Create `convex/_utils/rateYourMusicReleaseUrl.test.ts`:
 
@@ -90,7 +92,7 @@ test("normalizeRateYourMusicReleaseUrl rejects non-album release pages", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- **Step 2: Run the test to verify it fails**
 
 Run:
 
@@ -105,7 +107,7 @@ not ok 1 - convex/_utils/rateYourMusicReleaseUrl.test.ts
 Error [ERR_MODULE_NOT_FOUND]: Cannot find module
 ```
 
-- [ ] **Step 3: Implement the shared helper**
+- **Step 3: Implement the shared helper**
 
 Create `convex/_utils/rateYourMusicReleaseUrl.ts`:
 
@@ -160,7 +162,7 @@ export function getRateYourMusicReleaseKind(rymUrl: string): "album" | "ep" {
 }
 ```
 
-- [ ] **Step 4: Refactor RYM scrape ingest to import the shared helper**
+- **Step 4: Refactor RYM scrape ingest to import the shared helper**
 
 Modify the imports at the top of `convex/rateYourMusicScrapes.ts`:
 
@@ -185,7 +187,7 @@ const releaseKind = getRateYourMusicReleaseKind(rymUrl);
 
 In `getRateYourMusicScrapeByUrl`, keep the existing `try`/`catch` and call the imported `normalizeRateYourMusicReleaseUrl`.
 
-- [ ] **Step 5: Run validation**
+- **Step 5: Run validation**
 
 Run:
 
@@ -208,7 +210,7 @@ tsc --noEmit
 
 with exit code `0`.
 
-- [ ] **Step 6: Commit**
+- **Step 6: Commit**
 
 Run:
 
@@ -224,10 +226,10 @@ EOF
 ## Task 2: Convex Discovery Status API
 
 **Files:**
+
 - Modify: `convex/schema.ts`
 - Modify: `convex/forLaterAlbums.ts`
-
-- [ ] **Step 1: Add the discovery-status index if it is missing**
+- **Step 1: Add the discovery-status index if it is missing**
 
 In `convex/schema.ts`, find the `forLaterAlbumItems` table from Phase 1. Ensure the index block includes this compound index:
 
@@ -249,7 +251,7 @@ The final `forLaterAlbumItems` index block should include all existing Phase 1/2
 	.index("by_userId_rymDiscoveryStatus", ["userId", "rymDiscoveryStatus"])
 ```
 
-- [ ] **Step 2: Run typecheck to verify generated types expose the table**
+- **Step 2: Run typecheck to verify generated types expose the table**
 
 Run:
 
@@ -272,7 +274,7 @@ tsc --noEmit
 
 with exit code `0`.
 
-- [ ] **Step 3: Add Convex validators and types**
+- **Step 3: Add Convex validators and types**
 
 In `convex/forLaterAlbums.ts`, add these validators near the other Phase 1/2 validators:
 
@@ -307,7 +309,7 @@ type RymDiscoveryCandidateStatus =
 	| "failed";
 ```
 
-- [ ] **Step 4: Add the candidate eligibility helper**
+- **Step 4: Add the candidate eligibility helper**
 
 In `convex/forLaterAlbums.ts`, add this helper after existing private helpers:
 
@@ -345,7 +347,7 @@ function canRunRymDiscoveryForItem(
 }
 ```
 
-- [ ] **Step 5: Add `listRymDiscoveryCandidates`**
+- **Step 5: Add `listRymDiscoveryCandidates`**
 
 In `convex/forLaterAlbums.ts`, add this query:
 
@@ -432,7 +434,7 @@ export const listRymDiscoveryCandidates = query({
 });
 ```
 
-- [ ] **Step 6: Add status mutations**
+- **Step 6: Add status mutations**
 
 In `convex/forLaterAlbums.ts`, add these mutations:
 
@@ -489,7 +491,7 @@ export const completeRymDiscovery = mutation({
 });
 ```
 
-- [ ] **Step 7: Run validation**
+- **Step 7: Run validation**
 
 Run:
 
@@ -507,7 +509,7 @@ tsc --noEmit
 
 with exit code `0`.
 
-- [ ] **Step 8: Commit**
+- **Step 8: Commit**
 
 Run:
 
@@ -523,10 +525,10 @@ EOF
 ## Task 3: Mockable Discovery Service
 
 **Files:**
+
 - Create: `src/lib/rym-link-discovery.test.ts`
 - Create: `src/lib/rym-link-discovery.ts`
-
-- [ ] **Step 1: Write failing service tests with mocks**
+- **Step 1: Write failing service tests with mocks**
 
 Create `src/lib/rym-link-discovery.test.ts`:
 
@@ -674,7 +676,7 @@ test("discoverRymLinks stores failed when the AI search throws", async () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- **Step 2: Run the test to verify it fails**
 
 Run:
 
@@ -689,7 +691,7 @@ not ok 1 - src/lib/rym-link-discovery.test.ts
 Error [ERR_MODULE_NOT_FOUND]: Cannot find module
 ```
 
-- [ ] **Step 3: Implement the discovery service**
+- **Step 3: Implement the discovery service**
 
 Create `src/lib/rym-link-discovery.ts`:
 
@@ -890,7 +892,7 @@ export async function discoverRymLinks(
 }
 ```
 
-- [ ] **Step 4: Run service tests**
+- **Step 4: Run service tests**
 
 Run:
 
@@ -904,7 +906,7 @@ Expected output includes:
 # pass 5
 ```
 
-- [ ] **Step 5: Run typecheck**
+- **Step 5: Run typecheck**
 
 Run:
 
@@ -920,7 +922,7 @@ tsc --noEmit
 
 with exit code `0`.
 
-- [ ] **Step 6: Commit**
+- **Step 6: Commit**
 
 Run:
 
@@ -936,9 +938,9 @@ EOF
 ## Task 4: AI Discovery API Route
 
 **Files:**
-- Create: `src/app/api/for-later-albums/find-rym-links/route.ts`
 
-- [ ] **Step 1: Write the route**
+- Create: `src/app/api/for-later-albums/find-rym-links/route.ts`
+- **Step 1: Write the route**
 
 Create `src/app/api/for-later-albums/find-rym-links/route.ts`:
 
@@ -1049,7 +1051,7 @@ async function searchRymReleaseWithOpenAI(
 }
 ```
 
-- [ ] **Step 2: Run typecheck to catch generated API and route typing issues**
+- **Step 2: Run typecheck to catch generated API and route typing issues**
 
 Run:
 
@@ -1065,7 +1067,7 @@ tsc --noEmit
 
 with exit code `0`.
 
-- [ ] **Step 3: Run route-relevant tests**
+- **Step 3: Run route-relevant tests**
 
 Run:
 
@@ -1081,7 +1083,7 @@ Expected output includes:
 # pass 5
 ```
 
-- [ ] **Step 4: Commit**
+- **Step 4: Commit**
 
 Run:
 
@@ -1097,12 +1099,12 @@ EOF
 ## Task 5: End-to-End Verification
 
 **Files:**
+
 - Verify: `convex/_utils/rateYourMusicReleaseUrl.test.ts`
 - Verify: `src/lib/rym-link-discovery.test.ts`
 - Verify: `src/app/api/for-later-albums/find-rym-links/route.ts`
 - Verify: `convex/forLaterAlbums.ts`
-
-- [ ] **Step 1: Run all Phase 3 tests**
+- **Step 1: Run all Phase 3 tests**
 
 Run:
 
@@ -1117,7 +1119,7 @@ Expected output includes:
 # fail 0
 ```
 
-- [ ] **Step 2: Run static checks**
+- **Step 2: Run static checks**
 
 Run:
 
@@ -1135,7 +1137,7 @@ tsc --noEmit
 
 with exit code `0` for both commands.
 
-- [ ] **Step 3: Run a local API smoke test with mocked data unavailable**
+- **Step 3: Run a local API smoke test with mocked data unavailable**
 
 Start the app only if it is not already running:
 
@@ -1157,7 +1159,7 @@ Expected response:
 {"error":"Invalid request body","issues":{"userId":["userId is required"],"limit":["Number must be less than or equal to 25"]}}
 ```
 
-- [ ] **Step 4: Run a local API smoke test for an empty candidate batch**
+- **Step 4: Run a local API smoke test for an empty candidate batch**
 
 Use a synthetic user id that has no For Later rows so the route exercises request parsing and Convex candidate lookup without spending OpenAI tokens:
 
@@ -1173,7 +1175,7 @@ Expected response when there are no active unmatched `not_started` or `queued` r
 {"processed":0,"found":0,"failed":0,"results":[]}
 ```
 
-- [ ] **Step 5: Confirm database status semantics**
+- **Step 5: Confirm database status semantics**
 
 Inspect the changed `forLaterAlbumItems` row in Convex after a found result. It must have:
 
@@ -1217,7 +1219,7 @@ Inspect the changed row after an AI exception. It must have:
 }
 ```
 
-- [ ] **Step 6: Commit verification fixes if any were required**
+- **Step 6: Commit verification fixes if any were required**
 
 If verification changed files, run:
 
@@ -1247,3 +1249,4 @@ nothing to commit, working tree clean
 - Request schema enforces `userId`, optional `albumItemIds`, default `limit = 10`, and max `limit = 25`.
 - AI model string is centralized as `gpt-5-nano-2025-08-07`.
 - OpenAI web search uses `openai.responses(AI_MODEL)`, `openai.tools.webSearchPreview({ searchContextSize: "low" })`, and forced `toolChoice`.
+

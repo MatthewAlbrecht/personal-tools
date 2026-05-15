@@ -16,6 +16,7 @@ import type {
 import type * as _utils_albumMatching from "../_utils/albumMatching.js";
 import type * as _utils_albumMatchingCore from "../_utils/albumMatchingCore.js";
 import type * as _utils_forLaterAlbums from "../_utils/forLaterAlbums.js";
+import type * as _utils_forLaterAlbumsUi from "../_utils/forLaterAlbumsUi.js";
 import type * as _utils_geniusParser from "../_utils/geniusParser.js";
 import type * as _utils_playlistLyrics from "../_utils/playlistLyrics.js";
 import type * as _utils_rateYourMusicTaxonomy from "../_utils/rateYourMusicTaxonomy.js";
@@ -53,6 +54,7 @@ declare const fullApi: ApiFromModules<{
   "_utils/albumMatching": typeof _utils_albumMatching;
   "_utils/albumMatchingCore": typeof _utils_albumMatchingCore;
   "_utils/forLaterAlbums": typeof _utils_forLaterAlbums;
+  "_utils/forLaterAlbumsUi": typeof _utils_forLaterAlbumsUi;
   "_utils/geniusParser": typeof _utils_geniusParser;
   "_utils/playlistLyrics": typeof _utils_playlistLyrics;
   "_utils/rateYourMusicTaxonomy": typeof _utils_rateYourMusicTaxonomy;

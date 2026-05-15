@@ -404,7 +404,10 @@ export default defineSchema({
 		.index("by_userId_spotifyAlbumId", ["userId", "spotifyAlbumId"])
 		.index("by_userId_albumTitleKey", ["userId", "albumTitleKey"])
 		.index("by_rymScrapeId", ["rymScrapeId"])
-		.index("by_rymDiscoveryStatus", ["rymDiscoveryStatus"]),
+		.index("by_rymDiscoveryStatus", ["rymDiscoveryStatus"])
+		.index("by_userId_isActive_lastSeenAt", ["userId", "isActive", "lastSeenAt"])
+		.index("by_userId_rymScrapeId", ["userId", "rymScrapeId"])
+		.index("by_userId_rymDiscoveryStatus", ["userId", "rymDiscoveryStatus"]),
 
 	forLaterSyncRuns: defineTable({
 		userId: v.string(),
@@ -641,6 +644,8 @@ export default defineSchema({
 		spotifyAlbumId: v.optional(v.string()),
 		spotifyAlbumUrl: v.optional(v.string()),
 		spotifyAlbumConvexId: v.optional(v.id("spotifyAlbums")),
+		/** Sum of track lengths from RYM track listing (seconds); optional if DOM lacked durations */
+		tracklistingTotalSeconds: v.optional(v.number()),
 		lastScrapedAt: v.number(),
 		createdAt: v.number(),
 		updatedAt: v.number(),

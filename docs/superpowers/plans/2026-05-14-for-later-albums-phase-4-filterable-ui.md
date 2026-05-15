@@ -46,9 +46,9 @@ Phase 4 assumes these Phase 1-3 files and contracts already exist:
 ## Task 1: Add Convex UI Helper Tests
 
 **Files:**
-- Create: `convex/_utils/forLaterAlbumsUi.test.ts`
 
-- [ ] **Step 1: Create failing helper tests**
+- Create: `convex/_utils/forLaterAlbumsUi.test.ts`
+- **Step 1: Create failing helper tests**
 
 Create `convex/_utils/forLaterAlbumsUi.test.ts`:
 
@@ -129,7 +129,7 @@ test("buildOpenableRymLinks caps candidate and matched URLs in row order", () =>
 });
 ```
 
-- [ ] **Step 2: Run the tests and confirm failure**
+- **Step 2: Run the tests and confirm failure**
 
 Run:
 
@@ -144,9 +144,9 @@ Expected: FAIL with a module/export error because `convex/_utils/forLaterAlbumsU
 ## Task 2: Implement Convex UI Helpers
 
 **Files:**
-- Create: `convex/_utils/forLaterAlbumsUi.ts`
 
-- [ ] **Step 1: Create the helper module**
+- Create: `convex/_utils/forLaterAlbumsUi.ts`
+- **Step 1: Create the helper module**
 
 Create `convex/_utils/forLaterAlbumsUi.ts`:
 
@@ -270,7 +270,7 @@ function normalizeOptionalString(value: string | undefined): string | undefined 
 }
 ```
 
-- [ ] **Step 2: Run helper tests and confirm pass**
+- **Step 2: Run helper tests and confirm pass**
 
 Run:
 
@@ -285,9 +285,9 @@ Expected: PASS, with all four tests successful.
 ## Task 3: Add Phase 4 Schema Indexes
 
 **Files:**
-- Modify: `convex/schema.ts`
 
-- [ ] **Step 1: Add UI-focused indexes to `forLaterAlbumItems`**
+- Modify: `convex/schema.ts`
+- **Step 1: Add UI-focused indexes to `forLaterAlbumItems`**
 
 In the existing `forLaterAlbumItems` table definition, keep every Phase 1-3 field and existing index, then add these indexes to the chain:
 
@@ -299,7 +299,7 @@ In the existing `forLaterAlbumItems` table definition, keep every Phase 1-3 fiel
 
 The completed index chain should include the earlier indexes plus these Phase 4 additions.
 
-- [ ] **Step 2: Generate Convex types**
+- **Step 2: Generate Convex types**
 
 Run:
 
@@ -314,9 +314,9 @@ Expected: exits 0 and updates `convex/_generated/api.d.ts` / `convex/_generated/
 ## Task 4: Add Convex UI Query Return Types
 
 **Files:**
-- Modify: `convex/forLaterAlbums.ts`
 
-- [ ] **Step 1: Add Phase 4 imports**
+- Modify: `convex/forLaterAlbums.ts`
+- **Step 1: Add Phase 4 imports**
 
 At the top of `convex/forLaterAlbums.ts`, add imports alongside existing imports:
 
@@ -333,7 +333,7 @@ import {
 } from "./_utils/forLaterAlbumsUi";
 ```
 
-- [ ] **Step 2: Add validators and shared types**
+- **Step 2: Add validators and shared types**
 
 Add these near the top-level validators in `convex/forLaterAlbums.ts`:
 
@@ -470,9 +470,9 @@ type LoadForLaterAlbumRowsResult = {
 ## Task 5: Add Convex UI Query Helpers
 
 **Files:**
-- Modify: `convex/forLaterAlbums.ts`
 
-- [ ] **Step 1: Add local helper functions**
+- Modify: `convex/forLaterAlbums.ts`
+- **Step 1: Add local helper functions**
 
 Add these helper functions below existing Phase 1-3 helpers and above exported queries:
 
@@ -619,9 +619,9 @@ function rowMatchesFilters(
 ## Task 6: Add Convex Summary And Paginated Row Queries
 
 **Files:**
-- Modify: `convex/forLaterAlbums.ts`
 
-- [ ] **Step 1: Add `getForLaterUiSummary`**
+- Modify: `convex/forLaterAlbums.ts`
+- **Step 1: Add `getForLaterUiSummary`**
 
 Add this exported query:
 
@@ -678,7 +678,7 @@ export const getForLaterUiSummary = query({
 });
 ```
 
-- [ ] **Step 2: Add the shared paginated row loader**
+- **Step 2: Add the shared paginated row loader**
 
 Add this private helper below `getForLaterUiSummary`:
 
@@ -775,7 +775,7 @@ async function loadForLaterAlbumRows(
 }
 ```
 
-- [ ] **Step 3: Add `listForLaterAlbumRows`**
+- **Step 3: Add `listForLaterAlbumRows`**
 
 Add this exported query below the private loader:
 
@@ -798,7 +798,7 @@ export const listForLaterAlbumRows = query({
 });
 ```
 
-- [ ] **Step 4: Add `listOpenableRymLinks`**
+- **Step 4: Add `listOpenableRymLinks`**
 
 Add this exported query:
 
@@ -831,7 +831,7 @@ export const listOpenableRymLinks = query({
 });
 ```
 
-- [ ] **Step 5: Verify types after query additions**
+- **Step 5: Verify types after query additions**
 
 Run:
 
@@ -846,9 +846,9 @@ Expected: both commands exit 0. If `returns` validators expose a type mismatch, 
 ## Task 7: Add URL Filter State Tests
 
 **Files:**
-- Create: `src/app/for-later-albums/_utils/filter-state.test.ts`
 
-- [ ] **Step 1: Create failing URL state tests**
+- Create: `src/app/for-later-albums/_utils/filter-state.test.ts`
+- **Step 1: Create failing URL state tests**
 
 Create `src/app/for-later-albums/_utils/filter-state.test.ts`:
 
@@ -906,7 +906,7 @@ test("serializeForLaterFilters omits default values", () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests and confirm failure**
+- **Step 2: Run the tests and confirm failure**
 
 Run:
 
@@ -921,10 +921,10 @@ Expected: FAIL with a module/export error because `filter-state.ts` has not been
 ## Task 8: Implement URL Filter State Utilities
 
 **Files:**
+
 - Create: `src/app/for-later-albums/_utils/types.ts`
 - Create: `src/app/for-later-albums/_utils/filter-state.ts`
-
-- [ ] **Step 1: Create shared client types**
+- **Step 1: Create shared client types**
 
 Create `src/app/for-later-albums/_utils/types.ts`:
 
@@ -988,7 +988,7 @@ export type ForLaterAlbumRowData = {
 };
 ```
 
-- [ ] **Step 2: Create URL parsing and serialization**
+- **Step 2: Create URL parsing and serialization**
 
 Create `src/app/for-later-albums/_utils/filter-state.ts`:
 
@@ -1089,7 +1089,7 @@ function setIfNotDefault<T extends string>(
 }
 ```
 
-- [ ] **Step 3: Run URL state tests**
+- **Step 3: Run URL state tests**
 
 Run:
 
@@ -1104,9 +1104,9 @@ Expected: PASS, with all three tests successful.
 ## Task 9: Create The Route Shell
 
 **Files:**
-- Create: `src/app/for-later-albums/page.tsx`
 
-- [ ] **Step 1: Create the client route**
+- Create: `src/app/for-later-albums/page.tsx`
+- **Step 1: Create the client route**
 
 Create `src/app/for-later-albums/page.tsx`:
 
@@ -1207,7 +1207,7 @@ export default function ForLaterAlbumsPage() {
 }
 ```
 
-- [ ] **Step 2: Run typecheck and confirm expected missing components**
+- **Step 2: Run typecheck and confirm expected missing components**
 
 Run:
 
@@ -1222,10 +1222,10 @@ Expected: FAIL with missing module errors for the `_components` files that are c
 ## Task 10: Create Header Controls
 
 **Files:**
+
 - Create: `src/app/for-later-albums/_components/for-later-header.tsx`
 - Create: `src/app/for-later-albums/_components/open-rym-links-button.tsx`
-
-- [ ] **Step 1: Create multi-open button**
+- **Step 1: Create multi-open button**
 
 Create `src/app/for-later-albums/_components/open-rym-links-button.tsx`:
 
@@ -1270,7 +1270,7 @@ export function OpenRymLinksButton({
 }
 ```
 
-- [ ] **Step 2: Create header component**
+- **Step 2: Create header component**
 
 Create `src/app/for-later-albums/_components/for-later-header.tsx`:
 
@@ -1454,7 +1454,7 @@ function formatDateTime(timestamp: number): string {
 }
 ```
 
-- [ ] **Step 3: Run component lint check**
+- **Step 3: Run component lint check**
 
 Run:
 
@@ -1469,9 +1469,9 @@ Expected: exits 0 or reports only formatting changes that `pnpm check:write` can
 ## Task 11: Create Filter Controls
 
 **Files:**
-- Create: `src/app/for-later-albums/_components/for-later-filters.tsx`
 
-- [ ] **Step 1: Create filter component**
+- Create: `src/app/for-later-albums/_components/for-later-filters.tsx`
+- **Step 1: Create filter component**
 
 Create `src/app/for-later-albums/_components/for-later-filters.tsx`:
 
@@ -1634,7 +1634,7 @@ export function ForLaterFilters({
 }
 ```
 
-- [ ] **Step 2: Run component lint check**
+- **Step 2: Run component lint check**
 
 Run:
 
@@ -1649,9 +1649,9 @@ Expected: exits 0 or reports only formatting changes that `pnpm check:write` can
 ## Task 12: Use Frontend Design Skill And Create Row UI
 
 **Files:**
-- Create: `src/app/for-later-albums/_components/for-later-row.tsx`
 
-- [ ] **Step 1: Invoke the frontend-design skill before writing the row**
+- Create: `src/app/for-later-albums/_components/for-later-row.tsx`
+- **Step 1: Invoke the frontend-design skill before writing the row**
 
 Read and apply:
 
@@ -1661,7 +1661,7 @@ Read and apply:
 
 Apply it specifically to this row/card: dense album backlog row, clear metadata hierarchy, subtle RYM/listen badges, scannable taxonomy chips, and a polished empty-cover fallback. Keep the style compatible with existing `/albums` rows and shadcn/Tailwind conventions.
 
-- [ ] **Step 2: Create row component**
+- **Step 2: Create row component**
 
 Create `src/app/for-later-albums/_components/for-later-row.tsx`:
 
@@ -1820,7 +1820,7 @@ function formatDate(timestamp: number): string {
 }
 ```
 
-- [ ] **Step 3: Run component lint check**
+- **Step 3: Run component lint check**
 
 Run:
 
@@ -1835,9 +1835,9 @@ Expected: exits 0 or reports only formatting changes that `pnpm check:write` can
 ## Task 13: Create Paginated List
 
 **Files:**
-- Create: `src/app/for-later-albums/_components/for-later-list.tsx`
 
-- [ ] **Step 1: Create list component**
+- Create: `src/app/for-later-albums/_components/for-later-list.tsx`
+- **Step 1: Create list component**
 
 Create `src/app/for-later-albums/_components/for-later-list.tsx`:
 
@@ -1906,7 +1906,7 @@ export function ForLaterList({
 }
 ```
 
-- [ ] **Step 2: Run component lint check**
+- **Step 2: Run component lint check**
 
 Run:
 
@@ -1921,9 +1921,9 @@ Expected: exits 0 or reports only formatting changes that `pnpm check:write` can
 ## Task 14: End-To-End Verification
 
 **Files:**
-- Verify all files touched in Tasks 1-13.
 
-- [ ] **Step 1: Run focused helper tests**
+- Verify all files touched in Tasks 1-13.
+- **Step 1: Run focused helper tests**
 
 Run:
 
@@ -1934,7 +1934,7 @@ node --test src/app/for-later-albums/_utils/filter-state.test.ts
 
 Expected: both commands exit 0.
 
-- [ ] **Step 2: Regenerate Convex types**
+- **Step 2: Regenerate Convex types**
 
 Run:
 
@@ -1944,7 +1944,7 @@ npx convex codegen
 
 Expected: exits 0 and generated API types include `api.forLaterAlbums.getForLaterUiSummary`, `api.forLaterAlbums.listForLaterAlbumRows`, and `api.forLaterAlbums.listOpenableRymLinks`.
 
-- [ ] **Step 3: Run TypeScript**
+- **Step 3: Run TypeScript**
 
 Run:
 
@@ -1954,7 +1954,7 @@ pnpm typecheck
 
 Expected: exits 0.
 
-- [ ] **Step 4: Run Biome**
+- **Step 4: Run Biome**
 
 Run:
 
@@ -1964,7 +1964,7 @@ pnpm check
 
 Expected: exits 0. If formatting issues appear, run `pnpm check:write`, inspect the diff, then rerun `pnpm check`.
 
-- [ ] **Step 5: Manual UI verification**
+- **Step 5: Manual UI verification**
 
 Run:
 
@@ -2003,3 +2003,4 @@ Verify these user flows:
 - Genre and descriptor filters only show albums with matching RYM tags: Tasks 5, 6, 8, and 11.
 - Pagination works with filters applied: Tasks 6, 9, and 13.
 - Multi-open button opens only capped batches from the current filter result: Tasks 2, 6, 9, and 10.
+

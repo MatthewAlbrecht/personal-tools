@@ -39,10 +39,10 @@
 ## Task 1: Cron Helper Tests And Module
 
 **Files:**
+
 - Create: `src/lib/for-later-albums-cron.test.ts`
 - Create: `src/lib/for-later-albums-cron.ts`
-
-- [ ] **Step 1: Write failing cron helper tests**
+- **Step 1: Write failing cron helper tests**
 
 Create `src/lib/for-later-albums-cron.test.ts`:
 
@@ -112,7 +112,7 @@ test("toErrorMessage keeps Error messages and normalizes unknown values", () => 
 });
 ```
 
-- [ ] **Step 2: Run tests and verify failure**
+- **Step 2: Run tests and verify failure**
 
 Run:
 
@@ -122,7 +122,7 @@ node --test src/lib/for-later-albums-cron.test.ts
 
 Expected: FAIL because `src/lib/for-later-albums-cron.ts` does not exist or does not export the tested helpers.
 
-- [ ] **Step 3: Implement cron helper module**
+- **Step 3: Implement cron helper module**
 
 Create `src/lib/for-later-albums-cron.ts`:
 
@@ -163,7 +163,7 @@ export function toErrorMessage(error: unknown): string {
 }
 ```
 
-- [ ] **Step 4: Run helper tests and verify pass**
+- **Step 4: Run helper tests and verify pass**
 
 Run:
 
@@ -173,7 +173,7 @@ node --test src/lib/for-later-albums-cron.test.ts
 
 Expected: PASS with TAP output ending in `# fail 0`.
 
-- [ ] **Step 5: Run formatter check on helper files**
+- **Step 5: Run formatter check on helper files**
 
 Run:
 
@@ -188,13 +188,13 @@ Expected: PASS with Biome reporting no errors for both files.
 ## Task 2: Confirm Sync Never Auto-Queues Discovery
 
 **Files:**
-- Verify: `src/lib/for-later-albums-sync.ts`
 
-- [ ] **Step 1: Confirm sync never calls `queueRymDiscoveryForItem`**
+- Verify: `src/lib/for-later-albums-sync.ts`
+- **Step 1: Confirm sync never calls `queueRymDiscoveryForItem`**
 
 `syncForLaterAlbums` must not enqueue AI discovery after playlist upserts. Every persisted `forLaterSyncRuns` row should include `rymDiscoveryQueued: 0` (schema field remains from Phase 1 for optional future automation).
 
-- [ ] **Step 2: Run typecheck**
+- **Step 2: Run typecheck**
 
 Run:
 
@@ -209,9 +209,9 @@ Expected: PASS with no TypeScript errors.
 ## Task 3: Convex Sync Status Query
 
 **Files:**
-- Modify: `convex/forLaterAlbums.ts`
 
-- [ ] **Step 1: Add the latest sync status query**
+- Modify: `convex/forLaterAlbums.ts`
+- **Step 1: Add the latest sync status query**
 
 In `convex/forLaterAlbums.ts`, add this query near the existing sync-run functions:
 
@@ -268,7 +268,7 @@ export const getForLaterSyncStatus = query({
 });
 ```
 
-- [ ] **Step 2: Confirm `saveForLaterSyncRun` accepts failed cron runs**
+- **Step 2: Confirm `saveForLaterSyncRun` accepts failed cron runs**
 
 In the existing `saveForLaterSyncRun` mutation, ensure the args include the complete sync-run shape:
 
@@ -293,7 +293,7 @@ args: {
 },
 ```
 
-- [ ] **Step 3: Confirm the mutation writes the fields unchanged**
+- **Step 3: Confirm the mutation writes the fields unchanged**
 
 The mutation handler should insert the run directly:
 
@@ -303,7 +303,7 @@ handler: async (ctx, args) => {
 },
 ```
 
-- [ ] **Step 4: Run Convex type generation**
+- **Step 4: Run Convex type generation**
 
 Run:
 
@@ -313,7 +313,7 @@ npx convex codegen
 
 Expected: PASS and regenerate `convex/_generated/api.d.ts` with `forLaterAlbums.getForLaterSyncStatus`.
 
-- [ ] **Step 5: Run TypeScript check**
+- **Step 5: Run TypeScript check**
 
 Run:
 
@@ -328,9 +328,9 @@ Expected: PASS with no TypeScript errors.
 ## Task 4: Daily Cron Route
 
 **Files:**
-- Create: `src/pages/api/cron/sync-for-later-albums.ts`
 
-- [ ] **Step 1: Create the cron route**
+- Create: `src/pages/api/cron/sync-for-later-albums.ts`
+- **Step 1: Create the cron route**
 
 Create `src/pages/api/cron/sync-for-later-albums.ts`:
 
@@ -515,7 +515,7 @@ export default async function handler(
 }
 ```
 
-- [ ] **Step 2: Confirm route behavior for auth failures**
+- **Step 2: Confirm route behavior for auth failures**
 
 Run the dev server in one terminal:
 
@@ -533,7 +533,7 @@ curl -i http://localhost:1333/api/cron/sync-for-later-albums
 
 Expected: HTTP `401` with JSON containing `"error":"Unauthorized"`.
 
-- [ ] **Step 3: Confirm route behavior for unsupported methods**
+- **Step 3: Confirm route behavior for unsupported methods**
 
 Run:
 
@@ -543,7 +543,7 @@ curl -i -X PUT -H "Authorization: Bearer $CRON_SECRET" http://localhost:1333/api
 
 Expected: HTTP `405` with JSON containing `"error":"Method not allowed"`.
 
-- [ ] **Step 4: Confirm authorized cron reaches Spotify connection lookup**
+- **Step 4: Confirm authorized cron reaches Spotify connection lookup**
 
 Run:
 
@@ -553,7 +553,7 @@ curl -i -H "Authorization: Bearer $CRON_SECRET" "http://localhost:1333/api/cron/
 
 Expected when local Convex has a Spotify connection: HTTP `200` with `"success":true`. Expected when local Convex has no connection for `SPOTIFY_SYNC_USER_ID`: HTTP `404` with `"error":"No Spotify connection found"` and a failed `forLaterSyncRuns` row.
 
-- [ ] **Step 5: Run focused checks**
+- **Step 5: Run focused checks**
 
 Run:
 
@@ -569,9 +569,9 @@ Expected: both commands exit `0`; TypeScript reports no errors and Biome reports
 ## Task 5: Vercel Cron Schedule
 
 **Files:**
-- Modify: `vercel.json`
 
-- [ ] **Step 1: Add the daily For Later Albums cron**
+- Modify: `vercel.json`
+- **Step 1: Add the daily For Later Albums cron**
 
 Replace `vercel.json` with:
 
@@ -592,7 +592,7 @@ Replace `vercel.json` with:
 
 Vercel cron schedules are evaluated in UTC. This runs For Later Albums once per day at `09:15 UTC`.
 
-- [ ] **Step 2: Validate JSON**
+- **Step 2: Validate JSON**
 
 Run:
 
@@ -606,7 +606,7 @@ Expected output:
 vercel.json ok
 ```
 
-- [ ] **Step 3: Run Biome on config**
+- **Step 3: Run Biome on config**
 
 Run:
 
@@ -621,10 +621,10 @@ Expected: PASS with no Biome errors for `vercel.json`.
 ## Task 6: Sync Failure Display
 
 **Files:**
+
 - Create: `src/app/for-later-albums/_components/sync-status-banner.tsx`
 - Modify: `src/app/for-later-albums/page.tsx`
-
-- [ ] **Step 1: Create the status banner server component**
+- **Step 1: Create the status banner server component**
 
 Create `src/app/for-later-albums/_components/sync-status-banner.tsx`:
 
@@ -675,7 +675,7 @@ export async function SyncStatusBanner(): Promise<ReactElement | null> {
 }
 ```
 
-- [ ] **Step 2: Render the banner on the For Later Albums page**
+- **Step 2: Render the banner on the For Later Albums page**
 
 In `src/app/for-later-albums/page.tsx`, import the banner:
 
@@ -694,7 +694,7 @@ Render it above the existing Phase 4 sync button, filters, and album list:
 
 Keep any existing Phase 4 components and props unchanged; only add the banner at the top of the page content.
 
-- [ ] **Step 3: Run typecheck**
+- **Step 3: Run typecheck**
 
 Run:
 
@@ -704,7 +704,7 @@ pnpm typecheck
 
 Expected: PASS with no TypeScript errors.
 
-- [ ] **Step 4: Verify the failure display manually**
+- **Step 4: Verify the failure display manually**
 
 With the dev server running, trigger a failure by using a user id that has no Spotify connection:
 
@@ -727,6 +727,7 @@ Expected: a red banner appears with "Last For Later Albums sync failed." and the
 ## Task 7: End-To-End Verification
 
 **Files:**
+
 - Verify: `src/lib/for-later-albums-cron.test.ts`
 - Verify: `src/pages/api/cron/sync-for-later-albums.ts`
 - Verify: `src/lib/for-later-albums-sync.ts`
@@ -734,8 +735,7 @@ Expected: a red banner appears with "Last For Later Albums sync failed." and the
 - Verify: `src/app/for-later-albums/_components/sync-status-banner.tsx`
 - Verify: `src/app/for-later-albums/page.tsx`
 - Verify: `vercel.json`
-
-- [ ] **Step 1: Run helper tests**
+- **Step 1: Run helper tests**
 
 Run:
 
@@ -745,7 +745,7 @@ node --test src/lib/for-later-albums-cron.test.ts
 
 Expected: PASS with TAP output ending in `# fail 0`.
 
-- [ ] **Step 2: Run Convex codegen**
+- **Step 2: Run Convex codegen**
 
 Run:
 
@@ -755,7 +755,7 @@ npx convex codegen
 
 Expected: PASS and no unresolved generated API references.
 
-- [ ] **Step 3: Run TypeScript**
+- **Step 3: Run TypeScript**
 
 Run:
 
@@ -765,7 +765,7 @@ pnpm typecheck
 
 Expected: PASS with no TypeScript errors.
 
-- [ ] **Step 4: Run Biome**
+- **Step 4: Run Biome**
 
 Run:
 
@@ -775,7 +775,7 @@ pnpm check src/lib/for-later-albums-cron.ts src/lib/for-later-albums-cron.test.t
 
 Expected: PASS with no Biome errors.
 
-- [ ] **Step 5: Verify unauthorized cron protection**
+- **Step 5: Verify unauthorized cron protection**
 
 Run:
 
@@ -785,7 +785,7 @@ curl -i http://localhost:1333/api/cron/sync-for-later-albums
 
 Expected: HTTP `401` with JSON containing `"error":"Unauthorized"`.
 
-- [ ] **Step 6: Verify authorized cron sync**
+- **Step 6: Verify authorized cron sync**
 
 Run:
 
@@ -795,7 +795,7 @@ curl -i -H "Authorization: Bearer $CRON_SECRET" "http://localhost:1333/api/cron/
 
 Expected when `SPOTIFY_SYNC_USER_ID`, `FOR_LATER_SPOTIFY_PLAYLIST_ID`, and the Spotify connection are configured: HTTP `200` with `"success":true`, a `forLaterSyncRuns` row with `source:"cron"` and `status:"success"`, and no duplicated `forLaterAlbumItems`.
 
-- [ ] **Step 7: Verify failure observability**
+- **Step 7: Verify failure observability**
 
 Run:
 
@@ -805,7 +805,7 @@ curl -i -H "Authorization: Bearer $CRON_SECRET" "http://localhost:1333/api/cron/
 
 Expected: HTTP `404`, a `forLaterSyncRuns` row with `source:"cron"`, `status:"failed"`, and `error:"No Spotify connection found"`, plus a visible red failure banner at `/for-later-albums`.
 
-- [ ] **Step 8: Confirm cron leaves discovery status untouched**
+- **Step 8: Confirm cron leaves discovery status untouched**
 
 After a successful cron sync, spot-check unmatched `forLaterAlbumItems`: `rymDiscoveryStatus` should only change when Phase 2 matching links a scrape, never because cron queued AI work.
 
@@ -821,3 +821,4 @@ After a successful cron sync, spot-check unmatched `forLaterAlbumItems`: `rymDis
 - Daily sync does not duplicate backlog items because ingestion remains in the existing Phase 1 `syncForLaterAlbums` upsert flow.
 - Removed rows are only marked inactive by the existing snapshot-aware sync utility after a successful playlist snapshot fetch.
 - AI RYM discovery is never triggered by cron or playlist sync; `forLaterSyncRuns.rymDiscoveryQueued` remains `0` until optional future automation is added.
+

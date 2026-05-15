@@ -5,7 +5,6 @@ import {
 	buildArtistKeys,
 	findTitleArtistMatch,
 	normalizeAlbumTitle,
-	normalizeArtistName,
 } from "./albumMatchingCore";
 
 export {
@@ -66,29 +65,42 @@ async function upsertRymSpotifyAlbumLink(
 	});
 }
 
-async function patchForLaterItemMatch(
-	ctx: MutationCtx,
-	args: {
-		forLaterAlbumItemId: Id<"forLaterAlbumItems">;
-		scrapeId: Id<"rateYourMusicScrapes">;
-		method: RymMatchMethod;
-		now: number;
-	},
-): Promise<void> {
-	await ctx.db.patch(args.forLaterAlbumItemId, {
-		rymScrapeId: args.scrapeId,
-		rymMatchMethod: args.method,
-		rymMatchedAt: args.now,
-		updatedAt: args.now,
-	});
-}
-
 async function patchScrapeAlbumConvexId(
 	ctx: MutationCtx,
 	scrapeId: Id<"rateYourMusicScrapes">,
 	albumId: Id<"spotifyAlbums">,
 ): Promise<void> {
 	await ctx.db.patch(scrapeId, { spotifyAlbumConvexId: albumId });
+}
+
+/** Artist keys for a canonical album row (raw JSON artists when present, else comma-split artistName). */
+function canonicalAlbumArtistKeys(doc: Doc<"spotifyAlbums">): string[] {
+	if (doc.rawData) {
+		try {
+			const parsed = JSON.parse(doc.rawData) as {
+				artists?: Array<{ name?: string }>;
+			};
+			const names =
+				parsed.artists
+					?.map((a) => a.name)
+					.filter((n): n is string => Boolean(n)) ?? [];
+			if (names.length > 0) {
+				return buildArtistKeys(names);
+			}
+		} catch {
+			// fall through to artistName
+		}
+	}
+
+	const segments = doc.artistName
+		.split(", ")
+		.map((s) => s.trim())
+		.filter(Boolean);
+	if (segments.length > 0) {
+		return buildArtistKeys(segments);
+	}
+
+	return buildArtistKeys([doc.artistName]);
 }
 
 export async function matchRymForForLaterAlbum(
@@ -126,12 +138,6 @@ export async function matchRymForForLaterAlbum(
 			method: "spotify_id",
 			now: args.now,
 		});
-		await patchForLaterItemMatch(ctx, {
-			forLaterAlbumItemId: item._id,
-			scrapeId: exactScrape._id,
-			method: "spotify_id",
-			now: args.now,
-		});
 		await patchScrapeAlbumConvexId(ctx, exactScrape._id, item.albumId);
 		return { scrapeId: exactScrape._id, method: "spotify_id" };
 	}
@@ -161,12 +167,6 @@ export async function matchRymForForLaterAlbum(
 		matchedArtistKey: titleArtistMatch.matchedArtistKey,
 		now: args.now,
 	});
-	await patchForLaterItemMatch(ctx, {
-		forLaterAlbumItemId: item._id,
-		scrapeId: titleArtistMatch.candidate._id,
-		method: "title_artist",
-		now: args.now,
-	});
 	await patchScrapeAlbumConvexId(
 		ctx,
 		titleArtistMatch.candidate._id,
@@ -180,6 +180,10 @@ export async function matchRymForForLaterAlbum(
 	};
 }
 
+/**
+ * After a RYM scrape is saved: link scrape ↔ canonical `spotifyAlbums` via Spotify id or unique title+artist.
+ * For Later rows are not updated; resolve RYM via `albumId` → link table / `spotifyAlbumConvexId`.
+ */
 export async function matchForLaterAlbumsForRymScrape(
 	ctx: MutationCtx,
 	args: {
@@ -190,14 +194,6 @@ export async function matchForLaterAlbumsForRymScrape(
 		now: number;
 	},
 ): Promise<number> {
-	const userId = process.env.SPOTIFY_SYNC_USER_ID;
-	if (!userId) {
-		throw new Error("SPOTIFY_SYNC_USER_ID not configured");
-	}
-
-	const matchedAlbumIds = new Set<Id<"spotifyAlbums">>();
-	let matchesCreated = 0;
-
 	if (args.spotifyAlbumId) {
 		const spotifyAlbumId = args.spotifyAlbumId;
 		const album = await ctx.db
@@ -208,36 +204,15 @@ export async function matchForLaterAlbumsForRymScrape(
 			.first();
 
 		if (album) {
-			const items = await ctx.db
-				.query("forLaterAlbumItems")
-				.withIndex("by_userId_spotifyAlbumId", (q) =>
-					q.eq("userId", userId).eq("spotifyAlbumId", spotifyAlbumId),
-				)
-				.collect();
-
-			for (const item of items) {
-				await upsertRymSpotifyAlbumLink(ctx, {
-					scrapeId: args.scrapeId,
-					albumId: item.albumId,
-					spotifyAlbumId: spotifyAlbumId,
-					method: "spotify_id",
-					now: args.now,
-				});
-				await patchForLaterItemMatch(ctx, {
-					forLaterAlbumItemId: item._id,
-					scrapeId: args.scrapeId,
-					method: "spotify_id",
-					now: args.now,
-				});
-				matchedAlbumIds.add(item.albumId);
-				matchesCreated += 1;
-			}
-
-			if (matchedAlbumIds.size === 1) {
-				await patchScrapeAlbumConvexId(ctx, args.scrapeId, album._id);
-			}
-
-			return matchesCreated;
+			await upsertRymSpotifyAlbumLink(ctx, {
+				scrapeId: args.scrapeId,
+				albumId: album._id,
+				spotifyAlbumId,
+				method: "spotify_id",
+				now: args.now,
+			});
+			await patchScrapeAlbumConvexId(ctx, args.scrapeId, album._id);
+			return 1;
 		}
 	}
 
@@ -245,46 +220,50 @@ export async function matchForLaterAlbumsForRymScrape(
 	const rymArtistKeys = buildArtistKeys(
 		args.artists.map((artist) => artist.name),
 	);
-	const candidates = await ctx.db
-		.query("forLaterAlbumItems")
-		.withIndex("by_userId_albumTitleKey", (q) =>
-			q.eq("userId", userId).eq("albumTitleKey", albumTitleKey),
-		)
+
+	const albums = await ctx.db
+		.query("spotifyAlbums")
+		.withIndex("by_createdAt")
+		.order("desc")
 		.collect();
 
-	for (const item of candidates) {
-		const matchedArtistKey = artistKeysIntersect(
-			item.artistKeys,
-			rymArtistKeys,
-		);
-		if (!matchedArtistKey) {
+	const matchedCanonical: Doc<"spotifyAlbums">[] = [];
+	for (const album of albums) {
+		if (normalizeAlbumTitle(album.name) !== albumTitleKey) {
 			continue;
 		}
-
-		await upsertRymSpotifyAlbumLink(ctx, {
-			scrapeId: args.scrapeId,
-			albumId: item.albumId,
-			spotifyAlbumId: item.spotifyAlbumId,
-			method: "title_artist",
-			matchedArtistKey,
-			now: args.now,
-		});
-		await patchForLaterItemMatch(ctx, {
-			forLaterAlbumItemId: item._id,
-			scrapeId: args.scrapeId,
-			method: "title_artist",
-			now: args.now,
-		});
-		matchedAlbumIds.add(item.albumId);
-		matchesCreated += 1;
-	}
-
-	if (matchedAlbumIds.size === 1) {
-		const [albumId] = [...matchedAlbumIds];
-		if (albumId) {
-			await patchScrapeAlbumConvexId(ctx, args.scrapeId, albumId);
+		const albumArtistKeys = canonicalAlbumArtistKeys(album);
+		if (artistKeysIntersect(albumArtistKeys, rymArtistKeys)) {
+			matchedCanonical.push(album);
 		}
 	}
 
-	return matchesCreated;
+	if (matchedCanonical.length !== 1) {
+		return 0;
+	}
+
+	const album = matchedCanonical[0];
+	if (!album) {
+		return 0;
+	}
+
+	const matchedArtistKey = artistKeysIntersect(
+		canonicalAlbumArtistKeys(album),
+		rymArtistKeys,
+	);
+	if (!matchedArtistKey) {
+		return 0;
+	}
+
+	await upsertRymSpotifyAlbumLink(ctx, {
+		scrapeId: args.scrapeId,
+		albumId: album._id,
+		spotifyAlbumId: album.spotifyAlbumId,
+		method: "title_artist",
+		matchedArtistKey,
+		now: args.now,
+	});
+	await patchScrapeAlbumConvexId(ctx, args.scrapeId, album._id);
+
+	return 1;
 }

@@ -279,6 +279,53 @@ function getDefaultSpotifyAlbumId(section) {
 	return fallbackId;
 }
 
+/**
+ * "Total length: 38:00" (MM:SS) or "1:05:30" (H:MM:SS) from track listing footer.
+ * Fallback: sum `.tracklist_duration[data-inseconds]` in the same section.
+ */
+function getTracklistingTotalSeconds() {
+	const totalEl = document.querySelector(
+		".section_tracklisting span.tracklist_total",
+	);
+	if (totalEl) {
+		const text = totalEl.textContent.replace(/\s+/g, " ").trim();
+		const m = text.match(/total\s+length:\s*(\d{1,3}:\d{2}(?::\d{2})?)/i);
+		if (m) {
+			const parts = m[1].split(":").map(function parsePart(p) {
+				return Number.parseInt(p, 10);
+			});
+			if (
+				parts.length === 2 &&
+				parts.every(function ok(n) {
+					return !Number.isNaN(n);
+				})
+			) {
+				return parts[0] * 60 + parts[1];
+			}
+			if (
+				parts.length === 3 &&
+				parts.every(function ok2(n) {
+					return !Number.isNaN(n);
+				})
+			) {
+				return parts[0] * 3600 + parts[1] * 60 + parts[2];
+			}
+		}
+	}
+
+	let sum = 0;
+	const durationEls = document.querySelectorAll(
+		".section_tracklisting ul.tracks .tracklist_duration[data-inseconds]",
+	);
+	for (const el of durationEls) {
+		const sec = Number.parseInt(el.getAttribute("data-inseconds"), 10);
+		if (!Number.isNaN(sec)) {
+			sum += sec;
+		}
+	}
+	return sum > 0 ? sum : undefined;
+}
+
 function buildPayload(section) {
 	const canonicalPath = canonicalPathFromLocation();
 	const albumTitle = textFromAlbumTitle(section.querySelector(".album_title"));
@@ -292,6 +339,7 @@ function buildPayload(section) {
 	const artists = getArtists(section);
 	const releaseType = getReleaseType(section);
 	const spotifyAlbumId = getDefaultSpotifyAlbumId(section);
+	const tracklistingTotalSeconds = getTracklistingTotalSeconds();
 
 	return {
 		source: "rateyourmusic.com",
@@ -310,6 +358,9 @@ function buildPayload(section) {
 		spotifyAlbumUrl: spotifyAlbumId
 			? `https://open.spotify.com/album/${spotifyAlbumId}`
 			: null,
+		...(typeof tracklistingTotalSeconds === "number"
+			? { tracklistingTotalSeconds }
+			: {}),
 	};
 }
 

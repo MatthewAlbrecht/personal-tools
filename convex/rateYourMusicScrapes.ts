@@ -135,6 +135,7 @@ export const upsertRateYourMusicScrape = mutation({
 		spotifyAlbumId: v.optional(v.string()),
 		spotifyAlbumUrl: v.optional(v.string()),
 		spotifyAlbumConvexId: v.optional(v.id("spotifyAlbums")),
+		tracklistingTotalSeconds: v.optional(v.number()),
 		lastScrapedAt: v.optional(v.number()),
 	},
 	handler: async (ctx, args): Promise<Id<"rateYourMusicScrapes">> => {
@@ -153,6 +154,9 @@ export const upsertRateYourMusicScrape = mutation({
 			artists: args.artists,
 			spotifyAlbumId: args.spotifyAlbumId?.trim() || undefined,
 			spotifyAlbumUrl: args.spotifyAlbumUrl?.trim() || undefined,
+			...(args.tracklistingTotalSeconds !== undefined
+				? { tracklistingTotalSeconds: args.tracklistingTotalSeconds }
+				: {}),
 			lastScrapedAt,
 			updatedAt: now,
 		};
