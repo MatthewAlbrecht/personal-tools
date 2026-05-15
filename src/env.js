@@ -28,6 +28,18 @@ export const env = createEnv({
 		OPENAI_API_KEY: z.string().min(1),
 		// Spotify Sync Cron
 		SPOTIFY_SYNC_USER_ID: z.string().min(1),
+		/** Spotify playlist id for the single "For Later Albums" backlog; required at runtime for playlist sync routes/cron. */
+		FOR_LATER_SPOTIFY_PLAYLIST_ID: z.string().min(1).optional(),
+		/**
+		 * Incremental For Later sync: fetch only the last N playlist rows (offset = total − N).
+		 * Use when newest additions appear at the bottom of Spotify’s playlist order.
+		 */
+		FOR_LATER_INCREMENTAL_TAIL_TRACKS: z.coerce
+			.number()
+			.int()
+			.min(50)
+			.max(5000)
+			.default(200),
 		/** Bearer token for Chrome extension → `/api/rate-your-music/scrape` (omit or use 8+ chars locally). */
 		RYM_EXTENSION_INGEST_SECRET: z.string().min(8).optional(),
 	},
@@ -65,6 +77,9 @@ export const env = createEnv({
 		SPOTIFY_CLIENT_SECRET: process.env.SPOTIFY_CLIENT_SECRET,
 		OPENAI_API_KEY: process.env.OPENAI_API_KEY,
 		SPOTIFY_SYNC_USER_ID: process.env.SPOTIFY_SYNC_USER_ID,
+		FOR_LATER_SPOTIFY_PLAYLIST_ID: process.env.FOR_LATER_SPOTIFY_PLAYLIST_ID,
+		FOR_LATER_INCREMENTAL_TAIL_TRACKS:
+			process.env.FOR_LATER_INCREMENTAL_TAIL_TRACKS,
 		RYM_EXTENSION_INGEST_SECRET: process.env.RYM_EXTENSION_INGEST_SECRET,
 	},
 	/**

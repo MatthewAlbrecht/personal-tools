@@ -354,6 +354,84 @@ export default defineSchema({
 		.index("by_spotifyAlbumId", ["spotifyAlbumId"])
 		.index("by_createdAt", ["createdAt"]),
 
+	forLaterAlbumItems: defineTable({
+		userId: v.string(),
+		albumId: v.id("spotifyAlbums"),
+		spotifyAlbumId: v.string(),
+
+		albumTitleKey: v.string(),
+		artistKeys: v.array(v.string()),
+
+		sourceTrackIds: v.array(v.string()),
+		playlistAddedAt: v.optional(v.number()),
+		firstSeenAt: v.number(),
+		lastSeenAt: v.number(),
+		removedAt: v.optional(v.number()),
+		isActive: v.boolean(),
+
+		rymDiscoveryStatus: v.union(
+			v.literal("not_started"),
+			v.literal("queued"),
+			v.literal("searching"),
+			v.literal("found"),
+			v.literal("not_found"),
+			v.literal("failed"),
+		),
+		rymCandidateUrl: v.optional(v.string()),
+		rymCandidateConfidence: v.optional(
+			v.union(v.literal("high"), v.literal("medium"), v.literal("low")),
+		),
+		rymDiscoveryReason: v.optional(v.string()),
+		rymDiscoveryUpdatedAt: v.optional(v.number()),
+
+		rymScrapeId: v.optional(v.id("rateYourMusicScrapes")),
+		rymMatchMethod: v.optional(
+			v.union(
+				v.literal("spotify_id"),
+				v.literal("title_artist"),
+				v.literal("manual"),
+			),
+		),
+		rymMatchedAt: v.optional(v.number()),
+
+		createdAt: v.number(),
+		updatedAt: v.number(),
+	})
+		.index("by_userId", ["userId"])
+		.index("by_userId_active", ["userId", "isActive"])
+		.index("by_userId_lastSeenAt", ["userId", "lastSeenAt"])
+		.index("by_userId_albumId", ["userId", "albumId"])
+		.index("by_userId_spotifyAlbumId", ["userId", "spotifyAlbumId"])
+		.index("by_userId_albumTitleKey", ["userId", "albumTitleKey"])
+		.index("by_rymScrapeId", ["rymScrapeId"])
+		.index("by_rymDiscoveryStatus", ["rymDiscoveryStatus"]),
+
+	forLaterSyncRuns: defineTable({
+		userId: v.string(),
+		spotifyPlaylistId: v.string(),
+		source: v.union(v.literal("manual"), v.literal("cron")),
+		status: v.union(v.literal("success"), v.literal("failed")),
+		startedAt: v.number(),
+		completedAt: v.number(),
+		durationMs: v.number(),
+		spotifySnapshotId: v.optional(v.string()),
+		tracksFromPlaylist: v.number(),
+		uniqueAlbumsFromPlaylist: v.number(),
+		newAlbumsAdded: v.number(),
+		existingAlbumsSeen: v.number(),
+		albumsMarkedRemoved: v.number(),
+		rymMatchesCreated: v.number(),
+		rymDiscoveryQueued: v.number(),
+		error: v.optional(v.string()),
+		// Max Spotify playlist row added_at seen this run (ms UTC); incremental cutoff next sync.
+		playlistNewestAddedAtMs: v.optional(v.number()),
+	})
+		.index("by_userId_startedAt", ["userId", "startedAt"])
+		.index("by_spotifyPlaylistId_startedAt", [
+			"spotifyPlaylistId",
+			"startedAt",
+		]),
+
 	userAlbums: defineTable({
 		userId: v.string(),
 		albumId: v.id("spotifyAlbums"), // Reference to spotifyAlbums
@@ -570,6 +648,25 @@ export default defineSchema({
 		.index("by_rymUrl", ["rymUrl"])
 		.index("by_spotifyAlbumId", ["spotifyAlbumId"])
 		.index("by_updatedAt", ["updatedAt"]),
+
+	/** Source of truth for RYM scrape ↔ canonical Spotify album links (many-to-many, audit). */
+	rateYourMusicSpotifyAlbumLinks: defineTable({
+		scrapeId: v.id("rateYourMusicScrapes"),
+		albumId: v.id("spotifyAlbums"),
+		spotifyAlbumId: v.optional(v.string()),
+		method: v.union(
+			v.literal("spotify_id"),
+			v.literal("title_artist"),
+			v.literal("manual"),
+		),
+		matchedArtistKey: v.optional(v.string()),
+		createdAt: v.number(),
+		updatedAt: v.number(),
+	})
+		.index("by_scrapeId", ["scrapeId"])
+		.index("by_albumId", ["albumId"])
+		.index("by_spotifyAlbumId", ["spotifyAlbumId"])
+		.index("by_scrapeId_albumId", ["scrapeId", "albumId"]),
 
 	rateYourMusicReleaseGenres: defineTable({
 		scrapeId: v.id("rateYourMusicScrapes"),

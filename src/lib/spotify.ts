@@ -35,6 +35,13 @@ export type SpotifyPlaylist = {
 	owner: { id: string; display_name: string };
 	tracks: { total: number };
 	external_urls: { spotify: string };
+	snapshot_id?: string;
+};
+
+/** Subset returned by {@link getPlaylistTracksTotalHead} (`fields` filter). */
+export type SpotifyPlaylistTracksTotalHead = {
+	snapshot_id?: string;
+	tracks: { total: number };
 };
 
 export type SavedTrackItem = {
@@ -228,6 +235,20 @@ export async function getPlaylist(
 	return spotifyFetch<SpotifyPlaylist>(`/playlists/${playlistId}`, accessToken);
 }
 
+/** Minimal `GET /playlists/{id}` — only snapshot id and track count (Spotify `fields` filter). */
+export async function getPlaylistTracksTotalHead(
+	accessToken: string,
+	playlistId: string,
+): Promise<SpotifyPlaylistTracksTotalHead> {
+	const params = new URLSearchParams({
+		fields: "snapshot_id,tracks.total",
+	});
+	return spotifyFetch<SpotifyPlaylistTracksTotalHead>(
+		`/playlists/${playlistId}?${params.toString()}`,
+		accessToken,
+	);
+}
+
 export async function addTracksToPlaylist(
 	accessToken: string,
 	playlistId: string,
@@ -311,6 +332,110 @@ export async function getAllPlaylistTracks(
 	}
 
 	return allTracks;
+}
+
+export type PlaylistTrackCollection = {
+	items: PlaylistTrackItem[];
+	/** Number of GET `/playlists/{id}/tracks` calls made (100 rows per page max). */
+	playlistTrackPageRequests: number;
+};
+
+/**
+ * Paginates `/playlists/{id}/tracks` from offset 0. When {@link cutoffAddedAtMs}
+ * is set, stops **without** including the first row whose parseable {@literal added_at}
+ * is {@literal <= cutoffAddedAtMs}, and does not fetch further pages.
+ *
+ * Only correct when the playlist is ordered **newest {@literal added_at} first**
+ * at the API; otherwise use cutoff {@literal null} and filter in app code.
+ */
+async function collectPlaylistTrackItems(
+	accessToken: string,
+	playlistId: string,
+	cutoffAddedAtMs: number | null,
+): Promise<PlaylistTrackCollection> {
+	const allItems: PlaylistTrackItem[] = [];
+	let offset = 0;
+	const limit = 100;
+	let playlistTrackPageRequests = 0;
+
+	while (true) {
+		playlistTrackPageRequests += 1;
+		const response = await getPlaylistTracks(
+			accessToken,
+			playlistId,
+			limit,
+			offset,
+		);
+
+		for (const item of response.items) {
+			if (cutoffAddedAtMs !== null) {
+				const addedMs = Date.parse(item.added_at);
+				if (!Number.isNaN(addedMs) && addedMs <= cutoffAddedAtMs) {
+					return { items: allItems, playlistTrackPageRequests };
+				}
+			}
+
+			allItems.push(item);
+		}
+
+		if (!response.next) {
+			break;
+		}
+		offset += limit;
+	}
+
+	return { items: allItems, playlistTrackPageRequests };
+}
+
+export async function getAllPlaylistTrackItems(
+	accessToken: string,
+	playlistId: string,
+): Promise<PlaylistTrackCollection> {
+	return collectPlaylistTrackItems(accessToken, playlistId, null);
+}
+
+/**
+ * Playlist rows from {@literal startOffset} through the end (paginates while {@literal next} exists).
+ */
+export async function getPlaylistTrackItemsFromOffset(
+	accessToken: string,
+	playlistId: string,
+	startOffset: number,
+): Promise<PlaylistTrackCollection> {
+	const allItems: PlaylistTrackItem[] = [];
+	let offset = Math.max(0, Math.floor(startOffset));
+	const limit = 100;
+	let playlistTrackPageRequests = 0;
+
+	while (true) {
+		playlistTrackPageRequests += 1;
+		const response = await getPlaylistTracks(
+			accessToken,
+			playlistId,
+			limit,
+			offset,
+		);
+
+		for (const item of response.items) {
+			allItems.push(item);
+		}
+
+		if (!response.next) {
+			break;
+		}
+		offset += limit;
+	}
+
+	return { items: allItems, playlistTrackPageRequests };
+}
+
+/** Early-stop variant — requires playlist rows ordered newest {@literal added_at} first. Prefer full pagination + filter when order is unknown. */
+export async function getPlaylistTrackItemsAddedAfterMs(
+	accessToken: string,
+	playlistId: string,
+	cutoffAddedAtMs: number,
+): Promise<PlaylistTrackCollection> {
+	return collectPlaylistTrackItems(accessToken, playlistId, cutoffAddedAtMs);
 }
 
 // ============================================================================

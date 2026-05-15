@@ -13,6 +13,9 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
+import type * as _utils_albumMatching from "../_utils/albumMatching.js";
+import type * as _utils_albumMatchingCore from "../_utils/albumMatchingCore.js";
+import type * as _utils_forLaterAlbums from "../_utils/forLaterAlbums.js";
 import type * as _utils_geniusParser from "../_utils/geniusParser.js";
 import type * as _utils_playlistLyrics from "../_utils/playlistLyrics.js";
 import type * as _utils_rateYourMusicTaxonomy from "../_utils/rateYourMusicTaxonomy.js";
@@ -24,6 +27,7 @@ import type * as folioSociety from "../folioSociety.js";
 import type * as folioSocietyDetails from "../folioSocietyDetails.js";
 import type * as folioSocietyImages from "../folioSocietyImages.js";
 import type * as folioSocietyReleases from "../folioSocietyReleases.js";
+import type * as forLaterAlbums from "../forLaterAlbums.js";
 import type * as geniusAlbums from "../geniusAlbums.js";
 import type * as migrations_backfillCategorizedAt from "../migrations/backfillCategorizedAt.js";
 import type * as migrations_backfillSpotifyAlbumId from "../migrations/backfillSpotifyAlbumId.js";
@@ -46,6 +50,9 @@ import type * as spotify from "../spotify.js";
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  "_utils/albumMatching": typeof _utils_albumMatching;
+  "_utils/albumMatchingCore": typeof _utils_albumMatchingCore;
+  "_utils/forLaterAlbums": typeof _utils_forLaterAlbums;
   "_utils/geniusParser": typeof _utils_geniusParser;
   "_utils/playlistLyrics": typeof _utils_playlistLyrics;
   "_utils/rateYourMusicTaxonomy": typeof _utils_rateYourMusicTaxonomy;
@@ -57,6 +64,7 @@ declare const fullApi: ApiFromModules<{
   folioSocietyDetails: typeof folioSocietyDetails;
   folioSocietyImages: typeof folioSocietyImages;
   folioSocietyReleases: typeof folioSocietyReleases;
+  forLaterAlbums: typeof forLaterAlbums;
   geniusAlbums: typeof geniusAlbums;
   "migrations/backfillCategorizedAt": typeof migrations_backfillCategorizedAt;
   "migrations/backfillSpotifyAlbumId": typeof migrations_backfillSpotifyAlbumId;
