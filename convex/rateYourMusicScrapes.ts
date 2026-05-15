@@ -2,6 +2,7 @@ import { ConvexError, v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
+import { matchForLaterAlbumsForRymScrape } from "./_utils/albumMatching";
 import {
 	deleteReleaseDescriptorLinks,
 	deleteReleaseGenreLinks,
@@ -180,6 +181,14 @@ export const upsertRateYourMusicScrape = mutation({
 		}
 
 		await syncReleaseTaxonomy(ctx, scrapeId, args, now);
+
+		await matchForLaterAlbumsForRymScrape(ctx, {
+			scrapeId,
+			spotifyAlbumId: args.spotifyAlbumId?.trim() || undefined,
+			albumTitle: args.albumTitle,
+			artists: args.artists,
+			now,
+		});
 
 		return scrapeId;
 	},
