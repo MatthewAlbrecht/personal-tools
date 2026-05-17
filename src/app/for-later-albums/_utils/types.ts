@@ -7,19 +7,19 @@ export type ForLaterRymFilter =
 	| "no_scrape"
 	| "has_candidate"
 	| "no_candidate";
-export type ForLaterPlaylistFilter = "active" | "removed" | "all";
-export type ForLaterGenreRoleFilter = "primary" | "secondary" | "either";
+
+/** Whether every active constraint must match ("all") or any one ("any"). */
+export type ForLaterFilterMatch = "all" | "any";
 
 export type ForLaterFilters = {
-	genreKey?: string;
-	genreRole: ForLaterGenreRoleFilter;
-	descriptorKey?: string;
-	title?: string;
-	artist?: string;
+	genreKeys: string[];
+	descriptorKeys: string[];
+	/** Matches album title or artist name (substring, case-insensitive). */
+	search?: string;
 	year?: number;
 	listened: ForLaterListenedFilter;
 	rymStatus: ForLaterRymFilter;
-	playlist: ForLaterPlaylistFilter;
+	filterMatch: ForLaterFilterMatch;
 };
 
 export type ForLaterAlbumRowData = {

@@ -1,8 +1,7 @@
 import type {
+	ForLaterFilterMatch,
 	ForLaterFilters,
-	ForLaterGenreRoleFilter,
 	ForLaterListenedFilter,
-	ForLaterPlaylistFilter,
 	ForLaterRymFilter,
 } from "./types";
 
@@ -18,29 +17,49 @@ const RYM_VALUES = new Set<ForLaterRymFilter>([
 	"has_candidate",
 	"no_candidate",
 ]);
-const PLAYLIST_VALUES = new Set<ForLaterPlaylistFilter>([
-	"active",
-	"removed",
-	"all",
-]);
-const GENRE_ROLE_VALUES = new Set<ForLaterGenreRoleFilter>([
-	"primary",
-	"secondary",
-	"either",
-]);
+const FILTER_MATCH_VALUES = new Set<ForLaterFilterMatch>(["all", "any"]);
+
+function normalizeTaxonomyFilterKey(raw: string): string {
+	return raw.trim().toLowerCase();
+}
+
+export function parseKeyList(params: URLSearchParams, key: string): string[] {
+	const seen = new Set<string>();
+	for (const raw of params.getAll(key)) {
+		const normalized = normalizeTaxonomyFilterKey(raw);
+		if (normalized) {
+			seen.add(normalized);
+		}
+	}
+	return [...seen].sort();
+}
+
+export function addUniqueSortedKey(keys: string[], add: string): string[] {
+	const normalized = normalizeTaxonomyFilterKey(add);
+	if (!normalized) {
+		return keys;
+	}
+	const next = new Set(keys.map((k) => normalizeTaxonomyFilterKey(k)));
+	next.add(normalized);
+	return [...next].sort();
+}
 
 export function parseForLaterFilters(params: URLSearchParams): ForLaterFilters {
 	const year = params.get("year");
+	const q = optionalString(params.get("q"));
+	const legacyTitle = optionalString(params.get("title"));
+	const legacyArtist = optionalString(params.get("artist"));
+	const legacySearch =
+		q ??
+		([legacyTitle, legacyArtist].filter(Boolean).join(" ").trim() || undefined);
 	return {
-		genreKey: optionalString(params.get("genre")),
-		genreRole: parseEnum(params.get("genreRole"), GENRE_ROLE_VALUES, "either"),
-		descriptorKey: optionalString(params.get("descriptor")),
-		title: optionalString(params.get("title")),
-		artist: optionalString(params.get("artist")),
+		genreKeys: parseKeyList(params, "genre"),
+		descriptorKeys: parseKeyList(params, "descriptor"),
+		search: legacySearch,
 		year: year && /^\d{4}$/.test(year) ? Number.parseInt(year, 10) : undefined,
 		listened: parseEnum(params.get("listened"), LISTENED_VALUES, "all"),
 		rymStatus: parseEnum(params.get("rymStatus"), RYM_VALUES, "all"),
-		playlist: parseEnum(params.get("playlist"), PLAYLIST_VALUES, "active"),
+		filterMatch: parseEnum(params.get("match"), FILTER_MATCH_VALUES, "all"),
 	};
 }
 
@@ -48,17 +67,19 @@ export function serializeForLaterFilters(
 	filters: ForLaterFilters,
 ): URLSearchParams {
 	const params = new URLSearchParams();
-	setIfPresent(params, "genre", filters.genreKey);
-	setIfNotDefault(params, "genreRole", filters.genreRole, "either");
-	setIfPresent(params, "descriptor", filters.descriptorKey);
-	setIfPresent(params, "title", filters.title);
-	setIfPresent(params, "artist", filters.artist);
+	for (const key of filters.genreKeys) {
+		params.append("genre", key);
+	}
+	for (const key of filters.descriptorKeys) {
+		params.append("descriptor", key);
+	}
+	setIfPresent(params, "q", filters.search);
 	if (filters.year !== undefined) {
 		params.set("year", String(filters.year));
 	}
 	setIfNotDefault(params, "listened", filters.listened, "all");
 	setIfNotDefault(params, "rymStatus", filters.rymStatus, "all");
-	setIfNotDefault(params, "playlist", filters.playlist, "active");
+	setIfNotDefault(params, "match", filters.filterMatch, "all");
 	return params;
 }
 

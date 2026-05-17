@@ -5,9 +5,25 @@ import Image from "next/image";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
+import { buildGoogleRateYourMusicSearchUrl } from "../../../../convex/_utils/google_rym_lucky_search";
 import type { ForLaterAlbumRowData } from "../_utils/types";
 
-export function ForLaterRow({ row }: { row: ForLaterAlbumRowData }) {
+function googleRymSearchUrl(row: ForLaterAlbumRowData): string {
+	return buildGoogleRateYourMusicSearchUrl({
+		artistName: row.artistName,
+		albumName: row.name,
+	});
+}
+
+export function ForLaterRow({
+	row,
+	onAddGenreKey,
+	onAddDescriptorKey,
+}: {
+	row: ForLaterAlbumRowData;
+	onAddGenreKey?: (key: string) => void;
+	onAddDescriptorKey?: (key: string) => void;
+}) {
 	return (
 		<article className="rounded-xl border bg-card p-3 transition-colors hover:bg-muted/30">
 			<div className="flex gap-3">
@@ -40,17 +56,29 @@ export function ForLaterRow({ row }: { row: ForLaterAlbumRowData }) {
 							</p>
 						</div>
 						<div className="flex flex-wrap items-center gap-2 md:justify-end">
-							<Badge variant={row.isActive ? "default" : "secondary"}>
-								{row.isActive ? "Active" : "Removed"}
-							</Badge>
 							<ListenBadge row={row} />
-							<RymStatusBadge row={row} />
-							{row.rymMatchMethod ? (
-								<Badge variant="outline">{row.rymMatchMethod}</Badge>
+							{row.rymStatus !== "matched" ? (
+								<RymStatusBadge row={row} />
+							) : null}
+							{!row.rymUrl?.trim() ? (
+								<Button asChild size="sm" variant="secondary" className="gap-1">
+									<a
+										href={googleRymSearchUrl(row)}
+										target="_blank"
+										rel="noreferrer"
+									>
+										<ExternalLink className="h-3.5 w-3.5" />
+										Google RYM
+									</a>
+								</Button>
 							) : null}
 							{row.rymUrl ? (
 								<Button asChild size="sm" variant="outline" className="gap-1">
-									<a href={row.rymUrl} target="_blank" rel="noreferrer">
+									<a
+										href={row.rymUrl}
+										target="_blank"
+										rel="noopener noreferrer"
+									>
 										<ExternalLink className="h-3.5 w-3.5" />
 										RYM
 									</a>
@@ -58,7 +86,11 @@ export function ForLaterRow({ row }: { row: ForLaterAlbumRowData }) {
 							) : null}
 						</div>
 					</div>
-					<TagGroups row={row} />
+					<TagGroups
+						row={row}
+						onAddGenreKey={onAddGenreKey}
+						onAddDescriptorKey={onAddDescriptorKey}
+					/>
 					{row.rymDiscoveryReason ? (
 						<p className="line-clamp-2 text-muted-foreground text-xs">
 							{row.rymDiscoveryReason}
@@ -85,7 +117,6 @@ function ListenBadge({ row }: { row: ForLaterAlbumRowData }) {
 
 function RymStatusBadge({ row }: { row: ForLaterAlbumRowData }) {
 	const className = cn(
-		row.rymStatus === "matched" && "border-emerald-500/40 text-emerald-600",
 		row.rymStatus === "candidate" && "border-blue-500/40 text-blue-600",
 		row.rymStatus === "failed" && "border-destructive/40 text-destructive",
 	);
@@ -98,12 +129,35 @@ function RymStatusBadge({ row }: { row: ForLaterAlbumRowData }) {
 	);
 }
 
-function TagGroups({ row }: { row: ForLaterAlbumRowData }) {
+function TagGroups({
+	row,
+	onAddGenreKey,
+	onAddDescriptorKey,
+}: {
+	row: ForLaterAlbumRowData;
+	onAddGenreKey?: (key: string) => void;
+	onAddDescriptorKey?: (key: string) => void;
+}) {
 	return (
 		<div className="space-y-1">
-			<TagLine label="Primary" tags={row.primaryGenres} />
-			<TagLine label="Secondary" tags={row.secondaryGenres} />
-			<TagLine label="Descriptors" tags={row.descriptors} />
+			<TagLine
+				label="Primary"
+				tags={row.primaryGenres}
+				variant="primary"
+				onPickTag={onAddGenreKey}
+			/>
+			<TagLine
+				label="Secondary"
+				tags={row.secondaryGenres}
+				variant="secondary"
+				onPickTag={onAddGenreKey}
+			/>
+			<TagLine
+				label="Descriptors"
+				tags={row.descriptors}
+				variant="descriptors"
+				onPickTag={onAddDescriptorKey}
+			/>
 		</div>
 	);
 }
@@ -111,23 +165,57 @@ function TagGroups({ row }: { row: ForLaterAlbumRowData }) {
 function TagLine({
 	label,
 	tags,
+	variant,
+	onPickTag,
 }: {
 	label: string;
 	tags: Array<{ key: string; label: string }>;
+	variant: "primary" | "secondary" | "descriptors";
+	onPickTag?: (key: string) => void;
 }) {
 	if (tags.length === 0) {
 		return null;
 	}
 
-	return (
-		<div className="flex flex-wrap items-center gap-1.5 text-xs">
-			<span className="mr-1 text-muted-foreground">{label}</span>
-			{tags.map((tag) => (
-				<Badge key={tag.key} variant="secondary" className="font-normal">
+	const body = tags.map((tag, index) => (
+		<span key={tag.key}>
+			{index > 0 ? ", " : null}
+			{onPickTag ? (
+				<button
+					type="button"
+					className={cn(
+						"cursor-pointer rounded-xs text-left underline-offset-2 hover:underline",
+						variant === "descriptors" && "text-muted-foreground",
+					)}
+					onClick={() => onPickTag(tag.key)}
+				>
 					{tag.label}
-				</Badge>
-			))}
-		</div>
+				</button>
+			) : (
+				tag.label
+			)}
+		</span>
+	));
+
+	if (variant === "descriptors") {
+		return (
+			<p className="text-muted-foreground text-xs">
+				<span className="text-muted-foreground">{label}: </span>
+				{body}
+			</p>
+		);
+	}
+
+	return (
+		<p
+			className={cn(
+				variant === "primary" && "text-sm",
+				variant === "secondary" && "text-xs",
+			)}
+		>
+			<span className="text-muted-foreground">{label}: </span>
+			{body}
+		</p>
 	);
 }
 

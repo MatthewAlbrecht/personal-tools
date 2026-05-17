@@ -1,9 +1,19 @@
 import { v } from "convex/values";
-import { api } from "./_generated/api";
-import type { Doc } from "./_generated/dataModel";
+import { api, internal } from "./_generated/api";
+import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { action, mutation, query } from "./_generated/server";
 import { buildSpotifyAlbumListItems } from "./_utils/spotify_album_list";
+
+async function refreshForLaterProjectionsForUserAlbum(
+	ctx: MutationCtx,
+	args: { userId: string; albumId: Id<"spotifyAlbums"> },
+): Promise<void> {
+	await ctx.runMutation(
+		internal.forLaterAlbums.refreshFilterProjectionsForUserAlbum,
+		args,
+	);
+}
 
 // ============================================================================
 // Internal Helpers
@@ -2009,6 +2019,10 @@ export const recordAlbumListen = mutation({
 			});
 		}
 
+		await refreshForLaterProjectionsForUserAlbum(ctx, {
+			userId: args.userId,
+			albumId: args.albumId,
+		});
 		return { recorded: true };
 	},
 });
@@ -2092,6 +2106,10 @@ export const addManualAlbumListen = mutation({
 			});
 		}
 
+		await refreshForLaterProjectionsForUserAlbum(ctx, {
+			userId: args.userId,
+			albumId: album._id,
+		});
 		return { recorded: true, albumName: album.name };
 	},
 });
@@ -2192,6 +2210,11 @@ export const deleteAlbumListen = mutation({
 				});
 			}
 		}
+
+		await refreshForLaterProjectionsForUserAlbum(ctx, {
+			userId: listen.userId,
+			albumId: listen.albumId,
+		});
 	},
 });
 

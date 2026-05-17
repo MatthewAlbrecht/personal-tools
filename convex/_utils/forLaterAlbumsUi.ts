@@ -5,8 +5,7 @@ export type ForLaterRymFilter =
 	| "no_scrape"
 	| "has_candidate"
 	| "no_candidate";
-export type ForLaterPlaylistFilter = "active" | "removed" | "all";
-export type ForLaterGenreRoleFilter = "primary" | "secondary" | "either";
+export type ForLaterFilterMatch = "all" | "any";
 export type ForLaterDerivedRymStatus =
 	| "matched"
 	| "candidate"
@@ -16,31 +15,143 @@ export type ForLaterDerivedRymStatus =
 	| "not_started";
 
 export type ForLaterUiFilters = {
-	genreKey?: string;
-	genreRole: ForLaterGenreRoleFilter;
-	descriptorKey?: string;
-	title?: string;
-	artist?: string;
+	genreKeys: string[];
+	descriptorKeys: string[];
+	search?: string;
 	year?: number;
 	listened: ForLaterListenedFilter;
 	rymStatus: ForLaterRymFilter;
-	playlist: ForLaterPlaylistFilter;
+	filterMatch: ForLaterFilterMatch;
 };
+
+function sortUniqueTrimmedKeys(keys: string[] | undefined): string[] {
+	if (!keys?.length) {
+		return [];
+	}
+	const seen = new Set<string>();
+	for (const raw of keys) {
+		const t = raw.trim().toLowerCase();
+		if (t) {
+			seen.add(t);
+		}
+	}
+	return [...seen].sort();
+}
 
 export function normalizeForLaterFilters(
 	input: Partial<ForLaterUiFilters>,
 ): ForLaterUiFilters {
 	return {
-		genreKey: normalizeOptionalString(input.genreKey),
-		genreRole: input.genreRole ?? "either",
-		descriptorKey: normalizeOptionalString(input.descriptorKey),
-		title: normalizeOptionalString(input.title),
-		artist: normalizeOptionalString(input.artist),
+		genreKeys: sortUniqueTrimmedKeys(input.genreKeys),
+		descriptorKeys: sortUniqueTrimmedKeys(input.descriptorKeys),
+		search: normalizeOptionalString(input.search),
 		year: input.year,
 		listened: input.listened ?? "all",
 		rymStatus: input.rymStatus ?? "all",
-		playlist: input.playlist ?? "active",
+		filterMatch: input.filterMatch ?? "all",
 	};
+}
+
+/** True when list pagination can use denormalized projection indexes (no genre/descriptor/search or "any" match). */
+export function forLaterFiltersAllowIndexedScan(
+	filters: ForLaterUiFilters,
+): boolean {
+	if (filters.filterMatch !== "all") {
+		return false;
+	}
+	if (
+		filters.genreKeys.length > 0 ||
+		filters.descriptorKeys.length > 0 ||
+		Boolean(filters.search?.trim())
+	) {
+		return false;
+	}
+	return true;
+}
+
+export type ForLaterAlbumRowFilterInput = {
+	name: string;
+	artistName: string;
+	releaseYear?: number;
+	hasListened: boolean;
+	rymStatus: string;
+	rymUrl?: string;
+	primaryGenres: Array<{ key: string }>;
+	secondaryGenres: Array<{ key: string }>;
+	descriptors: Array<{ key: string }>;
+};
+
+function albumGenreKeySet(r: ForLaterAlbumRowFilterInput): Set<string> {
+	return new Set([
+		...r.primaryGenres.map((t) => t.key),
+		...r.secondaryGenres.map((t) => t.key),
+	]);
+}
+
+export function rowMatchesFilters(
+	row: ForLaterAlbumRowFilterInput,
+	filters: ForLaterUiFilters,
+): boolean {
+	type RowPred = (r: ForLaterAlbumRowFilterInput) => boolean;
+	const preds: RowPred[] = [];
+
+	const search = filters.search?.trim();
+	if (search) {
+		const q = search.toLowerCase();
+		preds.push(
+			(r) =>
+				r.name.toLowerCase().includes(q) ||
+				r.artistName.toLowerCase().includes(q),
+		);
+	}
+
+	if (filters.year !== undefined) {
+		const y = filters.year;
+		preds.push((r) => r.releaseYear === y);
+	}
+
+	if (filters.listened === "listened") {
+		preds.push((r) => r.hasListened);
+	} else if (filters.listened === "not_listened") {
+		preds.push((r) => !r.hasListened);
+	}
+
+	const rym = filters.rymStatus;
+	if (rym === "has_scrape") {
+		preds.push((r) => r.rymStatus === "matched");
+	} else if (rym === "no_scrape") {
+		preds.push((r) => r.rymStatus !== "matched");
+	} else if (rym === "has_candidate") {
+		preds.push((r) => Boolean(r.rymUrl));
+	} else if (rym === "no_candidate") {
+		preds.push((r) => !r.rymUrl);
+	}
+
+	if (filters.genreKeys.length > 0) {
+		const keys = filters.genreKeys;
+		preds.push((r) => {
+			const genres = albumGenreKeySet(r);
+			return keys.every((genreKey) => genres.has(genreKey));
+		});
+	}
+
+	if (filters.descriptorKeys.length > 0) {
+		const keys = filters.descriptorKeys;
+		preds.push((r) => {
+			const descriptors = new Set(r.descriptors.map((t) => t.key));
+			return keys.every((descriptorKey) => descriptors.has(descriptorKey));
+		});
+	}
+
+	if (preds.length === 0) {
+		return true;
+	}
+
+	const mode = filters.filterMatch;
+	if (mode === "any") {
+		return preds.some((p) => p(row));
+	}
+	return preds.every((p) => p(row));
 }
 
 export function deriveRymStatus(args: {
@@ -91,26 +202,6 @@ export function sortForLaterRows<
 
 		return b.createdAt - a.createdAt;
 	});
-}
-
-export function buildOpenableRymLinks(
-	rows: Array<{ id: string; rymUrl?: string }>,
-	limit: number,
-): Array<{ id: string; url: string }> {
-	const cappedLimit = Math.min(Math.max(limit, 1), 20);
-	const links: Array<{ id: string; url: string }> = [];
-
-	for (const row of rows) {
-		if (!row.rymUrl) {
-			continue;
-		}
-		links.push({ id: row.id, url: row.rymUrl });
-		if (links.length >= cappedLimit) {
-			break;
-		}
-	}
-
-	return links;
 }
 
 function normalizeOptionalString(

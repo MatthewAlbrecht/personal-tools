@@ -396,6 +396,13 @@ export default defineSchema({
 
 		createdAt: v.number(),
 		updatedAt: v.number(),
+
+		filterReleaseYear: v.optional(v.number()),
+		filterHasListened: v.optional(v.boolean()),
+		filterRymMatched: v.optional(v.boolean()),
+		filterHasRymUrl: v.optional(v.boolean()),
+		filterGenreKeysSorted: v.optional(v.array(v.string())),
+		filterDescriptorKeysSorted: v.optional(v.array(v.string())),
 	})
 		.index("by_userId", ["userId"])
 		.index("by_userId_active", ["userId", "isActive"])
@@ -405,9 +412,33 @@ export default defineSchema({
 		.index("by_userId_albumTitleKey", ["userId", "albumTitleKey"])
 		.index("by_rymScrapeId", ["rymScrapeId"])
 		.index("by_rymDiscoveryStatus", ["rymDiscoveryStatus"])
-		.index("by_userId_isActive_lastSeenAt", ["userId", "isActive", "lastSeenAt"])
+		.index("by_userId_isActive_lastSeenAt", [
+			"userId",
+			"isActive",
+			"lastSeenAt",
+		])
 		.index("by_userId_rymScrapeId", ["userId", "rymScrapeId"])
-		.index("by_userId_rymDiscoveryStatus", ["userId", "rymDiscoveryStatus"]),
+		.index("by_userId_rymDiscoveryStatus", ["userId", "rymDiscoveryStatus"])
+		.index("by_userId_filterReleaseYear_lastSeenAt", [
+			"userId",
+			"filterReleaseYear",
+			"lastSeenAt",
+		])
+		.index("by_userId_filterHasListened_lastSeenAt", [
+			"userId",
+			"filterHasListened",
+			"lastSeenAt",
+		])
+		.index("by_userId_filterRymMatched_lastSeenAt", [
+			"userId",
+			"filterRymMatched",
+			"lastSeenAt",
+		])
+		.index("by_userId_filterHasRymUrl_lastSeenAt", [
+			"userId",
+			"filterHasRymUrl",
+			"lastSeenAt",
+		]),
 
 	forLaterSyncRuns: defineTable({
 		userId: v.string(),

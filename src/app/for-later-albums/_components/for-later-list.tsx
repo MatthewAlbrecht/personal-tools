@@ -11,12 +11,16 @@ export function ForLaterList({
 	isLoadingMore,
 	canLoadMore,
 	onLoadMore,
+	onAddGenreKey,
+	onAddDescriptorKey,
 }: {
 	rows: ForLaterAlbumRowData[];
 	isLoading: boolean;
 	isLoadingMore: boolean;
 	canLoadMore: boolean;
 	onLoadMore: () => void;
+	onAddGenreKey?: (key: string) => void;
+	onAddDescriptorKey?: (key: string) => void;
 }) {
 	if (isLoading) {
 		return (
@@ -45,7 +49,12 @@ export function ForLaterList({
 	return (
 		<section className="space-y-3">
 			{rows.map((row) => (
-				<ForLaterRow key={row.id} row={row} />
+				<ForLaterRow
+					key={row.id}
+					row={row}
+					onAddGenreKey={onAddGenreKey}
+					onAddDescriptorKey={onAddDescriptorKey}
+				/>
 			))}
 			{canLoadMore ? (
 				<div className="flex justify-center pt-2">

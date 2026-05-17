@@ -11,6 +11,7 @@ import { ForLaterFilters } from "./_components/for-later-filters";
 import { ForLaterHeader } from "./_components/for-later-header";
 import { ForLaterList } from "./_components/for-later-list";
 import {
+	addUniqueSortedKey,
 	parseForLaterFilters,
 	serializeForLaterFilters,
 } from "./_utils/filter-state";
@@ -67,6 +68,20 @@ function ForLaterAlbumsPageInner() {
 		router.replace(query ? `/for-later-albums?${query}` : "/for-later-albums");
 	}
 
+	function addGenreKeyToFilters(key: string): void {
+		updateFilters({
+			...filters,
+			genreKeys: addUniqueSortedKey(filters.genreKeys, key),
+		});
+	}
+
+	function addDescriptorKeyToFilters(key: string): void {
+		updateFilters({
+			...filters,
+			descriptorKeys: addUniqueSortedKey(filters.descriptorKeys, key),
+		});
+	}
+
 	if (isLoading) {
 		return (
 			<div className="container mx-auto max-w-6xl p-6">
@@ -92,7 +107,6 @@ function ForLaterAlbumsPageInner() {
 			<div className="space-y-6">
 				<ForLaterHeader
 					userId={userId}
-					playlistName="For Later Albums"
 					spotifyDisplayName={connection?.displayName}
 					isConnected={isConnected}
 					getValidAccessToken={getValidAccessToken}
@@ -109,6 +123,8 @@ function ForLaterAlbumsPageInner() {
 					isLoadingMore={rows.status === "LoadingMore"}
 					canLoadMore={rows.status === "CanLoadMore"}
 					onLoadMore={() => rows.loadMore(25)}
+					onAddGenreKey={addGenreKeyToFilters}
+					onAddDescriptorKey={addDescriptorKeyToFilters}
 				/>
 			</div>
 		</div>

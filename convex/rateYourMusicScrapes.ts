@@ -1,4 +1,5 @@
 import { ConvexError, v } from "convex/values";
+import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
@@ -185,6 +186,13 @@ export const upsertRateYourMusicScrape = mutation({
 		}
 
 		await syncReleaseTaxonomy(ctx, scrapeId, args, now);
+
+		await ctx.runMutation(
+			internal.forLaterAlbums.refreshFilterProjectionsForScrape,
+			{
+				scrapeId,
+			},
+		);
 
 		await matchForLaterAlbumsForRymScrape(ctx, {
 			scrapeId,

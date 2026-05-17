@@ -1,8 +1,8 @@
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
-import type { QueryCtx } from "./_generated/server";
-import { mutation, query } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import {
 	type RymMatchResult,
 	buildArtistKeys,
@@ -11,12 +11,22 @@ import {
 } from "./_utils/albumMatching";
 import {
 	type ForLaterUiFilters,
-	buildOpenableRymLinks,
 	deriveRymStatus,
+	forLaterFiltersAllowIndexedScan,
 	normalizeForLaterFilters,
+	rowMatchesFilters,
 	sortForLaterRows,
 } from "./_utils/forLaterAlbumsUi";
+import {
+	buildFilterDescriptorKeysSorted,
+	buildFilterGenreKeysSorted,
+	parseReleaseYearFromIsoDate,
+} from "./_utils/forLaterFilterProjection";
+import { chooseIndexedForLaterListScan } from "./_utils/forLaterIndexedList";
+import { buildOpenableGoogleRymSearchLinks } from "./_utils/google_rym_lucky_search";
 import { requireAuth } from "./auth";
+
+type ForLaterDbCtx = QueryCtx | MutationCtx;
 
 const syncSourceValidator = v.union(v.literal("manual"), v.literal("cron"));
 const syncStatusValidator = v.union(v.literal("success"), v.literal("failed"));
@@ -40,28 +50,16 @@ const rymFilterValidator = v.union(
 	v.literal("no_candidate"),
 );
 
-const playlistFilterValidator = v.union(
-	v.literal("active"),
-	v.literal("removed"),
-	v.literal("all"),
-);
-
-const genreRoleFilterValidator = v.union(
-	v.literal("primary"),
-	v.literal("secondary"),
-	v.literal("either"),
-);
+const filterMatchValidator = v.union(v.literal("all"), v.literal("any"));
 
 const forLaterFiltersValidator = v.object({
-	genreKey: v.optional(v.string()),
-	genreRole: v.optional(genreRoleFilterValidator),
-	descriptorKey: v.optional(v.string()),
-	title: v.optional(v.string()),
-	artist: v.optional(v.string()),
+	genreKeys: v.optional(v.array(v.string())),
+	descriptorKeys: v.optional(v.array(v.string())),
+	search: v.optional(v.string()),
 	year: v.optional(v.number()),
 	listened: v.optional(listenedFilterValidator),
 	rymStatus: v.optional(rymFilterValidator),
-	playlist: v.optional(playlistFilterValidator),
+	filterMatch: v.optional(filterMatchValidator),
 });
 
 const tagValidator = v.object({
@@ -184,7 +182,7 @@ function spotifyAlbumArtistKeys(doc: Doc<"spotifyAlbums">): string[] {
 }
 
 async function loadTagsForScrape(
-	ctx: QueryCtx,
+	ctx: ForLaterDbCtx,
 	scrapeId: Id<"rateYourMusicScrapes">,
 ): Promise<{
 	primaryGenres: Array<{ key: string; label: string }>;
@@ -226,7 +224,7 @@ async function loadTagsForScrape(
 }
 
 async function loadListenSummary(
-	ctx: QueryCtx,
+	ctx: ForLaterDbCtx,
 	args: { userId: string; albumId: Id<"spotifyAlbums"> },
 ): Promise<{
 	hasListened: boolean;
@@ -268,74 +266,8 @@ async function loadListenSummary(
 	};
 }
 
-function rowMatchesFilters(
-	row: {
-		name: string;
-		artistName: string;
-		releaseYear?: number;
-		hasListened: boolean;
-		rymStatus: string;
-		rymUrl?: string;
-		isActive: boolean;
-		primaryGenres: Array<{ key: string }>;
-		secondaryGenres: Array<{ key: string }>;
-		descriptors: Array<{ key: string }>;
-	},
-	filters: ForLaterUiFilters,
-): boolean {
-	if (filters.playlist === "active" && !row.isActive) return false;
-	if (filters.playlist === "removed" && row.isActive) return false;
-
-	if (filters.listened === "listened" && !row.hasListened) return false;
-	if (filters.listened === "not_listened" && row.hasListened) return false;
-
-	if (filters.rymStatus === "has_scrape" && row.rymStatus !== "matched")
-		return false;
-	if (filters.rymStatus === "no_scrape" && row.rymStatus === "matched")
-		return false;
-	if (filters.rymStatus === "has_candidate" && !row.rymUrl) return false;
-	if (filters.rymStatus === "no_candidate" && row.rymUrl) return false;
-
-	if (filters.year !== undefined && row.releaseYear !== filters.year)
-		return false;
-	if (
-		filters.title &&
-		!row.name.toLowerCase().includes(filters.title.toLowerCase())
-	) {
-		return false;
-	}
-	if (
-		filters.artist &&
-		!row.artistName.toLowerCase().includes(filters.artist.toLowerCase())
-	) {
-		return false;
-	}
-
-	if (filters.genreKey) {
-		const primaryMatch = row.primaryGenres.some(
-			(tag) => tag.key === filters.genreKey,
-		);
-		const secondaryMatch = row.secondaryGenres.some(
-			(tag) => tag.key === filters.genreKey,
-		);
-		if (filters.genreRole === "primary" && !primaryMatch) return false;
-		if (filters.genreRole === "secondary" && !secondaryMatch) return false;
-		if (filters.genreRole === "either" && !primaryMatch && !secondaryMatch)
-			return false;
-	}
-
-	if (
-		filters.descriptorKey &&
-		!row.descriptors.some((tag) => tag.key === filters.descriptorKey)
-	) {
-		return false;
-	}
-
-	return true;
-}
-
 async function resolveRymContextForAlbum(
-	ctx: QueryCtx,
+	ctx: ForLaterDbCtx,
 	args: { albumId: Id<"spotifyAlbums">; item: Doc<"forLaterAlbumItems"> },
 ): Promise<{
 	resolvedScrapeId: Id<"rateYourMusicScrapes"> | undefined;
@@ -374,6 +306,268 @@ async function resolveRymContextForAlbum(
 	};
 }
 
+async function syncForLaterItemFilterProjection(
+	ctx: MutationCtx,
+	itemId: Id<"forLaterAlbumItems">,
+): Promise<void> {
+	const item = await ctx.db.get(itemId);
+	if (!item) {
+		return;
+	}
+
+	const album = await ctx.db.get(item.albumId);
+
+	const { resolvedScrapeId, scrape } = await resolveRymContextForAlbum(ctx, {
+		albumId: item.albumId,
+		item,
+	});
+
+	const tags = resolvedScrapeId
+		? await loadTagsForScrape(ctx, resolvedScrapeId)
+		: { primaryGenres: [], secondaryGenres: [], descriptors: [] };
+
+	const listenSummary = await loadListenSummary(ctx, {
+		userId: item.userId,
+		albumId: item.albumId,
+	});
+
+	const filterReleaseYear = parseReleaseYearFromIsoDate(album?.releaseDate);
+	const filterHasListened = listenSummary.hasListened;
+	const rymUrl = scrape?.rymUrl ?? item.rymCandidateUrl;
+	const rymStatus = deriveRymStatus({
+		rymScrapeId: resolvedScrapeId,
+		rymCandidateUrl: item.rymCandidateUrl,
+		rymDiscoveryStatus: item.rymDiscoveryStatus,
+	});
+	const filterRymMatched = rymStatus === "matched";
+	const filterHasRymUrl = Boolean(rymUrl);
+
+	await ctx.db.patch(itemId, {
+		...(filterReleaseYear !== undefined
+			? { filterReleaseYear }
+			: { filterReleaseYear: undefined }),
+		filterHasListened,
+		filterRymMatched,
+		filterHasRymUrl,
+		filterGenreKeysSorted: buildFilterGenreKeysSorted(
+			tags.primaryGenres,
+			tags.secondaryGenres,
+		),
+		filterDescriptorKeysSorted: buildFilterDescriptorKeysSorted(
+			tags.descriptors,
+		),
+		updatedAt: Date.now(),
+	});
+}
+
+async function hydrateForLaterAlbumRow(
+	ctx: QueryCtx,
+	args: { userId: string; item: Doc<"forLaterAlbumItems"> },
+): Promise<ForLaterAlbumRow | null> {
+	const album = await ctx.db.get(args.item.albumId);
+	if (!album) {
+		return null;
+	}
+
+	const { resolvedScrapeId, scrape, linkMethod } =
+		await resolveRymContextForAlbum(ctx, {
+			albumId: args.item.albumId,
+			item: args.item,
+		});
+
+	const tags = resolvedScrapeId
+		? await loadTagsForScrape(ctx, resolvedScrapeId)
+		: { primaryGenres: [], secondaryGenres: [], descriptors: [] };
+
+	const listenSummary = await loadListenSummary(ctx, {
+		userId: args.userId,
+		albumId: args.item.albumId,
+	});
+
+	const parsedYear = album.releaseDate
+		? Number.parseInt(album.releaseDate.slice(0, 4), 10)
+		: Number.NaN;
+
+	const rymStatus = deriveRymStatus({
+		rymScrapeId: resolvedScrapeId,
+		rymCandidateUrl: args.item.rymCandidateUrl,
+		rymDiscoveryStatus: args.item.rymDiscoveryStatus,
+	});
+
+	const rymUrl = scrape?.rymUrl ?? args.item.rymCandidateUrl;
+	const rymMatchMethodOut = args.item.rymMatchMethod ?? linkMethod;
+
+	const row: ForLaterAlbumRow = {
+		id: String(args.item._id),
+		albumItemId: args.item._id,
+		albumId: args.item.albumId,
+		spotifyAlbumId: args.item.spotifyAlbumId,
+		name: album.name,
+		artistName: album.artistName,
+		...(album.imageUrl ? { imageUrl: album.imageUrl } : {}),
+		...(album.releaseDate ? { releaseDate: album.releaseDate } : {}),
+		...(Number.isFinite(parsedYear) ? { releaseYear: parsedYear } : {}),
+		...(args.item.playlistAddedAt
+			? { playlistAddedAt: args.item.playlistAddedAt }
+			: {}),
+		firstSeenAt: args.item.firstSeenAt,
+		createdAt: args.item.createdAt,
+		lastSeenAt: args.item.lastSeenAt,
+		...(args.item.removedAt ? { removedAt: args.item.removedAt } : {}),
+		isActive: args.item.isActive,
+		...listenSummary,
+		rymStatus,
+		...(rymUrl ? { rymUrl } : {}),
+		...(args.item.rymCandidateConfidence
+			? { rymCandidateConfidence: args.item.rymCandidateConfidence }
+			: {}),
+		...(args.item.rymDiscoveryReason
+			? { rymDiscoveryReason: args.item.rymDiscoveryReason }
+			: {}),
+		...(rymMatchMethodOut ? { rymMatchMethod: rymMatchMethodOut } : {}),
+		...tags,
+	};
+
+	return row;
+}
+
+function appendForLaterProjectionFilters(
+	filters: ForLaterUiFilters,
+	options: {
+		skipYear?: boolean;
+		skipListened?: boolean;
+		skipRym?: boolean;
+	},
+	// biome-ignore lint/suspicious/noExplicitAny: Convex indexed `.filter` chains lack one exported builder type across indexes.
+	q: any,
+	// biome-ignore lint/suspicious/noExplicitAny: same
+): any {
+	let out = q;
+	if (!options.skipYear && filters.year !== undefined) {
+		out = out.filter(
+			(fb: {
+				eq: (a: unknown, b: unknown) => unknown;
+				field: (name: string) => unknown;
+			}) => fb.eq(fb.field("filterReleaseYear"), filters.year),
+		);
+	}
+	if (!options.skipListened && filters.listened === "listened") {
+		out = out.filter(
+			(fb: {
+				eq: (a: unknown, b: unknown) => unknown;
+				field: (name: string) => unknown;
+			}) => fb.eq(fb.field("filterHasListened"), true),
+		);
+	} else if (!options.skipListened && filters.listened === "not_listened") {
+		out = out.filter(
+			(fb: {
+				eq: (a: unknown, b: unknown) => unknown;
+				field: (name: string) => unknown;
+			}) => fb.eq(fb.field("filterHasListened"), false),
+		);
+	}
+	if (!options.skipRym && filters.rymStatus === "has_scrape") {
+		out = out.filter(
+			(fb: {
+				eq: (a: unknown, b: unknown) => unknown;
+				field: (name: string) => unknown;
+			}) => fb.eq(fb.field("filterRymMatched"), true),
+		);
+	} else if (!options.skipRym && filters.rymStatus === "no_scrape") {
+		out = out.filter(
+			(fb: {
+				eq: (a: unknown, b: unknown) => unknown;
+				field: (name: string) => unknown;
+			}) => fb.eq(fb.field("filterRymMatched"), false),
+		);
+	} else if (!options.skipRym && filters.rymStatus === "has_candidate") {
+		out = out.filter(
+			(fb: {
+				eq: (a: unknown, b: unknown) => unknown;
+				field: (name: string) => unknown;
+			}) => fb.eq(fb.field("filterHasRymUrl"), true),
+		);
+	} else if (!options.skipRym && filters.rymStatus === "no_candidate") {
+		out = out.filter(
+			(fb: {
+				eq: (a: unknown, b: unknown) => unknown;
+				field: (name: string) => unknown;
+			}) => fb.eq(fb.field("filterHasRymUrl"), false),
+		);
+	}
+	return out;
+}
+
+async function paginateForLaterAlbumItemsIndexed(
+	ctx: QueryCtx,
+	args: {
+		userId: string;
+		filters: ForLaterUiFilters;
+		requested: number;
+		cursor: string | null;
+	},
+): Promise<{
+	page: Doc<"forLaterAlbumItems">[];
+	isDone: boolean;
+	continueCursor: string;
+}> {
+	const { userId, filters, requested, cursor } = args;
+	const choice = chooseIndexedForLaterListScan(filters);
+
+	// biome-ignore lint/suspicious/noImplicitAnyLet: reassigned on every branch before paginate
+	let base;
+
+	if (choice.kind === "year") {
+		base = ctx.db
+			.query("forLaterAlbumItems")
+			.withIndex("by_userId_filterReleaseYear_lastSeenAt", (iq) =>
+				iq.eq("userId", userId).eq("filterReleaseYear", choice.year),
+			);
+		base = appendForLaterProjectionFilters(filters, { skipYear: true }, base);
+	} else if (choice.kind === "listened") {
+		base = ctx.db
+			.query("forLaterAlbumItems")
+			.withIndex("by_userId_filterHasListened_lastSeenAt", (iq) =>
+				iq.eq("userId", userId).eq("filterHasListened", choice.value),
+			);
+		base = appendForLaterProjectionFilters(
+			filters,
+			{ skipListened: true },
+			base,
+		);
+	} else if (choice.kind === "rymMatched") {
+		base = ctx.db
+			.query("forLaterAlbumItems")
+			.withIndex("by_userId_filterRymMatched_lastSeenAt", (iq) =>
+				iq.eq("userId", userId).eq("filterRymMatched", choice.value),
+			);
+		base = appendForLaterProjectionFilters(filters, { skipRym: true }, base);
+	} else if (choice.kind === "rymUrl") {
+		base = ctx.db
+			.query("forLaterAlbumItems")
+			.withIndex("by_userId_filterHasRymUrl_lastSeenAt", (iq) =>
+				iq.eq("userId", userId).eq("filterHasRymUrl", choice.value),
+			);
+		base = appendForLaterProjectionFilters(filters, { skipRym: true }, base);
+	} else {
+		base = ctx.db
+			.query("forLaterAlbumItems")
+			.withIndex("by_userId_lastSeenAt", (iq) => iq.eq("userId", userId));
+		base = appendForLaterProjectionFilters(filters, {}, base);
+	}
+
+	const result = await base.order("desc").paginate({
+		numItems: requested,
+		cursor,
+	});
+
+	return {
+		page: result.page,
+		isDone: result.isDone,
+		continueCursor: result.continueCursor,
+	};
+}
+
 async function loadForLaterAlbumRows(
 	ctx: QueryCtx,
 	args: {
@@ -383,7 +577,53 @@ async function loadForLaterAlbumRows(
 	},
 ): Promise<LoadForLaterAlbumRowsResult> {
 	const filters = normalizeForLaterFilters(args.filters);
-	const targetItems = args.paginationOpts.numItems;
+	const requested = args.paginationOpts.numItems;
+
+	if (forLaterFiltersAllowIndexedScan(filters)) {
+		const indexedPage = await paginateForLaterAlbumItemsIndexed(ctx, {
+			userId: args.userId,
+			filters,
+			requested,
+			cursor: args.paginationOpts.cursor,
+		});
+
+		const page: ForLaterAlbumRow[] = [];
+		for (const item of indexedPage.page) {
+			const row = await hydrateForLaterAlbumRow(ctx, {
+				userId: args.userId,
+				item,
+			});
+			if (!row) {
+				continue;
+			}
+			if (
+				rowMatchesFilters(
+					{
+						name: row.name,
+						artistName: row.artistName,
+						releaseYear: row.releaseYear,
+						hasListened: row.hasListened,
+						rymStatus: row.rymStatus,
+						rymUrl: row.rymUrl,
+						primaryGenres: row.primaryGenres,
+						secondaryGenres: row.secondaryGenres,
+						descriptors: row.descriptors,
+					},
+					filters,
+				)
+			) {
+				page.push(row);
+			}
+		}
+
+		return {
+			page: sortForLaterRows(page),
+			isDone: indexedPage.isDone,
+			continueCursor: indexedPage.continueCursor,
+		};
+	}
+
+	const targetItems = requested;
 	const scanSize = Math.min(Math.max(targetItems * 4, 25), 100);
 	const page: ForLaterAlbumRow[] = [];
 	let cursor: string | null = args.paginationOpts.cursor;
@@ -391,80 +631,40 @@ async function loadForLaterAlbumRows(
 	let isDone = false;
 
 	while (page.length < targetItems && !isDone) {
-		const result = await ctx.db
+		const batch = await ctx.db
 			.query("forLaterAlbumItems")
 			.withIndex("by_userId_lastSeenAt", (q) => q.eq("userId", args.userId))
 			.order("desc")
 			.paginate({ numItems: scanSize, cursor });
 
-		lastContinueCursor = result.continueCursor;
-		cursor = result.continueCursor;
-		isDone = result.isDone;
+		lastContinueCursor = batch.continueCursor;
+		cursor = batch.continueCursor;
+		isDone = batch.isDone;
 
-		for (const item of result.page) {
-			const album = await ctx.db.get(item.albumId);
-			if (!album) continue;
-
-			const { resolvedScrapeId, scrape, linkMethod } =
-				await resolveRymContextForAlbum(ctx, {
-					albumId: item.albumId,
-					item,
-				});
-
-			const tags = resolvedScrapeId
-				? await loadTagsForScrape(ctx, resolvedScrapeId)
-				: { primaryGenres: [], secondaryGenres: [], descriptors: [] };
-
-			const listenSummary = await loadListenSummary(ctx, {
+		for (const item of batch.page) {
+			const row = await hydrateForLaterAlbumRow(ctx, {
 				userId: args.userId,
-				albumId: item.albumId,
+				item,
 			});
-
-			const parsedYear = album.releaseDate
-				? Number.parseInt(album.releaseDate.slice(0, 4), 10)
-				: Number.NaN;
-
-			const rymStatus = deriveRymStatus({
-				rymScrapeId: resolvedScrapeId,
-				rymCandidateUrl: item.rymCandidateUrl,
-				rymDiscoveryStatus: item.rymDiscoveryStatus,
-			});
-
-			const rymUrl = scrape?.rymUrl ?? item.rymCandidateUrl;
-			const rymMatchMethodOut = item.rymMatchMethod ?? linkMethod;
-
-			const row: ForLaterAlbumRow = {
-				id: String(item._id),
-				albumItemId: item._id,
-				albumId: item.albumId,
-				spotifyAlbumId: item.spotifyAlbumId,
-				name: album.name,
-				artistName: album.artistName,
-				...(album.imageUrl ? { imageUrl: album.imageUrl } : {}),
-				...(album.releaseDate ? { releaseDate: album.releaseDate } : {}),
-				...(Number.isFinite(parsedYear) ? { releaseYear: parsedYear } : {}),
-				...(item.playlistAddedAt
-					? { playlistAddedAt: item.playlistAddedAt }
-					: {}),
-				firstSeenAt: item.firstSeenAt,
-				createdAt: item.createdAt,
-				lastSeenAt: item.lastSeenAt,
-				...(item.removedAt ? { removedAt: item.removedAt } : {}),
-				isActive: item.isActive,
-				...listenSummary,
-				rymStatus,
-				...(rymUrl ? { rymUrl } : {}),
-				...(item.rymCandidateConfidence
-					? { rymCandidateConfidence: item.rymCandidateConfidence }
-					: {}),
-				...(item.rymDiscoveryReason
-					? { rymDiscoveryReason: item.rymDiscoveryReason }
-					: {}),
-				...(rymMatchMethodOut ? { rymMatchMethod: rymMatchMethodOut } : {}),
-				...tags,
-			};
-
-			if (rowMatchesFilters(row, filters)) {
+			if (!row) {
+				continue;
+			}
+			if (
+				rowMatchesFilters(
+					{
+						name: row.name,
+						artistName: row.artistName,
+						releaseYear: row.releaseYear,
+						hasListened: row.hasListened,
+						rymStatus: row.rymStatus,
+						rymUrl: row.rymUrl,
+						primaryGenres: row.primaryGenres,
+						secondaryGenres: row.secondaryGenres,
+						descriptors: row.descriptors,
+					},
+					filters,
+				)
+			) {
 				page.push(row);
 			}
 			if (page.length >= targetItems) {
@@ -564,6 +764,8 @@ export const upsertForLaterAlbumItem = mutation({
 			artistKeys,
 			now: args.seenAt,
 		});
+
+		await syncForLaterItemFilterProjection(ctx, itemId);
 
 		return {
 			itemId,
@@ -792,8 +994,13 @@ export const listOpenableRymLinks = query({
 			},
 		});
 
-		return buildOpenableRymLinks(
-			rows.page.map((row) => ({ id: row.id, rymUrl: row.rymUrl })),
+		return buildOpenableGoogleRymSearchLinks(
+			rows.page.map((row) => ({
+				id: row.id,
+				artistName: row.artistName,
+				name: row.name,
+				rymUrl: row.rymUrl,
+			})),
 			args.limit,
 		);
 	},
@@ -819,6 +1026,7 @@ export const queueForLaterRymDiscovery = mutation({
 				rymDiscoveryUpdatedAt: now,
 				updatedAt: now,
 			});
+			await syncForLaterItemFilterProjection(ctx, id);
 			queued++;
 		}
 		return { queued };
@@ -838,6 +1046,154 @@ export const patchForLaterRymMatch = mutation({
 			rymMatchMethod: args.rymMatchMethod,
 			rymMatchedAt: args.rymMatchedAt,
 			updatedAt: args.rymMatchedAt,
+		});
+		await syncForLaterItemFilterProjection(ctx, args.itemId);
+	},
+});
+
+export const refreshFilterProjectionForItem = internalMutation({
+	args: { itemId: v.id("forLaterAlbumItems") },
+	handler: async (ctx, args): Promise<void> => {
+		await syncForLaterItemFilterProjection(ctx, args.itemId);
+	},
+});
+
+export const refreshFilterProjectionsForScrape = internalMutation({
+	args: { scrapeId: v.id("rateYourMusicScrapes") },
+	handler: async (ctx, args): Promise<void> => {
+		const seen = new Set<Id<"forLaterAlbumItems">>();
+
+		const byRymScrapeId = await ctx.db
+			.query("forLaterAlbumItems")
+			.withIndex("by_rymScrapeId", (q) => q.eq("rymScrapeId", args.scrapeId))
+			.collect();
+
+		for (const item of byRymScrapeId) {
+			await syncForLaterItemFilterProjection(ctx, item._id);
+			seen.add(item._id);
+		}
+
+		const albumLinks = await ctx.db
+			.query("rateYourMusicSpotifyAlbumLinks")
+			.withIndex("by_scrapeId", (q) => q.eq("scrapeId", args.scrapeId))
+			.collect();
+
+		const albumIds = [...new Set(albumLinks.map((link) => link.albumId))];
+
+		for (const albumId of albumIds) {
+			const linkedItems = await ctx.db
+				.query("forLaterAlbumItems")
+				.filter((q) => q.eq(q.field("albumId"), albumId))
+				.collect();
+
+			for (const item of linkedItems) {
+				if (seen.has(item._id)) {
+					continue;
+				}
+				await syncForLaterItemFilterProjection(ctx, item._id);
+				seen.add(item._id);
+			}
+		}
+	},
+});
+
+export const refreshFilterProjectionsForUserAlbum = internalMutation({
+	args: {
+		userId: v.string(),
+		albumId: v.id("spotifyAlbums"),
+	},
+	handler: async (ctx, args): Promise<void> => {
+		const items = await ctx.db
+			.query("forLaterAlbumItems")
+			.withIndex("by_userId_albumId", (q) =>
+				q.eq("userId", args.userId).eq("albumId", args.albumId),
+			)
+			.collect();
+
+		for (const item of items) {
+			await syncForLaterItemFilterProjection(ctx, item._id);
+		}
+	},
+});
+
+async function runSingleBackfillFilterProjectionBatch(
+	ctx: MutationCtx,
+	args: { cursor: string | null; limit: number },
+): Promise<{
+	continueCursor: string;
+	isDone: boolean;
+	processed: number;
+}> {
+	const limit = Math.min(Math.max(args.limit, 1), 100);
+
+	const result = await ctx.db
+		.query("forLaterAlbumItems")
+		.order("asc")
+		.paginate({
+			numItems: limit,
+			cursor: args.cursor,
+		});
+
+	for (const item of result.page) {
+		await syncForLaterItemFilterProjection(ctx, item._id);
+	}
+
+	return {
+		continueCursor: result.continueCursor,
+		isDone: result.isDone,
+		processed: result.page.length,
+	};
+}
+
+export const backfillFilterProjectionBatch = internalMutation({
+	args: {
+		cursor: v.optional(v.union(v.string(), v.null())),
+		limit: v.number(),
+	},
+	returns: v.object({
+		continueCursor: v.string(),
+		isDone: v.boolean(),
+		processed: v.number(),
+	}),
+	handler: async (
+		ctx,
+		args,
+	): Promise<{
+		continueCursor: string;
+		isDone: boolean;
+		processed: number;
+	}> => {
+		return await runSingleBackfillFilterProjectionBatch(ctx, {
+			cursor: args.cursor ?? null,
+			limit: args.limit,
+		});
+	},
+});
+
+/** Authenticated single batch; UI loops until `isDone`. */
+export const runBackfillFilterProjectionBatch = mutation({
+	args: {
+		cursor: v.optional(v.union(v.string(), v.null())),
+		limit: v.optional(v.number()),
+	},
+	returns: v.object({
+		continueCursor: v.string(),
+		isDone: v.boolean(),
+		processed: v.number(),
+	}),
+	handler: async (
+		ctx,
+		args,
+	): Promise<{
+		continueCursor: string;
+		isDone: boolean;
+		processed: number;
+	}> => {
+		requireAuth(ctx);
+		const limit = args.limit ?? 100;
+		return await runSingleBackfillFilterProjectionBatch(ctx, {
+			cursor: args.cursor ?? null,
+			limit,
 		});
 	},
 });
