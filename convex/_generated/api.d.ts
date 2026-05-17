@@ -19,6 +19,7 @@ import type * as _utils_forLaterAlbums from "../_utils/forLaterAlbums.js";
 import type * as _utils_forLaterAlbumsUi from "../_utils/forLaterAlbumsUi.js";
 import type * as _utils_forLaterFilterProjection from "../_utils/forLaterFilterProjection.js";
 import type * as _utils_forLaterIndexedList from "../_utils/forLaterIndexedList.js";
+import type * as _utils_forLaterProjectionPredicate from "../_utils/forLaterProjectionPredicate.js";
 import type * as _utils_geniusParser from "../_utils/geniusParser.js";
 import type * as _utils_google_rym_lucky_search from "../_utils/google_rym_lucky_search.js";
 import type * as _utils_playlistLyrics from "../_utils/playlistLyrics.js";
@@ -60,6 +61,7 @@ declare const fullApi: ApiFromModules<{
   "_utils/forLaterAlbumsUi": typeof _utils_forLaterAlbumsUi;
   "_utils/forLaterFilterProjection": typeof _utils_forLaterFilterProjection;
   "_utils/forLaterIndexedList": typeof _utils_forLaterIndexedList;
+  "_utils/forLaterProjectionPredicate": typeof _utils_forLaterProjectionPredicate;
   "_utils/geniusParser": typeof _utils_geniusParser;
   "_utils/google_rym_lucky_search": typeof _utils_google_rym_lucky_search;
   "_utils/playlistLyrics": typeof _utils_playlistLyrics;

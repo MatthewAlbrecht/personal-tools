@@ -54,7 +54,7 @@ function ForLaterAlbumsPageInner() {
 	const rows = usePaginatedQuery(
 		api.forLaterAlbums.listForLaterAlbumRows,
 		userId ? { userId, filters } : "skip",
-		{ initialNumItems: 25 },
+		{ initialNumItems: 30 },
 	);
 
 	const openableLinks = useQuery(
@@ -122,7 +122,7 @@ function ForLaterAlbumsPageInner() {
 					isLoading={rows.status === "LoadingFirstPage"}
 					isLoadingMore={rows.status === "LoadingMore"}
 					canLoadMore={rows.status === "CanLoadMore"}
-					onLoadMore={() => rows.loadMore(25)}
+					onLoadMore={() => rows.loadMore(30)}
 					onAddGenreKey={addGenreKeyToFilters}
 					onAddDescriptorKey={addDescriptorKeyToFilters}
 				/>

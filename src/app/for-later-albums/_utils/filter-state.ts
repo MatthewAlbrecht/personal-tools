@@ -1,8 +1,8 @@
 import type {
-	ForLaterFilterMatch,
 	ForLaterFilters,
 	ForLaterListenedFilter,
 	ForLaterRymFilter,
+	ForLaterTaxonomyMatch,
 } from "./types";
 
 const LISTENED_VALUES = new Set<ForLaterListenedFilter>([
@@ -17,7 +17,7 @@ const RYM_VALUES = new Set<ForLaterRymFilter>([
 	"has_candidate",
 	"no_candidate",
 ]);
-const FILTER_MATCH_VALUES = new Set<ForLaterFilterMatch>(["all", "any"]);
+const TAXONOMY_MATCH_VALUES = new Set<ForLaterTaxonomyMatch>(["all", "any"]);
 
 function normalizeTaxonomyFilterKey(raw: string): string {
 	return raw.trim().toLowerCase();
@@ -44,6 +44,18 @@ export function addUniqueSortedKey(keys: string[], add: string): string[] {
 	return [...next].sort();
 }
 
+function parseTaxonomyMatch(primary: string | null, legacy: string | null) {
+	const parsedPrimary =
+		primary && TAXONOMY_MATCH_VALUES.has(primary as ForLaterTaxonomyMatch)
+			? (primary as ForLaterTaxonomyMatch)
+			: undefined;
+	const parsedLegacy =
+		legacy && TAXONOMY_MATCH_VALUES.has(legacy as ForLaterTaxonomyMatch)
+			? (legacy as ForLaterTaxonomyMatch)
+			: undefined;
+	return parsedPrimary ?? parsedLegacy ?? "all";
+}
+
 export function parseForLaterFilters(params: URLSearchParams): ForLaterFilters {
 	const year = params.get("year");
 	const q = optionalString(params.get("q"));
@@ -52,6 +64,7 @@ export function parseForLaterFilters(params: URLSearchParams): ForLaterFilters {
 	const legacySearch =
 		q ??
 		([legacyTitle, legacyArtist].filter(Boolean).join(" ").trim() || undefined);
+	const legacyMatch = params.get("match");
 	return {
 		genreKeys: parseKeyList(params, "genre"),
 		descriptorKeys: parseKeyList(params, "descriptor"),
@@ -59,7 +72,11 @@ export function parseForLaterFilters(params: URLSearchParams): ForLaterFilters {
 		year: year && /^\d{4}$/.test(year) ? Number.parseInt(year, 10) : undefined,
 		listened: parseEnum(params.get("listened"), LISTENED_VALUES, "all"),
 		rymStatus: parseEnum(params.get("rymStatus"), RYM_VALUES, "all"),
-		filterMatch: parseEnum(params.get("match"), FILTER_MATCH_VALUES, "all"),
+		genreMatch: parseTaxonomyMatch(params.get("genreMatch"), legacyMatch),
+		descriptorMatch: parseTaxonomyMatch(
+			params.get("descriptorMatch"),
+			legacyMatch,
+		),
 	};
 }
 
@@ -79,7 +96,8 @@ export function serializeForLaterFilters(
 	}
 	setIfNotDefault(params, "listened", filters.listened, "all");
 	setIfNotDefault(params, "rymStatus", filters.rymStatus, "all");
-	setIfNotDefault(params, "match", filters.filterMatch, "all");
+	setIfNotDefault(params, "genreMatch", filters.genreMatch, "all");
+	setIfNotDefault(params, "descriptorMatch", filters.descriptorMatch, "all");
 	return params;
 }
 

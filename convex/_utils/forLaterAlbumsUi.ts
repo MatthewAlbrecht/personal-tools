@@ -21,7 +21,15 @@ export type ForLaterUiFilters = {
 	year?: number;
 	listened: ForLaterListenedFilter;
 	rymStatus: ForLaterRymFilter;
-	filterMatch: ForLaterFilterMatch;
+	/** Among selected genre tags: every tag ("all") vs at least one ("any"). */
+	genreMatch: ForLaterFilterMatch;
+	/** Among selected descriptor tags: every tag ("all") vs at least one ("any"). */
+	descriptorMatch: ForLaterFilterMatch;
+};
+
+/** Accept legacy `filterMatch` when normalizing Convex / bookmarked URLs. */
+export type ForLaterFiltersNormalizeInput = Partial<ForLaterUiFilters> & {
+	filterMatch?: ForLaterFilterMatch;
 };
 
 function sortUniqueTrimmedKeys(keys: string[] | undefined): string[] {
@@ -38,9 +46,17 @@ function sortUniqueTrimmedKeys(keys: string[] | undefined): string[] {
 	return [...seen].sort();
 }
 
+function resolveTaxonomyMatch(
+	specific: ForLaterFilterMatch | undefined,
+	legacy: ForLaterFilterMatch | undefined,
+): ForLaterFilterMatch {
+	return specific ?? legacy ?? "all";
+}
+
 export function normalizeForLaterFilters(
-	input: Partial<ForLaterUiFilters>,
+	input: ForLaterFiltersNormalizeInput,
 ): ForLaterUiFilters {
+	const legacy = input.filterMatch;
 	return {
 		genreKeys: sortUniqueTrimmedKeys(input.genreKeys),
 		descriptorKeys: sortUniqueTrimmedKeys(input.descriptorKeys),
@@ -48,22 +64,100 @@ export function normalizeForLaterFilters(
 		year: input.year,
 		listened: input.listened ?? "all",
 		rymStatus: input.rymStatus ?? "all",
-		filterMatch: input.filterMatch ?? "all",
+		genreMatch: resolveTaxonomyMatch(input.genreMatch, legacy),
+		descriptorMatch: resolveTaxonomyMatch(input.descriptorMatch, legacy),
 	};
 }
 
-/** True when list pagination can use denormalized projection indexes (no genre/descriptor/search or "any" match). */
+export function taxonomyKeysPassAgainstSet(
+	keys: string[],
+	match: ForLaterFilterMatch,
+	subjectKeys: Set<string>,
+): boolean {
+	if (keys.length === 0) {
+		return true;
+	}
+	if (match === "any") {
+		return keys.some((k) => subjectKeys.has(k));
+	}
+	return keys.every((k) => subjectKeys.has(k));
+}
+
+/** Upper bound on {@link forLaterPostFilterScanSize} to contain read costs. */
+export const FOR_LATER_POST_FILTER_SCAN_CAP = 1024;
+
+/**
+ * Raw rows to read per `.paginate()` when filters are applied **after** the query
+ * (genre/descriptor/search). Convex allows only one paginate per request, so sparse
+ * matches need a wide scan or early pages look empty.
+ */
+export function forLaterPostFilterScanSize(requested: number): number {
+	const n = Math.max(
+		1,
+		Math.floor(Number.isFinite(requested) ? requested : 25),
+	);
+	const overscan = Math.max(n * 40, 120);
+	return Math.min(overscan, FOR_LATER_POST_FILTER_SCAN_CAP);
+}
+
+/** True when list pagination can use denormalized projection indexes (no genre/descriptor/search). */
 export function forLaterFiltersAllowIndexedScan(
 	filters: ForLaterUiFilters,
 ): boolean {
-	if (filters.filterMatch !== "all") {
-		return false;
-	}
 	if (
 		filters.genreKeys.length > 0 ||
 		filters.descriptorKeys.length > 0 ||
 		Boolean(filters.search?.trim())
 	) {
+		return false;
+	}
+	return true;
+}
+
+/**
+ * True when we can paginate `forLaterAlbumGenreFacets` so `isDone` reflects albums
+ * with the selected genre(s), not the whole playlist.
+ *
+ * Skipped when search is active (FTS path). Skipped when genreMatch is `"any"` and
+ * multiple genre keys are selected — Convex allows only **one** `.paginate()` per
+ * query, so a facet-stream union cannot run inside `listForLaterAlbumRows`; those
+ * filters use the legacy `by_userId_lastSeenAt` path instead.
+ */
+export function forLaterFiltersAllowGenreFacetPagination(
+	filters: ForLaterUiFilters,
+): boolean {
+	if (filters.search?.trim()) {
+		return false;
+	}
+	if (filters.genreKeys.length === 0) {
+		return false;
+	}
+	if (filters.genreMatch === "any" && filters.genreKeys.length > 1) {
+		return false;
+	}
+	return true;
+}
+
+/**
+ * True when we can paginate `forLaterAlbumDescriptorFacets` so `isDone` reflects
+ * albums matching the selected descriptor slice, not the whole playlist.
+ *
+ * Used when genre facet pagination does not apply (e.g. descriptor-only filters, or
+ * genre ANY with multiple keys while a single descriptor dimension can narrow).
+ *
+ * Skipped when search is active. Skipped when descriptorMatch is `"any"` and
+ * multiple descriptor keys are selected (same single-`.paginate()` constraint).
+ */
+export function forLaterFiltersAllowDescriptorFacetPagination(
+	filters: ForLaterUiFilters,
+): boolean {
+	if (filters.search?.trim()) {
+		return false;
+	}
+	if (filters.descriptorKeys.length === 0) {
+		return false;
+	}
+	if (filters.descriptorMatch === "any" && filters.descriptorKeys.length > 1) {
 		return false;
 	}
 	return true;
@@ -127,31 +221,22 @@ export function rowMatchesFilters(
 		preds.push((r) => !r.rymUrl);
 	}
 
-	if (filters.genreKeys.length > 0) {
-		const keys = filters.genreKeys;
-		preds.push((r) => {
-			const genres = albumGenreKeySet(r);
-			return keys.every((genreKey) => genres.has(genreKey));
-		});
+	if (!preds.every((p) => p(row))) {
+		return false;
 	}
 
-	if (filters.descriptorKeys.length > 0) {
-		const keys = filters.descriptorKeys;
-		preds.push((r) => {
-			const descriptors = new Set(r.descriptors.map((t) => t.key));
-			return keys.every((descriptorKey) => descriptors.has(descriptorKey));
-		});
-	}
-
-	if (preds.length === 0) {
-		return true;
-	}
-
-	const mode = filters.filterMatch;
-	if (mode === "any") {
-		return preds.some((p) => p(row));
-	}
-	return preds.every((p) => p(row));
+	return (
+		taxonomyKeysPassAgainstSet(
+			filters.genreKeys,
+			filters.genreMatch,
+			albumGenreKeySet(row),
+		) &&
+		taxonomyKeysPassAgainstSet(
+			filters.descriptorKeys,
+			filters.descriptorMatch,
+			new Set(row.descriptors.map((t) => t.key)),
+		)
+	);
 }
 
 export function deriveRymStatus(args: {

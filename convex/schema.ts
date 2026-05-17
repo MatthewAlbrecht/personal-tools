@@ -403,6 +403,8 @@ export default defineSchema({
 		filterHasRymUrl: v.optional(v.boolean()),
 		filterGenreKeysSorted: v.optional(v.array(v.string())),
 		filterDescriptorKeysSorted: v.optional(v.array(v.string())),
+		/** Album title + artist; Convex FTS (`search_forLaterAlbumItems`). */
+		filterSearchText: v.optional(v.string()),
 	})
 		.index("by_userId", ["userId"])
 		.index("by_userId_active", ["userId", "isActive"])
@@ -438,7 +440,47 @@ export default defineSchema({
 			"userId",
 			"filterHasRymUrl",
 			"lastSeenAt",
-		]),
+		])
+		.searchIndex("search_forLaterAlbumItems", {
+			searchField: "filterSearchText",
+			filterFields: [
+				"userId",
+				"filterReleaseYear",
+				"filterHasListened",
+				"filterRymMatched",
+				"filterHasRymUrl",
+			],
+		}),
+
+	/** One row per (item, genre tag) for indexed genre-filtered list pagination. */
+	forLaterAlbumGenreFacets: defineTable({
+		userId: v.string(),
+		itemId: v.id("forLaterAlbumItems"),
+		genreKey: v.string(),
+		/** Denormalized from `forLaterAlbumItems.lastSeenAt` for sort alignment. */
+		lastSeenAt: v.number(),
+	})
+		.index("by_userId_genreKey_lastSeenAt", [
+			"userId",
+			"genreKey",
+			"lastSeenAt",
+		])
+		.index("by_itemId", ["itemId"]),
+
+	/** One row per (item, descriptor tag) for indexed descriptor-filtered list pagination. */
+	forLaterAlbumDescriptorFacets: defineTable({
+		userId: v.string(),
+		itemId: v.id("forLaterAlbumItems"),
+		descriptorKey: v.string(),
+		/** Denormalized from `forLaterAlbumItems.lastSeenAt` for sort alignment. */
+		lastSeenAt: v.number(),
+	})
+		.index("by_userId_descriptorKey_lastSeenAt", [
+			"userId",
+			"descriptorKey",
+			"lastSeenAt",
+		])
+		.index("by_itemId", ["itemId"]),
 
 	forLaterSyncRuns: defineTable({
 		userId: v.string(),

@@ -8,8 +8,8 @@ export type ForLaterRymFilter =
 	| "has_candidate"
 	| "no_candidate";
 
-/** Whether every active constraint must match ("all") or any one ("any"). */
-export type ForLaterFilterMatch = "all" | "any";
+/** Whether every selected tag must match ("all") or any one ("any"), per taxonomy group. */
+export type ForLaterTaxonomyMatch = "all" | "any";
 
 export type ForLaterFilters = {
 	genreKeys: string[];
@@ -19,7 +19,8 @@ export type ForLaterFilters = {
 	year?: number;
 	listened: ForLaterListenedFilter;
 	rymStatus: ForLaterRymFilter;
-	filterMatch: ForLaterFilterMatch;
+	genreMatch: ForLaterTaxonomyMatch;
+	descriptorMatch: ForLaterTaxonomyMatch;
 };
 
 export type ForLaterAlbumRowData = {

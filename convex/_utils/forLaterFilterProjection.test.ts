@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-	parseReleaseYearFromIsoDate,
-	buildFilterGenreKeysSorted,
 	buildFilterDescriptorKeysSorted,
+	buildFilterGenreKeysSorted,
+	buildFilterSearchText,
+	parseReleaseYearFromIsoDate,
 } from "./forLaterFilterProjection";
 
 test("parseReleaseYearFromIsoDate reads YYYY prefix", () => {
@@ -26,5 +27,12 @@ test("buildFilterDescriptorKeysSorted sorts unique", () => {
 	assert.deepEqual(
 		buildFilterDescriptorKeysSorted([{ key: "b" }, { key: "a" }, { key: "b" }]),
 		["a", "b"],
+	);
+});
+
+test("buildFilterSearchText joins trimmed album + artist", () => {
+	assert.equal(
+		buildFilterSearchText({ albumName: "  Hi  ", artistName: " Bye " }),
+		"Hi\nBye",
 	);
 });

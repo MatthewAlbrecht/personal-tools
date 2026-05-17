@@ -33,7 +33,7 @@ test("rymMatched facet when listened all", () => {
 	);
 });
 
-test("default when only filterMatch all and residual defaults", () => {
+test("default filters choose default indexed scan", () => {
 	assert.deepEqual(
 		chooseIndexedForLaterListScan(normalizeForLaterFilters({})),
 		{ kind: "default" },

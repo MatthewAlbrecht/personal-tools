@@ -20,7 +20,10 @@ import { Label } from "~/components/ui/label";
 import { useDebouncedState } from "~/lib/hooks/use-debounced-state";
 import { cn } from "~/lib/utils";
 import { api } from "../../../../convex/_generated/api";
-import type { ForLaterFilters as ForLaterFiltersState } from "../_utils/types";
+import type {
+	ForLaterFilters as ForLaterFiltersState,
+	ForLaterTaxonomyMatch,
+} from "../_utils/types";
 
 export function ForLaterFilters({
 	filters,
@@ -106,43 +109,6 @@ export function ForLaterFilters({
 
 	return (
 		<section className="space-y-2">
-			<div className="flex flex-wrap items-center gap-2">
-				<Label
-					id="for-later-filter-match-mode"
-					className="font-normal text-muted-foreground"
-				>
-					Match filters
-				</Label>
-				<fieldset
-					className="m-0 inline-flex min-w-0 rounded-md border border-border bg-background px-0.5 py-0.5"
-					aria-labelledby="for-later-filter-match-mode"
-				>
-					<button
-						type="button"
-						onClick={() => patchFilters({ filterMatch: "all" })}
-						className={cn(
-							"rounded px-2.5 py-1 font-medium text-sm",
-							filters.filterMatch === "all"
-								? "bg-muted shadow-sm"
-								: "text-muted-foreground hover:text-foreground",
-						)}
-					>
-						All
-					</button>
-					<button
-						type="button"
-						onClick={() => patchFilters({ filterMatch: "any" })}
-						className={cn(
-							"rounded px-2.5 py-1 font-medium text-sm",
-							filters.filterMatch === "any"
-								? "bg-muted shadow-sm"
-								: "text-muted-foreground hover:text-foreground",
-						)}
-					>
-						Any
-					</button>
-				</fieldset>
-			</div>
 			<div className="rounded-lg border bg-card p-4">
 				<div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
 					<div className="flex flex-col gap-1.5 md:col-span-2">
@@ -232,7 +198,14 @@ export function ForLaterFilters({
 						</fieldset>
 					</div>
 					<div className="flex flex-col gap-1.5 md:col-span-2">
-						<Label htmlFor="for-later-filter-genres">Genres</Label>
+						<div className="flex flex-wrap items-center justify-between gap-2">
+							<Label htmlFor="for-later-filter-genres">Genres</Label>
+							<TaxonomyMatchToggle
+								ariaLabel="How selected genre tags combine"
+								value={filters.genreMatch}
+								onChange={(genreMatch) => patchFilters({ genreMatch })}
+							/>
+						</div>
 						<Combobox
 							items={genreKeysPool}
 							multiple
@@ -268,7 +241,16 @@ export function ForLaterFilters({
 						</Combobox>
 					</div>
 					<div className="flex flex-col gap-1.5 md:col-span-2">
-						<Label htmlFor="for-later-filter-descriptors">Descriptors</Label>
+						<div className="flex flex-wrap items-center justify-between gap-2">
+							<Label htmlFor="for-later-filter-descriptors">Descriptors</Label>
+							<TaxonomyMatchToggle
+								ariaLabel="How selected descriptor tags combine"
+								value={filters.descriptorMatch}
+								onChange={(descriptorMatch) =>
+									patchFilters({ descriptorMatch })
+								}
+							/>
+						</div>
 						<Combobox
 							items={descriptorKeysPool}
 							multiple
@@ -339,7 +321,8 @@ export function ForLaterFilters({
 									year: undefined,
 									listened: "all",
 									rymStatus: "all",
-									filterMatch: "all",
+									genreMatch: "all",
+									descriptorMatch: "all",
 								})
 							}
 						>
@@ -349,5 +332,47 @@ export function ForLaterFilters({
 				</div>
 			</div>
 		</section>
+	);
+}
+
+function TaxonomyMatchToggle({
+	ariaLabel,
+	value,
+	onChange,
+}: {
+	ariaLabel: string;
+	value: ForLaterTaxonomyMatch;
+	onChange: (next: ForLaterTaxonomyMatch) => void;
+}) {
+	return (
+		<fieldset
+			className="m-0 inline-flex min-w-0 shrink-0 rounded-md border border-border bg-background px-0.5 py-0.5"
+			aria-label={ariaLabel}
+		>
+			<button
+				type="button"
+				onClick={() => onChange("all")}
+				className={cn(
+					"rounded px-2.5 py-1 font-medium text-sm",
+					value === "all"
+						? "bg-muted shadow-sm"
+						: "text-muted-foreground hover:text-foreground",
+				)}
+			>
+				All
+			</button>
+			<button
+				type="button"
+				onClick={() => onChange("any")}
+				className={cn(
+					"rounded px-2.5 py-1 font-medium text-sm",
+					value === "any"
+						? "bg-muted shadow-sm"
+						: "text-muted-foreground hover:text-foreground",
+				)}
+			>
+				Any
+			</button>
+		</fieldset>
 	);
 }

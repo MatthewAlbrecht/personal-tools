@@ -1,13 +1,23 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+	FOR_LATER_POST_FILTER_SCAN_CAP,
 	type ForLaterAlbumRowFilterInput,
 	deriveRymStatus,
+	forLaterFiltersAllowDescriptorFacetPagination,
+	forLaterFiltersAllowGenreFacetPagination,
 	forLaterFiltersAllowIndexedScan,
+	forLaterPostFilterScanSize,
 	normalizeForLaterFilters,
 	rowMatchesFilters,
 	sortForLaterRows,
 } from "./forLaterAlbumsUi";
+
+test("forLaterPostFilterScanSize overscans before in-memory filters", () => {
+	assert.equal(forLaterPostFilterScanSize(25), 1000);
+	assert.equal(forLaterPostFilterScanSize(30), FOR_LATER_POST_FILTER_SCAN_CAP);
+	assert.equal(forLaterPostFilterScanSize(1), 120);
+});
 
 test("normalizeForLaterFilters applies defaults", () => {
 	const filters = normalizeForLaterFilters({});
@@ -19,8 +29,16 @@ test("normalizeForLaterFilters applies defaults", () => {
 		year: undefined,
 		listened: "all",
 		rymStatus: "all",
-		filterMatch: "all",
+		genreMatch: "all",
+		descriptorMatch: "all",
 	});
+});
+
+test("normalizeForLaterFilters maps legacy filterMatch to both taxonomy modes", () => {
+	assert.deepEqual(
+		normalizeForLaterFilters({ filterMatch: "any" }),
+		normalizeForLaterFilters({ genreMatch: "any", descriptorMatch: "any" }),
+	);
 });
 
 test("normalizeForLaterFilters dedupes and sorts genre and descriptor keys", () => {
@@ -60,7 +78,7 @@ test("forLaterFiltersAllowIndexedScan allows default residual-only filters", () 
 	);
 });
 
-test("forLaterFiltersAllowIndexedScan rejects genre, descriptor, search, or any-match", () => {
+test("forLaterFiltersAllowIndexedScan rejects genre, descriptor, or search", () => {
 	assert.equal(
 		forLaterFiltersAllowIndexedScan(
 			normalizeForLaterFilters({ genreKeys: ["ambient"] }),
@@ -81,9 +99,9 @@ test("forLaterFiltersAllowIndexedScan rejects genre, descriptor, search, or any-
 	);
 	assert.equal(
 		forLaterFiltersAllowIndexedScan(
-			normalizeForLaterFilters({ filterMatch: "any" }),
+			normalizeForLaterFilters({ genreMatch: "any" }),
 		),
-		false,
+		true,
 	);
 });
 
@@ -91,6 +109,118 @@ test("forLaterFiltersAllowIndexedScan allows whitespace-only search", () => {
 	assert.equal(
 		forLaterFiltersAllowIndexedScan(
 			normalizeForLaterFilters({ search: "   " }),
+		),
+		true,
+	);
+});
+
+test("forLaterFiltersAllowGenreFacetPagination allows genre with ALL and extra facets", () => {
+	assert.equal(
+		forLaterFiltersAllowGenreFacetPagination(
+			normalizeForLaterFilters({
+				genreKeys: ["rock"],
+				year: 1999,
+				genreMatch: "all",
+			}),
+		),
+		true,
+	);
+});
+
+test("forLaterFiltersAllowGenreFacetPagination rejects search", () => {
+	assert.equal(
+		forLaterFiltersAllowGenreFacetPagination(
+			normalizeForLaterFilters({ genreKeys: ["rock"], search: "x" }),
+		),
+		false,
+	);
+});
+
+test("forLaterFiltersAllowGenreFacetPagination allows genre ANY with year and other facets (core AND)", () => {
+	assert.equal(
+		forLaterFiltersAllowGenreFacetPagination(
+			normalizeForLaterFilters({
+				genreKeys: ["rock"],
+				year: 1999,
+				genreMatch: "any",
+				descriptorKeys: ["melodic"],
+				descriptorMatch: "all",
+			}),
+		),
+		true,
+	);
+});
+
+test("forLaterFiltersAllowGenreFacetPagination rejects ANY with multiple genre keys", () => {
+	assert.equal(
+		forLaterFiltersAllowGenreFacetPagination(
+			normalizeForLaterFilters({
+				genreKeys: ["rock", "jazz"],
+				genreMatch: "any",
+			}),
+		),
+		false,
+	);
+});
+
+test("forLaterFiltersAllowGenreFacetPagination allows ALL with multiple genre keys", () => {
+	assert.equal(
+		forLaterFiltersAllowGenreFacetPagination(
+			normalizeForLaterFilters({
+				genreKeys: ["rock", "jazz"],
+				genreMatch: "all",
+			}),
+		),
+		true,
+	);
+});
+
+test("forLaterFiltersAllowDescriptorFacetPagination allows descriptor with ALL and core facets", () => {
+	assert.equal(
+		forLaterFiltersAllowDescriptorFacetPagination(
+			normalizeForLaterFilters({
+				descriptorKeys: ["melodic"],
+				year: 1999,
+				descriptorMatch: "all",
+			}),
+		),
+		true,
+	);
+});
+
+test("forLaterFiltersAllowDescriptorFacetPagination rejects search", () => {
+	assert.equal(
+		forLaterFiltersAllowDescriptorFacetPagination(
+			normalizeForLaterFilters({
+				descriptorKeys: ["sparse"],
+				search: "x",
+			}),
+		),
+		false,
+	);
+});
+
+test("forLaterFiltersAllowDescriptorFacetPagination rejects ANY with multiple descriptor keys", () => {
+	assert.equal(
+		forLaterFiltersAllowDescriptorFacetPagination(
+			normalizeForLaterFilters({
+				descriptorKeys: ["a", "b"],
+				descriptorMatch: "any",
+			}),
+		),
+		false,
+	);
+});
+
+test("forLaterFiltersAllowDescriptorFacetPagination allows when genre facet cannot (multi-genre ANY)", () => {
+	assert.equal(
+		forLaterFiltersAllowDescriptorFacetPagination(
+			normalizeForLaterFilters({
+				genreKeys: ["rock", "jazz"],
+				genreMatch: "any",
+				descriptorKeys: ["melodic"],
+				descriptorMatch: "all",
+			}),
 		),
 		true,
 	);

@@ -1,3 +1,14 @@
+/** Concatenate album + artist for Convex full-text search (`filterSearchText`). */
+export function buildFilterSearchText(args: {
+	albumName: string;
+	artistName: string;
+}): string {
+	const parts = [args.albumName.trim(), args.artistName.trim()].filter(
+		(s) => s.length > 0,
+	);
+	return parts.join("\n").trim();
+}
+
 export function parseReleaseYearFromIsoDate(
 	releaseDate: string | undefined,
 ): number | undefined {

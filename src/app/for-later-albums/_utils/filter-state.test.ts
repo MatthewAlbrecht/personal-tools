@@ -10,19 +10,22 @@ test("parseForLaterFilters returns defaults for an empty query", () => {
 		year: undefined,
 		listened: "all",
 		rymStatus: "all",
-		filterMatch: "all",
+		genreMatch: "all",
+		descriptorMatch: "all",
 	});
 });
 
 test("parseForLaterFilters lowercases genre and descriptor URL params", () => {
 	const params = new URLSearchParams("genre=Slowcore&descriptor=Melancholic");
 	assert.deepEqual(parseForLaterFilters(params).genreKeys, ["slowcore"]);
-	assert.deepEqual(parseForLaterFilters(params).descriptorKeys, ["melancholic"]);
+	assert.deepEqual(parseForLaterFilters(params).descriptorKeys, [
+		"melancholic",
+	]);
 });
 
-test("parseForLaterFilters reads q, genres, descriptors, and match mode", () => {
+test("parseForLaterFilters reads q, genres, descriptors, and taxonomy match modes", () => {
 	const params = new URLSearchParams(
-		"genre=slowcore&genre=ambient&descriptor=melancholic&descriptor=sparse&q=blue+note&year=1971&listened=not_listened&rymStatus=has_candidate&match=any",
+		"genre=slowcore&genre=ambient&descriptor=melancholic&descriptor=sparse&q=blue+note&year=1971&listened=not_listened&rymStatus=has_candidate&genreMatch=any&descriptorMatch=all",
 	);
 
 	assert.deepEqual(parseForLaterFilters(params), {
@@ -32,8 +35,15 @@ test("parseForLaterFilters reads q, genres, descriptors, and match mode", () => 
 		year: 1971,
 		listened: "not_listened",
 		rymStatus: "has_candidate",
-		filterMatch: "any",
+		genreMatch: "any",
+		descriptorMatch: "all",
 	});
+});
+
+test("parseForLaterFilters legacy match applies when genreMatch and descriptorMatch omitted", () => {
+	const params = new URLSearchParams("match=any");
+	assert.equal(parseForLaterFilters(params).genreMatch, "any");
+	assert.equal(parseForLaterFilters(params).descriptorMatch, "any");
 });
 
 test("parseForLaterFilters merges legacy title and artist into search when q absent", () => {
@@ -50,7 +60,8 @@ test("serializeForLaterFilters omits default values", () => {
 		year: undefined,
 		listened: "all",
 		rymStatus: "all",
-		filterMatch: "all",
+		genreMatch: "all",
+		descriptorMatch: "all",
 	});
 
 	assert.equal(params.toString(), "");
@@ -64,12 +75,14 @@ test("serializeForLaterFilters repeats genre and descriptor keys and sets q", ()
 		year: undefined,
 		listened: "all",
 		rymStatus: "all",
-		filterMatch: "any",
+		genreMatch: "any",
+		descriptorMatch: "all",
 	});
 
 	const next = new URLSearchParams(params.toString());
 	assert.deepEqual(next.getAll("genre"), ["ambient", "slowcore"]);
 	assert.deepEqual(next.getAll("descriptor"), ["melancholic"]);
 	assert.equal(next.get("q"), "coltrane");
-	assert.equal(next.get("match"), "any");
+	assert.equal(next.get("genreMatch"), "any");
+	assert.equal(next.get("descriptorMatch"), null);
 });
