@@ -7,11 +7,13 @@ import { Suspense, useMemo } from "react";
 import { AlbumRatingDrawer } from "~/components/album-rating-drawer";
 import { LoginPrompt } from "~/components/login-prompt";
 import { useAlbumRatingDrawer } from "~/lib/hooks/use-album-rating-drawer";
+import { useForLaterRymAssociateDrawer } from "~/lib/hooks/use-for-later-rym-associate-drawer";
 import { useSpotifyAuth } from "~/lib/hooks/use-spotify-auth";
 import { api } from "../../../convex/_generated/api";
 import { ForLaterFilters } from "./_components/for-later-filters";
 import { ForLaterHeader } from "./_components/for-later-header";
 import { ForLaterList } from "./_components/for-later-list";
+import { ForLaterRymAssociateDrawer } from "./_components/for-later-rym-associate-drawer";
 import {
 	addUniqueSortedKey,
 	parseForLaterFilters,
@@ -73,6 +75,13 @@ function ForLaterAlbumsPageInner() {
 		handleSaveRating,
 		ratedAlbumsForYear,
 	} = useAlbumRatingDrawer({ userId });
+
+	const {
+		associateRow,
+		openAssociateDrawer,
+		closeAssociateDrawer,
+		handleAssociate,
+	} = useForLaterRymAssociateDrawer({ userId });
 
 	function handleRateAlbum(row: ForLaterAlbumRowData): void {
 		const album = albumToRateFromForLaterRow(row);
@@ -142,6 +151,7 @@ function ForLaterAlbumsPageInner() {
 					canLoadMore={rows.status === "CanLoadMore"}
 					onLoadMore={() => rows.loadMore(30)}
 					onRateAlbum={handleRateAlbum}
+					onLinkRymAlbum={openAssociateDrawer}
 					onAddGenreKey={addGenreKeyToFilters}
 					onAddDescriptorKey={addDescriptorKeyToFilters}
 				/>
@@ -154,6 +164,14 @@ function ForLaterAlbumsPageInner() {
 					if (!open) closeRatingDrawer();
 				}}
 				onSave={handleSaveRating}
+			/>
+			<ForLaterRymAssociateDrawer
+				row={associateRow}
+				open={associateRow !== null}
+				onOpenChange={(open) => {
+					if (!open) closeAssociateDrawer();
+				}}
+				onAssociate={handleAssociate}
 			/>
 		</div>
 	);

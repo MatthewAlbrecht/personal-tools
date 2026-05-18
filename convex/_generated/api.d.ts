@@ -26,6 +26,7 @@ import type * as _utils_playlistLyrics from "../_utils/playlistLyrics.js";
 import type * as _utils_rateYourMusicTaxonomy from "../_utils/rateYourMusicTaxonomy.js";
 import type * as _utils_rymGenreHierarchy from "../_utils/rymGenreHierarchy.js";
 import type * as _utils_spotify_album_list from "../_utils/spotify_album_list.js";
+import type * as _utils_unmappedRymScrapes from "../_utils/unmappedRymScrapes.js";
 import type * as articles from "../articles.js";
 import type * as auth from "../auth.js";
 import type * as bookSearch from "../bookSearch.js";
@@ -70,6 +71,7 @@ declare const fullApi: ApiFromModules<{
   "_utils/rateYourMusicTaxonomy": typeof _utils_rateYourMusicTaxonomy;
   "_utils/rymGenreHierarchy": typeof _utils_rymGenreHierarchy;
   "_utils/spotify_album_list": typeof _utils_spotify_album_list;
+  "_utils/unmappedRymScrapes": typeof _utils_unmappedRymScrapes;
   articles: typeof articles;
   auth: typeof auth;
   bookSearch: typeof bookSearch;

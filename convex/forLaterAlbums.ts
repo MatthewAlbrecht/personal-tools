@@ -6,6 +6,7 @@ import { internalMutation, mutation, query } from "./_generated/server";
 import {
 	type RymMatchResult,
 	buildArtistKeys,
+	linkRymScrapeToSpotifyAlbum,
 	matchRymForForLaterAlbum,
 	normalizeAlbumTitle,
 } from "./_utils/albumMatching";
@@ -30,6 +31,11 @@ import {
 import { chooseIndexedForLaterListScan } from "./_utils/forLaterIndexedList";
 import { projectionMatchesFilters } from "./_utils/forLaterProjectionPredicate";
 import { buildOpenableGoogleRymSearchLinks } from "./_utils/google_rym_lucky_search";
+import {
+	collectMappedRymScrapeIds,
+	isRymScrapeMappedElsewhere,
+	scrapeMatchesSearch,
+} from "./_utils/unmappedRymScrapes";
 import { requireAuth } from "./auth";
 
 type ForLaterDbCtx = QueryCtx | MutationCtx;
@@ -110,6 +116,7 @@ const forLaterAlbumRowValidator = v.object({
 	),
 	rymNotOnSite: v.optional(v.boolean()),
 	markedAsSingle: v.optional(v.boolean()),
+	removedFromForLater: v.optional(v.boolean()),
 	primaryGenres: v.array(tagValidator),
 	secondaryGenres: v.array(tagValidator),
 	descriptors: v.array(tagValidator),
@@ -141,6 +148,7 @@ type ForLaterAlbumRow = {
 	rymMatchMethod?: "spotify_id" | "title_artist" | "manual";
 	rymNotOnSite?: boolean;
 	markedAsSingle?: boolean;
+	removedFromForLater?: boolean;
 	primaryGenres: Array<{ key: string; label: string }>;
 	secondaryGenres: Array<{ key: string; label: string }>;
 	descriptors: Array<{ key: string; label: string }>;
@@ -414,6 +422,8 @@ async function syncForLaterItemFilterProjection(
 		filterHasRymUrl,
 		filterRymNotOnSite: item.rymNotOnSite === true ? true : undefined,
 		filterMarkedAsSingle: item.markedAsSingle === true ? true : undefined,
+		filterRemovedFromForLater:
+			item.removedFromForLater === true ? true : undefined,
 		filterGenreKeysSorted,
 		filterDescriptorKeysSorted,
 		filterSearchText: buildFilterSearchText({
@@ -497,6 +507,9 @@ async function hydrateForLaterAlbumRow(
 		...(rymMatchMethodOut ? { rymMatchMethod: rymMatchMethodOut } : {}),
 		...(args.item.rymNotOnSite === true ? { rymNotOnSite: true } : {}),
 		...(args.item.markedAsSingle === true ? { markedAsSingle: true } : {}),
+		...(args.item.removedFromForLater === true
+			? { removedFromForLater: true }
+			: {}),
 		...tags,
 	};
 
@@ -508,12 +521,19 @@ function appendForLaterListExclusionFilters(
 	q: any,
 	// biome-ignore lint/suspicious/noExplicitAny: same
 ): any {
-	return q.filter(
-		(fb: {
-			neq: (a: unknown, b: unknown) => unknown;
-			field: (name: string) => unknown;
-		}) => fb.neq(fb.field("filterMarkedAsSingle"), true),
-	);
+	return q
+		.filter(
+			(fb: {
+				neq: (a: unknown, b: unknown) => unknown;
+				field: (name: string) => unknown;
+			}) => fb.neq(fb.field("filterMarkedAsSingle"), true),
+		)
+		.filter(
+			(fb: {
+				neq: (a: unknown, b: unknown) => unknown;
+				field: (name: string) => unknown;
+			}) => fb.neq(fb.field("filterRemovedFromForLater"), true),
+		);
 }
 
 function appendForLaterProjectionFilters(
@@ -691,6 +711,7 @@ async function hydrateMatchingRowsFromFacetItemRefs(
 					rymUrl: row.rymUrl,
 					rymNotOnSite: row.rymNotOnSite,
 					markedAsSingle: row.markedAsSingle,
+					removedFromForLater: row.removedFromForLater,
 					primaryGenres: row.primaryGenres,
 					secondaryGenres: row.secondaryGenres,
 					descriptors: row.descriptors,
@@ -773,6 +794,7 @@ async function loadForLaterAlbumRows(
 						rymUrl: row.rymUrl,
 						rymNotOnSite: row.rymNotOnSite,
 						markedAsSingle: row.markedAsSingle,
+						removedFromForLater: row.removedFromForLater,
 						primaryGenres: row.primaryGenres,
 						secondaryGenres: row.secondaryGenres,
 						descriptors: row.descriptors,
@@ -822,6 +844,7 @@ async function loadForLaterAlbumRows(
 						rymUrl: row.rymUrl,
 						rymNotOnSite: row.rymNotOnSite,
 						markedAsSingle: row.markedAsSingle,
+						removedFromForLater: row.removedFromForLater,
 						primaryGenres: row.primaryGenres,
 						secondaryGenres: row.secondaryGenres,
 						descriptors: row.descriptors,
@@ -942,6 +965,7 @@ async function loadForLaterAlbumRows(
 					rymUrl: row.rymUrl,
 					rymNotOnSite: row.rymNotOnSite,
 					markedAsSingle: row.markedAsSingle,
+					removedFromForLater: row.removedFromForLater,
 					primaryGenres: row.primaryGenres,
 					secondaryGenres: row.secondaryGenres,
 					descriptors: row.descriptors,
@@ -1220,7 +1244,7 @@ export const getForLaterUiSummary = query({
 			.first();
 
 		const visibleActiveRows = activeRows.filter(
-			(row) => row.markedAsSingle !== true,
+			(row) => row.markedAsSingle !== true && row.removedFromForLater !== true,
 		);
 
 		return {
@@ -1359,6 +1383,155 @@ export const setForLaterAlbumMarkedAsSingle = mutation({
 			updatedAt: now,
 		});
 		await syncForLaterItemFilterProjection(ctx, args.itemId);
+		return null;
+	},
+});
+
+export const setForLaterAlbumRemovedFromForLater = mutation({
+	args: {
+		userId: v.string(),
+		itemId: v.id("forLaterAlbumItems"),
+		removedFromForLater: v.boolean(),
+	},
+	returns: v.null(),
+	handler: async (ctx, args): Promise<null> => {
+		requireAuth(ctx);
+		const item = await ctx.db.get(args.itemId);
+		if (!item || item.userId !== args.userId) {
+			throw new Error("For Later album not found");
+		}
+		const now = Date.now();
+		await ctx.db.patch(args.itemId, {
+			removedFromForLater: args.removedFromForLater ? true : undefined,
+			updatedAt: now,
+		});
+		await syncForLaterItemFilterProjection(ctx, args.itemId);
+		return null;
+	},
+});
+
+const unmappedRymScrapeRowValidator = v.object({
+	scrapeId: v.id("rateYourMusicScrapes"),
+	rymUrl: v.string(),
+	albumTitle: v.string(),
+	artists: v.array(
+		v.object({
+			name: v.string(),
+			href: v.optional(v.string()),
+		}),
+	),
+	releaseKind: v.union(v.literal("album"), v.literal("ep"), v.literal("comp")),
+	createdAt: v.number(),
+});
+
+export const searchUnmappedRymScrapes = query({
+	args: {
+		search: v.optional(v.string()),
+		limit: v.optional(v.number()),
+	},
+	returns: v.array(unmappedRymScrapeRowValidator),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+
+		const limit = Math.min(Math.max(args.limit ?? 50, 1), 100);
+		const searchTerm = args.search?.trim() ?? "";
+
+		const mappedIds = await collectMappedRymScrapeIds(ctx);
+
+		const scrapes = await ctx.db
+			.query("rateYourMusicScrapes")
+			.withIndex("by_updatedAt")
+			.order("desc")
+			.take(500);
+
+		scrapes.sort((a, b) => b.createdAt - a.createdAt);
+
+		const results: Array<{
+			scrapeId: Id<"rateYourMusicScrapes">;
+			rymUrl: string;
+			albumTitle: string;
+			artists: Array<{ name: string; href?: string }>;
+			releaseKind: "album" | "ep" | "comp";
+			createdAt: number;
+		}> = [];
+
+		for (const scrape of scrapes) {
+			if (mappedIds.has(scrape._id)) {
+				continue;
+			}
+			if (!scrapeMatchesSearch(scrape, searchTerm)) {
+				continue;
+			}
+			results.push({
+				scrapeId: scrape._id,
+				rymUrl: scrape.rymUrl,
+				albumTitle: scrape.albumTitle,
+				artists: scrape.artists.map((artist) => ({
+					name: artist.name,
+					...(artist.href ? { href: artist.href } : {}),
+				})),
+				releaseKind: scrape.releaseKind,
+				createdAt: scrape.createdAt,
+			});
+			if (results.length >= limit) {
+				break;
+			}
+		}
+
+		return results;
+	},
+});
+
+export const associateForLaterAlbumWithRymScrape = mutation({
+	args: {
+		userId: v.string(),
+		itemId: v.id("forLaterAlbumItems"),
+		scrapeId: v.id("rateYourMusicScrapes"),
+	},
+	returns: v.null(),
+	handler: async (ctx, args): Promise<null> => {
+		requireAuth(ctx);
+
+		const item = await ctx.db.get(args.itemId);
+		if (!item || item.userId !== args.userId) {
+			throw new Error("For Later album not found");
+		}
+
+		const scrape = await ctx.db.get(args.scrapeId);
+		if (!scrape) {
+			throw new Error("RYM scrape not found");
+		}
+
+		const mappedElsewhere = await isRymScrapeMappedElsewhere(ctx, {
+			scrapeId: args.scrapeId,
+			allowedItemId: args.itemId,
+			allowedAlbumId: item.albumId,
+		});
+		if (mappedElsewhere) {
+			throw new Error("This RYM scrape is already linked to another album");
+		}
+
+		const now = Date.now();
+
+		await linkRymScrapeToSpotifyAlbum(ctx, {
+			scrapeId: args.scrapeId,
+			albumId: item.albumId,
+			spotifyAlbumId: item.spotifyAlbumId,
+			method: "manual",
+			now,
+		});
+
+		await ctx.db.patch(args.itemId, {
+			rymScrapeId: args.scrapeId,
+			rymMatchMethod: "manual",
+			rymMatchedAt: now,
+			rymDiscoveryStatus: "found",
+			rymNotOnSite: undefined,
+			updatedAt: now,
+		});
+
+		await syncForLaterItemFilterProjection(ctx, args.itemId);
+
 		return null;
 	},
 });

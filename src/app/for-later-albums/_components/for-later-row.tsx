@@ -1,9 +1,9 @@
 "use client";
 
-import type { ReactNode } from "react";
 import { useMutation } from "convex/react";
 import { Disc3, MoreHorizontal } from "lucide-react";
 import Image from "next/image";
+import type { ReactNode } from "react";
 import { toast } from "sonner";
 import { AlbumRatingBadge } from "~/components/album-rating-badge";
 import { AlbumUnrankedBadge } from "~/components/album-unranked-badge";
@@ -14,6 +14,7 @@ import {
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuLabel,
+	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { cn } from "~/lib/utils";
@@ -37,12 +38,14 @@ export function ForLaterRow({
 	row,
 	userId,
 	onRate,
+	onLinkRym,
 	onAddGenreKey,
 	onAddDescriptorKey,
 }: {
 	row: ForLaterAlbumRowData;
 	userId: string;
 	onRate?: () => void;
+	onLinkRym?: () => void;
 	onAddGenreKey?: (key: string) => void;
 	onAddDescriptorKey?: (key: string) => void;
 }) {
@@ -51,6 +54,9 @@ export function ForLaterRow({
 	);
 	const setMarkedAsSingle = useMutation(
 		api.forLaterAlbums.setForLaterAlbumMarkedAsSingle,
+	);
+	const setRemovedFromForLater = useMutation(
+		api.forLaterAlbums.setForLaterAlbumRemovedFromForLater,
 	);
 
 	async function handleSetRymNotOnSite(notOnSite: boolean): Promise<void> {
@@ -82,6 +88,22 @@ export function ForLaterRow({
 		} catch (error) {
 			console.error("Failed to update single mark:", error);
 			toast.error("Could not update single mark");
+		}
+	}
+
+	async function handleRemoveFromList(removed: boolean): Promise<void> {
+		try {
+			await setRemovedFromForLater({
+				userId,
+				itemId: row.albumItemId,
+				removedFromForLater: removed,
+			});
+			toast.success(
+				removed ? "Removed from list" : "Restored to for-later list",
+			);
+		} catch (error) {
+			console.error("Failed to remove from list:", error);
+			toast.error("Could not remove from list");
 		}
 	}
 
@@ -151,14 +173,6 @@ export function ForLaterRow({
 										<GoogleLogoIcon className="size-5" />
 									</RowExternalLink>
 								) : null}
-								{row.spotifyAlbumId.trim() ? (
-									<RowExternalLink
-										href={buildSpotifyAlbumUrl(row.spotifyAlbumId)}
-										ariaLabel={`Open ${row.name} on Spotify`}
-									>
-										<SpotifyLogoIcon className="size-5 text-[#1DB954]" />
-									</RowExternalLink>
-								) : null}
 								{row.rymUrl ? (
 									<RowExternalLink
 										href={row.rymUrl}
@@ -171,6 +185,14 @@ export function ForLaterRow({
 											height={20}
 											className="size-5 rounded-sm object-contain"
 										/>
+									</RowExternalLink>
+								) : null}
+								{row.spotifyAlbumId.trim() ? (
+									<RowExternalLink
+										href={buildSpotifyAlbumUrl(row.spotifyAlbumId)}
+										ariaLabel={`Open ${row.name} on Spotify`}
+									>
+										<SpotifyLogoIcon className="size-5 text-[#1DB954]" />
 									</RowExternalLink>
 								) : null}
 							</div>
@@ -186,8 +208,10 @@ export function ForLaterRow({
 			<div className="absolute right-0 bottom-0 z-10">
 				<ForLaterRowActionsMenu
 					row={row}
+					onLinkRym={onLinkRym}
 					onSetRymNotOnSite={handleSetRymNotOnSite}
 					onSetMarkedAsSingle={handleSetMarkedAsSingle}
+					onRemoveFromList={handleRemoveFromList}
 				/>
 			</div>
 		</article>
@@ -260,12 +284,16 @@ function GoogleLogoIcon({ className }: { className?: string }) {
 
 function ForLaterRowActionsMenu({
 	row,
+	onLinkRym,
 	onSetRymNotOnSite,
 	onSetMarkedAsSingle,
+	onRemoveFromList,
 }: {
 	row: ForLaterAlbumRowData;
+	onLinkRym?: () => void;
 	onSetRymNotOnSite: (notOnSite: boolean) => Promise<void>;
 	onSetMarkedAsSingle: (marked: boolean) => Promise<void>;
+	onRemoveFromList: (removed: boolean) => Promise<void>;
 }) {
 	return (
 		<DropdownMenu>
@@ -282,6 +310,11 @@ function ForLaterRowActionsMenu({
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end" className="w-52">
 				<DropdownMenuLabel>Actions</DropdownMenuLabel>
+				{onLinkRym && !row.rymUrl && !row.rymNotOnSite ? (
+					<DropdownMenuItem onSelect={onLinkRym}>
+						Link RYM scrape
+					</DropdownMenuItem>
+				) : null}
 				{row.markedAsSingle ? (
 					<DropdownMenuItem onSelect={() => void onSetMarkedAsSingle(false)}>
 						Clear single mark
@@ -300,6 +333,13 @@ function ForLaterRowActionsMenu({
 						Mark as Not on RYM
 					</DropdownMenuItem>
 				)}
+				<DropdownMenuSeparator />
+				<DropdownMenuItem
+					className="text-destructive focus:text-destructive"
+					onSelect={() => void onRemoveFromList(true)}
+				>
+					Remove
+				</DropdownMenuItem>
 			</DropdownMenuContent>
 		</DropdownMenu>
 	);

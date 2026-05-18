@@ -13,6 +13,7 @@ export function ForLaterList({
 	canLoadMore,
 	onLoadMore,
 	onRateAlbum,
+	onLinkRymAlbum,
 	onAddGenreKey,
 	onAddDescriptorKey,
 }: {
@@ -23,6 +24,7 @@ export function ForLaterList({
 	canLoadMore: boolean;
 	onLoadMore: () => void;
 	onRateAlbum?: (row: ForLaterAlbumRowData) => void;
+	onLinkRymAlbum?: (row: ForLaterAlbumRowData) => void;
 	onAddGenreKey?: (key: string) => void;
 	onAddDescriptorKey?: (key: string) => void;
 }) {
@@ -58,10 +60,9 @@ export function ForLaterList({
 					row={row}
 					userId={userId}
 					onRate={
-						onRateAlbum && row.userAlbumId
-							? () => onRateAlbum(row)
-							: undefined
+						onRateAlbum && row.userAlbumId ? () => onRateAlbum(row) : undefined
 					}
+					onLinkRym={onLinkRymAlbum ? () => onLinkRymAlbum(row) : undefined}
 					onAddGenreKey={onAddGenreKey}
 					onAddDescriptorKey={onAddDescriptorKey}
 				/>

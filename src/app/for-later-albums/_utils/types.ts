@@ -49,6 +49,7 @@ export type ForLaterAlbumRowData = {
 	rymMatchMethod?: "spotify_id" | "title_artist" | "manual";
 	rymNotOnSite?: boolean;
 	markedAsSingle?: boolean;
+	removedFromForLater?: boolean;
 	primaryGenres: Array<{ key: string; label: string }>;
 	secondaryGenres: Array<{ key: string; label: string }>;
 	descriptors: Array<{ key: string; label: string }>;

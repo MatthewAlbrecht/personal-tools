@@ -12,11 +12,13 @@ import {
  * When `skipSearchPredicate` is true (FTS already narrowed the candidate set), the
  * substring search predicate is skipped — hydrate still runs {@link rowMatchesFilters}.
  */
-/** Singles are soft-deleted from for-later list UIs but remain in the table. */
+/** Soft-deleted rows are hidden from for-later list UIs but remain in the table. */
 export function forLaterItemExcludedFromLists(
 	doc: Doc<"forLaterAlbumItems">,
 ): boolean {
-	return doc.filterMarkedAsSingle === true;
+	return (
+		doc.filterMarkedAsSingle === true || doc.filterRemovedFromForLater === true
+	);
 }
 
 export function projectionMatchesFilters(

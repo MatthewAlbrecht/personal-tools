@@ -15,7 +15,7 @@ export {
 	artistKeysIntersect,
 } from "./albumMatchingCore";
 
-export type RymMatchMethod = "spotify_id" | "title_artist";
+export type RymMatchMethod = "spotify_id" | "title_artist" | "manual";
 
 export type RymMatchResult = {
 	scrapeId?: Id<"rateYourMusicScrapes">;
@@ -267,4 +267,24 @@ export async function matchForLaterAlbumsForRymScrape(
 	await patchScrapeAlbumConvexId(ctx, args.scrapeId, album._id);
 
 	return 1;
+}
+
+export async function linkRymScrapeToSpotifyAlbum(
+	ctx: MutationCtx,
+	args: {
+		scrapeId: Id<"rateYourMusicScrapes">;
+		albumId: Id<"spotifyAlbums">;
+		spotifyAlbumId?: string;
+		method: RymMatchMethod;
+		now: number;
+	},
+): Promise<void> {
+	await upsertRymSpotifyAlbumLink(ctx, {
+		scrapeId: args.scrapeId,
+		albumId: args.albumId,
+		spotifyAlbumId: args.spotifyAlbumId,
+		method: args.method,
+		now: args.now,
+	});
+	await patchScrapeAlbumConvexId(ctx, args.scrapeId, args.albumId);
 }

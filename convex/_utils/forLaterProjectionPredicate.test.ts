@@ -146,6 +146,22 @@ test("projectionMatchesFilters excludes marked-as-single rows from all lists", (
 	assert.equal(projectionMatchesFilters(album, filters), true);
 });
 
+test("projectionMatchesFilters excludes removed-from-for-later rows from all lists", () => {
+	const removed = stubDoc({
+		_id: "item10" as Id<"forLaterAlbumItems">,
+		_creationTime: 0,
+		filterRemovedFromForLater: true,
+	});
+	const visible = stubDoc({
+		_id: "item11" as Id<"forLaterAlbumItems">,
+		_creationTime: 0,
+		filterRemovedFromForLater: undefined,
+	});
+	const filters = normalizeForLaterFilters({});
+	assert.equal(projectionMatchesFilters(removed, filters), false);
+	assert.equal(projectionMatchesFilters(visible, filters), true);
+});
+
 test("projectionMatchesFilters not_on_rym shows only not-on-RYM rows", () => {
 	const notOnRym = stubDoc({
 		_id: "item6" as Id<"forLaterAlbumItems">,

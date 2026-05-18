@@ -327,6 +327,26 @@ test("rowMatchesFilters excludes marked-as-single rows", () => {
 	assert.equal(rowMatchesFilters(album, filters), true);
 });
 
+test("rowMatchesFilters excludes removed-from-for-later rows", () => {
+	const removed: ForLaterAlbumRowFilterInput = {
+		name: "x",
+		artistName: "y",
+		hasListened: false,
+		rymStatus: "unmatched",
+		removedFromForLater: true,
+		primaryGenres: [],
+		secondaryGenres: [],
+		descriptors: [],
+	};
+	const visible: ForLaterAlbumRowFilterInput = {
+		...removed,
+		removedFromForLater: undefined,
+	};
+	const filters = normalizeForLaterFilters({});
+	assert.equal(rowMatchesFilters(removed, filters), false);
+	assert.equal(rowMatchesFilters(visible, filters), true);
+});
+
 test("rowMatchesFilters not_on_rym shows only not-on-RYM rows", () => {
 	const notOnRym: ForLaterAlbumRowFilterInput = {
 		name: "x",

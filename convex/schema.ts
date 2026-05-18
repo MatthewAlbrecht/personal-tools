@@ -398,6 +398,8 @@ export default defineSchema({
 		rymNotOnSite: v.optional(v.boolean()),
 		/** User marked this as a single — hidden from for-later lists (soft delete). */
 		markedAsSingle: v.optional(v.boolean()),
+		/** User dismissed from for-later list — hidden from lists (soft delete). */
+		removedFromForLater: v.optional(v.boolean()),
 
 		createdAt: v.number(),
 		updatedAt: v.number(),
@@ -408,6 +410,7 @@ export default defineSchema({
 		filterHasRymUrl: v.optional(v.boolean()),
 		filterRymNotOnSite: v.optional(v.boolean()),
 		filterMarkedAsSingle: v.optional(v.boolean()),
+		filterRemovedFromForLater: v.optional(v.boolean()),
 		filterGenreKeysSorted: v.optional(v.array(v.string())),
 		filterDescriptorKeysSorted: v.optional(v.array(v.string())),
 		/** Album title + artist; Convex FTS (`search_forLaterAlbumItems`). */

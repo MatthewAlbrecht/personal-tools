@@ -200,6 +200,7 @@ export type ForLaterAlbumRowFilterInput = {
 	rymUrl?: string;
 	rymNotOnSite?: boolean;
 	markedAsSingle?: boolean;
+	removedFromForLater?: boolean;
 	primaryGenres: Array<{ key: string }>;
 	secondaryGenres: Array<{ key: string }>;
 	descriptors: Array<{ key: string }>;
@@ -220,6 +221,7 @@ export function rowMatchesFilters(
 	const preds: RowPred[] = [];
 
 	preds.push((r) => r.markedAsSingle !== true);
+	preds.push((r) => r.removedFromForLater !== true);
 
 	const search = filters.search?.trim();
 	if (search) {
