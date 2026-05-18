@@ -394,6 +394,11 @@ export default defineSchema({
 		),
 		rymMatchedAt: v.optional(v.number()),
 
+		/** User marked this album as absent from Rate Your Music. */
+		rymNotOnSite: v.optional(v.boolean()),
+		/** User marked this as a single — hidden from for-later lists (soft delete). */
+		markedAsSingle: v.optional(v.boolean()),
+
 		createdAt: v.number(),
 		updatedAt: v.number(),
 
@@ -401,6 +406,8 @@ export default defineSchema({
 		filterHasListened: v.optional(v.boolean()),
 		filterRymMatched: v.optional(v.boolean()),
 		filterHasRymUrl: v.optional(v.boolean()),
+		filterRymNotOnSite: v.optional(v.boolean()),
+		filterMarkedAsSingle: v.optional(v.boolean()),
 		filterGenreKeysSorted: v.optional(v.array(v.string())),
 		filterDescriptorKeysSorted: v.optional(v.array(v.string())),
 		/** Album title + artist; Convex FTS (`search_forLaterAlbumItems`). */
@@ -687,10 +694,30 @@ export default defineSchema({
 		key: v.string(),
 		label: v.string(),
 		href: v.optional(v.string()),
+		description: v.optional(v.string()),
+		isTopLevel: v.optional(v.boolean()),
 		createdAt: v.number(),
+		updatedAt: v.optional(v.number()),
 	})
 		.index("by_key", ["key"])
+		.index("by_label", ["label"])
+		.index("by_isTopLevel", ["isTopLevel"])
 		.index("by_createdAt", ["createdAt"]),
+
+	rateYourMusicGenreRelationships: defineTable({
+		parentGenreId: v.id("rateYourMusicGenres"),
+		childGenreId: v.id("rateYourMusicGenres"),
+		parentKey: v.string(),
+		childKey: v.string(),
+		position: v.number(),
+		createdAt: v.number(),
+		updatedAt: v.number(),
+	})
+		.index("by_parentGenreId", ["parentGenreId"])
+		.index("by_childGenreId", ["childGenreId"])
+		.index("by_parentKey", ["parentKey"])
+		.index("by_childKey", ["childKey"])
+		.index("by_parentGenreId_childGenreId", ["parentGenreId", "childGenreId"]),
 
 	rateYourMusicDescriptors: defineTable({
 		key: v.string(),
@@ -700,11 +727,15 @@ export default defineSchema({
 		.index("by_key", ["key"])
 		.index("by_createdAt", ["createdAt"]),
 
-	// Rate Your Music release scrapes (album / EP pages — extension or API)
+	// Rate Your Music release scrapes (album / EP / compilation pages — extension or API)
 	rateYourMusicScrapes: defineTable({
 		/** Canonical https URL for this release (normalized for dedupe) */
 		rymUrl: v.string(),
-		releaseKind: v.union(v.literal("album"), v.literal("ep")),
+		releaseKind: v.union(
+			v.literal("album"),
+			v.literal("ep"),
+			v.literal("comp"),
+		),
 		/** Label from RYM "Type" row, e.g. "Album" | "EP" */
 		releaseTypeLabel: v.optional(v.string()),
 		albumTitle: v.string(),

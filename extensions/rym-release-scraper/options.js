@@ -13,7 +13,8 @@ async function loadOptions() {
 	const originEl = document.getElementById("origin");
 	const secretEl = document.getElementById("secret");
 	if (originEl) {
-		originEl.value = cfg[ORIGIN_KEY] || "http://127.0.0.1:1333";
+		originEl.value =
+			cfg[ORIGIN_KEY] || "https://www.moooose.dev";
 	}
 	if (secretEl) {
 		secretEl.value = cfg[SECRET_KEY] || "";
@@ -23,7 +24,8 @@ async function loadOptions() {
 async function saveOptions() {
 	const originEl = document.getElementById("origin");
 	const secretEl = document.getElementById("secret");
-	const rawOrigin = originEl?.value?.trim() || "http://127.0.0.1:1333";
+	const rawOrigin =
+		originEl?.value?.trim() || "https://www.moooose.dev";
 	const secret = secretEl?.value ?? "";
 	await chrome.storage.sync.set({
 		[ORIGIN_KEY]: rawOrigin.replace(/\/+$/, ""),

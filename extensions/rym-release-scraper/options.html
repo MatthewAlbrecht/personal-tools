@@ -53,15 +53,17 @@
 	<body>
 		<h2>Backend sync (optional)</h2>
 		<p class="hint">
-			Set the same secret as <code>RYM_EXTENSION_INGEST_SECRET</code> in your Next
-			app <code>.env</code>. Scrapes still save locally without this.
+			Default targets production. For local Convex/dev server, set origin to
+			<code>http://127.0.0.1:1333</code>. Use the same secret as
+			<code>RYM_EXTENSION_INGEST_SECRET</code> in the deployed app env. Scrapes
+			still save locally without a secret.
 		</p>
 		<label for="origin">App origin</label>
 		<input
 			id="origin"
 			type="url"
 			autocomplete="off"
-			placeholder="http://127.0.0.1:1333"
+			placeholder="https://www.moooose.dev"
 		/>
 		<label for="secret">Ingest secret</label>
 		<input

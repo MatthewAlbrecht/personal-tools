@@ -5,8 +5,7 @@ export type ForLaterRymFilter =
 	| "all"
 	| "has_scrape"
 	| "no_scrape"
-	| "has_candidate"
-	| "no_candidate";
+	| "not_on_rym";
 
 /** Whether every selected tag must match ("all") or any one ("any"), per taxonomy group. */
 export type ForLaterTaxonomyMatch = "all" | "any";
@@ -16,7 +15,8 @@ export type ForLaterFilters = {
 	descriptorKeys: string[];
 	/** Matches album title or artist name (substring, case-insensitive). */
 	search?: string;
-	year?: number;
+	yearMin?: number;
+	yearMax?: number;
 	listened: ForLaterListenedFilter;
 	rymStatus: ForLaterRymFilter;
 	genreMatch: ForLaterTaxonomyMatch;
@@ -40,19 +40,15 @@ export type ForLaterAlbumRowData = {
 	removedAt?: number;
 	isActive: boolean;
 	hasListened: boolean;
+	userAlbumId?: Id<"userAlbums">;
 	listenCount: number;
 	lastListenedAt?: number;
-	rymStatus:
-		| "matched"
-		| "candidate"
-		| "searching"
-		| "not_found"
-		| "failed"
-		| "not_started";
+	rating?: number;
+	rymStatus: "matched" | "unmatched";
 	rymUrl?: string;
-	rymCandidateConfidence?: "high" | "medium" | "low";
-	rymDiscoveryReason?: string;
 	rymMatchMethod?: "spotify_id" | "title_artist" | "manual";
+	rymNotOnSite?: boolean;
+	markedAsSingle?: boolean;
 	primaryGenres: Array<{ key: string; label: string }>;
 	secondaryGenres: Array<{ key: string; label: string }>;
 	descriptors: Array<{ key: string; label: string }>;

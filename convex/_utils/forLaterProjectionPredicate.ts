@@ -1,6 +1,7 @@
 import type { Doc } from "../_generated/dataModel";
 import {
 	type ForLaterUiFilters,
+	releaseYearMatchesForLaterFilter,
 	taxonomyKeysPassAgainstSet,
 } from "./forLaterAlbumsUi";
 
@@ -11,11 +12,22 @@ import {
  * When `skipSearchPredicate` is true (FTS already narrowed the candidate set), the
  * substring search predicate is skipped — hydrate still runs {@link rowMatchesFilters}.
  */
+/** Singles are soft-deleted from for-later list UIs but remain in the table. */
+export function forLaterItemExcludedFromLists(
+	doc: Doc<"forLaterAlbumItems">,
+): boolean {
+	return doc.filterMarkedAsSingle === true;
+}
+
 export function projectionMatchesFilters(
 	doc: Doc<"forLaterAlbumItems">,
 	filters: ForLaterUiFilters,
 	options?: { skipSearchPredicate?: boolean },
 ): boolean {
+	if (forLaterItemExcludedFromLists(doc)) {
+		return false;
+	}
+
 	type DocPred = (d: Doc<"forLaterAlbumItems">) => boolean;
 	const preds: DocPred[] = [];
 
@@ -26,9 +38,10 @@ export function projectionMatchesFilters(
 		preds.push(() => blob.includes(q));
 	}
 
-	if (filters.year !== undefined) {
-		const y = filters.year;
-		preds.push((d) => d.filterReleaseYear === y);
+	if (filters.yearMin !== undefined || filters.yearMax !== undefined) {
+		preds.push((d) =>
+			releaseYearMatchesForLaterFilter(d.filterReleaseYear, filters),
+		);
 	}
 
 	if (filters.listened === "listened") {
@@ -38,14 +51,15 @@ export function projectionMatchesFilters(
 	}
 
 	const rym = filters.rymStatus;
-	if (rym === "has_scrape") {
-		preds.push((d) => d.filterRymMatched === true);
-	} else if (rym === "no_scrape") {
-		preds.push((d) => d.filterRymMatched !== true);
-	} else if (rym === "has_candidate") {
-		preds.push((d) => d.filterHasRymUrl === true);
-	} else if (rym === "no_candidate") {
-		preds.push((d) => d.filterHasRymUrl !== true);
+	if (rym === "not_on_rym") {
+		preds.push((d) => d.filterRymNotOnSite === true);
+	} else if (rym !== "all") {
+		preds.push((d) => d.filterRymNotOnSite !== true);
+		if (rym === "has_scrape") {
+			preds.push((d) => d.filterRymMatched === true);
+		} else if (rym === "no_scrape") {
+			preds.push((d) => d.filterRymMatched !== true);
+		}
 	}
 
 	if (!preds.every((p) => p(doc))) {

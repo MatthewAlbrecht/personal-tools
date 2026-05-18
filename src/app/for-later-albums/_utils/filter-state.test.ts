@@ -7,7 +7,8 @@ test("parseForLaterFilters returns defaults for an empty query", () => {
 		genreKeys: [],
 		descriptorKeys: [],
 		search: undefined,
-		year: undefined,
+		yearMin: undefined,
+		yearMax: undefined,
 		listened: "all",
 		rymStatus: "all",
 		genreMatch: "all",
@@ -25,16 +26,17 @@ test("parseForLaterFilters lowercases genre and descriptor URL params", () => {
 
 test("parseForLaterFilters reads q, genres, descriptors, and taxonomy match modes", () => {
 	const params = new URLSearchParams(
-		"genre=slowcore&genre=ambient&descriptor=melancholic&descriptor=sparse&q=blue+note&year=1971&listened=not_listened&rymStatus=has_candidate&genreMatch=any&descriptorMatch=all",
+		"genre=slowcore&genre=ambient&descriptor=melancholic&descriptor=sparse&q=blue+note&yearMin=1971&yearMax=1971&listened=not_listened&rymStatus=not_on_rym&genreMatch=any&descriptorMatch=all",
 	);
 
 	assert.deepEqual(parseForLaterFilters(params), {
 		genreKeys: ["ambient", "slowcore"],
 		descriptorKeys: ["melancholic", "sparse"],
 		search: "blue note",
-		year: 1971,
+		yearMin: 1971,
+		yearMax: 1971,
 		listened: "not_listened",
-		rymStatus: "has_candidate",
+		rymStatus: "not_on_rym",
 		genreMatch: "any",
 		descriptorMatch: "all",
 	});
@@ -57,7 +59,8 @@ test("serializeForLaterFilters omits default values", () => {
 		genreKeys: [],
 		descriptorKeys: [],
 		search: undefined,
-		year: undefined,
+		yearMin: undefined,
+		yearMax: undefined,
 		listened: "all",
 		rymStatus: "all",
 		genreMatch: "all",
@@ -67,12 +70,44 @@ test("serializeForLaterFilters omits default values", () => {
 	assert.equal(params.toString(), "");
 });
 
+test("parseForLaterFilters maps legacy year param to min and max", () => {
+	const params = new URLSearchParams("year=1984");
+	assert.deepEqual(parseForLaterFilters(params), {
+		genreKeys: [],
+		descriptorKeys: [],
+		search: undefined,
+		yearMin: 1984,
+		yearMax: 1984,
+		listened: "all",
+		rymStatus: "all",
+		genreMatch: "all",
+		descriptorMatch: "all",
+	});
+});
+
+test("serializeForLaterFilters writes yearMin and yearMax", () => {
+	const params = serializeForLaterFilters({
+		genreKeys: [],
+		descriptorKeys: [],
+		search: undefined,
+		yearMin: 1970,
+		yearMax: 1979,
+		listened: "all",
+		rymStatus: "all",
+		genreMatch: "all",
+		descriptorMatch: "all",
+	});
+	assert.equal(params.get("yearMin"), "1970");
+	assert.equal(params.get("yearMax"), "1979");
+});
+
 test("serializeForLaterFilters repeats genre and descriptor keys and sets q", () => {
 	const params = serializeForLaterFilters({
 		genreKeys: ["ambient", "slowcore"],
 		descriptorKeys: ["melancholic"],
 		search: "coltrane",
-		year: undefined,
+		yearMin: undefined,
+		yearMax: undefined,
 		listened: "all",
 		rymStatus: "all",
 		genreMatch: "any",

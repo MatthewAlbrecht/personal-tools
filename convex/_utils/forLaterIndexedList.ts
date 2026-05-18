@@ -1,18 +1,21 @@
-import type { ForLaterUiFilters } from "./forLaterAlbumsUi";
+import {
+	forLaterSingleIndexedReleaseYear,
+	type ForLaterUiFilters,
+} from "./forLaterAlbumsUi";
 
 export type IndexedForLaterListChoice =
 	| { kind: "year"; year: number }
 	| { kind: "listened"; value: boolean }
 	| { kind: "rymMatched"; value: boolean }
-	| { kind: "rymUrl"; value: boolean }
 	| { kind: "default" };
 
 /** Which equality prefix drives the compound index; remaining scalars go through `.filter()`. */
 export function chooseIndexedForLaterListScan(
 	filters: ForLaterUiFilters,
 ): IndexedForLaterListChoice {
-	if (filters.year !== undefined) {
-		return { kind: "year", year: filters.year };
+	const singleYear = forLaterSingleIndexedReleaseYear(filters);
+	if (singleYear !== undefined) {
+		return { kind: "year", year: singleYear };
 	}
 	if (filters.listened === "listened") {
 		return { kind: "listened", value: true };
@@ -25,12 +28,6 @@ export function chooseIndexedForLaterListScan(
 	}
 	if (filters.rymStatus === "no_scrape") {
 		return { kind: "rymMatched", value: false };
-	}
-	if (filters.rymStatus === "has_candidate") {
-		return { kind: "rymUrl", value: true };
-	}
-	if (filters.rymStatus === "no_candidate") {
-		return { kind: "rymUrl", value: false };
 	}
 	return { kind: "default" };
 }

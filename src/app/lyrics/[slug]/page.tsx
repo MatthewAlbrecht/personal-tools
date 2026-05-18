@@ -10,89 +10,7 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { Label } from "~/components/ui/label";
 import { Skeleton } from "~/components/ui/skeleton";
 import { api } from "../../../../convex/_generated/api";
-
-function AlbumSkeleton() {
-	return (
-		<div className="mx-auto max-w-4xl space-y-8 px-4 py-10">
-			<div className="text-center">
-				<Skeleton className="mx-auto mb-4 h-12 w-3/4" />
-				<Skeleton className="mx-auto h-8 w-1/2" />
-			</div>
-			<div className="space-y-8">
-				{[1, 2, 3].map((i) => (
-					<div key={i} className="space-y-4">
-						<Skeleton className="h-8 w-64" />
-						<Skeleton className="h-32 w-full" />
-					</div>
-				))}
-			</div>
-		</div>
-	);
-}
-
-function formatLyrics(lyrics: string): React.ReactNode {
-	// Split by lines
-	const lines = lyrics.split("\n");
-
-	return lines.map((line, index) => {
-		// Check if line is a section header like [Verse 2], [Chorus], etc.
-		const isSectionHeader = /^\[.*\]$/.test(line.trim());
-
-		if (isSectionHeader) {
-			return (
-				<span
-					key={index}
-					className="text-muted-foreground text-sm print:text-xs"
-				>
-					{line}
-					<br />
-				</span>
-			);
-		}
-
-		// Handle formatting markers
-		const parts: React.ReactNode[] = [];
-		const currentText = line;
-		let key = 0;
-
-		// Process italics (*text*)
-		const italicRegex = /\*([^*]+)\*/g;
-		let lastIndex = 0;
-		let match: RegExpExecArray | null;
-
-		// biome-ignore lint/suspicious/noAssignInExpressions: Standard pattern for regex exec loop
-		while ((match = italicRegex.exec(line)) !== null) {
-			// Add text before the italic
-			if (match.index > lastIndex) {
-				parts.push(line.substring(lastIndex, match.index));
-			}
-			// Add italic text
-			parts.push(
-				<em key={`italic-${index}-${key++}`} className="italic">
-					{match[1]}
-				</em>,
-			);
-			lastIndex = match.index + match[0].length;
-		}
-
-		// Add remaining text
-		if (lastIndex < line.length) {
-			parts.push(line.substring(lastIndex));
-		}
-
-		// If line is empty, just return a line break
-		if (line.trim() === "") {
-			return <br key={index} />;
-		}
-
-		return (
-			<span key={index}>
-				{parts.length > 0 ? parts : line}
-				<br />
-			</span>
-		);
-	});
-}
+import { LyricsRenderer } from "../../playlist-lyrics/_components/lyrics-renderer";
 
 export default function AlbumLyricsPage({
 	params,
@@ -104,6 +22,7 @@ export default function AlbumLyricsPage({
 	const albumData = useQuery(api.geniusAlbums.getAlbumBySlug, { slug });
 	const [isCompact, setIsCompact] = useState(false);
 	const [showGeniusInfo, setShowGeniusInfo] = useState(false);
+	const [showSectionLabels, setShowSectionLabels] = useState(true);
 
 	function handlePrint() {
 		setIsCompact(false);
@@ -165,6 +84,21 @@ export default function AlbumLyricsPage({
 						/>
 						<Label htmlFor="genius-info" className="cursor-pointer text-sm">
 							Show Genius info
+						</Label>
+					</div>
+					<div className="flex items-center gap-2">
+						<Checkbox
+							id="show-section-labels"
+							checked={showSectionLabels}
+							onCheckedChange={(checked) =>
+								setShowSectionLabels(checked === true)
+							}
+						/>
+						<Label
+							htmlFor="show-section-labels"
+							className="cursor-pointer text-sm"
+						>
+							Show song part labels
 						</Label>
 					</div>
 					<div className="flex gap-2">
@@ -231,7 +165,10 @@ export default function AlbumLyricsPage({
 
 							{/* Lyrics */}
 							<div className="font-sans leading-relaxed print:text-base">
-								{formatLyrics(song.lyrics)}
+								<LyricsRenderer
+									lyrics={song.lyrics}
+									showSectionLabels={showSectionLabels}
+								/>
 							</div>
 						</article>
 					))
@@ -251,6 +188,25 @@ export default function AlbumLyricsPage({
 						Genius.com
 					</a>
 				</p>
+			</div>
+		</div>
+	);
+}
+
+function AlbumSkeleton() {
+	return (
+		<div className="mx-auto max-w-4xl space-y-8 px-4 py-10">
+			<div className="text-center">
+				<Skeleton className="mx-auto mb-4 h-12 w-3/4" />
+				<Skeleton className="mx-auto h-8 w-1/2" />
+			</div>
+			<div className="space-y-8">
+				{[1, 2, 3].map((i) => (
+					<div key={i} className="space-y-4">
+						<Skeleton className="h-8 w-64" />
+						<Skeleton className="h-32 w-full" />
+					</div>
+				))}
 			</div>
 		</div>
 	);

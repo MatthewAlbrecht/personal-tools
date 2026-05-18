@@ -198,14 +198,25 @@ function getArtists(section) {
 	if (!row) {
 		return [];
 	}
-	return Array.from(row.querySelectorAll("a.artist")).map(
-		function mapArtist(a) {
+	const linked = Array.from(row.querySelectorAll("a.artist"))
+		.map(function mapArtist(a) {
 			return {
 				name: a.textContent.replace(/\s+/g, " ").trim(),
 				href: a.getAttribute("href"),
 			};
-		},
-	);
+		})
+		.filter(function hasName(entry) {
+			return entry.name.length > 0;
+		});
+	if (linked.length > 0) {
+		return linked;
+	}
+	const td = row.querySelector("td");
+	const text = td ? td.textContent.replace(/\s+/g, " ").trim() : "";
+	if (!text) {
+		return [];
+	}
+	return [{ name: text, href: undefined }];
 }
 
 function getReleaseType(section) {

@@ -9,6 +9,7 @@ import {
 	forLaterFiltersAllowIndexedScan,
 	forLaterPostFilterScanSize,
 	normalizeForLaterFilters,
+	releaseYearMatchesForLaterFilter,
 	rowMatchesFilters,
 	sortForLaterRows,
 } from "./forLaterAlbumsUi";
@@ -26,7 +27,8 @@ test("normalizeForLaterFilters applies defaults", () => {
 		genreKeys: [],
 		descriptorKeys: [],
 		search: undefined,
-		year: undefined,
+		yearMin: undefined,
+		yearMax: undefined,
 		listened: "all",
 		rymStatus: "all",
 		genreMatch: "all",
@@ -69,7 +71,8 @@ test("forLaterFiltersAllowIndexedScan allows default residual-only filters", () 
 	assert.equal(
 		forLaterFiltersAllowIndexedScan(
 			normalizeForLaterFilters({
-				year: 1999,
+				yearMin: 1999,
+				yearMax: 1999,
 				listened: "listened",
 				rymStatus: "has_scrape",
 			}),
@@ -119,7 +122,8 @@ test("forLaterFiltersAllowGenreFacetPagination allows genre with ALL and extra f
 		forLaterFiltersAllowGenreFacetPagination(
 			normalizeForLaterFilters({
 				genreKeys: ["rock"],
-				year: 1999,
+				yearMin: 1999,
+				yearMax: 1999,
 				genreMatch: "all",
 			}),
 		),
@@ -141,7 +145,8 @@ test("forLaterFiltersAllowGenreFacetPagination allows genre ANY with year and ot
 		forLaterFiltersAllowGenreFacetPagination(
 			normalizeForLaterFilters({
 				genreKeys: ["rock"],
-				year: 1999,
+				yearMin: 1999,
+				yearMax: 1999,
 				genreMatch: "any",
 				descriptorKeys: ["melodic"],
 				descriptorMatch: "all",
@@ -180,7 +185,8 @@ test("forLaterFiltersAllowDescriptorFacetPagination allows descriptor with ALL a
 		forLaterFiltersAllowDescriptorFacetPagination(
 			normalizeForLaterFilters({
 				descriptorKeys: ["melodic"],
-				year: 1999,
+				yearMin: 1999,
+				yearMax: 1999,
 				descriptorMatch: "all",
 			}),
 		),
@@ -277,26 +283,107 @@ test("rowMatchesFilters matches genre in primary or secondary union", () => {
 	);
 });
 
-test("deriveRymStatus prefers matched scrapes over candidate status", () => {
+test("rowMatchesFilters excludes not-on-RYM rows from scrape filters", () => {
+	const row: ForLaterAlbumRowFilterInput = {
+		name: "x",
+		artistName: "y",
+		hasListened: false,
+		rymStatus: "unmatched",
+		rymNotOnSite: true,
+		primaryGenres: [],
+		secondaryGenres: [],
+		descriptors: [],
+	};
+	assert.equal(
+		rowMatchesFilters(row, normalizeForLaterFilters({ rymStatus: "all" })),
+		true,
+	);
+	assert.equal(
+		rowMatchesFilters(
+			row,
+			normalizeForLaterFilters({ rymStatus: "no_scrape" }),
+		),
+		false,
+	);
+});
+
+test("rowMatchesFilters excludes marked-as-single rows", () => {
+	const single: ForLaterAlbumRowFilterInput = {
+		name: "x",
+		artistName: "y",
+		hasListened: false,
+		rymStatus: "unmatched",
+		markedAsSingle: true,
+		primaryGenres: [],
+		secondaryGenres: [],
+		descriptors: [],
+	};
+	const album: ForLaterAlbumRowFilterInput = {
+		...single,
+		markedAsSingle: undefined,
+	};
+	const filters = normalizeForLaterFilters({});
+	assert.equal(rowMatchesFilters(single, filters), false);
+	assert.equal(rowMatchesFilters(album, filters), true);
+});
+
+test("rowMatchesFilters not_on_rym shows only not-on-RYM rows", () => {
+	const notOnRym: ForLaterAlbumRowFilterInput = {
+		name: "x",
+		artistName: "y",
+		hasListened: false,
+		rymStatus: "unmatched",
+		rymNotOnSite: true,
+		primaryGenres: [],
+		secondaryGenres: [],
+		descriptors: [],
+	};
+	const onRym: ForLaterAlbumRowFilterInput = {
+		...notOnRym,
+		rymNotOnSite: false,
+	};
+	const filters = normalizeForLaterFilters({ rymStatus: "not_on_rym" });
+	assert.equal(rowMatchesFilters(notOnRym, filters), true);
+	assert.equal(rowMatchesFilters(onRym, filters), false);
+});
+
+test("deriveRymStatus is matched when a scrape is linked", () => {
 	assert.equal(
 		deriveRymStatus({
 			rymScrapeId: "scrape_1",
-			rymCandidateUrl: "https://rateyourmusic.com/release/album/a/b",
-			rymDiscoveryStatus: "found",
 		}),
 		"matched",
 	);
 });
 
-test("deriveRymStatus reports candidate when no scrape is matched", () => {
-	assert.equal(
-		deriveRymStatus({
-			rymScrapeId: undefined,
-			rymCandidateUrl: "https://rateyourmusic.com/release/album/a/b",
-			rymDiscoveryStatus: "found",
-		}),
-		"candidate",
-	);
+test("deriveRymStatus is unmatched without a scrape", () => {
+	assert.equal(deriveRymStatus({ rymScrapeId: undefined }), "unmatched");
+});
+
+test("releaseYearMatchesForLaterFilter uses inclusive gte and lte bounds", () => {
+	const filters = normalizeForLaterFilters({ yearMin: 1970, yearMax: 1979 });
+	assert.equal(releaseYearMatchesForLaterFilter(1969, filters), false);
+	assert.equal(releaseYearMatchesForLaterFilter(1970, filters), true);
+	assert.equal(releaseYearMatchesForLaterFilter(1979, filters), true);
+	assert.equal(releaseYearMatchesForLaterFilter(1980, filters), false);
+	assert.equal(releaseYearMatchesForLaterFilter(undefined, filters), false);
+});
+
+test("rowMatchesFilters applies year range on releaseYear", () => {
+	const row: ForLaterAlbumRowFilterInput = {
+		name: "x",
+		artistName: "y",
+		releaseYear: 1975,
+		hasListened: false,
+		rymStatus: "matched",
+		primaryGenres: [],
+		secondaryGenres: [],
+		descriptors: [],
+	};
+	const inRange = normalizeForLaterFilters({ yearMin: 1970, yearMax: 1979 });
+	const outOfRange = normalizeForLaterFilters({ yearMin: 1980, yearMax: 1989 });
+	assert.equal(rowMatchesFilters(row, inRange), true);
+	assert.equal(rowMatchesFilters(row, outOfRange), false);
 });
 
 test("sortForLaterRows orders lastSeenAt, playlistAddedAt, then createdAt descending", () => {

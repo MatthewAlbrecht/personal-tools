@@ -7,18 +7,22 @@ import { ForLaterRow } from "./for-later-row";
 
 export function ForLaterList({
 	rows,
+	userId,
 	isLoading,
 	isLoadingMore,
 	canLoadMore,
 	onLoadMore,
+	onRateAlbum,
 	onAddGenreKey,
 	onAddDescriptorKey,
 }: {
 	rows: ForLaterAlbumRowData[];
+	userId: string;
 	isLoading: boolean;
 	isLoadingMore: boolean;
 	canLoadMore: boolean;
 	onLoadMore: () => void;
+	onRateAlbum?: (row: ForLaterAlbumRowData) => void;
 	onAddGenreKey?: (key: string) => void;
 	onAddDescriptorKey?: (key: string) => void;
 }) {
@@ -52,6 +56,12 @@ export function ForLaterList({
 				<ForLaterRow
 					key={row.id}
 					row={row}
+					userId={userId}
+					onRate={
+						onRateAlbum && row.userAlbumId
+							? () => onRateAlbum(row)
+							: undefined
+					}
 					onAddGenreKey={onAddGenreKey}
 					onAddDescriptorKey={onAddDescriptorKey}
 				/>

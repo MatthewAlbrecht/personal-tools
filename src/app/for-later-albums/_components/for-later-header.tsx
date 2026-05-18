@@ -6,7 +6,6 @@ import {
 	ExternalLink,
 	MoreHorizontal,
 	RefreshCw,
-	Search,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -16,13 +15,9 @@ import {
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuLabel,
-	DropdownMenuRadioGroup,
-	DropdownMenuRadioItem,
-	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { api } from "../../../../convex/_generated/api";
-import type { ForLaterAlbumRowData } from "../_utils/types";
 import { openVisibleRymLinks } from "./open-rym-links-button";
 
 type ForLaterSummary = {
@@ -48,30 +43,23 @@ export function ForLaterHeader({
 	isConnected,
 	getValidAccessToken,
 	summary,
-	visibleRows,
 	openableLinks,
-	batchSize,
-	onBatchSizeChange,
 }: {
 	userId: string;
 	spotifyDisplayName?: string;
 	isConnected: boolean;
 	getValidAccessToken: () => Promise<string | null>;
 	summary?: ForLaterSummary;
-	visibleRows: ForLaterAlbumRowData[];
 	openableLinks: Array<{ id: string; url: string }>;
-	batchSize: 5 | 10 | 20;
-	onBatchSizeChange: (size: 5 | 10 | 20) => void;
 }) {
 	const [isSyncing, setIsSyncing] = useState(false);
-	const [isFinding, setIsFinding] = useState(false);
 	const [isBackfilling, setIsBackfilling] = useState(false);
 
 	const runBackfillBatch = useMutation(
 		api.forLaterAlbums.runBackfillFilterProjectionBatch,
 	);
 
-	const isBusy = isSyncing || isFinding || isBackfilling;
+	const isBusy = isSyncing || isBackfilling;
 
 	async function handleSyncNow(): Promise<void> {
 		setIsSyncing(true);
@@ -102,47 +90,6 @@ export function ForLaterHeader({
 			toast.error("Could not sync For Later Albums");
 		} finally {
 			setIsSyncing(false);
-		}
-	}
-
-	async function handleFindRymLinks(): Promise<void> {
-		const ids = visibleRows
-			.filter(
-				(row) =>
-					row.rymStatus !== "matched" &&
-					row.rymStatus !== "searching" &&
-					!row.rymUrl,
-			)
-			.slice(0, 10)
-			.map((row) => row.albumItemId);
-
-		if (ids.length === 0) {
-			toast.message("No visible unmatched albums need RYM discovery");
-			return;
-		}
-
-		setIsFinding(true);
-		try {
-			const response = await fetch("/api/for-later-albums/find-rym-links", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ userId, forLaterAlbumItemIds: ids }),
-			});
-			const data = (await response.json()) as {
-				ok?: boolean;
-				queued?: number;
-				error?: string;
-			};
-			if (!response.ok) {
-				throw new Error(data.error ?? "RYM link discovery failed");
-			}
-			const n = typeof data.queued === "number" ? data.queued : ids.length;
-			toast.success(`Queued RYM discovery for ${n} album${n === 1 ? "" : "s"}`);
-		} catch (error) {
-			console.error("RYM discovery failed:", error);
-			toast.error("Could not start RYM discovery");
-		} finally {
-			setIsFinding(false);
 		}
 	}
 
@@ -232,13 +179,6 @@ export function ForLaterHeader({
 								{isSyncing ? "Syncing…" : "Sync now"}
 							</DropdownMenuItem>
 							<DropdownMenuItem
-								disabled={isBusy}
-								onSelect={() => void handleFindRymLinks()}
-							>
-								<Search className="size-4" />
-								{isFinding ? "Finding…" : "Find RYM links"}
-							</DropdownMenuItem>
-							<DropdownMenuItem
 								disabled={openableLinks.length === 0 || isBusy}
 								onSelect={() => openVisibleRymLinks(openableLinks)}
 							>
@@ -253,24 +193,6 @@ export function ForLaterHeader({
 								<DatabaseBackup className="size-4" />
 								{isBackfilling ? "Backfilling…" : "Backfill filter fields"}
 							</DropdownMenuItem>
-							<DropdownMenuSeparator />
-							<DropdownMenuLabel className="text-xs">
-								Tabs per open
-							</DropdownMenuLabel>
-							<DropdownMenuRadioGroup
-								value={String(batchSize)}
-								onValueChange={(value) =>
-									onBatchSizeChange(Number.parseInt(value, 10) as 5 | 10 | 20)
-								}
-							>
-								<DropdownMenuRadioItem value="5">5 tabs</DropdownMenuRadioItem>
-								<DropdownMenuRadioItem value="10">
-									10 tabs
-								</DropdownMenuRadioItem>
-								<DropdownMenuRadioItem value="20">
-									20 tabs
-								</DropdownMenuRadioItem>
-							</DropdownMenuRadioGroup>
 						</DropdownMenuContent>
 					</DropdownMenu>
 				</div>

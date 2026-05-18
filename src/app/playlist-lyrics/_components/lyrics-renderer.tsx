@@ -1,12 +1,22 @@
 import type React from "react";
 
-export function LyricsRenderer({ lyrics }: { lyrics: string }) {
+export function LyricsRenderer({
+	lyrics,
+	showSectionLabels = true,
+}: {
+	lyrics: string;
+	showSectionLabels?: boolean;
+}) {
 	return lyrics.split("\n").map((line, lineIndex) => {
 		if (line.trim() === "") {
 			return <br key={lineIndex} />;
 		}
 
 		if (/^\[.*\]$/.test(line.trim())) {
+			if (!showSectionLabels) {
+				return null;
+			}
+
 			return (
 				<span
 					key={lineIndex}

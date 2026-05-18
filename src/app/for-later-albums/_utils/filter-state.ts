@@ -14,8 +14,7 @@ const RYM_VALUES = new Set<ForLaterRymFilter>([
 	"all",
 	"has_scrape",
 	"no_scrape",
-	"has_candidate",
-	"no_candidate",
+	"not_on_rym",
 ]);
 const TAXONOMY_MATCH_VALUES = new Set<ForLaterTaxonomyMatch>(["all", "any"]);
 
@@ -56,8 +55,27 @@ function parseTaxonomyMatch(primary: string | null, legacy: string | null) {
 	return parsedPrimary ?? parsedLegacy ?? "all";
 }
 
+function parseYearBound(params: URLSearchParams, key: string): number | undefined {
+	const raw = params.get(key);
+	if (!raw || !/^\d{4}$/.test(raw)) {
+		return undefined;
+	}
+	const value = Number.parseInt(raw, 10);
+	return Number.isFinite(value) ? value : undefined;
+}
+
 export function parseForLaterFilters(params: URLSearchParams): ForLaterFilters {
-	const year = params.get("year");
+	const legacyYear = params.get("year");
+	const yearMin =
+		parseYearBound(params, "yearMin") ??
+		(legacyYear && /^\d{4}$/.test(legacyYear)
+			? Number.parseInt(legacyYear, 10)
+			: undefined);
+	const yearMax =
+		parseYearBound(params, "yearMax") ??
+		(legacyYear && /^\d{4}$/.test(legacyYear)
+			? Number.parseInt(legacyYear, 10)
+			: undefined);
 	const q = optionalString(params.get("q"));
 	const legacyTitle = optionalString(params.get("title"));
 	const legacyArtist = optionalString(params.get("artist"));
@@ -69,7 +87,8 @@ export function parseForLaterFilters(params: URLSearchParams): ForLaterFilters {
 		genreKeys: parseKeyList(params, "genre"),
 		descriptorKeys: parseKeyList(params, "descriptor"),
 		search: legacySearch,
-		year: year && /^\d{4}$/.test(year) ? Number.parseInt(year, 10) : undefined,
+		yearMin,
+		yearMax,
 		listened: parseEnum(params.get("listened"), LISTENED_VALUES, "all"),
 		rymStatus: parseEnum(params.get("rymStatus"), RYM_VALUES, "all"),
 		genreMatch: parseTaxonomyMatch(params.get("genreMatch"), legacyMatch),
@@ -91,8 +110,11 @@ export function serializeForLaterFilters(
 		params.append("descriptor", key);
 	}
 	setIfPresent(params, "q", filters.search);
-	if (filters.year !== undefined) {
-		params.set("year", String(filters.year));
+	if (filters.yearMin !== undefined) {
+		params.set("yearMin", String(filters.yearMin));
+	}
+	if (filters.yearMax !== undefined) {
+		params.set("yearMax", String(filters.yearMax));
 	}
 	setIfNotDefault(params, "listened", filters.listened, "all");
 	setIfNotDefault(params, "rymStatus", filters.rymStatus, "all");

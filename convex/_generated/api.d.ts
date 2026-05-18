@@ -24,6 +24,7 @@ import type * as _utils_geniusParser from "../_utils/geniusParser.js";
 import type * as _utils_google_rym_lucky_search from "../_utils/google_rym_lucky_search.js";
 import type * as _utils_playlistLyrics from "../_utils/playlistLyrics.js";
 import type * as _utils_rateYourMusicTaxonomy from "../_utils/rateYourMusicTaxonomy.js";
+import type * as _utils_rymGenreHierarchy from "../_utils/rymGenreHierarchy.js";
 import type * as _utils_spotify_album_list from "../_utils/spotify_album_list.js";
 import type * as articles from "../articles.js";
 import type * as auth from "../auth.js";
@@ -43,6 +44,7 @@ import type * as playlistLyrics from "../playlistLyrics.js";
 import type * as rateYourMusicScrapes from "../rateYourMusicScrapes.js";
 import type * as robRankings from "../robRankings.js";
 import type * as rooleases from "../rooleases.js";
+import type * as rymGenreHierarchy from "../rymGenreHierarchy.js";
 import type * as s3Helper from "../s3Helper.js";
 import type * as spotify from "../spotify.js";
 
@@ -66,6 +68,7 @@ declare const fullApi: ApiFromModules<{
   "_utils/google_rym_lucky_search": typeof _utils_google_rym_lucky_search;
   "_utils/playlistLyrics": typeof _utils_playlistLyrics;
   "_utils/rateYourMusicTaxonomy": typeof _utils_rateYourMusicTaxonomy;
+  "_utils/rymGenreHierarchy": typeof _utils_rymGenreHierarchy;
   "_utils/spotify_album_list": typeof _utils_spotify_album_list;
   articles: typeof articles;
   auth: typeof auth;
@@ -85,6 +88,7 @@ declare const fullApi: ApiFromModules<{
   rateYourMusicScrapes: typeof rateYourMusicScrapes;
   robRankings: typeof robRankings;
   rooleases: typeof rooleases;
+  rymGenreHierarchy: typeof rymGenreHierarchy;
   s3Helper: typeof s3Helper;
   spotify: typeof spotify;
 }>;

@@ -8,7 +8,12 @@ export function taxonomyKeyFromLabel(label: string): string {
 
 export async function ensureGenreId(
 	ctx: MutationCtx,
-	args: { name: string; href?: string | undefined },
+	args: {
+		name: string;
+		href?: string | undefined;
+		description?: string | undefined;
+		isTopLevel?: boolean | undefined;
+	},
 	now: number,
 ): Promise<Id<"rateYourMusicGenres">> {
 	const label = args.name.trim();
@@ -22,18 +27,46 @@ export async function ensureGenreId(
 		.first();
 
 	const href = args.href?.trim() || undefined;
+	const description = args.description?.trim() || undefined;
 
 	if (!existing) {
 		return await ctx.db.insert("rateYourMusicGenres", {
 			key,
 			label,
 			...(href ? { href } : {}),
+			...(description ? { description } : {}),
+			...(args.isTopLevel !== undefined ? { isTopLevel: args.isTopLevel } : {}),
 			createdAt: now,
+			updatedAt: now,
 		});
 	}
 
-	if (href && !existing.href) {
-		await ctx.db.patch(existing._id, { href });
+	const patch: Partial<{
+		label: string;
+		href: string;
+		description: string;
+		isTopLevel: boolean;
+		updatedAt: number;
+	}> = {};
+
+	if (label && existing.label !== label) {
+		patch.label = label;
+	}
+	if (href && existing.href !== href) {
+		patch.href = href;
+	}
+	if (description && existing.description !== description) {
+		patch.description = description;
+	}
+	if (
+		args.isTopLevel !== undefined &&
+		existing.isTopLevel !== args.isTopLevel
+	) {
+		patch.isTopLevel = args.isTopLevel;
+	}
+	if (Object.keys(patch).length > 0) {
+		patch.updatedAt = now;
+		await ctx.db.patch(existing._id, patch);
 	}
 
 	return existing._id;

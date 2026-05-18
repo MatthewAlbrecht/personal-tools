@@ -84,6 +84,7 @@ function PlaylistLyricsReaderContent({
 	const [showAlbum, setShowAlbum] = useState(true);
 	const [showYear, setShowYear] = useState(true);
 	const [showAlbumArt, setShowAlbumArt] = useState(false);
+	const [showSectionLabels, setShowSectionLabels] = useState(true);
 	const backHref =
 		variant === "public" ? "/public/playlist-lyrics" : "/playlist-lyrics";
 	const backLabel =
@@ -156,7 +157,7 @@ function PlaylistLyricsReaderContent({
 
 				<div className="mt-4 border-t pt-4">
 					<p className="mb-3 font-medium text-sm">Display options</p>
-					<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+					<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
 						<ToggleControl
 							id="show-artist"
 							checked={showArtist}
@@ -186,6 +187,12 @@ function PlaylistLyricsReaderContent({
 							checked={showGeniusInfo}
 							onCheckedChange={setShowGeniusInfo}
 							label="Show Genius info"
+						/>
+						<ToggleControl
+							id="show-section-labels"
+							checked={showSectionLabels}
+							onCheckedChange={setShowSectionLabels}
+							label="Show song part labels"
 						/>
 					</div>
 				</div>
@@ -267,7 +274,10 @@ function PlaylistLyricsReaderContent({
 
 								<div className="font-sans leading-relaxed print:text-base">
 									{song.scrape?.lyrics ? (
-										<LyricsRenderer lyrics={song.scrape.lyrics} />
+										<LyricsRenderer
+											lyrics={song.scrape.lyrics}
+											showSectionLabels={showSectionLabels}
+										/>
 									) : (
 										<p className="text-muted-foreground">
 											Lyrics are not available for this song.

@@ -33,7 +33,8 @@ test("projectionMatchesFilters ALL requires every predicate when multiple facets
 		filterGenreKeysSorted: ["rock"],
 	});
 	const filters = normalizeForLaterFilters({
-		year: 1999,
+		yearMin: 1999,
+		yearMax: 1999,
 		genreKeys: ["rock"],
 	});
 	assert.equal(projectionMatchesFilters(doc, filters), true);
@@ -59,7 +60,8 @@ test("projectionMatchesFilters core facets AND descriptor ANY among selected key
 		filterDescriptorKeysSorted: ["x", "y"],
 	});
 	const filters = normalizeForLaterFilters({
-		year: 1999,
+		yearMin: 1999,
+		yearMax: 1999,
 		descriptorKeys: ["x", "z"],
 		descriptorMatch: "any",
 	});
@@ -74,7 +76,8 @@ test("projectionMatchesFilters core AND applies across taxonomy groups", () => {
 		filterDescriptorKeysSorted: ["x"],
 	});
 	const filters = normalizeForLaterFilters({
-		year: 1999,
+		yearMin: 1999,
+		yearMax: 1999,
 		descriptorKeys: ["x"],
 		descriptorMatch: "any",
 	});
@@ -95,4 +98,66 @@ test("skipSearchPredicate skips substring gate used after FTS pre-filter", () =>
 		projectionMatchesFilters(doc, filters, { skipSearchPredicate: true }),
 		true,
 	);
+});
+
+test("projectionMatchesFilters excludes not-on-RYM rows from scrape filters", () => {
+	const doc = stubDoc({
+		_id: "item5" as Id<"forLaterAlbumItems">,
+		_creationTime: 0,
+		filterHasRymUrl: false,
+		filterRymNotOnSite: true,
+	});
+	const filters = normalizeForLaterFilters({ rymStatus: "no_scrape" });
+	assert.equal(projectionMatchesFilters(doc, filters), false);
+	assert.equal(
+		projectionMatchesFilters(
+			doc,
+			normalizeForLaterFilters({ rymStatus: "all" }),
+		),
+		true,
+	);
+});
+
+test("projectionMatchesFilters applies inclusive year range on filterReleaseYear", () => {
+	const doc = stubDoc({
+		_id: "itemRange" as Id<"forLaterAlbumItems">,
+		_creationTime: 0,
+		filterReleaseYear: 1975,
+	});
+	const inRange = normalizeForLaterFilters({ yearMin: 1970, yearMax: 1979 });
+	const outOfRange = normalizeForLaterFilters({ yearMin: 1980, yearMax: 1989 });
+	assert.equal(projectionMatchesFilters(doc, inRange), true);
+	assert.equal(projectionMatchesFilters(doc, outOfRange), false);
+});
+
+test("projectionMatchesFilters excludes marked-as-single rows from all lists", () => {
+	const single = stubDoc({
+		_id: "item8" as Id<"forLaterAlbumItems">,
+		_creationTime: 0,
+		filterMarkedAsSingle: true,
+	});
+	const album = stubDoc({
+		_id: "item9" as Id<"forLaterAlbumItems">,
+		_creationTime: 0,
+		filterMarkedAsSingle: undefined,
+	});
+	const filters = normalizeForLaterFilters({});
+	assert.equal(projectionMatchesFilters(single, filters), false);
+	assert.equal(projectionMatchesFilters(album, filters), true);
+});
+
+test("projectionMatchesFilters not_on_rym shows only not-on-RYM rows", () => {
+	const notOnRym = stubDoc({
+		_id: "item6" as Id<"forLaterAlbumItems">,
+		_creationTime: 0,
+		filterRymNotOnSite: true,
+	});
+	const onRym = stubDoc({
+		_id: "item7" as Id<"forLaterAlbumItems">,
+		_creationTime: 0,
+		filterRymNotOnSite: undefined,
+	});
+	const filters = normalizeForLaterFilters({ rymStatus: "not_on_rym" });
+	assert.equal(projectionMatchesFilters(notOnRym, filters), true);
+	assert.equal(projectionMatchesFilters(onRym, filters), false);
 });

@@ -17,7 +17,8 @@
 		"infra:preview": "pulumi preview",
 		"infra:destroy": "pulumi destroy",
 		"migrate:lyrics": "node scripts/migrate-lyrics-to-prod.js",
-		"backfill:for-later-projection": "node scripts/backfill-for-later-filter-projection.mjs"
+		"backfill:for-later-projection": "node scripts/backfill-for-later-filter-projection.mjs",
+		"import:rym-genres": "tsx scripts/import-rym-genre-hierarchy.ts genresfromrym.hml"
 	},
 	"dependencies": {
 		"@ai-sdk/openai": "^2.0.80",

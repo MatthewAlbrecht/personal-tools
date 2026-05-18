@@ -3,8 +3,10 @@
 import { usePaginatedQuery, useQuery } from "convex/react";
 import { Disc3 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useMemo } from "react";
+import { AlbumRatingDrawer } from "~/components/album-rating-drawer";
 import { LoginPrompt } from "~/components/login-prompt";
+import { useAlbumRatingDrawer } from "~/lib/hooks/use-album-rating-drawer";
 import { useSpotifyAuth } from "~/lib/hooks/use-spotify-auth";
 import { api } from "../../../convex/_generated/api";
 import { ForLaterFilters } from "./_components/for-later-filters";
@@ -15,7 +17,11 @@ import {
 	parseForLaterFilters,
 	serializeForLaterFilters,
 } from "./_utils/filter-state";
-import type { ForLaterFilters as ForLaterFiltersState } from "./_utils/types";
+import { albumToRateFromForLaterRow } from "./_utils/rating";
+import type {
+	ForLaterAlbumRowData,
+	ForLaterFilters as ForLaterFiltersState,
+} from "./_utils/types";
 
 export default function ForLaterAlbumsPage() {
 	return (
@@ -38,8 +44,6 @@ function ForLaterAlbumsPageInner() {
 	const searchParams = useSearchParams();
 	const { userId, isLoading, isConnected, getValidAccessToken, connection } =
 		useSpotifyAuth();
-	const [batchSize, setBatchSize] = useState<5 | 10 | 20>(10);
-
 	const urlSearchParams = searchParams ?? new URLSearchParams();
 	const filters = useMemo(
 		() => parseForLaterFilters(urlSearchParams),
@@ -59,8 +63,24 @@ function ForLaterAlbumsPageInner() {
 
 	const openableLinks = useQuery(
 		api.forLaterAlbums.listOpenableRymLinks,
-		userId ? { userId, filters, limit: batchSize } : "skip",
+		userId ? { userId, filters, limit: 10 } : "skip",
 	);
+
+	const {
+		albumToRate,
+		openRatingDrawer,
+		closeRatingDrawer,
+		handleSaveRating,
+		ratedAlbumsForYear,
+	} = useAlbumRatingDrawer({ userId });
+
+	function handleRateAlbum(row: ForLaterAlbumRowData): void {
+		const album = albumToRateFromForLaterRow(row);
+		if (!album) {
+			return;
+		}
+		openRatingDrawer(album);
+	}
 
 	function updateFilters(nextFilters: ForLaterFiltersState): void {
 		const nextParams = serializeForLaterFilters(nextFilters);
@@ -111,22 +131,30 @@ function ForLaterAlbumsPageInner() {
 					isConnected={isConnected}
 					getValidAccessToken={getValidAccessToken}
 					summary={summary}
-					visibleRows={rows.results ?? []}
 					openableLinks={openableLinks ?? []}
-					batchSize={batchSize}
-					onBatchSizeChange={setBatchSize}
 				/>
 				<ForLaterFilters filters={filters} onChange={updateFilters} />
 				<ForLaterList
 					rows={rows.results ?? []}
+					userId={userId}
 					isLoading={rows.status === "LoadingFirstPage"}
 					isLoadingMore={rows.status === "LoadingMore"}
 					canLoadMore={rows.status === "CanLoadMore"}
 					onLoadMore={() => rows.loadMore(30)}
+					onRateAlbum={handleRateAlbum}
 					onAddGenreKey={addGenreKeyToFilters}
 					onAddDescriptorKey={addDescriptorKeyToFilters}
 				/>
 			</div>
+			<AlbumRatingDrawer
+				albumToRate={albumToRate}
+				ratedAlbumsForYear={ratedAlbumsForYear}
+				open={albumToRate !== null}
+				onOpenChange={(open) => {
+					if (!open) closeRatingDrawer();
+				}}
+				onSave={handleSaveRating}
+			/>
 		</div>
 	);
 }

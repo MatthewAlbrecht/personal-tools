@@ -221,11 +221,12 @@ export async function matchForLaterAlbumsForRymScrape(
 		args.artists.map((artist) => artist.name),
 	);
 
+	/** Bounded read: full-table `.collect()` exceeds Convex limits at scale. */
 	const albums = await ctx.db
 		.query("spotifyAlbums")
 		.withIndex("by_createdAt")
 		.order("desc")
-		.collect();
+		.take(1024);
 
 	const matchedCanonical: Doc<"spotifyAlbums">[] = [];
 	for (const album of albums) {

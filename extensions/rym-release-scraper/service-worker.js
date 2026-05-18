@@ -44,7 +44,7 @@ async function forwardCaptureToBackend(payload) {
 	const originRaw =
 		(typeof cfg[SETTINGS_BACKEND_ORIGIN] === "string" &&
 			cfg[SETTINGS_BACKEND_ORIGIN].trim()) ||
-		"http://127.0.0.1:1333";
+		"https://www.moooose.dev";
 	const origin = originRaw.replace(/\/+$/, "");
 	const secret =
 		typeof cfg[SETTINGS_BACKEND_SECRET] === "string"

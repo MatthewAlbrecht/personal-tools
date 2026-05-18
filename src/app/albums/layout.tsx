@@ -7,7 +7,7 @@ import { LoginPrompt } from "~/components/login-prompt";
 import { SyncAlbumsButton } from "~/components/sync-albums-button";
 import { SpotifyConnection } from "../spotify-playlister/_components/spotify-connection";
 import { AddListenDrawer } from "./_components/add-listen-view";
-import { AlbumRanker } from "./_components/album-ranker";
+import { AlbumRatingDrawer } from "~/components/album-rating-drawer";
 import { AlbumsProvider, useAlbums } from "./_context/albums-context";
 
 const TABS = [
@@ -146,18 +146,15 @@ function AlbumsLayoutContent({ children }: { children: React.ReactNode }) {
 				isSaving={isAddingListen}
 			/>
 
-			{/* Album Ranker Drawer */}
-			{ratedAlbumsForYear && (
-				<AlbumRanker
-					albumToRate={albumToRate}
-					existingRankedAlbums={ratedAlbumsForYear}
-					open={albumToRate !== null}
-					onOpenChange={(open) => {
-						if (!open) closeRatingDrawer();
-					}}
-					onSave={handleSaveRating}
-				/>
-			)}
+			<AlbumRatingDrawer
+				albumToRate={albumToRate}
+				ratedAlbumsForYear={ratedAlbumsForYear}
+				open={albumToRate !== null}
+				onOpenChange={(open) => {
+					if (!open) closeRatingDrawer();
+				}}
+				onSave={handleSaveRating}
+			/>
 		</div>
 	);
 }

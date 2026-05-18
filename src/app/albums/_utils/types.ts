@@ -76,14 +76,4 @@ export type UserAlbumData = {
 	rating?: number;
 };
 
-// Album to rate in the ranker drawer
-export type AlbumToRate = {
-	userAlbumId: string;
-	albumId: string;
-	name: string;
-	artistName: string;
-	imageUrl?: string;
-	releaseDate?: string;
-	currentRating?: number; // Existing rating for re-ranking
-	currentPosition?: number; // Existing position for re-ranking
-};
+export type { AlbumToRate } from "~/lib/album-rating-types";

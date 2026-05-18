@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Button } from "~/components/ui/button";
 import {
 	Combobox,
@@ -24,6 +24,7 @@ import type {
 	ForLaterFilters as ForLaterFiltersState,
 	ForLaterTaxonomyMatch,
 } from "../_utils/types";
+import { YearRangePicker } from "./year-range-picker";
 
 export function ForLaterFilters({
 	filters,
@@ -35,7 +36,7 @@ export function ForLaterFilters({
 	const genreOptions = useQuery(
 		api.rateYourMusicScrapes.listRateYourMusicGenreKeys,
 		{
-			limit: 500,
+			limit: 3000,
 		},
 	);
 	const descriptorOptions = useQuery(
@@ -99,14 +100,6 @@ export function ForLaterFilters({
 		});
 	}, [debouncedSearch]);
 
-	const [yearDraft, setYearDraft] = useState(() =>
-		filters.year !== undefined ? String(filters.year) : "",
-	);
-
-	useEffect(() => {
-		setYearDraft(filters.year !== undefined ? String(filters.year) : "");
-	}, [filters.year]);
-
 	return (
 		<section className="space-y-2">
 			<div className="rounded-lg border bg-card p-4">
@@ -123,33 +116,12 @@ export function ForLaterFilters({
 					</div>
 					<div className="flex flex-col gap-1.5">
 						<Label htmlFor="for-later-filter-year">Release year</Label>
-						<Input
-							id="for-later-filter-year"
-							value={yearDraft}
-							placeholder="YYYY"
-							inputMode="numeric"
-							autoComplete="off"
-							onChange={(event) => {
-								const digitsOnly = event.target.value
-									.replace(/\D/g, "")
-									.slice(0, 4);
-								setYearDraft(digitsOnly);
-								if (digitsOnly.length === 4) {
-									patchFilters({
-										year: Number.parseInt(digitsOnly, 10),
-									});
-								} else if (digitsOnly.length === 0) {
-									patchFilters({ year: undefined });
-								}
-							}}
-							onBlur={(event) => {
-								const blurred = event.target.value.replace(/\D/g, "");
-								if (blurred.length > 0 && blurred.length < 4) {
-									setYearDraft(
-										filters.year !== undefined ? String(filters.year) : "",
-									);
-								}
-							}}
+						<YearRangePicker
+							yearMin={filters.yearMin}
+							yearMax={filters.yearMax}
+							onCommit={({ yearMin, yearMax }) =>
+								patchFilters({ yearMin, yearMax })
+							}
 						/>
 					</div>
 					<div className="flex flex-col gap-1.5">
@@ -287,49 +259,86 @@ export function ForLaterFilters({
 							</ComboboxContent>
 						</Combobox>
 					</div>
-					<div className="flex flex-col gap-1.5">
-						<Label htmlFor="for-later-filter-rym">RYM link status</Label>
-						<select
-							id="for-later-filter-rym"
-							value={filters.rymStatus}
-							onChange={(event) =>
-								patchFilters({
-									rymStatus: event.target
-										.value as ForLaterFiltersState["rymStatus"],
-								})
-							}
-							className="rounded-md border bg-background px-3 py-2 text-sm"
+					<div className="flex min-w-0 flex-col gap-1.5">
+						<Label id="for-later-filter-rym">RYM</Label>
+						<fieldset
+							className="m-0 inline-flex min-w-0 max-w-full flex-nowrap self-start overflow-x-auto rounded-md border border-border bg-background px-0.5 py-0.5"
+							aria-labelledby="for-later-filter-rym"
 						>
-							<option value="all">All RYM states</option>
-							<option value="has_scrape">Has scrape</option>
-							<option value="no_scrape">No scrape</option>
-							<option value="has_candidate">Has candidate URL</option>
-							<option value="no_candidate">No candidate URL</option>
-						</select>
-					</div>
-					<div className="flex flex-col justify-end gap-1.5">
-						<Label htmlFor="for-later-clear-filters">Actions</Label>
-						<Button
-							id="for-later-clear-filters"
-							type="button"
-							variant="outline"
-							onClick={() =>
-								onChange({
-									genreKeys: [],
-									descriptorKeys: [],
-									search: undefined,
-									year: undefined,
-									listened: "all",
-									rymStatus: "all",
-									genreMatch: "all",
-									descriptorMatch: "all",
-								})
-							}
-						>
-							Clear filters
-						</Button>
+							<legend className="sr-only">Filter by RYM link status</legend>
+							<button
+								type="button"
+								onClick={() => patchFilters({ rymStatus: "all" })}
+								className={cn(
+									"shrink-0 whitespace-nowrap rounded px-2 py-1 font-medium text-sm",
+									filters.rymStatus === "all"
+										? "bg-muted shadow-sm"
+										: "text-muted-foreground hover:text-foreground",
+								)}
+							>
+								All
+							</button>
+							<button
+								type="button"
+								onClick={() => patchFilters({ rymStatus: "has_scrape" })}
+								className={cn(
+									"shrink-0 whitespace-nowrap rounded px-2 py-1 font-medium text-sm",
+									filters.rymStatus === "has_scrape"
+										? "bg-muted shadow-sm"
+										: "text-muted-foreground hover:text-foreground",
+								)}
+							>
+								Scrape
+							</button>
+							<button
+								type="button"
+								onClick={() => patchFilters({ rymStatus: "no_scrape" })}
+								className={cn(
+									"shrink-0 whitespace-nowrap rounded px-2 py-1 font-medium text-sm",
+									filters.rymStatus === "no_scrape"
+										? "bg-muted shadow-sm"
+										: "text-muted-foreground hover:text-foreground",
+								)}
+							>
+								No scrape
+							</button>
+							<button
+								type="button"
+								onClick={() => patchFilters({ rymStatus: "not_on_rym" })}
+								className={cn(
+									"shrink-0 whitespace-nowrap rounded px-2 py-1 font-medium text-sm",
+									filters.rymStatus === "not_on_rym"
+										? "bg-muted shadow-sm"
+										: "text-muted-foreground hover:text-foreground",
+								)}
+							>
+								No RYM
+							</button>
+						</fieldset>
 					</div>
 				</div>
+			</div>
+			<div className="flex justify-end">
+				<Button
+					id="for-later-clear-filters"
+					type="button"
+					variant="outline"
+					onClick={() =>
+						onChange({
+							genreKeys: [],
+							descriptorKeys: [],
+							search: undefined,
+							yearMin: undefined,
+							yearMax: undefined,
+							listened: "all",
+							rymStatus: "all",
+							genreMatch: "all",
+							descriptorMatch: "all",
+						})
+					}
+				>
+					Clear filters
+				</Button>
 			</div>
 		</section>
 	);

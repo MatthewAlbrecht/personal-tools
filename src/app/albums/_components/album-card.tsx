@@ -3,7 +3,9 @@
 import { Check, Disc3, RefreshCw } from "lucide-react";
 import Image from "next/image";
 import { forwardRef } from "react";
-import { getRatingColors, getTierShortLabel } from "~/lib/album-tiers";
+import { AlbumListenCountBadge } from "~/components/album-listen-count-badge";
+import { AlbumRatingBadge } from "~/components/album-rating-badge";
+import { AlbumUnrankedBadge } from "~/components/album-unranked-badge";
 import { cn } from "~/lib/utils";
 
 type AlbumCardProps = {
@@ -52,7 +54,6 @@ export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
 				})
 			: null;
 
-		const ratingColors = rating ? getRatingColors(rating) : null;
 		const isRated = rating !== undefined;
 
 		return (
@@ -104,43 +105,26 @@ export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
 					</span>
 
 					{/* Rating Badge or Unranked Button */}
-					{isRated && ratingColors ? (
-						// Rated - show colored tier badge (clickable if onRate provided)
-						onRate ? (
-							<button
-								type="button"
-								onClick={(e) => {
-									e.stopPropagation();
-									onRate();
-								}}
-								className={`inline-flex items-center rounded-full border px-2 py-0.5 font-medium text-[10px] transition-opacity hover:opacity-80 ${ratingColors.bg} ${ratingColors.text} ${ratingColors.border}`}
-								title="Re-rank this album"
-							>
-								{getTierShortLabel(rating)}
-							</button>
-						) : (
-							<span
-								className={`inline-flex items-center rounded-full border px-2 py-0.5 font-medium text-[10px] ${ratingColors.bg} ${ratingColors.text} ${ratingColors.border}`}
-							>
-								{getTierShortLabel(rating)}
-							</span>
-						)
-					) : (
-						// Unranked - show subtle ghost button (only if onRate is provided)
-						onRate && (
-							<button
-								type="button"
-								onClick={(e) => {
-									e.stopPropagation();
-									onRate();
-								}}
-								className="inline-flex items-center rounded-full border border-muted-foreground/20 border-dashed px-2 py-0.5 font-medium text-[10px] text-muted-foreground/40 transition-all hover:border-muted-foreground/50 hover:text-muted-foreground"
-								title="Rank this album"
-							>
-								Unranked
-							</button>
-						)
-					)}
+					{isRated ? (
+						<AlbumRatingBadge
+							rating={rating}
+							onClick={
+								onRate
+									? (event) => {
+											event.stopPropagation();
+											onRate();
+										}
+									: undefined
+							}
+						/>
+					) : onRate ? (
+						<AlbumUnrankedBadge
+							onClick={(e) => {
+								e.stopPropagation();
+								onRate();
+							}}
+						/>
+					) : null}
 
 					{/* Listened Again Indicator */}
 					{listenedAgain && isRated && (
@@ -153,16 +137,9 @@ export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
 					)}
 
 					{/* Listen ordinal */}
-					{listenOrdinal !== undefined &&
-						(listenOrdinal === 1 ? (
-							<span className="inline-flex items-center rounded-full bg-emerald-500/15 px-2 py-0.5 font-medium text-[10px] text-emerald-600 dark:text-emerald-400">
-								First
-							</span>
-						) : (
-							<span className="inline-flex items-center rounded-full bg-muted px-1.5 py-0.5 font-medium text-[10px] text-muted-foreground">
-								{listenOrdinal}×
-							</span>
-						))}
+					{listenOrdinal !== undefined ? (
+						<AlbumListenCountBadge listenCount={listenOrdinal} />
+					) : null}
 
 					{/* Date/Year */}
 					<div className="text-right text-muted-foreground text-xs">

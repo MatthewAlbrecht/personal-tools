@@ -16,6 +16,7 @@ import {
 	forLaterFiltersAllowGenreFacetPagination,
 	forLaterFiltersAllowIndexedScan,
 	forLaterPostFilterScanSize,
+	forLaterSingleIndexedReleaseYear,
 	normalizeForLaterFilters,
 	rowMatchesFilters,
 	sortForLaterRows,
@@ -51,8 +52,7 @@ const rymFilterValidator = v.union(
 	v.literal("all"),
 	v.literal("has_scrape"),
 	v.literal("no_scrape"),
-	v.literal("has_candidate"),
-	v.literal("no_candidate"),
+	v.literal("not_on_rym"),
 );
 
 const taxonomyMatchValidator = v.union(v.literal("all"), v.literal("any"));
@@ -61,6 +61,9 @@ const forLaterFiltersValidator = v.object({
 	genreKeys: v.optional(v.array(v.string())),
 	descriptorKeys: v.optional(v.array(v.string())),
 	search: v.optional(v.string()),
+	yearMin: v.optional(v.number()),
+	yearMax: v.optional(v.number()),
+	/** @deprecated Use yearMin/yearMax */
 	year: v.optional(v.number()),
 	listened: v.optional(listenedFilterValidator),
 	rymStatus: v.optional(rymFilterValidator),
@@ -92,21 +95,12 @@ const forLaterAlbumRowValidator = v.object({
 	removedAt: v.optional(v.number()),
 	isActive: v.boolean(),
 	hasListened: v.boolean(),
+	userAlbumId: v.optional(v.id("userAlbums")),
 	listenCount: v.number(),
 	lastListenedAt: v.optional(v.number()),
-	rymStatus: v.union(
-		v.literal("matched"),
-		v.literal("candidate"),
-		v.literal("searching"),
-		v.literal("not_found"),
-		v.literal("failed"),
-		v.literal("not_started"),
-	),
+	rating: v.optional(v.number()),
+	rymStatus: v.union(v.literal("matched"), v.literal("unmatched")),
 	rymUrl: v.optional(v.string()),
-	rymCandidateConfidence: v.optional(
-		v.union(v.literal("high"), v.literal("medium"), v.literal("low")),
-	),
-	rymDiscoveryReason: v.optional(v.string()),
 	rymMatchMethod: v.optional(
 		v.union(
 			v.literal("spotify_id"),
@@ -114,6 +108,8 @@ const forLaterAlbumRowValidator = v.object({
 			v.literal("manual"),
 		),
 	),
+	rymNotOnSite: v.optional(v.boolean()),
+	markedAsSingle: v.optional(v.boolean()),
 	primaryGenres: v.array(tagValidator),
 	secondaryGenres: v.array(tagValidator),
 	descriptors: v.array(tagValidator),
@@ -136,19 +132,15 @@ type ForLaterAlbumRow = {
 	removedAt?: number;
 	isActive: boolean;
 	hasListened: boolean;
+	userAlbumId?: Id<"userAlbums">;
 	listenCount: number;
 	lastListenedAt?: number;
-	rymStatus:
-		| "matched"
-		| "candidate"
-		| "searching"
-		| "not_found"
-		| "failed"
-		| "not_started";
+	rating?: number;
+	rymStatus: "matched" | "unmatched";
 	rymUrl?: string;
-	rymCandidateConfidence?: "high" | "medium" | "low";
-	rymDiscoveryReason?: string;
 	rymMatchMethod?: "spotify_id" | "title_artist" | "manual";
+	rymNotOnSite?: boolean;
+	markedAsSingle?: boolean;
 	primaryGenres: Array<{ key: string; label: string }>;
 	secondaryGenres: Array<{ key: string; label: string }>;
 	descriptors: Array<{ key: string; label: string }>;
@@ -236,8 +228,10 @@ async function loadListenSummary(
 	args: { userId: string; albumId: Id<"spotifyAlbums"> },
 ): Promise<{
 	hasListened: boolean;
+	userAlbumId?: Id<"userAlbums">;
 	listenCount: number;
 	lastListenedAt?: number;
+	rating?: number;
 }> {
 	const userAlbum = await ctx.db
 		.query("userAlbums")
@@ -269,8 +263,10 @@ async function loadListenSummary(
 
 	return {
 		hasListened: true,
+		userAlbumId: userAlbum._id,
 		listenCount: userAlbum.listenCount,
 		...(lastListenedAt !== undefined ? { lastListenedAt } : {}),
+		...(userAlbum.rating !== undefined ? { rating: userAlbum.rating } : {}),
 	};
 }
 
@@ -393,11 +389,9 @@ async function syncForLaterItemFilterProjection(
 
 	const filterReleaseYear = parseReleaseYearFromIsoDate(album?.releaseDate);
 	const filterHasListened = listenSummary.hasListened;
-	const rymUrl = scrape?.rymUrl ?? item.rymCandidateUrl;
+	const rymUrl = scrape?.rymUrl;
 	const rymStatus = deriveRymStatus({
 		rymScrapeId: resolvedScrapeId,
-		rymCandidateUrl: item.rymCandidateUrl,
-		rymDiscoveryStatus: item.rymDiscoveryStatus,
 	});
 	const filterRymMatched = rymStatus === "matched";
 	const filterHasRymUrl = Boolean(rymUrl);
@@ -418,6 +412,8 @@ async function syncForLaterItemFilterProjection(
 		filterHasListened,
 		filterRymMatched,
 		filterHasRymUrl,
+		filterRymNotOnSite: item.rymNotOnSite === true ? true : undefined,
+		filterMarkedAsSingle: item.markedAsSingle === true ? true : undefined,
 		filterGenreKeysSorted,
 		filterDescriptorKeysSorted,
 		filterSearchText: buildFilterSearchText({
@@ -472,11 +468,9 @@ async function hydrateForLaterAlbumRow(
 
 	const rymStatus = deriveRymStatus({
 		rymScrapeId: resolvedScrapeId,
-		rymCandidateUrl: args.item.rymCandidateUrl,
-		rymDiscoveryStatus: args.item.rymDiscoveryStatus,
 	});
 
-	const rymUrl = scrape?.rymUrl ?? args.item.rymCandidateUrl;
+	const rymUrl = scrape?.rymUrl;
 	const rymMatchMethodOut = args.item.rymMatchMethod ?? linkMethod;
 
 	const row: ForLaterAlbumRow = {
@@ -500,17 +494,26 @@ async function hydrateForLaterAlbumRow(
 		...listenSummary,
 		rymStatus,
 		...(rymUrl ? { rymUrl } : {}),
-		...(args.item.rymCandidateConfidence
-			? { rymCandidateConfidence: args.item.rymCandidateConfidence }
-			: {}),
-		...(args.item.rymDiscoveryReason
-			? { rymDiscoveryReason: args.item.rymDiscoveryReason }
-			: {}),
 		...(rymMatchMethodOut ? { rymMatchMethod: rymMatchMethodOut } : {}),
+		...(args.item.rymNotOnSite === true ? { rymNotOnSite: true } : {}),
+		...(args.item.markedAsSingle === true ? { markedAsSingle: true } : {}),
 		...tags,
 	};
 
 	return row;
+}
+
+function appendForLaterListExclusionFilters(
+	// biome-ignore lint/suspicious/noExplicitAny: Convex indexed `.filter` chains lack one exported builder type across indexes.
+	q: any,
+	// biome-ignore lint/suspicious/noExplicitAny: same
+): any {
+	return q.filter(
+		(fb: {
+			neq: (a: unknown, b: unknown) => unknown;
+			field: (name: string) => unknown;
+		}) => fb.neq(fb.field("filterMarkedAsSingle"), true),
+	);
 }
 
 function appendForLaterProjectionFilters(
@@ -524,13 +527,21 @@ function appendForLaterProjectionFilters(
 	q: any,
 	// biome-ignore lint/suspicious/noExplicitAny: same
 ): any {
-	let out = q;
-	if (!options.skipYear && filters.year !== undefined) {
+	let out = appendForLaterListExclusionFilters(q);
+	if (!options.skipYear && filters.yearMin !== undefined) {
 		out = out.filter(
 			(fb: {
-				eq: (a: unknown, b: unknown) => unknown;
+				gte: (a: unknown, b: unknown) => unknown;
 				field: (name: string) => unknown;
-			}) => fb.eq(fb.field("filterReleaseYear"), filters.year),
+			}) => fb.gte(fb.field("filterReleaseYear"), filters.yearMin),
+		);
+	}
+	if (!options.skipYear && filters.yearMax !== undefined) {
+		out = out.filter(
+			(fb: {
+				lte: (a: unknown, b: unknown) => unknown;
+				field: (name: string) => unknown;
+			}) => fb.lte(fb.field("filterReleaseYear"), filters.yearMax),
 		);
 	}
 	if (!options.skipListened && filters.listened === "listened") {
@@ -548,34 +559,36 @@ function appendForLaterProjectionFilters(
 			}) => fb.eq(fb.field("filterHasListened"), false),
 		);
 	}
-	if (!options.skipRym && filters.rymStatus === "has_scrape") {
+	if (!options.skipRym && filters.rymStatus === "not_on_rym") {
 		out = out.filter(
 			(fb: {
 				eq: (a: unknown, b: unknown) => unknown;
 				field: (name: string) => unknown;
-			}) => fb.eq(fb.field("filterRymMatched"), true),
+			}) => fb.eq(fb.field("filterRymNotOnSite"), true),
 		);
-	} else if (!options.skipRym && filters.rymStatus === "no_scrape") {
+	} else if (!options.skipRym && filters.rymStatus !== "all") {
 		out = out.filter(
 			(fb: {
 				eq: (a: unknown, b: unknown) => unknown;
+				neq: (a: unknown, b: unknown) => unknown;
 				field: (name: string) => unknown;
-			}) => fb.eq(fb.field("filterRymMatched"), false),
+			}) => fb.neq(fb.field("filterRymNotOnSite"), true),
 		);
-	} else if (!options.skipRym && filters.rymStatus === "has_candidate") {
-		out = out.filter(
-			(fb: {
-				eq: (a: unknown, b: unknown) => unknown;
-				field: (name: string) => unknown;
-			}) => fb.eq(fb.field("filterHasRymUrl"), true),
-		);
-	} else if (!options.skipRym && filters.rymStatus === "no_candidate") {
-		out = out.filter(
-			(fb: {
-				eq: (a: unknown, b: unknown) => unknown;
-				field: (name: string) => unknown;
-			}) => fb.eq(fb.field("filterHasRymUrl"), false),
-		);
+		if (filters.rymStatus === "has_scrape") {
+			out = out.filter(
+				(fb: {
+					eq: (a: unknown, b: unknown) => unknown;
+					field: (name: string) => unknown;
+				}) => fb.eq(fb.field("filterRymMatched"), true),
+			);
+		} else if (filters.rymStatus === "no_scrape") {
+			out = out.filter(
+				(fb: {
+					eq: (a: unknown, b: unknown) => unknown;
+					field: (name: string) => unknown;
+				}) => fb.eq(fb.field("filterRymMatched"), false),
+			);
+		}
 	}
 	return out;
 }
@@ -622,13 +635,6 @@ async function paginateForLaterAlbumItemsIndexed(
 			.query("forLaterAlbumItems")
 			.withIndex("by_userId_filterRymMatched_lastSeenAt", (iq) =>
 				iq.eq("userId", userId).eq("filterRymMatched", choice.value),
-			);
-		base = appendForLaterProjectionFilters(filters, { skipRym: true }, base);
-	} else if (choice.kind === "rymUrl") {
-		base = ctx.db
-			.query("forLaterAlbumItems")
-			.withIndex("by_userId_filterHasRymUrl_lastSeenAt", (iq) =>
-				iq.eq("userId", userId).eq("filterHasRymUrl", choice.value),
 			);
 		base = appendForLaterProjectionFilters(filters, { skipRym: true }, base);
 	} else {
@@ -683,6 +689,8 @@ async function hydrateMatchingRowsFromFacetItemRefs(
 					hasListened: row.hasListened,
 					rymStatus: row.rymStatus,
 					rymUrl: row.rymUrl,
+					rymNotOnSite: row.rymNotOnSite,
+					markedAsSingle: row.markedAsSingle,
 					primaryGenres: row.primaryGenres,
 					secondaryGenres: row.secondaryGenres,
 					descriptors: row.descriptors,
@@ -716,8 +724,9 @@ async function loadForLaterAlbumRows(
 			.query("forLaterAlbumItems")
 			.withSearchIndex("search_forLaterAlbumItems", (q) => {
 				let qb = q.search("filterSearchText", term).eq("userId", args.userId);
-				if (filters.year !== undefined) {
-					qb = qb.eq("filterReleaseYear", filters.year);
+				const singleYear = forLaterSingleIndexedReleaseYear(filters);
+				if (singleYear !== undefined) {
+					qb = qb.eq("filterReleaseYear", singleYear);
 				}
 				if (filters.listened === "listened") {
 					qb = qb.eq("filterHasListened", true);
@@ -729,10 +738,6 @@ async function loadForLaterAlbumRows(
 					qb = qb.eq("filterRymMatched", true);
 				} else if (rym === "no_scrape") {
 					qb = qb.eq("filterRymMatched", false);
-				} else if (rym === "has_candidate") {
-					qb = qb.eq("filterHasRymUrl", true);
-				} else if (rym === "no_candidate") {
-					qb = qb.eq("filterHasRymUrl", false);
 				}
 				return qb;
 			})
@@ -766,6 +771,8 @@ async function loadForLaterAlbumRows(
 						hasListened: row.hasListened,
 						rymStatus: row.rymStatus,
 						rymUrl: row.rymUrl,
+						rymNotOnSite: row.rymNotOnSite,
+						markedAsSingle: row.markedAsSingle,
 						primaryGenres: row.primaryGenres,
 						secondaryGenres: row.secondaryGenres,
 						descriptors: row.descriptors,
@@ -813,6 +820,8 @@ async function loadForLaterAlbumRows(
 						hasListened: row.hasListened,
 						rymStatus: row.rymStatus,
 						rymUrl: row.rymUrl,
+						rymNotOnSite: row.rymNotOnSite,
+						markedAsSingle: row.markedAsSingle,
 						primaryGenres: row.primaryGenres,
 						secondaryGenres: row.secondaryGenres,
 						descriptors: row.descriptors,
@@ -931,6 +940,8 @@ async function loadForLaterAlbumRows(
 					hasListened: row.hasListened,
 					rymStatus: row.rymStatus,
 					rymUrl: row.rymUrl,
+					rymNotOnSite: row.rymNotOnSite,
+					markedAsSingle: row.markedAsSingle,
 					primaryGenres: row.primaryGenres,
 					secondaryGenres: row.secondaryGenres,
 					descriptors: row.descriptors,
@@ -1208,8 +1219,12 @@ export const getForLaterUiSummary = query({
 			.order("desc")
 			.first();
 
+		const visibleActiveRows = activeRows.filter(
+			(row) => row.markedAsSingle !== true,
+		);
+
 		return {
-			activeCount: activeRows.length,
+			activeCount: visibleActiveRows.length,
 			removedCount: removedRows.length,
 			lastSync: lastSync
 				? {
@@ -1299,6 +1314,52 @@ export const queueForLaterRymDiscovery = mutation({
 			queued++;
 		}
 		return { queued };
+	},
+});
+
+export const setForLaterAlbumRymNotOnSite = mutation({
+	args: {
+		userId: v.string(),
+		itemId: v.id("forLaterAlbumItems"),
+		notOnSite: v.boolean(),
+	},
+	returns: v.null(),
+	handler: async (ctx, args): Promise<null> => {
+		requireAuth(ctx);
+		const item = await ctx.db.get(args.itemId);
+		if (!item || item.userId !== args.userId) {
+			throw new Error("For Later album not found");
+		}
+		const now = Date.now();
+		await ctx.db.patch(args.itemId, {
+			rymNotOnSite: args.notOnSite ? true : undefined,
+			updatedAt: now,
+		});
+		await syncForLaterItemFilterProjection(ctx, args.itemId);
+		return null;
+	},
+});
+
+export const setForLaterAlbumMarkedAsSingle = mutation({
+	args: {
+		userId: v.string(),
+		itemId: v.id("forLaterAlbumItems"),
+		markedAsSingle: v.boolean(),
+	},
+	returns: v.null(),
+	handler: async (ctx, args): Promise<null> => {
+		requireAuth(ctx);
+		const item = await ctx.db.get(args.itemId);
+		if (!item || item.userId !== args.userId) {
+			throw new Error("For Later album not found");
+		}
+		const now = Date.now();
+		await ctx.db.patch(args.itemId, {
+			markedAsSingle: args.markedAsSingle ? true : undefined,
+			updatedAt: now,
+		});
+		await syncForLaterItemFilterProjection(ctx, args.itemId);
+		return null;
 	},
 });
 

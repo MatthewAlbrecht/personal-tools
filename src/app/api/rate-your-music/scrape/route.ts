@@ -23,14 +23,36 @@ type ExtensionPayload = {
 	tracklistingTotalSeconds?: number;
 };
 
-function normalizeNamedLinks(items: NamedLink[] | undefined) {
+function normalizeNamedLinks(
+	items: NamedLink[] | undefined,
+): Array<{ name: string; href?: string }> {
 	if (!items?.length) {
 		return [];
 	}
-	return items.map((item) => ({
-		name: item.name,
-		...(item.href ? { href: item.href } : {}),
-	}));
+	const out: Array<{ name: string; href?: string }> = [];
+	for (const item of items) {
+		if (!item || typeof item !== "object") {
+			continue;
+		}
+		const name =
+			typeof item.name === "string"
+				? item.name.replace(/\s+/g, " ").trim()
+				: "";
+		if (!name) {
+			continue;
+		}
+		const hrefRaw = item.href;
+		const hrefTrimmed =
+			hrefRaw !== undefined && hrefRaw !== null && String(hrefRaw).trim()
+				? String(hrefRaw).trim()
+				: "";
+		if (hrefTrimmed) {
+			out.push({ name, href: hrefTrimmed });
+		} else {
+			out.push({ name });
+		}
+	}
+	return out;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -118,7 +140,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 				primaryGenres: normalizeNamedLinks(body.primaryGenres),
 				secondaryGenres: normalizeNamedLinks(body.secondaryGenres),
 				descriptors: Array.isArray(body.descriptors)
-					? body.descriptors.filter((d): d is string => typeof d === "string")
+					? body.descriptors
+							.filter((d): d is string => typeof d === "string")
+							.map((d) => d.replace(/\s+/g, " ").trim())
+							.filter(Boolean)
 					: [],
 				spotifyAlbumId:
 					body.spotifyAlbumId === null || body.spotifyAlbumId === undefined

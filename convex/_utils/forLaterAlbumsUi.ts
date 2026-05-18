@@ -3,21 +3,17 @@ export type ForLaterRymFilter =
 	| "all"
 	| "has_scrape"
 	| "no_scrape"
-	| "has_candidate"
-	| "no_candidate";
+	| "not_on_rym";
 export type ForLaterFilterMatch = "all" | "any";
-export type ForLaterDerivedRymStatus =
-	| "matched"
-	| "candidate"
-	| "searching"
-	| "not_found"
-	| "failed"
-	| "not_started";
+export type ForLaterDerivedRymStatus = "matched" | "unmatched";
 
 export type ForLaterUiFilters = {
 	genreKeys: string[];
 	descriptorKeys: string[];
 	search?: string;
+	yearMin?: number;
+	yearMax?: number;
+	/** @deprecated Use yearMin/yearMax; still accepted for backward compatibility. */
 	year?: number;
 	listened: ForLaterListenedFilter;
 	rymStatus: ForLaterRymFilter;
@@ -61,12 +57,44 @@ export function normalizeForLaterFilters(
 		genreKeys: sortUniqueTrimmedKeys(input.genreKeys),
 		descriptorKeys: sortUniqueTrimmedKeys(input.descriptorKeys),
 		search: normalizeOptionalString(input.search),
-		year: input.year,
+		yearMin: input.yearMin ?? input.year,
+		yearMax: input.yearMax ?? input.year,
 		listened: input.listened ?? "all",
 		rymStatus: input.rymStatus ?? "all",
 		genreMatch: resolveTaxonomyMatch(input.genreMatch, legacy),
 		descriptorMatch: resolveTaxonomyMatch(input.descriptorMatch, legacy),
 	};
+}
+
+export function forLaterSingleIndexedReleaseYear(
+	filters: ForLaterUiFilters,
+): number | undefined {
+	if (filters.yearMin === undefined || filters.yearMax === undefined) {
+		return undefined;
+	}
+	if (filters.yearMin !== filters.yearMax) {
+		return undefined;
+	}
+	return filters.yearMin;
+}
+
+export function releaseYearMatchesForLaterFilter(
+	releaseYear: number | undefined,
+	filters: ForLaterUiFilters,
+): boolean {
+	if (filters.yearMin === undefined && filters.yearMax === undefined) {
+		return true;
+	}
+	if (releaseYear === undefined) {
+		return false;
+	}
+	if (filters.yearMin !== undefined && releaseYear < filters.yearMin) {
+		return false;
+	}
+	if (filters.yearMax !== undefined && releaseYear > filters.yearMax) {
+		return false;
+	}
+	return true;
 }
 
 export function taxonomyKeysPassAgainstSet(
@@ -170,6 +198,8 @@ export type ForLaterAlbumRowFilterInput = {
 	hasListened: boolean;
 	rymStatus: string;
 	rymUrl?: string;
+	rymNotOnSite?: boolean;
+	markedAsSingle?: boolean;
 	primaryGenres: Array<{ key: string }>;
 	secondaryGenres: Array<{ key: string }>;
 	descriptors: Array<{ key: string }>;
@@ -189,6 +219,8 @@ export function rowMatchesFilters(
 	type RowPred = (r: ForLaterAlbumRowFilterInput) => boolean;
 	const preds: RowPred[] = [];
 
+	preds.push((r) => r.markedAsSingle !== true);
+
 	const search = filters.search?.trim();
 	if (search) {
 		const q = search.toLowerCase();
@@ -199,9 +231,8 @@ export function rowMatchesFilters(
 		);
 	}
 
-	if (filters.year !== undefined) {
-		const y = filters.year;
-		preds.push((r) => r.releaseYear === y);
+	if (filters.yearMin !== undefined || filters.yearMax !== undefined) {
+		preds.push((r) => releaseYearMatchesForLaterFilter(r.releaseYear, filters));
 	}
 
 	if (filters.listened === "listened") {
@@ -211,14 +242,15 @@ export function rowMatchesFilters(
 	}
 
 	const rym = filters.rymStatus;
-	if (rym === "has_scrape") {
-		preds.push((r) => r.rymStatus === "matched");
-	} else if (rym === "no_scrape") {
-		preds.push((r) => r.rymStatus !== "matched");
-	} else if (rym === "has_candidate") {
-		preds.push((r) => Boolean(r.rymUrl));
-	} else if (rym === "no_candidate") {
-		preds.push((r) => !r.rymUrl);
+	if (rym === "not_on_rym") {
+		preds.push((r) => r.rymNotOnSite === true);
+	} else if (rym !== "all") {
+		preds.push((r) => r.rymNotOnSite !== true);
+		if (rym === "has_scrape") {
+			preds.push((r) => r.rymStatus === "matched");
+		} else if (rym === "no_scrape") {
+			preds.push((r) => r.rymStatus !== "matched");
+		}
 	}
 
 	if (!preds.every((p) => p(row))) {
@@ -241,34 +273,8 @@ export function rowMatchesFilters(
 
 export function deriveRymStatus(args: {
 	rymScrapeId?: unknown;
-	rymCandidateUrl?: string;
-	rymDiscoveryStatus:
-		| "not_started"
-		| "queued"
-		| "searching"
-		| "found"
-		| "not_found"
-		| "failed";
 }): ForLaterDerivedRymStatus {
-	if (args.rymScrapeId) {
-		return "matched";
-	}
-	if (args.rymCandidateUrl || args.rymDiscoveryStatus === "found") {
-		return "candidate";
-	}
-	if (
-		args.rymDiscoveryStatus === "queued" ||
-		args.rymDiscoveryStatus === "searching"
-	) {
-		return "searching";
-	}
-	if (args.rymDiscoveryStatus === "not_found") {
-		return "not_found";
-	}
-	if (args.rymDiscoveryStatus === "failed") {
-		return "failed";
-	}
-	return "not_started";
+	return args.rymScrapeId ? "matched" : "unmatched";
 }
 
 export function sortForLaterRows<

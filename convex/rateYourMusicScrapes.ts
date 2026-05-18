@@ -54,14 +54,19 @@ export function normalizeRateYourMusicReleaseUrl(raw: string): string {
 	return url.href;
 }
 
-function releaseKindFromPathname(pathname: string): "album" | "ep" {
+function releaseKindFromPathname(pathname: string): "album" | "ep" | "comp" {
 	if (pathname.includes("/release/ep/")) {
 		return "ep";
+	}
+	if (pathname.includes("/release/comp/")) {
+		return "comp";
 	}
 	if (pathname.includes("/release/album/")) {
 		return "album";
 	}
-	throw new ConvexError("RYM URL must be an album or EP release path");
+	throw new ConvexError(
+		"RYM URL must be an album, EP, or compilation release path",
+	);
 }
 
 async function syncReleaseTaxonomy(
@@ -388,12 +393,11 @@ export const listRateYourMusicGenreKeys = query({
 	},
 	handler: async (ctx, args) => {
 		requireAuth(ctx);
-		const limit = Math.min(Math.max(args.limit ?? 200, 1), 500);
+		const limit = Math.min(Math.max(args.limit ?? 3000, 1), 3000);
 
 		const rows = await ctx.db
 			.query("rateYourMusicGenres")
-			.withIndex("by_createdAt")
-			.order("desc")
+			.withIndex("by_label")
 			.take(limit);
 
 		return rows.map((r) => ({

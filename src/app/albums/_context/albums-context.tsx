@@ -13,14 +13,10 @@ import { useSpotifyAuth } from "~/lib/hooks/use-spotify-auth";
 import { useSyncHistory } from "~/lib/hooks/use-sync-history";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
-import type {
-	AlbumItem,
-	AlbumToRate,
-	HistoryListen,
-	TrackItem,
-} from "../_utils/types";
+import { useAlbumRatingDrawer } from "~/lib/hooks/use-album-rating-drawer";
+import type { AlbumToRate } from "~/lib/album-rating-types";
+import type { AlbumItem, HistoryListen, TrackItem } from "../_utils/types";
 
-// Type for rated albums returned by getRatedAlbumsForYear query
 type RankedAlbumForYear = {
 	_id: Id<"userAlbums">;
 	albumId: Id<"spotifyAlbums">;
@@ -103,7 +99,20 @@ export function AlbumsProvider({ children }: { children: React.ReactNode }) {
 		useSpotifyAuth();
 
 	const [yearFilter, setYearFilter] = useState<string | null>(null);
-	const [albumToRate, setAlbumToRate] = useState<AlbumToRate | null>(null);
+	const yearForRankerFallback =
+		yearFilter === "all" || yearFilter === null
+			? new Date().getFullYear()
+			: Number.parseInt(yearFilter, 10);
+	const {
+		albumToRate,
+		openRatingDrawer: openRatingDrawerForAlbum,
+		closeRatingDrawer,
+		handleSaveRating,
+		ratedAlbumsForYear,
+	} = useAlbumRatingDrawer({
+		userId,
+		fallbackYear: yearForRankerFallback,
+	});
 	const [trackToAddListen, setTrackToAddListen] = useState<TrackItem | null>(
 		null,
 	);
@@ -128,20 +137,6 @@ export function AlbumsProvider({ children }: { children: React.ReactNode }) {
 	const userAlbums = useQuery(
 		api.spotify.getUserAlbums,
 		userId ? { userId } : "skip",
-	);
-
-	// Fetch rated albums for the ranker - use the album's release year when rating
-	const albumToRateYear = albumToRate?.releaseDate
-		? Number.parseInt(albumToRate.releaseDate.substring(0, 4), 10)
-		: null;
-	const yearForRanker =
-		albumToRateYear ??
-		(yearFilter === "all" || yearFilter === null
-			? new Date().getFullYear()
-			: Number.parseInt(yearFilter, 10));
-	const ratedAlbumsForYear = useQuery(
-		api.spotify.getRatedAlbumsForYear,
-		userId ? { userId, year: yearForRanker } : "skip",
 	);
 
 	// Mutations
@@ -177,45 +172,25 @@ export function AlbumsProvider({ children }: { children: React.ReactNode }) {
 			const userAlbum = userAlbumsMap.get(listen.albumId);
 			if (!userAlbum || !listen.album) return;
 
-			setAlbumToRate({
+			const album: AlbumToRate = {
 				userAlbumId: userAlbum._id,
 				albumId: listen.albumId,
 				name: listen.album.name,
 				artistName: listen.album.artistName,
-				imageUrl: listen.album.imageUrl,
-				releaseDate: listen.album.releaseDate,
-				currentRating: userAlbum.rating,
-				currentPosition: userAlbum.position,
-			});
+				...(listen.album.imageUrl ? { imageUrl: listen.album.imageUrl } : {}),
+				...(listen.album.releaseDate
+					? { releaseDate: listen.album.releaseDate }
+					: {}),
+				...(userAlbum.rating !== undefined
+					? { currentRating: userAlbum.rating }
+					: {}),
+				...(userAlbum.position !== undefined
+					? { currentPosition: userAlbum.position }
+					: {}),
+			};
+			openRatingDrawerForAlbum(album);
 		},
-		[userAlbumsMap],
-	);
-
-	const closeRatingDrawer = useCallback(() => {
-		setAlbumToRate(null);
-	}, []);
-
-	const handleSaveRating = useCallback(
-		async (rating: number, position: number) => {
-			if (!albumToRate) return;
-
-			const albumName = albumToRate.name;
-			const userAlbumId = albumToRate.userAlbumId as Id<"userAlbums">;
-			setAlbumToRate(null);
-
-			try {
-				await updateAlbumRatingMutation({
-					userAlbumId,
-					rating,
-					position,
-				});
-				toast.success(`Rated "${albumName}"`);
-			} catch (error) {
-				console.error("Failed to save rating:", error);
-				toast.error("Failed to save rating");
-			}
-		},
-		[albumToRate, updateAlbumRatingMutation],
+		[userAlbumsMap, openRatingDrawerForAlbum],
 	);
 
 	const openAddListenDrawer = useCallback(

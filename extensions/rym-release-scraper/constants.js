@@ -1,5 +1,5 @@
 /**
  * Next.js origin (no trailing slash). All ingest POSTs go here.
- * Use local dev (`pnpm dev` → port 1333) while developing; switch to your deployed URL for prod.
+ * Default is production (moooose.dev); override in extension options or use local dev (`pnpm dev` → 1333).
  */
-globalThis.RYM_INGEST_ORIGIN = "http://127.0.0.1:1333";
+globalThis.RYM_INGEST_ORIGIN = "https://www.moooose.dev";
