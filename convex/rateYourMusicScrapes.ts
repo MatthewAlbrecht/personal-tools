@@ -408,6 +408,7 @@ export const listRateYourMusicGenreKeys = query({
 		return rows.map((r) => ({
 			key: r.key,
 			label: r.label,
+			isTopLevel: r.isTopLevel === true,
 		}));
 	},
 });

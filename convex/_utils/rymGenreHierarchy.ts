@@ -90,6 +90,48 @@ export function flattenRymGenreHierarchy(
 	return { genres, relationships };
 }
 
+export function buildParentKeysByChildKey(
+	relationships: Array<{ parentKey: string; childKey: string }>,
+): Map<string, string[]> {
+	const parentKeysByChild = new Map<string, string[]>();
+
+	for (const relationship of relationships) {
+		const parents = parentKeysByChild.get(relationship.childKey) ?? [];
+		if (!parents.includes(relationship.parentKey)) {
+			parents.push(relationship.parentKey);
+		}
+		parentKeysByChild.set(relationship.childKey, parents);
+	}
+
+	return parentKeysByChild;
+}
+
+/** Adds every ancestor key so parent-genre filters match subgenre-tagged albums. */
+export function expandGenreKeysWithAncestorKeys(
+	directKeys: Iterable<string>,
+	parentKeysByChild: Map<string, string[]>,
+): string[] {
+	const expanded = new Set<string>();
+	const pending = [...directKeys];
+
+	while (pending.length > 0) {
+		const key = pending.pop();
+		if (!key || expanded.has(key)) {
+			continue;
+		}
+
+		expanded.add(key);
+		const parents = parentKeysByChild.get(key) ?? [];
+		for (const parentKey of parents) {
+			if (!expanded.has(parentKey)) {
+				pending.push(parentKey);
+			}
+		}
+	}
+
+	return [...expanded].sort();
+}
+
 function normalizeText(text: string): string {
 	return text.replace(/\s+/g, " ").trim();
 }

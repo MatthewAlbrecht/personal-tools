@@ -232,6 +232,22 @@ test("forLaterFiltersAllowDescriptorFacetPagination allows when genre facet cann
 	);
 });
 
+test("rowMatchesFilters matches parent genre via filterGenreKeysSorted", () => {
+	const row = {
+		name: "Album",
+		artistName: "Artist",
+		hasListened: false,
+		rymStatus: "matched" as const,
+		primaryGenres: [{ key: "acoustic blues" }],
+		secondaryGenres: [],
+		descriptors: [],
+		filterGenreKeysSorted: ["acoustic blues", "blues"],
+	};
+	const filters = normalizeForLaterFilters({ genreKeys: ["blues"] });
+
+	assert.equal(rowMatchesFilters(row, filters), true);
+});
+
 test("rowMatchesFilters matches genre in secondary only", () => {
 	const row: ForLaterAlbumRowFilterInput = {
 		name: "x",

@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+	buildParentKeysByChildKey,
+	expandGenreKeysWithAncestorKeys,
 	flattenRymGenreHierarchy,
 	parseRymGenreHierarchyHtml,
 } from "./rymGenreHierarchy";
@@ -145,5 +147,22 @@ test("flattenRymGenreHierarchy dedupes genres but keeps multiple parent edges", 
 	assert.equal(
 		flat.genres.find((genre) => genre.key === "asmr")?.isTopLevel,
 		false,
+	);
+});
+
+test("expandGenreKeysWithAncestorKeys walks every parent branch", () => {
+	const parentKeysByChild = buildParentKeysByChildKey([
+		{ parentKey: "blues", childKey: "acoustic blues" },
+		{ parentKey: "blues", childKey: "country blues" },
+		{ parentKey: "acoustic blues", childKey: "acoustic texas blues" },
+		{ parentKey: "country blues", childKey: "acoustic texas blues" },
+	]);
+
+	assert.deepEqual(
+		expandGenreKeysWithAncestorKeys(
+			["acoustic texas blues"],
+			parentKeysByChild,
+		),
+		["acoustic blues", "acoustic texas blues", "blues", "country blues"],
 	);
 });

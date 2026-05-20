@@ -48,6 +48,14 @@ export function ForLaterFilters({
 		() => (genreOptions ?? []).map((g) => g.key).sort(),
 		[genreOptions],
 	);
+	const topLevelGenreKeysPool = useMemo(
+		() =>
+			(genreOptions ?? [])
+				.filter((g) => g.isTopLevel)
+				.map((g) => g.key)
+				.sort(),
+		[genreOptions],
+	);
 	const descriptorKeysPool = useMemo(
 		() => (descriptorOptions ?? []).map((d) => d.key).sort(),
 		[descriptorOptions],
@@ -180,6 +188,7 @@ export function ForLaterFilters({
 						</div>
 						<Combobox
 							items={genreKeysPool}
+							browseItems={topLevelGenreKeysPool}
 							multiple
 							getItemLabel={formatGenreOption}
 							value={filters.genreKeys}

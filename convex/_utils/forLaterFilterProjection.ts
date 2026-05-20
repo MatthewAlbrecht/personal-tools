@@ -1,3 +1,9 @@
+import type { QueryCtx } from "../_generated/server";
+import {
+	buildParentKeysByChildKey,
+	expandGenreKeysWithAncestorKeys,
+} from "./rymGenreHierarchy";
+
 /** Concatenate album + artist for Convex full-text search (`filterSearchText`). */
 export function buildFilterSearchText(args: {
 	albumName: string;
@@ -23,7 +29,7 @@ export function parseReleaseYearFromIsoDate(
 	return Number.isFinite(year) ? year : undefined;
 }
 
-export function buildFilterGenreKeysSorted(
+export function buildDirectFilterGenreKeys(
 	primaryGenres: Array<{ key: string }>,
 	secondaryGenres: Array<{ key: string }>,
 ): string[] {
@@ -35,6 +41,26 @@ export function buildFilterGenreKeysSorted(
 		keys.add(t.key);
 	}
 	return [...keys].sort();
+}
+
+/** @deprecated Use {@link buildDirectFilterGenreKeys}. */
+export const buildFilterGenreKeysSorted = buildDirectFilterGenreKeys;
+
+export function buildFilterGenreKeysSortedWithAncestors(
+	directKeys: string[],
+	parentKeysByChild: Map<string, string[]>,
+): string[] {
+	return expandGenreKeysWithAncestorKeys(directKeys, parentKeysByChild);
+}
+
+export async function loadRymGenreParentKeysByChild(
+	ctx: Pick<QueryCtx, "db">,
+): Promise<Map<string, string[]>> {
+	const relationships = await ctx.db
+		.query("rateYourMusicGenreRelationships")
+		.collect();
+
+	return buildParentKeysByChildKey(relationships);
 }
 
 export function buildFilterDescriptorKeysSorted(

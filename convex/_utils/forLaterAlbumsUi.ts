@@ -204,9 +204,15 @@ export type ForLaterAlbumRowFilterInput = {
 	primaryGenres: Array<{ key: string }>;
 	secondaryGenres: Array<{ key: string }>;
 	descriptors: Array<{ key: string }>;
+	/** Denormalized scrape tags plus ancestor keys; preferred for genre filters. */
+	filterGenreKeysSorted?: string[];
 };
 
 function albumGenreKeySet(r: ForLaterAlbumRowFilterInput): Set<string> {
+	if (r.filterGenreKeysSorted && r.filterGenreKeysSorted.length > 0) {
+		return new Set(r.filterGenreKeysSorted);
+	}
+
 	return new Set([
 		...r.primaryGenres.map((t) => t.key),
 		...r.secondaryGenres.map((t) => t.key),

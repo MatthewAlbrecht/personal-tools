@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+	buildDirectFilterGenreKeys,
 	buildFilterDescriptorKeysSorted,
-	buildFilterGenreKeysSorted,
+	buildFilterGenreKeysSortedWithAncestors,
 	buildFilterSearchText,
 	parseReleaseYearFromIsoDate,
 } from "./forLaterFilterProjection";
+import { buildParentKeysByChildKey } from "./rymGenreHierarchy";
 
 test("parseReleaseYearFromIsoDate reads YYYY prefix", () => {
 	assert.equal(parseReleaseYearFromIsoDate("1972-03-01"), 1972);
@@ -13,13 +15,27 @@ test("parseReleaseYearFromIsoDate reads YYYY prefix", () => {
 	assert.equal(parseReleaseYearFromIsoDate(undefined), undefined);
 });
 
-test("buildFilterGenreKeysSorted merges primary and secondary keys sorted unique", () => {
+test("buildDirectFilterGenreKeys merges primary and secondary keys sorted unique", () => {
 	assert.deepEqual(
-		buildFilterGenreKeysSorted(
+		buildDirectFilterGenreKeys(
 			[{ key: "z" }, { key: "a" }],
 			[{ key: "m" }, { key: "a" }],
 		),
 		["a", "m", "z"],
+	);
+});
+
+test("buildFilterGenreKeysSortedWithAncestors adds parent keys for filters", () => {
+	const parentKeysByChild = buildParentKeysByChildKey([
+		{ parentKey: "blues", childKey: "acoustic blues" },
+	]);
+
+	assert.deepEqual(
+		buildFilterGenreKeysSortedWithAncestors(
+			["acoustic blues"],
+			parentKeysByChild,
+		),
+		["acoustic blues", "blues"],
 	);
 });
 

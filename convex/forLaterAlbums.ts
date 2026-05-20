@@ -11,6 +11,7 @@ import {
 	normalizeAlbumTitle,
 } from "./_utils/albumMatching";
 import {
+	type ForLaterAlbumRowFilterInput,
 	type ForLaterUiFilters,
 	deriveRymStatus,
 	forLaterFiltersAllowDescriptorFacetPagination,
@@ -23,9 +24,11 @@ import {
 	sortForLaterRows,
 } from "./_utils/forLaterAlbumsUi";
 import {
+	buildDirectFilterGenreKeys,
 	buildFilterDescriptorKeysSorted,
-	buildFilterGenreKeysSorted,
+	buildFilterGenreKeysSortedWithAncestors,
 	buildFilterSearchText,
+	loadRymGenreParentKeysByChild,
 	parseReleaseYearFromIsoDate,
 } from "./_utils/forLaterFilterProjection";
 import { chooseIndexedForLaterListScan } from "./_utils/forLaterIndexedList";
@@ -159,6 +162,27 @@ type LoadForLaterAlbumRowsResult = {
 	isDone: boolean;
 	continueCursor: string;
 };
+
+function forLaterRowFilterInput(
+	row: ForLaterAlbumRow,
+	item: Doc<"forLaterAlbumItems">,
+): ForLaterAlbumRowFilterInput {
+	return {
+		name: row.name,
+		artistName: row.artistName,
+		releaseYear: row.releaseYear,
+		hasListened: row.hasListened,
+		rymStatus: row.rymStatus,
+		rymUrl: row.rymUrl,
+		rymNotOnSite: row.rymNotOnSite,
+		markedAsSingle: row.markedAsSingle,
+		removedFromForLater: row.removedFromForLater,
+		primaryGenres: row.primaryGenres,
+		secondaryGenres: row.secondaryGenres,
+		descriptors: row.descriptors,
+		filterGenreKeysSorted: item.filterGenreKeysSorted,
+	};
+}
 
 function spotifyAlbumArtistKeys(doc: Doc<"spotifyAlbums">): string[] {
 	if (doc.rawData) {
@@ -373,6 +397,7 @@ async function syncForLaterAlbumDescriptorFacets(
 async function syncForLaterItemFilterProjection(
 	ctx: MutationCtx,
 	itemId: Id<"forLaterAlbumItems">,
+	options?: { parentKeysByChild?: Map<string, string[]> },
 ): Promise<void> {
 	const item = await ctx.db.get(itemId);
 	if (!item) {
@@ -404,9 +429,15 @@ async function syncForLaterItemFilterProjection(
 	const filterRymMatched = rymStatus === "matched";
 	const filterHasRymUrl = Boolean(rymUrl);
 
-	const filterGenreKeysSorted = buildFilterGenreKeysSorted(
+	const directGenreKeys = buildDirectFilterGenreKeys(
 		tags.primaryGenres,
 		tags.secondaryGenres,
+	);
+	const parentKeysByChild =
+		options?.parentKeysByChild ?? (await loadRymGenreParentKeysByChild(ctx));
+	const filterGenreKeysSorted = buildFilterGenreKeysSortedWithAncestors(
+		directGenreKeys,
+		parentKeysByChild,
 	);
 
 	const filterDescriptorKeysSorted = buildFilterDescriptorKeysSorted(
@@ -700,25 +731,7 @@ async function hydrateMatchingRowsFromFacetItemRefs(
 		if (!row) {
 			continue;
 		}
-		if (
-			rowMatchesFilters(
-				{
-					name: row.name,
-					artistName: row.artistName,
-					releaseYear: row.releaseYear,
-					hasListened: row.hasListened,
-					rymStatus: row.rymStatus,
-					rymUrl: row.rymUrl,
-					rymNotOnSite: row.rymNotOnSite,
-					markedAsSingle: row.markedAsSingle,
-					removedFromForLater: row.removedFromForLater,
-					primaryGenres: row.primaryGenres,
-					secondaryGenres: row.secondaryGenres,
-					descriptors: row.descriptors,
-				},
-				args.filters,
-			)
-		) {
+		if (rowMatchesFilters(forLaterRowFilterInput(row, item), args.filters)) {
 			matches.push(row);
 		}
 	}
@@ -783,25 +796,7 @@ async function loadForLaterAlbumRows(
 			if (!row) {
 				continue;
 			}
-			if (
-				rowMatchesFilters(
-					{
-						name: row.name,
-						artistName: row.artistName,
-						releaseYear: row.releaseYear,
-						hasListened: row.hasListened,
-						rymStatus: row.rymStatus,
-						rymUrl: row.rymUrl,
-						rymNotOnSite: row.rymNotOnSite,
-						markedAsSingle: row.markedAsSingle,
-						removedFromForLater: row.removedFromForLater,
-						primaryGenres: row.primaryGenres,
-						secondaryGenres: row.secondaryGenres,
-						descriptors: row.descriptors,
-					},
-					filters,
-				)
-			) {
+			if (rowMatchesFilters(forLaterRowFilterInput(row, item), filters)) {
 				page.push(row);
 			}
 		}
@@ -833,25 +828,7 @@ async function loadForLaterAlbumRows(
 			if (!row) {
 				continue;
 			}
-			if (
-				rowMatchesFilters(
-					{
-						name: row.name,
-						artistName: row.artistName,
-						releaseYear: row.releaseYear,
-						hasListened: row.hasListened,
-						rymStatus: row.rymStatus,
-						rymUrl: row.rymUrl,
-						rymNotOnSite: row.rymNotOnSite,
-						markedAsSingle: row.markedAsSingle,
-						removedFromForLater: row.removedFromForLater,
-						primaryGenres: row.primaryGenres,
-						secondaryGenres: row.secondaryGenres,
-						descriptors: row.descriptors,
-					},
-					filters,
-				)
-			) {
+			if (rowMatchesFilters(forLaterRowFilterInput(row, item), filters)) {
 				page.push(row);
 			}
 		}
@@ -954,25 +931,7 @@ async function loadForLaterAlbumRows(
 		if (!row) {
 			continue;
 		}
-		if (
-			rowMatchesFilters(
-				{
-					name: row.name,
-					artistName: row.artistName,
-					releaseYear: row.releaseYear,
-					hasListened: row.hasListened,
-					rymStatus: row.rymStatus,
-					rymUrl: row.rymUrl,
-					rymNotOnSite: row.rymNotOnSite,
-					markedAsSingle: row.markedAsSingle,
-					removedFromForLater: row.removedFromForLater,
-					primaryGenres: row.primaryGenres,
-					secondaryGenres: row.secondaryGenres,
-					descriptors: row.descriptors,
-				},
-				filters,
-			)
-		) {
+		if (rowMatchesFilters(forLaterRowFilterInput(row, item), filters)) {
 			matches.push(row);
 		}
 	}
@@ -1642,8 +1601,9 @@ async function runSingleBackfillFilterProjectionBatch(
 			cursor: args.cursor,
 		});
 
+	const parentKeysByChild = await loadRymGenreParentKeysByChild(ctx);
 	for (const item of result.page) {
-		await syncForLaterItemFilterProjection(ctx, item._id);
+		await syncForLaterItemFilterProjection(ctx, item._id, { parentKeysByChild });
 	}
 
 	return {

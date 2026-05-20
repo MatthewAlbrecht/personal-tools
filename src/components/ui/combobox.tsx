@@ -53,6 +53,7 @@ function useComboboxContext(): ComboboxContextValue {
 
 export function Combobox({
 	items,
+	browseItems,
 	getItemLabel,
 	multiple = false,
 	value,
@@ -60,6 +61,8 @@ export function Combobox({
 	children,
 }: {
 	items: string[];
+	/** Shown when the input is empty; search still uses `items`. Defaults to `items`. */
+	browseItems?: string[];
 	getItemLabel?: (item: string) => string;
 	multiple?: boolean;
 	value: string[];
@@ -79,14 +82,15 @@ export function Combobox({
 
 	const filteredItems = useMemo(() => {
 		const q = filter.trim().toLowerCase();
+		const pool = q ? items : (browseItems ?? items);
 		if (!q) {
-			return items;
+			return pool;
 		}
 		return items.filter((item) => {
 			const label = resolveLabel(item).toLowerCase();
 			return label.includes(q) || item.toLowerCase().includes(q);
 		});
-	}, [items, filter, resolveLabel]);
+	}, [items, browseItems, filter, resolveLabel]);
 
 	useEffect(() => {
 		setHighlightedIndex(0);
