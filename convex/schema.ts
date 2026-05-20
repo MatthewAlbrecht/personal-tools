@@ -730,13 +730,14 @@ export default defineSchema({
 		.index("by_key", ["key"])
 		.index("by_createdAt", ["createdAt"]),
 
-	// Rate Your Music release scrapes (album / EP / compilation pages — extension or API)
+	// Rate Your Music release scrapes (album / EP / mixtape / compilation — extension or API)
 	rateYourMusicScrapes: defineTable({
 		/** Canonical https URL for this release (normalized for dedupe) */
 		rymUrl: v.string(),
 		releaseKind: v.union(
 			v.literal("album"),
 			v.literal("ep"),
+			v.literal("mixtape"),
 			v.literal("comp"),
 		),
 		/** Label from RYM "Type" row, e.g. "Album" | "EP" */

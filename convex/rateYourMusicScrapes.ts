@@ -54,18 +54,23 @@ export function normalizeRateYourMusicReleaseUrl(raw: string): string {
 	return url.href;
 }
 
-function releaseKindFromPathname(pathname: string): "album" | "ep" | "comp" {
+function releaseKindFromPathname(
+	pathname: string,
+): "album" | "ep" | "mixtape" | "comp" {
 	if (pathname.includes("/release/ep/")) {
 		return "ep";
 	}
 	if (pathname.includes("/release/comp/")) {
 		return "comp";
 	}
+	if (pathname.includes("/release/mixtape/")) {
+		return "mixtape";
+	}
 	if (pathname.includes("/release/album/")) {
 		return "album";
 	}
 	throw new ConvexError(
-		"RYM URL must be an album, EP, or compilation release path",
+		"RYM URL must be an album, EP, mixtape, or compilation release path",
 	);
 }
 
