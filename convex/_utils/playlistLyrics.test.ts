@@ -9,6 +9,7 @@ import {
 	isPublicPlaylistStatus,
 	normalizeGeniusSongUrl,
 	shouldRefreshScrapeBeforePlaylistReuse,
+	planCompactPlaylistPositions,
 	sortPlaylistItems,
 } from "./playlistLyrics";
 
@@ -110,6 +111,26 @@ test("sortPlaylistItems orders by position ascending", () => {
 		result.map((item) => item.id),
 		["first", "second", "third"],
 	);
+});
+
+test("planCompactPlaylistPositions renumbers gaps after a delete", () => {
+	const items = [
+		{ _id: "a", position: 1 },
+		{ _id: "c", position: 3 },
+	];
+
+	assert.deepEqual(planCompactPlaylistPositions(items), [
+		{ _id: "c", position: 2 },
+	]);
+});
+
+test("planCompactPlaylistPositions returns no updates when already contiguous", () => {
+	const items = [
+		{ _id: "a", position: 1 },
+		{ _id: "b", position: 2 },
+	];
+
+	assert.deepEqual(planCompactPlaylistPositions(items), []);
 });
 
 test("isPublicPlaylistStatus only allows ready playlists", () => {

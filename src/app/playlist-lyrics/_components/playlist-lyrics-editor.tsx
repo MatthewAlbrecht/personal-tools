@@ -4,9 +4,10 @@ import { useMutation, useQuery } from "convex/react";
 import { Link as LinkIcon } from "lucide-react";
 import Link from "next/link";
 import type { ClipboardEvent, FormEvent, ReactElement } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
+import { Checkbox } from "~/components/ui/checkbox";
 import {
 	Card,
 	CardContent,
@@ -18,8 +19,13 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Textarea } from "~/components/ui/textarea";
+import {
+	formatTrackDurationInput,
+	parseTrackDurationInput,
+} from "~/lib/zine/zine-song-header-content";
 import { api } from "../../../../convex/_generated/api";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
+import { getPlaylistDisplayTrackNumber } from "../_utils/song-display";
 
 type PlaylistFields = {
 	title: string;
@@ -34,7 +40,8 @@ type PlaylistItemFieldName =
 	| "artistNameOverride"
 	| "albumTitleOverride"
 	| "albumArtUrlOverride"
-	| "userNote";
+	| "userNote"
+	| "introContent";
 type PlaylistLyricsItem = Doc<"playlistLyricsItems"> & {
 	scrape?: Doc<"geniusLyricScrapes">;
 };
@@ -45,6 +52,7 @@ export function PlaylistLyricsEditor({ slug }: { slug: string }): ReactElement {
 	const updatePlaylist = useMutation(api.playlistLyrics.updatePlaylist);
 	const updateItem = useMutation(api.playlistLyrics.updateItem);
 	const deleteItem = useMutation(api.playlistLyrics.deleteItem);
+	const createManualItem = useMutation(api.playlistLyrics.createManualItem);
 
 	const [playlistFields, setPlaylistFields] = useState<PlaylistFields>({
 		title: "",
@@ -56,6 +64,11 @@ export function PlaylistLyricsEditor({ slug }: { slug: string }): ReactElement {
 		useState<PlaylistFieldName | null>(null);
 	const [songUrl, setSongUrl] = useState("");
 	const [isAddingSong, setIsAddingSong] = useState(false);
+	const [manualSongTitle, setManualSongTitle] = useState("");
+	const [manualArtistName, setManualArtistName] = useState("");
+	const [manualAlbumTitle, setManualAlbumTitle] = useState("");
+	const [manualIntroContent, setManualIntroContent] = useState("");
+	const [isAddingManualSong, setIsAddingManualSong] = useState(false);
 	const [isRescrapingAll, setIsRescrapingAll] = useState(false);
 	const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 	const [busyItems, setBusyItems] = useState<Record<string, ItemBusyAction>>(
@@ -160,6 +173,14 @@ export function PlaylistLyricsEditor({ slug }: { slug: string }): ReactElement {
 		toast.success("Public link copied to clipboard!");
 	}
 
+	function handleCopyPublicZineLink(): void {
+		if (!data) return;
+
+		const publicZineUrl = `${window.location.origin}/public/playlist-lyrics/${data.playlist.slug}/zine`;
+		navigator.clipboard.writeText(publicZineUrl);
+		toast.success("Public zine link copied to clipboard!");
+	}
+
 	async function handleAddSong(
 		event: FormEvent<HTMLFormElement>,
 	): Promise<void> {
@@ -206,6 +227,43 @@ export function PlaylistLyricsEditor({ slug }: { slug: string }): ReactElement {
 		}
 	}
 
+	async function handleAddManualSong(
+		event: FormEvent<HTMLFormElement>,
+	): Promise<void> {
+		event.preventDefault();
+
+		if (!data) return;
+
+		const songTitle = manualSongTitle.trim();
+		if (!songTitle) {
+			toast.error("Enter a track title");
+			return;
+		}
+
+		setIsAddingManualSong(true);
+		try {
+			await createManualItem({
+				playlistId: data.playlist._id,
+				songTitle,
+				artistName: manualArtistName.trim() || undefined,
+				albumTitle: manualAlbumTitle.trim() || undefined,
+				introContent: manualIntroContent.trim() || undefined,
+			});
+			setManualSongTitle("");
+			setManualArtistName("");
+			setManualAlbumTitle("");
+			setManualIntroContent("");
+			toast.success("Instrumental track added");
+		} catch (error) {
+			console.error("Failed to add manual song:", error);
+			toast.error(
+				error instanceof Error ? error.message : "Failed to add track",
+			);
+		} finally {
+			setIsAddingManualSong(false);
+		}
+	}
+
 	async function handleItemFieldBlur(
 		item: PlaylistLyricsItem,
 		field: PlaylistItemFieldName,
@@ -223,6 +281,8 @@ export function PlaylistLyricsEditor({ slug }: { slug: string }): ReactElement {
 				await updateItem({ itemId: item._id, albumTitleOverride: value });
 			} else if (field === "albumArtUrlOverride") {
 				await updateItem({ itemId: item._id, albumArtUrlOverride: value });
+			} else if (field === "introContent") {
+				await updateItem({ itemId: item._id, introContent: value });
 			} else {
 				await updateItem({ itemId: item._id, userNote: value });
 			}
@@ -232,6 +292,60 @@ export function PlaylistLyricsEditor({ slug }: { slug: string }): ReactElement {
 			console.error("Failed to save song:", error);
 			toast.error(
 				error instanceof Error ? error.message : "Failed to save song",
+			);
+		} finally {
+			clearItemBusy(item._id);
+		}
+	}
+
+	async function handleDurationBlur(
+		item: PlaylistLyricsItem,
+		rawInput: string,
+	): Promise<void> {
+		const trimmedInput = rawInput.trim();
+		const currentFormatted = formatTrackDurationInput(
+			item.durationSecondsOverride,
+		);
+
+		if (trimmedInput === currentFormatted) {
+			return;
+		}
+
+		let parsed: number | null;
+		try {
+			parsed = parseTrackDurationInput(rawInput);
+		} catch (error) {
+			console.error("Failed to parse duration:", error);
+			toast.error(
+				error instanceof Error ? error.message : "Invalid duration format",
+			);
+			return;
+		}
+
+		if (
+			parsed === null &&
+			item.durationSecondsOverride === undefined
+		) {
+			return;
+		}
+		if (
+			parsed !== null &&
+			parsed === item.durationSecondsOverride
+		) {
+			return;
+		}
+
+		setItemBusy(item._id, "save");
+		try {
+			await updateItem({
+				itemId: item._id,
+				durationSecondsOverride: parsed,
+			});
+			toast.success("Song saved");
+		} catch (error) {
+			console.error("Failed to save duration:", error);
+			toast.error(
+				error instanceof Error ? error.message : "Failed to save duration",
 			);
 		} finally {
 			clearItemBusy(item._id);
@@ -405,6 +519,17 @@ export function PlaylistLyricsEditor({ slug }: { slug: string }): ReactElement {
 						<LinkIcon className="mr-2 h-4 w-4" />
 						Copy Public Link
 					</Button>
+					{isPublic ? (
+						<Button
+							type="button"
+							variant="outline"
+							onClick={handleCopyPublicZineLink}
+							title="Copy public zine link"
+						>
+							<LinkIcon className="mr-2 h-4 w-4" />
+							Copy Public Zine Link
+						</Button>
+					) : null}
 					<Button asChild variant="outline">
 						<Link href={`/playlist-lyrics/${currentSlug}`}>Print view</Link>
 					</Button>
@@ -484,15 +609,23 @@ export function PlaylistLyricsEditor({ slug }: { slug: string }): ReactElement {
 				</CardContent>
 			</Card>
 
+			<PlaylistBackCoverQrCard
+				appleMusicQrImageUrl={playlist.zineAppleMusicQrImageUrl}
+				playlistId={playlist._id}
+				showAppleMusicQr={playlist.zineShowAppleMusicQr === true}
+				showSpotifyQr={playlist.zineShowSpotifyQr === true}
+				spotifyQrImageUrl={playlist.zineSpotifyQrImageUrl}
+			/>
+
 			<Card>
 				<CardHeader>
 					<CardTitle>Add Song</CardTitle>
 					<CardDescription>
-						Paste a Genius song URL to scrape lyrics and add it to this
-						playlist.
+						Paste a Genius song URL to scrape lyrics, or add an instrumental
+						track manually.
 					</CardDescription>
 				</CardHeader>
-				<CardContent>
+				<CardContent className="space-y-6">
 					<form
 						onSubmit={handleAddSong}
 						className="flex flex-col gap-3 sm:flex-row"
@@ -515,6 +648,76 @@ export function PlaylistLyricsEditor({ slug }: { slug: string }): ReactElement {
 							{isAddingSong ? "Adding..." : "Add song"}
 						</Button>
 					</form>
+
+					<div className="space-y-3 border-t pt-6">
+						<div>
+							<h3 className="font-medium text-sm">Instrumental track</h3>
+							<p className="text-muted-foreground text-sm">
+								For intros, interludes, outros, or other tracks without lyrics.
+							</p>
+						</div>
+						<form
+							onSubmit={handleAddManualSong}
+							className="grid gap-3 sm:grid-cols-2"
+						>
+							<div className="space-y-2 sm:col-span-2">
+								<Label htmlFor="manual-song-title">Track title</Label>
+								<Input
+									id="manual-song-title"
+									value={manualSongTitle}
+									onChange={(event) =>
+										setManualSongTitle(event.currentTarget.value)
+									}
+									placeholder="Intro"
+									disabled={isAddingManualSong}
+									required
+								/>
+							</div>
+							<div className="space-y-2">
+								<Label htmlFor="manual-artist-name">Artist</Label>
+								<Input
+									id="manual-artist-name"
+									value={manualArtistName}
+									onChange={(event) =>
+										setManualArtistName(event.currentTarget.value)
+									}
+									placeholder="Optional"
+									disabled={isAddingManualSong}
+								/>
+							</div>
+							<div className="space-y-2">
+								<Label htmlFor="manual-album-title">Album</Label>
+								<Input
+									id="manual-album-title"
+									value={manualAlbumTitle}
+									onChange={(event) =>
+										setManualAlbumTitle(event.currentTarget.value)
+									}
+									placeholder="Optional"
+									disabled={isAddingManualSong}
+								/>
+							</div>
+							<div className="space-y-2 sm:col-span-2">
+								<Label htmlFor="manual-intro-content">Intro</Label>
+								<Textarea
+									id="manual-intro-content"
+									value={manualIntroContent}
+									onChange={(event) =>
+										setManualIntroContent(event.currentTarget.value)
+									}
+									placeholder="Optional intro text for the zine"
+									disabled={isAddingManualSong}
+								/>
+							</div>
+							<div className="sm:col-span-2">
+								<Button type="submit" disabled={isAddingManualSong}>
+									{isAddingManualSong
+										? "Adding..."
+										: "Add instrumental track"}
+								</Button>
+							</div>
+						</form>
+					</div>
 				</CardContent>
 			</Card>
 
@@ -545,18 +748,20 @@ export function PlaylistLyricsEditor({ slug }: { slug: string }): ReactElement {
 					<Card>
 						<CardContent className="pt-6">
 							<p className="text-muted-foreground text-sm">
-								No songs yet. Add a Genius URL above to start the playlist.
+								No songs yet. Add a Genius URL or an instrumental track above.
 							</p>
 						</CardContent>
 					</Card>
 				) : (
 					<div className="space-y-4">
-						{songs.map((item) => (
+						{songs.map((item, index) => (
 							<PlaylistSongCard
 								key={item._id}
 								item={item}
+								trackNumber={getPlaylistDisplayTrackNumber(index)}
 								busyAction={busyItems[item._id]}
 								onItemFieldBlur={handleItemFieldBlur}
+								onDurationBlur={handleDurationBlur}
 								onDeleteItem={handleDeleteItem}
 								onRescrapeItem={handleRescrapeItem}
 							/>
@@ -596,28 +801,273 @@ async function readPlaylistLyricsRouteError(
 	}
 }
 
+function PlaylistBackCoverQrCard({
+	playlistId,
+	spotifyQrImageUrl,
+	appleMusicQrImageUrl,
+	showSpotifyQr,
+	showAppleMusicQr,
+}: {
+	playlistId: Id<"playlistLyrics">;
+	spotifyQrImageUrl?: string;
+	appleMusicQrImageUrl?: string;
+	showSpotifyQr: boolean;
+	showAppleMusicQr: boolean;
+}): ReactElement {
+	return (
+		<Card>
+			<CardHeader>
+				<CardTitle>Back cover QR codes</CardTitle>
+				<CardDescription>
+					Upload Spotify and Apple Music playlist QR codes for the zine back
+					cover. Each appears bottom-left only when uploaded and toggled on.
+				</CardDescription>
+			</CardHeader>
+			<CardContent className="grid gap-8 sm:grid-cols-2">
+				<PlaylistQrSlotEditor
+					initialImageUrl={spotifyQrImageUrl}
+					initialShow={showSpotifyQr}
+					label="Spotify"
+					playlistId={playlistId}
+					service="spotify"
+				/>
+				<PlaylistQrSlotEditor
+					initialImageUrl={appleMusicQrImageUrl}
+					initialShow={showAppleMusicQr}
+					label="Apple Music"
+					playlistId={playlistId}
+					service="appleMusic"
+				/>
+			</CardContent>
+		</Card>
+	);
+}
+
+type QrService = "spotify" | "appleMusic";
+
+function PlaylistQrSlotEditor({
+	playlistId,
+	service,
+	label,
+	initialImageUrl,
+	initialShow,
+}: {
+	playlistId: Id<"playlistLyrics">;
+	service: QrService;
+	label: string;
+	initialImageUrl?: string;
+	initialShow: boolean;
+}): ReactElement {
+	const updateSpotifyQr = useMutation(api.playlistLyrics.updateZineSpotifyQr);
+	const updateAppleMusicQr = useMutation(
+		api.playlistLyrics.updateZineAppleMusicQr,
+	);
+	const updateQrToggles = useMutation(api.playlistLyrics.updateZineQrToggles);
+	const generateUploadUrl = useMutation(
+		api.playlistLyrics.generateZineCoverUploadUrl,
+	);
+
+	const [imageUrl, setImageUrl] = useState(initialImageUrl ?? "");
+	const [showOnBackCover, setShowOnBackCover] = useState(initialShow);
+	const [isUploading, setIsUploading] = useState(false);
+	const [isSavingUrl, setIsSavingUrl] = useState(false);
+	const fileInputRef = useRef<HTMLInputElement>(null);
+
+	useEffect(() => {
+		setImageUrl(initialImageUrl ?? "");
+		setShowOnBackCover(initialShow);
+	}, [initialImageUrl, initialShow]);
+
+	const resolvedImageUrl = imageUrl.trim() || undefined;
+	const inputIdPrefix = `playlist-qr-${service}`;
+
+	async function persistImageUrl(
+		nextUrl: string,
+	): Promise<string | undefined> {
+		const trimmed = nextUrl.trim();
+		const updateQr =
+			service === "spotify" ? updateSpotifyQr : updateAppleMusicQr;
+		const result = await updateQr({
+			playlistId,
+			qrImageUrl: trimmed.length > 0 ? trimmed : "",
+		});
+		return result.qrImageUrl;
+	}
+
+	async function handleUrlBlur(): Promise<void> {
+		const trimmed = imageUrl.trim();
+		const initialTrimmed = (initialImageUrl ?? "").trim();
+		if (trimmed === initialTrimmed) return;
+
+		setIsSavingUrl(true);
+		try {
+			const saved = await persistImageUrl(imageUrl);
+			setImageUrl(saved ?? "");
+			toast.success(`${label} QR saved`);
+		} catch (error) {
+			console.error(`Failed to save ${label} QR:`, error);
+			toast.error(
+				error instanceof Error ? error.message : `Failed to save ${label} QR`,
+			);
+		} finally {
+			setIsSavingUrl(false);
+		}
+	}
+
+	async function handleFileUpload(file: File | undefined): Promise<void> {
+		if (!file) return;
+
+		const maxBytes = 15 * 1024 * 1024;
+		if (file.size > maxBytes) {
+			toast.error("Image must be 15 MB or smaller");
+			return;
+		}
+
+		setIsUploading(true);
+		try {
+			const uploadUrl = await generateUploadUrl({});
+			const response = await fetch(uploadUrl, {
+				method: "POST",
+				headers: { "Content-Type": file.type },
+				body: file,
+			});
+
+			if (!response.ok) {
+				throw new Error("Upload failed");
+			}
+
+			const { storageId } = (await response.json()) as { storageId: string };
+			const updateQr =
+				service === "spotify" ? updateSpotifyQr : updateAppleMusicQr;
+			const result = await updateQr({
+				playlistId,
+				storageId: storageId as Id<"_storage">,
+			});
+			setImageUrl(result.qrImageUrl ?? "");
+			toast.success(`${label} QR uploaded`);
+		} catch (error) {
+			console.error(`Failed to upload ${label} QR:`, error);
+			toast.error(`Failed to upload ${label} QR`);
+		} finally {
+			setIsUploading(false);
+			if (fileInputRef.current) {
+				fileInputRef.current.value = "";
+			}
+		}
+	}
+
+	async function handleShowToggle(checked: boolean): Promise<void> {
+		setShowOnBackCover(checked);
+		try {
+			await updateQrToggles(
+				service === "spotify"
+					? { playlistId, showSpotifyQr: checked }
+					: { playlistId, showAppleMusicQr: checked },
+			);
+		} catch (error) {
+			setShowOnBackCover(!checked);
+			console.error(`Failed to update ${label} QR toggle:`, error);
+			toast.error(`Failed to update ${label} visibility`);
+		}
+	}
+
+	return (
+		<div className="space-y-3">
+			<p className="font-medium text-sm">{label}</p>
+			{resolvedImageUrl ? (
+				<img
+					alt={`${label} QR preview`}
+					className="h-24 w-24 rounded-md border object-contain bg-white"
+					src={resolvedImageUrl}
+				/>
+			) : null}
+			<div className="space-y-2">
+				<Label htmlFor={`${inputIdPrefix}-url`}>Image URL</Label>
+				<Input
+					id={`${inputIdPrefix}-url`}
+					type="url"
+					value={imageUrl}
+					disabled={isUploading || isSavingUrl}
+					placeholder="https://…"
+					onChange={(event) => setImageUrl(event.currentTarget.value)}
+					onBlur={() => {
+						void handleUrlBlur();
+					}}
+				/>
+			</div>
+			<p className="text-center text-muted-foreground text-xs">or</p>
+			<div className="space-y-2">
+				<Label htmlFor={`${inputIdPrefix}-file`}>Upload image</Label>
+				<input
+					ref={fileInputRef}
+					accept="image/jpeg,image/png,image/webp,image/gif"
+					className="sr-only"
+					id={`${inputIdPrefix}-file`}
+					type="file"
+					onChange={(event) => {
+						const file = event.target.files?.[0];
+						void handleFileUpload(file);
+					}}
+				/>
+				<Button
+					type="button"
+					variant="outline"
+					disabled={isUploading || isSavingUrl}
+					onClick={() => fileInputRef.current?.click()}
+				>
+					{isUploading ? "Uploading…" : "Choose file"}
+				</Button>
+			</div>
+			<div className="flex items-center gap-2">
+				<Checkbox
+					id={`${inputIdPrefix}-show`}
+					checked={showOnBackCover}
+					disabled={!resolvedImageUrl || isUploading || isSavingUrl}
+					onCheckedChange={(checked) => {
+						void handleShowToggle(checked === true);
+					}}
+				/>
+				<Label htmlFor={`${inputIdPrefix}-show`} className="font-normal text-sm">
+					Show on back cover
+				</Label>
+			</div>
+		</div>
+	);
+}
+
 function PlaylistSongCard({
 	item,
+	trackNumber,
 	busyAction,
 	onItemFieldBlur,
+	onDurationBlur,
 	onDeleteItem,
 	onRescrapeItem,
 }: {
 	item: PlaylistLyricsItem;
+	trackNumber: number;
 	busyAction?: ItemBusyAction;
 	onItemFieldBlur: (
 		item: PlaylistLyricsItem,
 		field: PlaylistItemFieldName,
 		value: string,
 	) => Promise<void>;
+	onDurationBlur: (
+		item: PlaylistLyricsItem,
+		rawInput: string,
+	) => Promise<void>;
 	onDeleteItem: (itemId: Id<"playlistLyricsItems">) => Promise<void>;
 	onRescrapeItem: (itemId: Id<"playlistLyricsItems">) => Promise<void>;
 }): ReactElement {
 	const sourceUrl = item.scrape?.canonicalUrl ?? item.pendingUrl;
+	const isManual = item.scrapeState === "manual";
 	const isBusy = busyAction !== undefined;
 	const displayMetadata = getDisplayMetadataParts(item);
 	const [albumArtUrlOverride, setAlbumArtUrlOverride] = useState(
 		item.albumArtUrlOverride ?? "",
+	);
+	const [durationInput, setDurationInput] = useState(
+		formatTrackDurationInput(item.durationSecondsOverride),
 	);
 	const albumArtPreviewUrl =
 		albumArtUrlOverride.trim() || item.scrape?.albumArtUrl?.trim();
@@ -626,28 +1076,34 @@ function PlaylistSongCard({
 		setAlbumArtUrlOverride(item.albumArtUrlOverride ?? "");
 	}, [item.albumArtUrlOverride]);
 
+	useEffect(() => {
+		setDurationInput(formatTrackDurationInput(item.durationSecondsOverride));
+	}, [item.durationSecondsOverride]);
+
 	return (
 		<Card>
 			<CardHeader>
 				<div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 					<div className="space-y-1">
 						<CardTitle>
-							{item.position}. {getDisplayTitle(item)}
+							{trackNumber}. {getDisplayTitle(item)}
 						</CardTitle>
 						<CardDescription>{displayMetadata.join(" - ")}</CardDescription>
 					</div>
 					<div className="flex gap-2">
-						<Button
-							type="button"
-							variant="outline"
-							size="sm"
-							disabled={isBusy}
-							onClick={() => {
-								void onRescrapeItem(item._id);
-							}}
-						>
-							{busyAction === "rescrape" ? "Rescraping..." : "Rescrape"}
-						</Button>
+						{!isManual ? (
+							<Button
+								type="button"
+								variant="outline"
+								size="sm"
+								disabled={isBusy}
+								onClick={() => {
+									void onRescrapeItem(item._id);
+								}}
+							>
+								{busyAction === "rescrape" ? "Rescraping..." : "Rescrape"}
+							</Button>
+						) : null}
 						<Button
 							type="button"
 							variant="destructive"
@@ -663,51 +1119,59 @@ function PlaylistSongCard({
 				</div>
 			</CardHeader>
 			<CardContent className="space-y-5">
-				<div className="grid gap-3 rounded-lg border bg-muted/30 p-4 text-sm sm:grid-cols-2">
-					<MetadataRow label="Scrape state" value={item.scrapeState} />
-					<MetadataRow
-						label="Last scraped"
-						value={
-							item.scrape
-								? formatDate(item.scrape.lastScrapedAt)
-								: "Not scraped"
-						}
-					/>
-					<MetadataRow
-						label="Scraped title"
-						value={item.scrape?.songTitle ?? "Unavailable"}
-					/>
-					<MetadataRow
-						label="Scraped artist"
-						value={item.scrape?.artistName ?? "Unavailable"}
-					/>
-					<MetadataRow
-						label="Scraped album"
-						value={getScrapedAlbumTitle(item) ?? "Unavailable"}
-					/>
-					<MetadataRow
-						label="Scraped album art"
-						value={item.scrape?.albumArtUrl ?? "Unavailable"}
-					/>
-					<MetadataRow
-						label="Scraped year"
-						value={getScrapedAlbumYear(item) ?? "Unavailable"}
-					/>
-					<MetadataRow label="Pending URL" value={item.pendingUrl ?? "None"} />
-					{sourceUrl ? (
-						<div className="sm:col-span-2">
-							<div className="text-muted-foreground">Source</div>
-							<a
-								href={sourceUrl}
-								target="_blank"
-								rel="noreferrer"
-								className="break-all text-primary underline-offset-4 hover:underline"
-							>
-								{sourceUrl}
-							</a>
-						</div>
-					) : null}
-				</div>
+				{isManual ? (
+					<div className="rounded-lg border bg-muted/30 p-4 text-sm">
+						<p className="text-muted-foreground">
+							Manual instrumental track — no Genius scrape or lyrics.
+						</p>
+					</div>
+				) : (
+					<div className="grid gap-3 rounded-lg border bg-muted/30 p-4 text-sm sm:grid-cols-2">
+						<MetadataRow label="Scrape state" value={item.scrapeState} />
+						<MetadataRow
+							label="Last scraped"
+							value={
+								item.scrape
+									? formatDate(item.scrape.lastScrapedAt)
+									: "Not scraped"
+							}
+						/>
+						<MetadataRow
+							label="Scraped title"
+							value={item.scrape?.songTitle ?? "Unavailable"}
+						/>
+						<MetadataRow
+							label="Scraped artist"
+							value={item.scrape?.artistName ?? "Unavailable"}
+						/>
+						<MetadataRow
+							label="Scraped album"
+							value={getScrapedAlbumTitle(item) ?? "Unavailable"}
+						/>
+						<MetadataRow
+							label="Scraped album art"
+							value={item.scrape?.albumArtUrl ?? "Unavailable"}
+						/>
+						<MetadataRow
+							label="Scraped year"
+							value={getScrapedAlbumYear(item) ?? "Unavailable"}
+						/>
+						<MetadataRow label="Pending URL" value={item.pendingUrl ?? "None"} />
+						{sourceUrl ? (
+							<div className="sm:col-span-2">
+								<div className="text-muted-foreground">Source</div>
+								<a
+									href={sourceUrl}
+									target="_blank"
+									rel="noreferrer"
+									className="break-all text-primary underline-offset-4 hover:underline"
+								>
+									{sourceUrl}
+								</a>
+							</div>
+						) : null}
+					</div>
+				)}
 
 				<div className="grid gap-4 sm:grid-cols-2">
 					<div className="space-y-2">
@@ -715,7 +1179,11 @@ function PlaylistSongCard({
 						<Input
 							id={`song-title-${item._id}`}
 							defaultValue={item.songTitleOverride ?? ""}
-							placeholder={item.scrape?.songTitle ?? "Song title"}
+							placeholder={
+								item.scrape?.songTitle ??
+								item.songTitleOverride ??
+								"Song title"
+							}
 							disabled={isBusy}
 							onBlur={(event) => {
 								void onItemFieldBlur(
@@ -759,6 +1227,24 @@ function PlaylistSongCard({
 						/>
 					</div>
 					<div className="space-y-2">
+						<Label htmlFor={`song-duration-${item._id}`}>Duration override</Label>
+						<Input
+							id={`song-duration-${item._id}`}
+							value={durationInput}
+							placeholder="3:15"
+							disabled={isBusy}
+							onChange={(event) =>
+								setDurationInput(event.currentTarget.value)
+							}
+							onBlur={(event) => {
+								void onDurationBlur(item, event.currentTarget.value);
+							}}
+						/>
+						<p className="text-muted-foreground text-xs">
+							m:ss for the zine header. Leave empty for auto.
+						</p>
+					</div>
+					<div className="space-y-2 sm:col-span-2">
 						<Label htmlFor={`song-album-art-${item._id}`}>
 							Album art URL override
 						</Label>
@@ -801,6 +1287,23 @@ function PlaylistSongCard({
 							</p>
 						)}
 					</div>
+				</div>
+
+				<div className="space-y-2">
+					<Label htmlFor={`song-intro-${item._id}`}>Intro</Label>
+					<Textarea
+						id={`song-intro-${item._id}`}
+						defaultValue={item.introContent ?? ""}
+						placeholder="Optional intro for the zine INTRO section"
+						disabled={isBusy}
+						onBlur={(event) => {
+							void onItemFieldBlur(
+								item,
+								"introContent",
+								event.currentTarget.value,
+							);
+						}}
+					/>
 				</div>
 
 				<div className="space-y-2">
@@ -884,6 +1387,7 @@ function getItemFieldValue(
 	if (field === "artistNameOverride") return item.artistNameOverride ?? "";
 	if (field === "albumTitleOverride") return item.albumTitleOverride ?? "";
 	if (field === "albumArtUrlOverride") return item.albumArtUrlOverride ?? "";
+	if (field === "introContent") return item.introContent ?? "";
 	return item.userNote ?? "";
 }
 

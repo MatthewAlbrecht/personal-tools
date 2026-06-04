@@ -1,7 +1,13 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import { ArrowLeft, Columns2, Link as LinkIcon, Printer } from "lucide-react";
+import {
+	ArrowLeft,
+	BookOpen,
+	Columns2,
+	Link as LinkIcon,
+	Printer,
+} from "lucide-react";
 import Link from "next/link";
 import React, { useState } from "react";
 import { toast } from "sonner";
@@ -9,8 +15,8 @@ import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Label } from "~/components/ui/label";
 import { Skeleton } from "~/components/ui/skeleton";
+import { LyricsRenderer } from "~/components/zine/lyrics-renderer";
 import { api } from "../../../../convex/_generated/api";
-import { LyricsRenderer } from "../../playlist-lyrics/_components/lyrics-renderer";
 
 export default function AlbumLyricsPage({
 	params,
@@ -102,6 +108,12 @@ export default function AlbumLyricsPage({
 						</Label>
 					</div>
 					<div className="flex gap-2">
+						<Button asChild variant="outline">
+							<Link href={`/lyrics/${slug}/zine`}>
+								<BookOpen className="mr-2 h-4 w-4" />
+								Zine
+							</Link>
+						</Button>
 						<Button onClick={handleCopyPublicLink} variant="outline">
 							<LinkIcon className="mr-2 h-4 w-4" />
 							Share Link

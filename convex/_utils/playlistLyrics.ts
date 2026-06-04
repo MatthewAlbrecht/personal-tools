@@ -272,6 +272,31 @@ export function sortPlaylistItems<T extends { position: number }>(
 	return [...items].sort((a, b) => a.position - b.position);
 }
 
+export type CompactPlaylistPositionUpdate<TId = string> = {
+	_id: TId;
+	position: number;
+};
+
+export function planCompactPlaylistPositions<
+	T extends { _id: TId; position: number },
+	TId = string,
+>(items: T[]): CompactPlaylistPositionUpdate<TId>[] {
+	const sorted = sortPlaylistItems(items);
+	const updates: CompactPlaylistPositionUpdate<TId>[] = [];
+
+	for (let index = 0; index < sorted.length; index++) {
+		const item = sorted[index];
+		if (!item) continue;
+
+		const nextPosition = index + 1;
+		if (item.position !== nextPosition) {
+			updates.push({ _id: item._id, position: nextPosition });
+		}
+	}
+
+	return updates;
+}
+
 function normalizeOptionalString(
 	value: string | undefined,
 ): string | undefined {

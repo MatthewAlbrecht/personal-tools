@@ -63,11 +63,6 @@ function ForLaterAlbumsPageInner() {
 		{ initialNumItems: 30 },
 	);
 
-	const openableLinks = useQuery(
-		api.forLaterAlbums.listOpenableRymLinks,
-		userId ? { userId, filters, limit: 10 } : "skip",
-	);
-
 	const {
 		albumToRate,
 		openRatingDrawer,
@@ -140,7 +135,6 @@ function ForLaterAlbumsPageInner() {
 					isConnected={isConnected}
 					getValidAccessToken={getValidAccessToken}
 					summary={summary}
-					openableLinks={openableLinks ?? []}
 				/>
 				<ForLaterFilters filters={filters} onChange={updateFilters} />
 				<ForLaterList

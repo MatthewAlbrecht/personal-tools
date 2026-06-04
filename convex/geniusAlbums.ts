@@ -1,6 +1,8 @@
 import { v } from "convex/values";
 import { api } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import { action, mutation, query } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import {
 	extractAbout,
 	extractAlbumMetadata,
@@ -57,7 +59,10 @@ export const getAlbumBySlug = query({
 		songs.sort((a, b) => a.trackNumber - b.trackNumber);
 
 		return {
-			album,
+			album: {
+				...album,
+				zineCoverImageUrl: await resolveAlbumCoverImageUrl(ctx, album),
+			},
 			songs,
 		};
 	},
@@ -329,18 +334,18 @@ export const scrapeAndStoreAlbum = action({
 				const lyrics = extractLyrics(songHtml);
 				const about = extractAbout(songHtml);
 
-				if (!songTitle || !lyrics) {
-					console.warn(`Could not extract data for song ${trackNumber}`);
+				if (!songTitle) {
+					console.warn(`Could not extract title for song ${trackNumber}`);
 					continue;
 				}
 
-				// Store song
+				// Store song (instrumentals / unavailable lyrics still get a page)
 				await ctx.runMutation(api.geniusAlbums.createSong, {
 					albumId,
 					songTitle,
 					geniusSongUrl: songUrl || "",
 					trackNumber,
-					lyrics,
+					lyrics: lyrics ?? "",
 					about,
 				});
 
@@ -388,5 +393,143 @@ export const deleteSong = mutation({
 		requireAuth(ctx);
 		await ctx.db.delete(args.id);
 		return { success: true };
+	},
+});
+
+async function resolveAlbumCoverImageUrl(
+	ctx: Pick<QueryCtx | MutationCtx, "storage">,
+	album: {
+		zineCoverImageStorageId?: Id<"_storage">;
+		zineCoverImageUrl?: string;
+	},
+): Promise<string | undefined> {
+	if (album.zineCoverImageStorageId) {
+		return (
+			(await ctx.storage.getUrl(album.zineCoverImageStorageId)) ?? undefined
+		);
+	}
+
+	return album.zineCoverImageUrl;
+}
+
+export const generateZineCoverUploadUrl = mutation({
+	args: {},
+	returns: v.string(),
+	handler: async (ctx) => {
+		requireAuth(ctx);
+		return await ctx.storage.generateUploadUrl();
+	},
+});
+
+export const updateZineCoverImage = mutation({
+	args: {
+		albumId: v.id("geniusAlbums"),
+		coverImageUrl: v.optional(v.string()),
+		storageId: v.optional(v.id("_storage")),
+	},
+	returns: v.object({ coverImageUrl: v.optional(v.string()) }),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+		const album = await ctx.db.get(args.albumId);
+		if (!album) throw new Error("Album not found");
+		const now = Date.now();
+
+		if (args.storageId !== undefined) {
+			if (
+				album.zineCoverImageStorageId &&
+				album.zineCoverImageStorageId !== args.storageId
+			) {
+				await ctx.storage.delete(album.zineCoverImageStorageId);
+			}
+			await ctx.db.patch(args.albumId, {
+				zineCoverImageStorageId: args.storageId,
+				zineCoverImageUrl: undefined,
+				updatedAt: now,
+			});
+			return {
+				coverImageUrl: (await ctx.storage.getUrl(args.storageId)) ?? undefined,
+			};
+		}
+
+		if (args.coverImageUrl !== undefined) {
+			if (album.zineCoverImageStorageId) {
+				await ctx.storage.delete(album.zineCoverImageStorageId);
+			}
+			const trimmed = args.coverImageUrl.trim();
+			const normalized = trimmed.length > 0 ? trimmed : undefined;
+			await ctx.db.patch(args.albumId, {
+				zineCoverImageUrl: normalized,
+				zineCoverImageStorageId: undefined,
+				updatedAt: now,
+			});
+			return { coverImageUrl: normalized };
+		}
+
+		throw new Error("No cover image provided");
+	},
+});
+
+export const updateZineCoverGreyscale = mutation({
+	args: { albumId: v.id("geniusAlbums"), greyscale: v.boolean() },
+	returns: v.null(),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+		const album = await ctx.db.get(args.albumId);
+		if (!album) throw new Error("Album not found");
+		await ctx.db.patch(args.albumId, {
+			zineCoverGreyscale: args.greyscale ? true : undefined,
+			updatedAt: Date.now(),
+		});
+		return null;
+	},
+});
+
+export const updateZineSongSettings = mutation({
+	args: {
+		songId: v.id("geniusSongs"),
+		zineLyricsColumnCount: v.optional(v.union(v.literal(1), v.literal(2))),
+		zineLyricsFontSizePt: v.optional(v.number()),
+		zineTitleCondenseScale: v.optional(v.number()),
+		zineShowCredits: v.optional(v.boolean()),
+	},
+	returns: v.id("geniusSongs"),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+		if (
+			args.zineLyricsColumnCount === undefined &&
+			args.zineLyricsFontSizePt === undefined &&
+			args.zineTitleCondenseScale === undefined &&
+			args.zineShowCredits === undefined
+		) {
+			throw new Error("No zine settings provided");
+		}
+		const song = await ctx.db.get(args.songId);
+		if (!song) throw new Error("Song not found");
+
+		const patch: {
+			zineLyricsColumnCount?: 1 | 2 | undefined;
+			zineLyricsFontSizePt?: number | undefined;
+			zineTitleCondenseScale?: number | undefined;
+			zineShowCredits?: boolean | undefined;
+		} = {};
+
+		if (args.zineLyricsColumnCount !== undefined) {
+			patch.zineLyricsColumnCount =
+				args.zineLyricsColumnCount === 2 ? undefined : 1;
+		}
+		if (args.zineLyricsFontSizePt !== undefined) {
+			const rounded = Math.round(args.zineLyricsFontSizePt * 2) / 2;
+			patch.zineLyricsFontSizePt = rounded === 9 ? undefined : rounded;
+		}
+		if (args.zineTitleCondenseScale !== undefined) {
+			const rounded = Math.round(args.zineTitleCondenseScale * 100) / 100;
+			patch.zineTitleCondenseScale = rounded === 1 ? undefined : rounded;
+		}
+		if (args.zineShowCredits !== undefined) {
+			patch.zineShowCredits = args.zineShowCredits ? undefined : false;
+		}
+
+		await ctx.db.patch(args.songId, patch);
+		return args.songId;
 	},
 });

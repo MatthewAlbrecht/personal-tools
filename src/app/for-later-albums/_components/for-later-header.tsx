@@ -1,12 +1,7 @@
 "use client";
 
 import { useMutation } from "convex/react";
-import {
-	DatabaseBackup,
-	ExternalLink,
-	MoreHorizontal,
-	RefreshCw,
-} from "lucide-react";
+import { DatabaseBackup, MoreHorizontal, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
@@ -18,7 +13,6 @@ import {
 	DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { api } from "../../../../convex/_generated/api";
-import { openVisibleRymLinks } from "./open-rym-links-button";
 
 type ForLaterSummary = {
 	activeCount: number;
@@ -43,14 +37,12 @@ export function ForLaterHeader({
 	isConnected,
 	getValidAccessToken,
 	summary,
-	openableLinks,
 }: {
 	userId: string;
 	spotifyDisplayName?: string;
 	isConnected: boolean;
 	getValidAccessToken: () => Promise<string | null>;
 	summary?: ForLaterSummary;
-	openableLinks: Array<{ id: string; url: string }>;
 }) {
 	const [isSyncing, setIsSyncing] = useState(false);
 	const [isBackfilling, setIsBackfilling] = useState(false);
@@ -177,14 +169,6 @@ export function ForLaterHeader({
 							>
 								<RefreshCw className="size-4" />
 								{isSyncing ? "Syncing…" : "Sync now"}
-							</DropdownMenuItem>
-							<DropdownMenuItem
-								disabled={openableLinks.length === 0 || isBusy}
-								onSelect={() => openVisibleRymLinks(openableLinks)}
-							>
-								<ExternalLink className="size-4" />
-								Open {openableLinks.length} Google RYM tab
-								{openableLinks.length === 1 ? "" : "s"}
 							</DropdownMenuItem>
 							<DropdownMenuItem
 								disabled={isBusy}

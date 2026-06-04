@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import { ArrowLeft, Columns2, Edit, Printer } from "lucide-react";
+import { ArrowLeft, BookOpen, Columns2, Edit, Printer } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { Button } from "~/components/ui/button";
@@ -10,7 +10,8 @@ import { Label } from "~/components/ui/label";
 import { Skeleton } from "~/components/ui/skeleton";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
-import { LyricsRenderer } from "./lyrics-renderer";
+import { LyricsRenderer } from "~/components/zine/lyrics-renderer";
+import { getPlaylistDisplayTrackNumber } from "../_utils/song-display";
 
 type PlaylistLyricsItemForReader = {
 	_id: Id<"playlistLyricsItems">;
@@ -148,6 +149,18 @@ function PlaylistLyricsReaderContent({
 							<Printer className="mr-2 h-4 w-4" />
 							Print
 						</Button>
+						<Button asChild variant="outline">
+							<Link
+								href={
+									variant === "public"
+										? `/public/playlist-lyrics/${slug}/zine`
+										: `/playlist-lyrics/${slug}/zine`
+								}
+							>
+								<BookOpen className="mr-2 h-4 w-4" />
+								Zine
+							</Link>
+						</Button>
 						<Button onClick={handleCompactPrint} variant="outline">
 							<Columns2 className="mr-2 h-4 w-4" />
 							2-Column
@@ -228,7 +241,7 @@ function PlaylistLyricsReaderContent({
 						No songs found for this playlist.
 					</p>
 				) : (
-					songs.map((song) => {
+					songs.map((song, index) => {
 						const metadataParts = getMetadataParts(song, {
 							showAlbum,
 							showArtist,
@@ -249,7 +262,7 @@ function PlaylistLyricsReaderContent({
 									/>
 								) : null}
 								<span className="text-muted-foreground text-sm print:text-xs">
-									Track {song.position}
+									Track {getPlaylistDisplayTrackNumber(index)}
 								</span>
 								<h2 className="mb-2 font-semibold text-2xl print:text-3xl">
 									{getSongTitle(song)}

@@ -1,15 +1,15 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import { ArrowLeft, Columns2, Printer } from "lucide-react";
+import { ArrowLeft, BookOpen, Columns2, Printer } from "lucide-react";
 import Link from "next/link";
 import React, { useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Label } from "~/components/ui/label";
 import { Skeleton } from "~/components/ui/skeleton";
+import { LyricsRenderer } from "~/components/zine/lyrics-renderer";
 import { api } from "../../../../../convex/_generated/api";
-import { LyricsRenderer } from "../../../playlist-lyrics/_components/lyrics-renderer";
 
 export default function PublicAlbumLyricsPage({
 	params,
@@ -104,6 +104,12 @@ export default function PublicAlbumLyricsPage({
 					</Label>
 				</div>
 				<div className="flex gap-2">
+					<Button asChild variant="outline">
+						<Link href={`/public/lyrics/${slug}/zine`}>
+							<BookOpen className="mr-2 h-4 w-4" />
+							Zine
+						</Link>
+					</Button>
 					<Button variant="outline" onClick={handlePrint}>
 						<Printer className="mr-2 h-4 w-4" />
 						Print

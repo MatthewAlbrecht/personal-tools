@@ -197,13 +197,6 @@ export const upsertRateYourMusicScrape = mutation({
 
 		await syncReleaseTaxonomy(ctx, scrapeId, args, now);
 
-		await ctx.runMutation(
-			internal.forLaterAlbums.refreshFilterProjectionsForScrape,
-			{
-				scrapeId,
-			},
-		);
-
 		await matchForLaterAlbumsForRymScrape(ctx, {
 			scrapeId,
 			spotifyAlbumId: args.spotifyAlbumId?.trim() || undefined,
@@ -211,6 +204,13 @@ export const upsertRateYourMusicScrape = mutation({
 			artists: args.artists,
 			now,
 		});
+
+		await ctx.runMutation(
+			internal.forLaterAlbums.refreshFilterProjectionsForScrape,
+			{
+				scrapeId,
+			},
+		);
 
 		return scrapeId;
 	},

@@ -28,3 +28,17 @@ test("RYM scrape ingest matches after taxonomy sync", () => {
 	assert.match(source, /albumTitle: args\.albumTitle/);
 	assert.match(source, /artists: args\.artists/);
 });
+
+test("RYM scrape ingest refreshes For Later projections after album link matching", () => {
+	const matchIndex = source.indexOf("await matchForLaterAlbumsForRymScrape");
+	const refreshIndex = source.indexOf(
+		"internal.forLaterAlbums.refreshFilterProjectionsForScrape",
+	);
+
+	assert.ok(matchIndex >= 0, "matching call must exist");
+	assert.ok(refreshIndex >= 0, "projection refresh must exist");
+	assert.ok(
+		refreshIndex > matchIndex,
+		"projection refresh must run after Spotify album link matching",
+	);
+});
