@@ -1,9 +1,9 @@
 "use client";
 
 import { useMutation } from "convex/react";
-import { Disc3, MoreHorizontal } from "lucide-react";
+import { Check, Disc3, MoreHorizontal } from "lucide-react";
 import Image from "next/image";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AlbumRatingBadge } from "~/components/album-rating-badge";
 import { AlbumUnrankedBadge } from "~/components/album-unranked-badge";
@@ -21,6 +21,8 @@ import { cn } from "~/lib/utils";
 import { api } from "../../../../convex/_generated/api";
 import { buildGoogleRateYourMusicSearchUrl } from "../../../../convex/_utils/google_rym_lucky_search";
 import type { ForLaterAlbumRowData } from "../_utils/types";
+
+type CopiedField = "album" | "artist";
 
 function googleRymSearchUrl(row: ForLaterAlbumRowData): string {
 	return buildGoogleRateYourMusicSearchUrl({
@@ -58,6 +60,36 @@ export function ForLaterRow({
 	const setRemovedFromForLater = useMutation(
 		api.forLaterAlbums.setForLaterAlbumRemovedFromForLater,
 	);
+	const [copiedField, setCopiedField] = useState<CopiedField | null>(null);
+	const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	useEffect(() => {
+		return () => {
+			if (copiedTimeoutRef.current) {
+				clearTimeout(copiedTimeoutRef.current);
+			}
+		};
+	}, []);
+
+	async function handleCopyText(
+		text: string,
+		field: CopiedField,
+	): Promise<void> {
+		try {
+			await navigator.clipboard.writeText(text);
+			setCopiedField(field);
+
+			if (copiedTimeoutRef.current) {
+				clearTimeout(copiedTimeoutRef.current);
+			}
+
+			copiedTimeoutRef.current = setTimeout(() => {
+				setCopiedField(null);
+			}, 1400);
+		} catch (error) {
+			console.error("Failed to copy text:", error);
+		}
+	}
 
 	async function handleSetRymNotOnSite(notOnSite: boolean): Promise<void> {
 		try {
@@ -129,10 +161,30 @@ export function ForLaterRow({
 					<div className="space-y-2">
 						<div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
 							<div className="min-w-0">
-								<h2 className="truncate font-semibold text-base">{row.name}</h2>
-								<p className="truncate text-muted-foreground text-sm">
-									{row.artistName}
+								<h2 className="flex min-w-0 items-center gap-2 font-semibold text-base">
+									<button
+										type="button"
+										className="min-w-0 truncate rounded-sm text-left underline-offset-2 transition-colors hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+										title="Copy album name"
+										onClick={() => void handleCopyText(row.name, "album")}
+									>
+										{row.name}
+									</button>
+									<CopiedIndicator visible={copiedField === "album"} />
+								</h2>
+								<p className="flex min-w-0 items-center gap-2 text-muted-foreground text-sm">
+									<button
+										type="button"
+										className="min-w-0 truncate rounded-sm text-left underline-offset-2 transition-colors hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+										title="Copy artist name"
+										onClick={() =>
+											void handleCopyText(row.artistName, "artist")
+										}
+									>
+										{row.artistName}
+									</button>
 									{row.releaseYear ? ` · ${row.releaseYear}` : ""}
+									<CopiedIndicator visible={copiedField === "artist"} />
 								</p>
 								<p className="text-muted-foreground text-xs">
 									Added {formatDate(row.playlistAddedAt ?? row.firstSeenAt)} ·
@@ -215,6 +267,19 @@ export function ForLaterRow({
 				/>
 			</div>
 		</article>
+	);
+}
+
+function CopiedIndicator({ visible }: { visible: boolean }) {
+	if (!visible) {
+		return null;
+	}
+
+	return (
+		<span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-1.5 py-0.5 font-medium text-[10px] text-emerald-700 dark:text-emerald-300">
+			<Check className="size-3" />
+			Copied
+		</span>
 	);
 }
 

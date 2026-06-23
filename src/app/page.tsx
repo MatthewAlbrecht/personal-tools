@@ -45,6 +45,12 @@ export default async function Home() {
 						</Link>
 						<Link
 							className="rounded-lg bg-white/10 px-6 py-3 text-center font-semibold transition hover:bg-white/20"
+							href="/concerts"
+						>
+							Concert Tracker →
+						</Link>
+						<Link
+							className="rounded-lg bg-white/10 px-6 py-3 text-center font-semibold transition hover:bg-white/20"
 							href="/robs-rankings"
 						>
 							Rob's Rankings →

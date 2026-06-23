@@ -818,4 +818,106 @@ export default defineSchema({
 	})
 		.index("by_scrapeId", ["scrapeId"])
 		.index("by_descriptorId", ["descriptorId"]),
+
+	concertVenues: defineTable({
+		tmVenueId: v.string(),
+		name: v.string(),
+		city: v.optional(v.string()),
+		stateCode: v.optional(v.string()),
+		address: v.optional(v.string()),
+		postalCode: v.optional(v.string()),
+		latitude: v.optional(v.number()),
+		longitude: v.optional(v.number()),
+		firstSeenAt: v.number(),
+		lastSeenAt: v.number(),
+		lastFetchedAt: v.optional(v.number()),
+	})
+		.index("by_tmVenueId", ["tmVenueId"])
+		.index("by_name", ["name"]),
+
+	userConcertVenues: defineTable({
+		userId: v.string(),
+		venueId: v.id("concertVenues"),
+		isSelected: v.boolean(),
+		label: v.optional(v.string()),
+		createdAt: v.number(),
+		updatedAt: v.number(),
+	})
+		.index("by_userId", ["userId"])
+		.index("by_userId_venueId", ["userId", "venueId"])
+		.index("by_userId_isSelected", ["userId", "isSelected"]),
+
+	concertEvents: defineTable({
+		tmEventId: v.string(),
+		tmEventIds: v.optional(v.array(v.string())),
+		dedupeKey: v.optional(v.string()),
+		dedupeBaseKey: v.optional(v.string()),
+		venueId: v.id("concertVenues"),
+		name: v.string(),
+		url: v.optional(v.string()),
+		imageUrl: v.optional(v.string()),
+		localDate: v.optional(v.string()),
+		localTime: v.optional(v.string()),
+		dateTime: v.optional(v.string()),
+		tmStatus: v.optional(v.string()),
+		publicSaleStartDateTime: v.optional(v.string()),
+		attractionNames: v.array(v.string()),
+		eventDates: v.optional(v.array(v.string())),
+		dateRangeStart: v.optional(v.string()),
+		dateRangeEnd: v.optional(v.string()),
+		firstSeenAt: v.number(),
+		lastSeenAt: v.number(),
+		lastFetchedAt: v.number(),
+	})
+		.index("by_tmEventId", ["tmEventId"])
+		.index("by_dedupeKey", ["dedupeKey"])
+		.index("by_dedupeBaseKey", ["dedupeBaseKey"])
+		.index("by_venueId", ["venueId"])
+		.index("by_venueId_dateTime", ["venueId", "dateTime"])
+		.index("by_venueId_dateRangeStart", ["venueId", "dateRangeStart"])
+		.index("by_dateTime", ["dateTime"])
+		.index("by_dateRangeStart", ["dateRangeStart"]),
+
+	userConcertEvents: defineTable({
+		userId: v.string(),
+		eventId: v.id("concertEvents"),
+		venueId: v.optional(v.id("concertVenues")),
+		eventDate: v.optional(v.string()),
+		userStatus: v.union(
+			v.literal("new"),
+			v.literal("interested"),
+			v.literal("owned"),
+			v.literal("ignored"),
+		),
+		notes: v.optional(v.string()),
+		firstSeenAt: v.number(),
+		updatedAt: v.number(),
+	})
+		.index("by_userId", ["userId"])
+		.index("by_eventId", ["eventId"])
+		.index("by_userId_eventId", ["userId", "eventId"])
+		.index("by_userId_userStatus", ["userId", "userStatus"])
+		.index("by_userId_eventDate", ["userId", "eventDate"])
+		.index("by_userId_userStatus_eventDate", [
+			"userId",
+			"userStatus",
+			"eventDate",
+		])
+		.index("by_userId_venueId_eventDate", ["userId", "venueId", "eventDate"])
+		.index("by_userId_venueId_userStatus_eventDate", [
+			"userId",
+			"venueId",
+			"userStatus",
+			"eventDate",
+		]),
+
+	concertCalendarFeeds: defineTable({
+		userId: v.string(),
+		token: v.string(),
+		createdAt: v.number(),
+		updatedAt: v.number(),
+		revokedAt: v.optional(v.number()),
+	})
+		.index("by_userId", ["userId"])
+		.index("by_token", ["token"]),
 });

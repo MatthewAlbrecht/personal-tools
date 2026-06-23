@@ -13,6 +13,7 @@ export function middleware(request: NextRequest) {
 	const isBooks = request.nextUrl.pathname.startsWith("/books");
 	const isFolioSociety = request.nextUrl.pathname.startsWith("/folio-society");
 	const isArticles = request.nextUrl.pathname.startsWith("/articles");
+	const isConcerts = request.nextUrl.pathname.startsWith("/concerts");
 	const isPlaylistLyrics =
 		request.nextUrl.pathname.startsWith("/playlist-lyrics");
 	const isPlaylistLyricsApi = request.nextUrl.pathname.startsWith(
@@ -23,6 +24,7 @@ export function middleware(request: NextRequest) {
 		(isBooks ||
 			isFolioSociety ||
 			isArticles ||
+			isConcerts ||
 			isPlaylistLyrics ||
 			isPlaylistLyricsApi) &&
 		!session
@@ -43,6 +45,8 @@ export const config = {
 		"/folio-society/:path*",
 		"/articles",
 		"/articles/:path*",
+		"/concerts",
+		"/concerts/:path*",
 		"/playlist-lyrics",
 		"/playlist-lyrics/:path*",
 		"/api/migrate-playlist-lyrics",
