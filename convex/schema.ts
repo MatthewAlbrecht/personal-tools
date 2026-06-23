@@ -515,6 +515,46 @@ export default defineSchema({
 		])
 		.index("by_itemId", ["itemId"]),
 
+	forLaterAlbumRecommendations: defineTable({
+		userId: v.string(),
+		createdAt: v.number(),
+		seed: v.string(),
+		now: v.number(),
+		answers: v.object({
+			addedTimeframe: v.union(
+				v.literal("day"),
+				v.literal("week"),
+				v.literal("month"),
+				v.literal("two_months"),
+				v.literal("any"),
+			),
+			genreKey: v.string(),
+			releaseTime: v.union(
+				v.literal("new_release"),
+				v.literal("recent"),
+				v.literal("modern"),
+				v.literal("old"),
+				v.literal("any"),
+			),
+			descriptorKey: v.string(),
+			ratingTier: v.union(
+				v.literal("holy_moly"),
+				v.literal("really_enjoyed"),
+				v.literal("good"),
+				v.literal("any"),
+			),
+			count: v.number(),
+		}),
+		requestedCount: v.number(),
+		matchingCount: v.number(),
+		returnedCount: v.number(),
+		albumItemIds: v.array(v.id("forLaterAlbumItems")),
+		albumIds: v.array(v.id("spotifyAlbums")),
+		spotifyAlbumIds: v.array(v.string()),
+	})
+		.index("by_userId_createdAt", ["userId", "createdAt"])
+		.index("by_userId", ["userId"]),
+
 	forLaterSyncRuns: defineTable({
 		userId: v.string(),
 		spotifyPlaylistId: v.string(),

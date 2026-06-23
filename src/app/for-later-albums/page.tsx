@@ -7,12 +7,14 @@ import { Suspense, useMemo } from "react";
 import { AlbumRatingDrawer } from "~/components/album-rating-drawer";
 import { LoginPrompt } from "~/components/login-prompt";
 import { useAlbumRatingDrawer } from "~/lib/hooks/use-album-rating-drawer";
+import { useForLaterRecommendationDrawer } from "~/lib/hooks/use-for-later-recommendation-drawer";
 import { useForLaterRymAssociateDrawer } from "~/lib/hooks/use-for-later-rym-associate-drawer";
 import { useSpotifyAuth } from "~/lib/hooks/use-spotify-auth";
 import { api } from "../../../convex/_generated/api";
 import { ForLaterFilters } from "./_components/for-later-filters";
 import { ForLaterHeader } from "./_components/for-later-header";
 import { ForLaterList } from "./_components/for-later-list";
+import { ForLaterRecommendationDrawer } from "./_components/for-later-recommendation-drawer";
 import { ForLaterRymAssociateDrawer } from "./_components/for-later-rym-associate-drawer";
 import {
 	addUniqueSortedKey,
@@ -77,6 +79,11 @@ function ForLaterAlbumsPageInner() {
 		closeAssociateDrawer,
 		handleAssociate,
 	} = useForLaterRymAssociateDrawer({ userId });
+	const {
+		isRecommendationDrawerOpen,
+		openRecommendationDrawer,
+		setRecommendationDrawerOpen,
+	} = useForLaterRecommendationDrawer();
 
 	function handleRateAlbum(row: ForLaterAlbumRowData): void {
 		const album = albumToRateFromForLaterRow(row);
@@ -135,6 +142,7 @@ function ForLaterAlbumsPageInner() {
 					isConnected={isConnected}
 					getValidAccessToken={getValidAccessToken}
 					summary={summary}
+					onOpenRecommendationDrawer={openRecommendationDrawer}
 				/>
 				<ForLaterFilters filters={filters} onChange={updateFilters} />
 				<ForLaterList
@@ -166,6 +174,11 @@ function ForLaterAlbumsPageInner() {
 					if (!open) closeAssociateDrawer();
 				}}
 				onAssociate={handleAssociate}
+			/>
+			<ForLaterRecommendationDrawer
+				userId={userId}
+				open={isRecommendationDrawerOpen}
+				onOpenChange={setRecommendationDrawerOpen}
 			/>
 		</div>
 	);

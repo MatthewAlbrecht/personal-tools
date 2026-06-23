@@ -33,6 +33,20 @@ import {
 } from "./_utils/forLaterFilterProjection";
 import { chooseIndexedForLaterListScan } from "./_utils/forLaterIndexedList";
 import { projectionMatchesFilters } from "./_utils/forLaterProjectionPredicate";
+import {
+	type AddedTimeframeAnswer,
+	type ForLaterRecommendationAnswers,
+	type ForLaterRecommendationCandidate,
+	type RatingTierAnswer,
+	type RecommendationTagInput,
+	type RecommendationTagOption,
+	type ReleaseTimeAnswer,
+	buildSavedRecommendationAlbumRefs,
+	candidateMatchesRecommendationAnswers,
+	chooseRecommendationRows,
+	normalizeRecommendationCount,
+	selectRandomTagOptions,
+} from "./_utils/forLaterRecommendations";
 import { buildOpenableGoogleRymSearchLinks } from "./_utils/google_rym_lucky_search";
 import {
 	collectMappedRymScrapeIds,
@@ -82,6 +96,44 @@ const forLaterFiltersValidator = v.object({
 	filterMatch: v.optional(taxonomyMatchValidator),
 });
 
+const recommendationAddedTimeframeValidator = v.union(
+	v.literal("day"),
+	v.literal("week"),
+	v.literal("month"),
+	v.literal("two_months"),
+	v.literal("any"),
+);
+
+const recommendationReleaseTimeValidator = v.union(
+	v.literal("new_release"),
+	v.literal("recent"),
+	v.literal("modern"),
+	v.literal("old"),
+	v.literal("any"),
+);
+
+const recommendationRatingTierValidator = v.union(
+	v.literal("holy_moly"),
+	v.literal("really_enjoyed"),
+	v.literal("good"),
+	v.literal("any"),
+);
+
+const recommendationAnswersValidator = v.object({
+	addedTimeframe: recommendationAddedTimeframeValidator,
+	genreKey: v.string(),
+	releaseTime: recommendationReleaseTimeValidator,
+	descriptorKey: v.string(),
+	ratingTier: recommendationRatingTierValidator,
+	count: v.number(),
+});
+
+const recommendationOptionValidator = v.object({
+	key: v.string(),
+	label: v.string(),
+	count: v.number(),
+});
+
 const tagValidator = v.object({
 	key: v.string(),
 	label: v.string(),
@@ -123,6 +175,21 @@ const forLaterAlbumRowValidator = v.object({
 	primaryGenres: v.array(tagValidator),
 	secondaryGenres: v.array(tagValidator),
 	descriptors: v.array(tagValidator),
+});
+
+const recommendationResultFields = {
+	rows: v.array(forLaterAlbumRowValidator),
+	matchingCount: v.number(),
+	requestedCount: v.number(),
+	returnedCount: v.number(),
+	wasLimitedByPool: v.boolean(),
+};
+
+const recommendationResultValidator = v.object(recommendationResultFields);
+
+const savedRecommendationResultValidator = v.object({
+	recommendationId: v.id("forLaterAlbumRecommendations"),
+	...recommendationResultFields,
 });
 
 type ForLaterAlbumRow = {
@@ -545,6 +612,286 @@ async function hydrateForLaterAlbumRow(
 	};
 
 	return row;
+}
+
+const FOR_LATER_RECOMMENDATION_SCAN_LIMIT = 2000;
+const FOR_LATER_RECOMMENDATION_OPTION_LIMIT = 10;
+
+type ForLaterRecommendationHydratedCandidate = {
+	row: ForLaterAlbumRow;
+	candidate: ForLaterRecommendationCandidate;
+};
+
+type ForLaterRecommendationResult = {
+	rows: ForLaterAlbumRow[];
+	matchingCount: number;
+	requestedCount: number;
+	returnedCount: number;
+	wasLimitedByPool: boolean;
+};
+
+function forLaterRecommendationItemHidden(
+	item: Doc<"forLaterAlbumItems">,
+): boolean {
+	return (
+		item.filterMarkedAsSingle === true ||
+		item.filterRemovedFromForLater === true ||
+		item.markedAsSingle === true ||
+		item.removedFromForLater === true
+	);
+}
+
+function readableRecommendationLabelFromKey(key: string): string {
+	return key
+		.split(/[\s_-]+/)
+		.filter(Boolean)
+		.map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+		.join(" ");
+}
+
+function recommendationTagInputFromKey(key: string): RecommendationTagInput {
+	return {
+		key,
+		label: readableRecommendationLabelFromKey(key),
+	};
+}
+
+function recommendationCandidateFromItem(
+	item: Doc<"forLaterAlbumItems">,
+): ForLaterRecommendationCandidate {
+	return {
+		id: String(item._id),
+		playlistAddedAt: item.playlistAddedAt,
+		firstSeenAt: item.firstSeenAt,
+		createdAt: item.createdAt,
+		releaseYear: item.filterReleaseYear,
+		filterGenreKeysSorted: item.filterGenreKeysSorted ?? [],
+		filterDescriptorKeysSorted: item.filterDescriptorKeysSorted ?? [],
+		markedAsSingle: item.markedAsSingle,
+		removedFromForLater: item.removedFromForLater,
+	};
+}
+
+function recommendationCandidateFromRow(
+	row: ForLaterAlbumRow,
+	item: Doc<"forLaterAlbumItems">,
+): ForLaterRecommendationCandidate {
+	return {
+		id: row.id,
+		playlistAddedAt: row.playlistAddedAt,
+		firstSeenAt: row.firstSeenAt,
+		createdAt: row.createdAt,
+		releaseYear: row.releaseYear,
+		filterGenreKeysSorted: item.filterGenreKeysSorted ?? [],
+		filterDescriptorKeysSorted: item.filterDescriptorKeysSorted ?? [],
+		rating: row.rating,
+		markedAsSingle: row.markedAsSingle,
+		removedFromForLater: row.removedFromForLater,
+	};
+}
+
+async function collectVisibleActiveForLaterRecommendationItems(
+	ctx: ForLaterDbCtx,
+	args: { userId: string },
+): Promise<Doc<"forLaterAlbumItems">[]> {
+	const items = await ctx.db
+		.query("forLaterAlbumItems")
+		.withIndex("by_userId_isActive_lastSeenAt", (q) =>
+			q.eq("userId", args.userId).eq("isActive", true),
+		)
+		.order("desc")
+		.take(FOR_LATER_RECOMMENDATION_SCAN_LIMIT);
+
+	return items.filter((item) => !forLaterRecommendationItemHidden(item));
+}
+
+async function loadRecommendationGenreLabels(
+	ctx: QueryCtx,
+	keys: string[],
+): Promise<Map<string, string>> {
+	const labels = new Map<string, string>();
+	for (const key of keys) {
+		const genre = await ctx.db
+			.query("rateYourMusicGenres")
+			.withIndex("by_key", (q) => q.eq("key", key))
+			.first();
+		if (genre) {
+			labels.set(key, genre.label);
+		}
+	}
+	return labels;
+}
+
+async function loadRecommendationDescriptorLabels(
+	ctx: QueryCtx,
+	keys: string[],
+): Promise<Map<string, string>> {
+	const labels = new Map<string, string>();
+	for (const key of keys) {
+		const descriptor = await ctx.db
+			.query("rateYourMusicDescriptors")
+			.withIndex("by_key", (q) => q.eq("key", key))
+			.first();
+		if (descriptor) {
+			labels.set(key, descriptor.label);
+		}
+	}
+	return labels;
+}
+
+function applyRecommendationOptionLabels(
+	options: RecommendationTagOption[],
+	labels: Map<string, string>,
+): RecommendationTagOption[] {
+	return options.map((option) => ({
+		...option,
+		label: labels.get(option.key) ?? option.label,
+	}));
+}
+
+async function collectForLaterRecommendationTagOptions(
+	ctx: QueryCtx,
+	args: { userId: string; genreSeed: string; descriptorSeed: string },
+): Promise<{
+	genres: RecommendationTagOption[];
+	descriptors: RecommendationTagOption[];
+}> {
+	const items = await collectVisibleActiveForLaterRecommendationItems(ctx, {
+		userId: args.userId,
+	});
+	const genreOptions = selectRandomTagOptions(
+		items.flatMap((item) =>
+			(item.filterGenreKeysSorted ?? []).map(recommendationTagInputFromKey),
+		),
+		args.genreSeed,
+		FOR_LATER_RECOMMENDATION_OPTION_LIMIT,
+	);
+	const descriptorOptions = selectRandomTagOptions(
+		items.flatMap((item) =>
+			(item.filterDescriptorKeysSorted ?? []).map(
+				recommendationTagInputFromKey,
+			),
+		),
+		args.descriptorSeed,
+		FOR_LATER_RECOMMENDATION_OPTION_LIMIT,
+	);
+	const [genreLabels, descriptorLabels] = await Promise.all([
+		loadRecommendationGenreLabels(
+			ctx,
+			genreOptions.map((option) => option.key),
+		),
+		loadRecommendationDescriptorLabels(
+			ctx,
+			descriptorOptions.map((option) => option.key),
+		),
+	]);
+
+	return {
+		genres: applyRecommendationOptionLabels(genreOptions, genreLabels),
+		descriptors: applyRecommendationOptionLabels(
+			descriptorOptions,
+			descriptorLabels,
+		),
+	};
+}
+
+async function collectForLaterRecommendationCandidates(
+	ctx: ForLaterDbCtx,
+	args: { userId: string; answers: ForLaterRecommendationAnswers; now: number },
+): Promise<ForLaterRecommendationHydratedCandidate[]> {
+	const items = await collectVisibleActiveForLaterRecommendationItems(ctx, {
+		userId: args.userId,
+	});
+	const cheapFilterAnswers: ForLaterRecommendationAnswers = {
+		...args.answers,
+		ratingTier: "any",
+	};
+
+	const candidates: ForLaterRecommendationHydratedCandidate[] = [];
+	for (const item of items) {
+		const itemCandidate = recommendationCandidateFromItem(item);
+		if (
+			!candidateMatchesRecommendationAnswers(
+				itemCandidate,
+				cheapFilterAnswers,
+				args.now,
+			)
+		) {
+			continue;
+		}
+
+		const row = await hydrateForLaterAlbumRow(ctx, {
+			userId: args.userId,
+			item,
+		});
+		if (!row) {
+			continue;
+		}
+
+		candidates.push({
+			row,
+			candidate: recommendationCandidateFromRow(row, item),
+		});
+	}
+
+	return candidates;
+}
+
+function normalizeRecommendationAnswers(answers: {
+	addedTimeframe: AddedTimeframeAnswer;
+	genreKey: string;
+	releaseTime: ReleaseTimeAnswer;
+	descriptorKey: string;
+	ratingTier: RatingTierAnswer;
+	count: number;
+}): ForLaterRecommendationAnswers {
+	return {
+		addedTimeframe: answers.addedTimeframe,
+		genreKey: answers.genreKey.trim() || "any",
+		releaseTime: answers.releaseTime,
+		descriptorKey: answers.descriptorKey.trim() || "any",
+		ratingTier: answers.ratingTier,
+		count: normalizeRecommendationCount(answers.count),
+	};
+}
+
+async function buildForLaterRecommendationResult(
+	ctx: ForLaterDbCtx,
+	args: {
+		userId: string;
+		answers: ForLaterRecommendationAnswers;
+		now: number;
+		seed: string;
+	},
+): Promise<ForLaterRecommendationResult> {
+	const candidates = await collectForLaterRecommendationCandidates(ctx, {
+		userId: args.userId,
+		answers: args.answers,
+		now: args.now,
+	});
+	const matching = candidates.filter(({ candidate }) =>
+		candidateMatchesRecommendationAnswers(candidate, args.answers, args.now),
+	);
+	const rowsByCandidateId = new Map(
+		matching.map(({ candidate, row }) => [candidate.id, row]),
+	);
+	const selectedCandidates = chooseRecommendationRows(
+		matching.map(({ candidate }) => candidate),
+		args.answers.count,
+		args.seed,
+	);
+	const rows = selectedCandidates.flatMap((candidate) => {
+		const row = rowsByCandidateId.get(candidate.id);
+		return row ? [row] : [];
+	});
+
+	return {
+		rows,
+		matchingCount: matching.length,
+		requestedCount: args.answers.count,
+		returnedCount: rows.length,
+		wasLimitedByPool: rows.length < args.answers.count,
+	};
 }
 
 function appendForLaterListExclusionFilters(
@@ -1221,6 +1568,116 @@ export const getForLaterUiSummary = query({
 	},
 });
 
+export const listForLaterRecommendationOptions = query({
+	args: {
+		userId: v.string(),
+		genreSeed: v.string(),
+		descriptorSeed: v.string(),
+	},
+	returns: v.object({
+		genres: v.array(recommendationOptionValidator),
+		descriptors: v.array(recommendationOptionValidator),
+	}),
+	handler: async (
+		ctx,
+		args,
+	): Promise<{
+		genres: Array<{ key: string; label: string; count: number }>;
+		descriptors: Array<{ key: string; label: string; count: number }>;
+	}> => {
+		requireAuth(ctx);
+		return await collectForLaterRecommendationTagOptions(ctx, {
+			userId: args.userId,
+			genreSeed: args.genreSeed,
+			descriptorSeed: args.descriptorSeed,
+		});
+	},
+});
+
+export const getForLaterRecommendations = query({
+	args: {
+		userId: v.string(),
+		answers: recommendationAnswersValidator,
+		now: v.number(),
+		seed: v.string(),
+	},
+	returns: recommendationResultValidator,
+	handler: async (ctx, args): Promise<ForLaterRecommendationResult> => {
+		requireAuth(ctx);
+		const answers = normalizeRecommendationAnswers({
+			addedTimeframe: args.answers.addedTimeframe as AddedTimeframeAnswer,
+			genreKey: args.answers.genreKey,
+			releaseTime: args.answers.releaseTime as ReleaseTimeAnswer,
+			descriptorKey: args.answers.descriptorKey,
+			ratingTier: args.answers.ratingTier as RatingTierAnswer,
+			count: args.answers.count,
+		});
+
+		return await buildForLaterRecommendationResult(ctx, {
+			userId: args.userId,
+			answers,
+			now: args.now,
+			seed: args.seed,
+		});
+	},
+});
+
+export const createForLaterRecommendation = mutation({
+	args: {
+		userId: v.string(),
+		answers: recommendationAnswersValidator,
+		now: v.number(),
+		seed: v.string(),
+	},
+	returns: savedRecommendationResultValidator,
+	handler: async (
+		ctx,
+		args,
+	): Promise<
+		ForLaterRecommendationResult & {
+			recommendationId: Id<"forLaterAlbumRecommendations">;
+		}
+	> => {
+		requireAuth(ctx);
+		const answers = normalizeRecommendationAnswers({
+			addedTimeframe: args.answers.addedTimeframe as AddedTimeframeAnswer,
+			genreKey: args.answers.genreKey,
+			releaseTime: args.answers.releaseTime as ReleaseTimeAnswer,
+			descriptorKey: args.answers.descriptorKey,
+			ratingTier: args.answers.ratingTier as RatingTierAnswer,
+			count: args.answers.count,
+		});
+		const result = await buildForLaterRecommendationResult(ctx, {
+			userId: args.userId,
+			answers,
+			now: args.now,
+			seed: args.seed,
+		});
+		const albumRefs = buildSavedRecommendationAlbumRefs(result.rows);
+		const recommendationId = await ctx.db.insert(
+			"forLaterAlbumRecommendations",
+			{
+				userId: args.userId,
+				createdAt: Date.now(),
+				seed: args.seed,
+				now: args.now,
+				answers,
+				requestedCount: result.requestedCount,
+				matchingCount: result.matchingCount,
+				returnedCount: result.returnedCount,
+				albumItemIds: albumRefs.albumItemIds,
+				albumIds: albumRefs.albumIds,
+				spotifyAlbumIds: albumRefs.spotifyAlbumIds,
+			},
+		);
+
+		return {
+			recommendationId,
+			...result,
+		};
+	},
+});
+
 export const listForLaterAlbumRows = query({
 	args: {
 		userId: v.string(),
@@ -1603,7 +2060,9 @@ async function runSingleBackfillFilterProjectionBatch(
 
 	const parentKeysByChild = await loadRymGenreParentKeysByChild(ctx);
 	for (const item of result.page) {
-		await syncForLaterItemFilterProjection(ctx, item._id, { parentKeysByChild });
+		await syncForLaterItemFilterProjection(ctx, item._id, {
+			parentKeysByChild,
+		});
 	}
 
 	return {

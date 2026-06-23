@@ -1,0 +1,296 @@
+export type AddedTimeframeAnswer =
+	| "day"
+	| "week"
+	| "month"
+	| "two_months"
+	| "any";
+
+export type ReleaseTimeAnswer =
+	| "new_release"
+	| "recent"
+	| "modern"
+	| "old"
+	| "any";
+
+export type RatingTierAnswer = "holy_moly" | "really_enjoyed" | "good" | "any";
+
+export type ForLaterRecommendationCandidate = {
+	id: string;
+	playlistAddedAt?: number;
+	firstSeenAt?: number;
+	createdAt: number;
+	releaseYear?: number;
+	filterGenreKeysSorted: string[];
+	filterDescriptorKeysSorted: string[];
+	rating?: number;
+	markedAsSingle?: boolean;
+	removedFromForLater?: boolean;
+};
+
+export type ForLaterRecommendationAnswers = {
+	addedTimeframe: AddedTimeframeAnswer;
+	genreKey: string;
+	releaseTime: ReleaseTimeAnswer;
+	descriptorKey: string;
+	ratingTier: RatingTierAnswer;
+	count: number;
+};
+
+export type RecommendationTagInput = {
+	key: string;
+	label: string;
+};
+
+export type RecommendationTagOption = RecommendationTagInput & {
+	count: number;
+};
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const MIN_RECOMMENDATION_COUNT = 1;
+const MAX_RECOMMENDATION_COUNT = 5;
+
+export function normalizeRecommendationCount(count?: number): number {
+	if (count === undefined) {
+		return MIN_RECOMMENDATION_COUNT;
+	}
+
+	if (!Number.isFinite(count)) {
+		return count > MAX_RECOMMENDATION_COUNT
+			? MAX_RECOMMENDATION_COUNT
+			: MIN_RECOMMENDATION_COUNT;
+	}
+
+	const integerCount = Math.trunc(count);
+
+	if (integerCount < MIN_RECOMMENDATION_COUNT) {
+		return MIN_RECOMMENDATION_COUNT;
+	}
+
+	if (integerCount > MAX_RECOMMENDATION_COUNT) {
+		return MAX_RECOMMENDATION_COUNT;
+	}
+
+	return integerCount;
+}
+
+export function recommendationAddedAt(
+	candidate: ForLaterRecommendationCandidate,
+): number {
+	return (
+		candidate.playlistAddedAt ?? candidate.firstSeenAt ?? candidate.createdAt
+	);
+}
+
+export function addedTimeframeMatches(
+	candidate: ForLaterRecommendationCandidate,
+	addedTimeframe: AddedTimeframeAnswer,
+	now: number,
+): boolean {
+	if (addedTimeframe === "any") {
+		return true;
+	}
+
+	const ageMs = now - recommendationAddedAt(candidate);
+
+	if (ageMs < 0) {
+		return false;
+	}
+
+	switch (addedTimeframe) {
+		case "day":
+			return ageMs <= DAY_MS;
+		case "week":
+			return ageMs > DAY_MS && ageMs <= 7 * DAY_MS;
+		case "month":
+			return ageMs > 7 * DAY_MS && ageMs <= 30 * DAY_MS;
+		case "two_months":
+			return ageMs > 30 * DAY_MS && ageMs <= 60 * DAY_MS;
+	}
+}
+
+export function releaseTimeMatches(
+	candidate: ForLaterRecommendationCandidate,
+	releaseTime: ReleaseTimeAnswer,
+	now: number,
+): boolean {
+	if (releaseTime === "any") {
+		return true;
+	}
+
+	if (candidate.releaseYear === undefined) {
+		return false;
+	}
+
+	const currentYear = new Date(now).getUTCFullYear();
+	const releaseAge = currentYear - candidate.releaseYear;
+
+	if (releaseAge < 0) {
+		return false;
+	}
+
+	switch (releaseTime) {
+		case "new_release":
+			return releaseAge <= 1;
+		case "recent":
+			return releaseAge >= 2 && releaseAge <= 5;
+		case "modern":
+			return releaseAge >= 6 && releaseAge <= 20;
+		case "old":
+			return releaseAge > 20;
+	}
+}
+
+export function ratingTierMatches(
+	rating: number | undefined,
+	ratingTier: RatingTierAnswer,
+): boolean {
+	if (ratingTier === "any") {
+		return true;
+	}
+
+	if (rating === undefined) {
+		return false;
+	}
+
+	switch (ratingTier) {
+		case "holy_moly":
+			return rating >= 13 && rating <= 15;
+		case "really_enjoyed":
+			return rating >= 10 && rating <= 12;
+		case "good":
+			return rating >= 7 && rating <= 9;
+	}
+}
+
+export function candidateMatchesRecommendationAnswers(
+	candidate: ForLaterRecommendationCandidate,
+	answers: ForLaterRecommendationAnswers,
+	now: number,
+): boolean {
+	if (candidate.markedAsSingle || candidate.removedFromForLater) {
+		return false;
+	}
+
+	if (!addedTimeframeMatches(candidate, answers.addedTimeframe, now)) {
+		return false;
+	}
+
+	if (!releaseTimeMatches(candidate, answers.releaseTime, now)) {
+		return false;
+	}
+
+	if (!ratingTierMatches(candidate.rating, answers.ratingTier)) {
+		return false;
+	}
+
+	if (
+		answers.genreKey !== "any" &&
+		!candidate.filterGenreKeysSorted.includes(answers.genreKey)
+	) {
+		return false;
+	}
+
+	if (
+		answers.descriptorKey !== "any" &&
+		!candidate.filterDescriptorKeysSorted.includes(answers.descriptorKey)
+	) {
+		return false;
+	}
+
+	return true;
+}
+
+export function seededShuffle<T>(items: readonly T[], seed: string): T[] {
+	const shuffled = [...items];
+	const random = createSeededRandom(seed);
+
+	for (let index = shuffled.length - 1; index > 0; index -= 1) {
+		const swapIndex = Math.floor(random() * (index + 1));
+		[shuffled[index], shuffled[swapIndex]] = [
+			shuffled[swapIndex] as T,
+			shuffled[index] as T,
+		];
+	}
+
+	return shuffled;
+}
+
+export function chooseRecommendationRows<
+	T extends ForLaterRecommendationCandidate,
+>(rows: readonly T[], count: number, seed: string): T[] {
+	return seededShuffle(rows, seed).slice(
+		0,
+		normalizeRecommendationCount(count),
+	);
+}
+
+export function selectRandomTagOptions(
+	tags: readonly RecommendationTagInput[],
+	seed: string,
+	limit: number,
+): RecommendationTagOption[] {
+	const optionsByKey = new Map<string, RecommendationTagOption>();
+
+	for (const tag of tags) {
+		const option = optionsByKey.get(tag.key);
+
+		if (option !== undefined) {
+			option.count += 1;
+			continue;
+		}
+
+		optionsByKey.set(tag.key, {
+			key: tag.key,
+			label: tag.label,
+			count: 1,
+		});
+	}
+
+	return seededShuffle([...optionsByKey.values()], seed).slice(
+		0,
+		Math.max(0, Math.trunc(limit)),
+	);
+}
+
+export function buildSavedRecommendationAlbumRefs<AlbumItemId, AlbumId>(
+	rows: readonly {
+		albumItemId: AlbumItemId;
+		albumId: AlbumId;
+		spotifyAlbumId: string;
+	}[],
+): {
+	albumItemIds: AlbumItemId[];
+	albumIds: AlbumId[];
+	spotifyAlbumIds: string[];
+} {
+	return {
+		albumItemIds: rows.map((row) => row.albumItemId),
+		albumIds: rows.map((row) => row.albumId),
+		spotifyAlbumIds: rows.map((row) => row.spotifyAlbumId),
+	};
+}
+
+function createSeededRandom(seed: string): () => number {
+	let state = hashSeed(seed);
+
+	return function random(): number {
+		state += 0x6d2b79f5;
+
+		let value = state;
+		value = Math.imul(value ^ (value >>> 15), value | 1);
+		value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+
+		return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+	};
+}
+
+function hashSeed(seed: string): number {
+	let hash = 2166136261;
+
+	for (let index = 0; index < seed.length; index += 1) {
+		hash ^= seed.charCodeAt(index);
+		hash = Math.imul(hash, 16777619);
+	}
+
+	return hash >>> 0;
+}

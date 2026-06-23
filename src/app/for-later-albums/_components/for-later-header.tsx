@@ -1,7 +1,12 @@
 "use client";
 
 import { useMutation } from "convex/react";
-import { DatabaseBackup, MoreHorizontal, RefreshCw } from "lucide-react";
+import {
+	DatabaseBackup,
+	MoreHorizontal,
+	RefreshCw,
+	Sparkles,
+} from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
@@ -37,12 +42,14 @@ export function ForLaterHeader({
 	isConnected,
 	getValidAccessToken,
 	summary,
+	onOpenRecommendationDrawer,
 }: {
 	userId: string;
 	spotifyDisplayName?: string;
 	isConnected: boolean;
 	getValidAccessToken: () => Promise<string | null>;
 	summary?: ForLaterSummary;
+	onOpenRecommendationDrawer: () => void;
 }) {
 	const [isSyncing, setIsSyncing] = useState(false);
 	const [isBackfilling, setIsBackfilling] = useState(false);
@@ -148,7 +155,15 @@ export function ForLaterHeader({
 						)}
 					</p>
 				</div>
-				<div className="flex shrink-0 justify-end">
+				<div className="flex shrink-0 justify-end gap-2">
+					<Button
+						type="button"
+						onClick={onOpenRecommendationDrawer}
+						disabled={summary !== undefined && summary.activeCount === 0}
+					>
+						<Sparkles className="size-4" />
+						Recommend
+					</Button>
 					<DropdownMenu>
 						<DropdownMenuTrigger asChild>
 							<Button
