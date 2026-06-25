@@ -13,6 +13,9 @@ export function SiteHeader() {
 					<Link href="/" className="font-semibold tracking-tight">
 						moooose.dev
 					</Link>
+					<Link href="/public/robs-top-50" className="text-sm hover:underline">
+						Rob&apos;s Top 50
+					</Link>
 					{isAuthenticated && (
 						<nav className="flex items-center gap-3">
 							<Link href="/books" className="text-sm hover:underline">
@@ -46,7 +49,7 @@ export function SiteHeader() {
 								For Later
 							</Link>
 							<Link href="/robs-rankings" className="text-sm hover:underline">
-								Rob's Rankings
+								Rob&apos;s Top 50 — Editor
 							</Link>
 							<Link href="/rooleases" className="text-sm hover:underline">
 								Rooleases

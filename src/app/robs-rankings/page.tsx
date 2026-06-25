@@ -1,34 +1,39 @@
 "use client";
 
 import { useMutation, useQuery } from "convex/react";
-import { ListMusic } from "lucide-react";
+import { ExternalLink, ListMusic, Plus, Upload } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { LoginPrompt } from "~/components/login-prompt";
-import { useAuthToken } from "~/lib/hooks/use-auth-token";
+import { Button } from "~/components/ui/button";
+import { useSpotifyAuth } from "~/lib/hooks/use-spotify-auth";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
-import { AlbumPicker } from "./_components/album-picker";
+import { AddAlbumDialog } from "./_components/add-album-dialog";
+import { ImportPlaylistDialog } from "./_components/import-playlist-dialog";
 import { RankingBoard } from "./_components/ranking-board";
 
-type Mode = "picker" | "ranking";
-
 export default function RobsRankingsPage() {
-	const { userId, isLoading: authLoading } = useAuthToken();
+	const {
+		userId,
+		isLoading: authLoading,
+		getValidAccessToken,
+	} = useSpotifyAuth();
 	const [year, setYear] = useState<number | null>(null);
-	const [mode, setMode] = useState<Mode>("ranking");
 	const [yearId, setYearId] = useState<Id<"robRankingYears"> | null>(null);
+	const [isImportOpen, setIsImportOpen] = useState(false);
+	const [isAddOpen, setIsAddOpen] = useState(false);
 	const initializedRef = useRef(false);
 
-	// Mutations
 	const getOrCreateYear = useMutation(api.robRankings.getOrCreateYear);
 	const addAlbumToYear = useMutation(api.robRankings.addAlbumToYear);
 	const removeAlbumFromYear = useMutation(api.robRankings.removeAlbumFromYear);
 	const batchUpdatePositions = useMutation(
 		api.robRankings.batchUpdatePositions,
 	);
-	const updateAlbumStatus = useMutation(api.robRankings.updateAlbumStatus);
+	const setYearPublished = useMutation(api.robRankings.setYearPublished);
 
-	// Queries - only run if we have a yearId
 	const rankingAlbums = useQuery(
 		api.robRankings.getAlbumsForYear,
 		yearId ? { yearId } : "skip",
@@ -37,41 +42,38 @@ export default function RobsRankingsPage() {
 		api.robRankings.getAvailableAlbums,
 		yearId ? { yearId } : "skip",
 	);
-	const existingYears = useQuery(
-		api.robRankings.getYearsForUser,
+	const yearSummaries = useQuery(
+		api.robRankings.listYearSummariesForUser,
 		userId ? { userId } : "skip",
 	);
 
-	// Initialize year on first load
 	async function initializeYear(selectedYear: number) {
 		if (!userId) return;
 		const id = await getOrCreateYear({ userId, year: selectedYear });
 		setYearId(id);
 	}
 
-	// Handle year change
 	async function handleYearChange(newYear: number) {
 		setYear(newYear);
 		setYearId(null);
-		setMode("picker");
 		await initializeYear(newYear);
 	}
 
-	// Initialize with latest existing year or current year
 	useEffect(() => {
 		if (initializedRef.current || !userId || authLoading) return;
-		if (existingYears === undefined) return; // Still loading
+		if (yearSummaries === undefined) return;
 
 		initializedRef.current = true;
 
-		// Use latest existing year, or current year if none exist
 		const defaultYear =
-			existingYears.length > 0 ? existingYears[0] : new Date().getFullYear();
+			yearSummaries.length > 0
+				? yearSummaries[0]?.year
+				: new Date().getFullYear();
 		if (defaultYear !== undefined) {
 			setYear(defaultYear);
-			initializeYear(defaultYear);
+			void getOrCreateYear({ userId, year: defaultYear }).then(setYearId);
 		}
-	}, [userId, authLoading, existingYears]);
+	}, [userId, authLoading, yearSummaries, getOrCreateYear]);
 
 	if (authLoading || (userId && year === null)) {
 		return (
@@ -87,7 +89,7 @@ export default function RobsRankingsPage() {
 		return (
 			<LoginPrompt
 				icon={ListMusic}
-				message="Sign in to access Rob's Rankings"
+				message="Sign in to edit Rob's Top 50 lists"
 				redirectPath="/robs-rankings"
 			/>
 		);
@@ -95,107 +97,136 @@ export default function RobsRankingsPage() {
 
 	const albums = rankingAlbums ?? [];
 	const available = availableAlbums ?? [];
-	const years = existingYears ?? [];
+	const summaries = yearSummaries ?? [];
 	const displayYear = year ?? new Date().getFullYear();
+	const currentSummary = summaries.find((s) => s.year === displayYear);
+	const isPublished = currentSummary?.published ?? false;
 
-	// Generate year options (current year down to 2020)
 	const currentYear = new Date().getFullYear();
 	const yearOptions = Array.from(
-		{ length: currentYear - 2019 },
+		{ length: currentYear - 2015 },
 		(_, i) => currentYear - i,
 	);
 
+	async function handlePublishToggle() {
+		if (!yearId) return;
+		try {
+			await setYearPublished({
+				yearId,
+				published: !isPublished,
+			});
+			toast.success(isPublished ? "Year unpublished" : "Year published");
+			if (!isPublished && albums.length < 50) {
+				toast.info(`List has ${albums.length}/50 albums`);
+			}
+		} catch (error) {
+			toast.error(
+				error instanceof Error
+					? error.message
+					: "Failed to update publish status",
+			);
+		}
+	}
+
 	return (
 		<div className="container mx-auto max-w-4xl p-4">
-			{/* Header */}
-			<div className="mb-6 flex items-center justify-between">
-				<h1 className="font-bold text-2xl">Rob's Rankings</h1>
-				<div className="flex items-center gap-4">
-					<div className="flex items-center gap-2">
-						<label
-							htmlFor="year-select"
-							className="text-muted-foreground text-sm"
-						>
-							Year:
-						</label>
-						<select
-							id="year-select"
-							value={displayYear}
-							onChange={(e) => handleYearChange(Number(e.target.value))}
-							className="rounded-md border bg-background px-3 py-1.5 text-sm"
-						>
-							{yearOptions.map((y) => (
+			<div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+				<div>
+					<h1 className="font-bold text-2xl">Rob&apos;s Top 50 — Editor</h1>
+					<p className="text-muted-foreground text-sm">
+						Import a playlist, reorder, and publish.
+					</p>
+				</div>
+
+				<div className="flex flex-wrap items-center gap-2">
+					<label htmlFor="year-select" className="sr-only">
+						Year
+					</label>
+					<select
+						id="year-select"
+						value={displayYear}
+						onChange={(e) => void handleYearChange(Number(e.target.value))}
+						className="rounded-md border bg-background px-3 py-1.5 text-sm"
+					>
+						{yearOptions.map((y) => {
+							const summary = summaries.find((s) => s.year === y);
+							const suffix = summary?.published
+								? " ●"
+								: summary && summary.entryCount > 0
+									? " ✓"
+									: "";
+							return (
 								<option key={y} value={y}>
 									{y}
-									{years.includes(y) ? " ✓" : ""}
+									{suffix}
 								</option>
-							))}
-						</select>
-					</div>
-
-					{/* Mode toggle - only show if we have albums */}
-					{albums.length > 0 && (
-						<div className="flex rounded-md border">
-							<button
-								type="button"
-								onClick={() => setMode("picker")}
-								className={`px-3 py-1.5 text-sm ${
-									mode === "picker"
-										? "bg-primary text-primary-foreground"
-										: "hover:bg-muted"
-								}`}
-							>
-								Edit Albums
-							</button>
-							<button
-								type="button"
-								onClick={() => setMode("ranking")}
-								className={`px-3 py-1.5 text-sm ${
-									mode === "ranking"
-										? "bg-primary text-primary-foreground"
-										: "hover:bg-muted"
-								}`}
-							>
-								Rank
-							</button>
-						</div>
-					)}
+							);
+						})}
+					</select>
 				</div>
 			</div>
 
-			{/* Content */}
+			{yearId && (
+				<div className="mb-6 flex flex-wrap gap-2">
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						onClick={() => setIsImportOpen(true)}
+					>
+						<Upload className="mr-2 h-4 w-4" />
+						Import from Spotify
+					</Button>
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						onClick={() => setIsAddOpen(true)}
+						disabled={albums.length >= 50}
+					>
+						<Plus className="mr-2 h-4 w-4" />
+						Add album
+					</Button>
+					<Button
+						type="button"
+						variant={isPublished ? "secondary" : "default"}
+						size="sm"
+						onClick={() => void handlePublishToggle()}
+						disabled={albums.length === 0 && !isPublished}
+					>
+						{isPublished ? "Unpublish" : "Publish"}
+					</Button>
+					{isPublished && (
+						<Button type="button" variant="ghost" size="sm" asChild>
+							<Link href="/public/robs-top-50" target="_blank">
+								<ExternalLink className="mr-2 h-4 w-4" />
+								View public page
+							</Link>
+						</Button>
+					)}
+				</div>
+			)}
+
 			{!yearId ? (
 				<div className="flex h-64 items-center justify-center">
 					<p className="text-muted-foreground">Loading year data...</p>
 				</div>
-			) : mode === "picker" ? (
-				<AlbumPicker
-					availableAlbums={available}
-					selectedAlbums={albums}
-					year={displayYear}
-					onAddAlbum={(albumId) => {
-						if (yearId && userId) {
-							addAlbumToYear({
-								userId,
-								yearId,
-								albumId: albumId as Id<"spotifyAlbums">,
-							});
-						}
-					}}
-					onRemoveAlbum={(rankingAlbumId) => {
-						removeAlbumFromYear({
-							rankingAlbumId: rankingAlbumId as Id<"robRankingAlbums">,
-						});
-					}}
-					onDone={() => setMode("ranking")}
-				/>
+			) : albums.length === 0 ? (
+				<div className="flex h-64 flex-col items-center justify-center gap-4 rounded-lg border border-dashed">
+					<p className="text-muted-foreground">
+						No albums yet for {displayYear}.
+					</p>
+					<Button type="button" onClick={() => setIsImportOpen(true)}>
+						<Upload className="mr-2 h-4 w-4" />
+						Import from Spotify
+					</Button>
+				</div>
 			) : (
 				<RankingBoard
 					albums={albums}
-					yearId={yearId}
 					onBatchUpdatePositions={(positions) => {
 						if (!yearId) return;
-						batchUpdatePositions({
+						void batchUpdatePositions({
 							yearId,
 							positions: positions.map((p) => ({
 								rankingAlbumId: p.rankingAlbumId as Id<"robRankingAlbums">,
@@ -203,13 +234,34 @@ export default function RobsRankingsPage() {
 							})),
 						});
 					}}
-					onUpdateStatus={(rankingAlbumId, status) => {
-						updateAlbumStatus({
+					onRemoveAlbum={(rankingAlbumId) => {
+						void removeAlbumFromYear({
 							rankingAlbumId: rankingAlbumId as Id<"robRankingAlbums">,
-							status,
 						});
 					}}
 				/>
+			)}
+
+			{yearId && (
+				<>
+					<ImportPlaylistDialog
+						open={isImportOpen}
+						onOpenChange={setIsImportOpen}
+						yearId={yearId}
+						userId={userId}
+						hasExistingEntries={albums.length > 0}
+						getAccessToken={getValidAccessToken}
+					/>
+					<AddAlbumDialog
+						open={isAddOpen}
+						onOpenChange={setIsAddOpen}
+						availableAlbums={available}
+						entryCount={albums.length}
+						onAddAlbum={(albumId) => {
+							void addAlbumToYear({ userId, yearId, albumId });
+						}}
+					/>
+				</>
 			)}
 		</div>
 	);

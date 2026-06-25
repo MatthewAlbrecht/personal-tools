@@ -1,19 +1,19 @@
 "use client";
 
-import { Check, Disc3, Lock } from "lucide-react";
+import { Disc3, X } from "lucide-react";
 import Image from "next/image";
-import { forwardRef } from "react";
+import { type KeyboardEvent, forwardRef } from "react";
+import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
-import type { RankingStatus } from "../_utils/types";
 
 type RankingAlbumCardProps = {
 	position: number;
 	name: string;
 	artistName: string;
 	imageUrl?: string;
-	status: RankingStatus;
 	isSelected?: boolean;
 	onSelect?: () => void;
+	onRemove?: () => void;
 };
 
 export const RankingAlbumCard = forwardRef<
@@ -25,30 +25,37 @@ export const RankingAlbumCard = forwardRef<
 		name,
 		artistName,
 		imageUrl,
-		status,
 		isSelected = false,
 		onSelect,
+		onRemove,
 	},
 	ref,
 ) {
 	return (
 		<div
 			ref={ref}
-			onClick={onSelect}
+			{...(onSelect
+				? {
+						role: "button" as const,
+						tabIndex: 0,
+						onClick: onSelect,
+						onKeyDown: (e: KeyboardEvent<HTMLDivElement>) => {
+							if (e.key === "Enter" || e.key === " ") {
+								e.preventDefault();
+								onSelect();
+							}
+						},
+					}
+				: {})}
 			className={cn(
-				"group flex items-center gap-2 rounded-md border p-1 hover:bg-muted/50",
+				"group flex items-center gap-2 rounded-md border border-transparent p-1 hover:bg-muted/50",
 				isSelected && "ring-2 ring-primary",
-				status === "confirmed" && "border-transparent bg-emerald-500/10",
-				status === "locked" && "border-amber-500/30",
-				status === "none" && "border-transparent",
 			)}
 		>
-			{/* Position Number */}
 			<div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded bg-muted font-mono text-xs">
 				{position}
 			</div>
 
-			{/* Album Cover */}
 			<div className="relative h-9 w-9 flex-shrink-0 overflow-hidden rounded bg-muted">
 				{imageUrl ? (
 					<Image
@@ -65,27 +72,26 @@ export const RankingAlbumCard = forwardRef<
 				)}
 			</div>
 
-			{/* Album Info */}
 			<div className="min-w-0 flex-1">
 				<p className="truncate font-medium text-sm">{name}</p>
 				<p className="truncate text-muted-foreground text-xs">{artistName}</p>
 			</div>
 
-			{/* Status Indicators */}
-			<div className="flex flex-shrink-0 items-center gap-1">
-				{status === "confirmed" && (
-					<span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 font-medium text-[10px] text-emerald-600 dark:text-emerald-400">
-						<Check className="h-3 w-3" />
-						Confirmed
-					</span>
-				)}
-				{status === "locked" && (
-					<span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 font-medium text-[10px] text-amber-600 dark:text-amber-400">
-						<Lock className="h-3 w-3" />
-						Locked
-					</span>
-				)}
-			</div>
+			{onRemove && (
+				<Button
+					type="button"
+					variant="ghost"
+					size="icon"
+					className="h-7 w-7 flex-shrink-0 opacity-0 group-hover:opacity-100"
+					onClick={(e) => {
+						e.stopPropagation();
+						onRemove();
+					}}
+				>
+					<X className="h-3.5 w-3.5" />
+					<span className="sr-only">Remove album</span>
+				</Button>
+			)}
 		</div>
 	);
 });

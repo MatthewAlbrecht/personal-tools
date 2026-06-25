@@ -668,13 +668,17 @@ export default defineSchema({
 		.index("by_userId", ["userId"])
 		.index("by_userId_startedAt", ["userId", "startedAt"]),
 
-	// Rob's Rankings - guessing yearly top 50 album lists
+	// Rob's Rankings - yearly top 50 album lists
 	robRankingYears: defineTable({
 		userId: v.string(),
 		year: v.number(),
+		published: v.optional(v.boolean()),
+		publishedAt: v.optional(v.number()),
 		createdAt: v.number(),
 		updatedAt: v.number(),
-	}).index("by_userId_year", ["userId", "year"]),
+	})
+		.index("by_userId_year", ["userId", "year"])
+		.index("by_published", ["published"]),
 
 	robRankingAlbums: defineTable({
 		userId: v.string(),

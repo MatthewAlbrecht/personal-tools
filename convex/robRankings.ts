@@ -23,9 +23,40 @@ export const getOrCreateYear = mutation({
 		return await ctx.db.insert("robRankingYears", {
 			userId: args.userId,
 			year: args.year,
+			published: false,
 			createdAt: now,
 			updatedAt: now,
 		});
+	},
+});
+
+export const listYearSummariesForUser = query({
+	args: {
+		userId: v.string(),
+	},
+	handler: async (ctx, args) => {
+		const years = await ctx.db
+			.query("robRankingYears")
+			.filter((q) => q.eq(q.field("userId"), args.userId))
+			.collect();
+
+		const summaries = await Promise.all(
+			years.map(async (yearRow) => {
+				const entries = await ctx.db
+					.query("robRankingAlbums")
+					.withIndex("by_yearId", (q) => q.eq("yearId", yearRow._id))
+					.collect();
+				return {
+					yearId: yearRow._id,
+					year: yearRow.year,
+					published: yearRow.published ?? false,
+					publishedAt: yearRow.publishedAt,
+					entryCount: entries.length,
+				};
+			}),
+		);
+
+		return summaries.sort((a, b) => b.year - a.year);
 	},
 });
 
@@ -41,6 +72,63 @@ export const getYearsForUser = query({
 			.collect();
 
 		return years.map((y) => y.year).sort((a, b) => b - a);
+	},
+});
+
+export const listPublishedYears = query({
+	args: {},
+	handler: async (ctx) => {
+		const years = await ctx.db
+			.query("robRankingYears")
+			.withIndex("by_published", (q) => q.eq("published", true))
+			.collect();
+
+		return years
+			.map((y) => ({ year: y.year, publishedAt: y.publishedAt }))
+			.sort((a, b) => b.year - a.year);
+	},
+});
+
+export const getPublishedAlbumsForYear = query({
+	args: {
+		year: v.number(),
+	},
+	handler: async (ctx, args) => {
+		const yearRow = await ctx.db
+			.query("robRankingYears")
+			.filter((q) =>
+				q.and(
+					q.eq(q.field("year"), args.year),
+					q.eq(q.field("published"), true),
+				),
+			)
+			.first();
+
+		if (!yearRow) return [];
+
+		const rankings = await ctx.db
+			.query("robRankingAlbums")
+			.withIndex("by_yearId", (q) => q.eq("yearId", yearRow._id))
+			.collect();
+
+		const albumsWithData = await Promise.all(
+			rankings.map(async (ranking) => {
+				const album = await ctx.db.get(ranking.albumId);
+				return {
+					position: ranking.position,
+					album: album
+						? {
+								name: album.name,
+								artistName: album.artistName,
+								imageUrl: album.imageUrl,
+								releaseDate: album.releaseDate,
+							}
+						: null,
+				};
+			}),
+		);
+
+		return albumsWithData.sort((a, b) => a.position - b.position);
 	},
 });
 
@@ -62,7 +150,6 @@ export const getAlbumsForYear = query({
 					_id: ranking._id,
 					albumId: ranking.albumId,
 					position: ranking.position,
-					status: ranking.status as "none" | "locked" | "confirmed",
 					album: album
 						? {
 								name: album.name,
@@ -85,7 +172,6 @@ export const getAvailableAlbums = query({
 		yearId: v.id("robRankingYears"),
 	},
 	handler: async (ctx, args) => {
-		// Get albums already in this year's rankings
 		const rankings = await ctx.db
 			.query("robRankingAlbums")
 			.withIndex("by_yearId", (q) => q.eq("yearId", args.yearId))
@@ -93,10 +179,8 @@ export const getAvailableAlbums = query({
 
 		const usedAlbumIds = new Set(rankings.map((r) => r.albumId.toString()));
 
-		// Get all spotify albums
 		const allAlbums = await ctx.db.query("spotifyAlbums").collect();
 
-		// Filter out already-used albums
 		return allAlbums
 			.filter((a) => !usedAlbumIds.has(a._id.toString()))
 			.map((a) => ({
@@ -111,6 +195,79 @@ export const getAvailableAlbums = query({
 	},
 });
 
+export const setYearPublished = mutation({
+	args: {
+		yearId: v.id("robRankingYears"),
+		published: v.boolean(),
+	},
+	handler: async (ctx, args) => {
+		const yearRow = await ctx.db.get(args.yearId);
+		if (!yearRow) throw new Error("Year not found");
+
+		if (args.published) {
+			const entries = await ctx.db
+				.query("robRankingAlbums")
+				.withIndex("by_yearId", (q) => q.eq("yearId", args.yearId))
+				.collect();
+			if (entries.length === 0) {
+				throw new Error("Cannot publish an empty list");
+			}
+		}
+
+		const now = Date.now();
+		await ctx.db.patch(args.yearId, {
+			published: args.published,
+			publishedAt: args.published ? now : yearRow.publishedAt,
+			updatedAt: now,
+		});
+	},
+});
+
+export const replaceYearFromAlbums = mutation({
+	args: {
+		userId: v.string(),
+		yearId: v.id("robRankingYears"),
+		albumIds: v.array(v.id("spotifyAlbums")),
+	},
+	handler: async (ctx, args) => {
+		const yearRow = await ctx.db.get(args.yearId);
+		if (!yearRow) throw new Error("Year not found");
+		if (yearRow.userId !== args.userId) {
+			throw new Error("Not authorized for this year");
+		}
+		if (args.albumIds.length > 50) {
+			throw new Error("Cannot import more than 50 albums");
+		}
+
+		const existing = await ctx.db
+			.query("robRankingAlbums")
+			.withIndex("by_yearId", (q) => q.eq("yearId", args.yearId))
+			.collect();
+
+		for (const row of existing) {
+			await ctx.db.delete(row._id);
+		}
+
+		const now = Date.now();
+		for (let i = 0; i < args.albumIds.length; i++) {
+			const albumId = args.albumIds[i];
+			if (!albumId) continue;
+			await ctx.db.insert("robRankingAlbums", {
+				userId: args.userId,
+				yearId: args.yearId,
+				albumId,
+				position: i + 1,
+				status: "none",
+				createdAt: now,
+				updatedAt: now,
+			});
+		}
+
+		await ctx.db.patch(args.yearId, { updatedAt: now });
+		return { imported: args.albumIds.length };
+	},
+});
+
 // Add an album to a year's rankings
 export const addAlbumToYear = mutation({
 	args: {
@@ -119,7 +276,6 @@ export const addAlbumToYear = mutation({
 		albumId: v.id("spotifyAlbums"),
 	},
 	handler: async (ctx, args) => {
-		// Get current count to determine position
 		const existing = await ctx.db
 			.query("robRankingAlbums")
 			.withIndex("by_yearId", (q) => q.eq("yearId", args.yearId))
@@ -129,7 +285,6 @@ export const addAlbumToYear = mutation({
 			throw new Error("Cannot add more than 50 albums");
 		}
 
-		// Check if album already exists in this year
 		const alreadyAdded = existing.find(
 			(e) => e.albumId.toString() === args.albumId.toString(),
 		);
@@ -161,10 +316,8 @@ export const removeAlbumFromYear = mutation({
 
 		const removedPosition = ranking.position;
 
-		// Delete the album
 		await ctx.db.delete(args.rankingAlbumId);
 
-		// Shift down all albums with higher positions
 		const higherPositions = await ctx.db
 			.query("robRankingAlbums")
 			.withIndex("by_yearId", (q) => q.eq("yearId", ranking.yearId))
@@ -190,23 +343,9 @@ export const updateAlbumPosition = mutation({
 		const album = await ctx.db.get(args.rankingAlbumId);
 		if (!album) throw new Error("Album not found");
 
-		if (album.status === "confirmed") {
-			throw new Error("Cannot move confirmed album");
-		}
-
 		const oldPosition = album.position;
 		if (oldPosition === args.newPosition) return;
 
-		// Check bucket constraints for locked albums
-		if (album.status === "locked") {
-			const oldBucket = Math.ceil(oldPosition / 10);
-			const newBucket = Math.ceil(args.newPosition / 10);
-			if (oldBucket !== newBucket) {
-				throw new Error("Locked album cannot move outside its bucket");
-			}
-		}
-
-		// Find album at target position
 		const targetAlbum = await ctx.db
 			.query("robRankingAlbums")
 			.withIndex("by_yearId_position", (q) =>
@@ -217,12 +356,6 @@ export const updateAlbumPosition = mutation({
 		const now = Date.now();
 
 		if (targetAlbum) {
-			// Check if target is confirmed - if so, we need to find next available spot
-			if (targetAlbum.status === "confirmed") {
-				throw new Error("Cannot swap with confirmed album");
-			}
-
-			// Swap positions
 			await ctx.db.patch(targetAlbum._id, {
 				position: oldPosition,
 				updatedAt: now,
@@ -232,20 +365,6 @@ export const updateAlbumPosition = mutation({
 		await ctx.db.patch(args.rankingAlbumId, {
 			position: args.newPosition,
 			updatedAt: now,
-		});
-	},
-});
-
-// Update album status (none/locked/confirmed)
-export const updateAlbumStatus = mutation({
-	args: {
-		rankingAlbumId: v.id("robRankingAlbums"),
-		status: v.string(),
-	},
-	handler: async (ctx, args) => {
-		await ctx.db.patch(args.rankingAlbumId, {
-			status: args.status,
-			updatedAt: Date.now(),
 		});
 	},
 });
@@ -264,94 +383,19 @@ export const batchUpdatePositions = mutation({
 	handler: async (ctx, args) => {
 		const now = Date.now();
 
-		// Validate all albums belong to this year and collect current state
-		const albumsToUpdate = await Promise.all(
-			args.positions.map(async ({ rankingAlbumId }) => {
-				const album = await ctx.db.get(rankingAlbumId);
-				if (!album) throw new Error(`Album ${rankingAlbumId} not found`);
-				if (album.yearId !== args.yearId) {
-					throw new Error(
-						`Album ${rankingAlbumId} does not belong to this year`,
-					);
-				}
-				return album;
-			}),
-		);
-
-		// Check for confirmed albums being moved
-		for (let i = 0; i < albumsToUpdate.length; i++) {
-			const album = albumsToUpdate[i];
-			const update = args.positions[i];
-			if (
-				album &&
-				update &&
-				album.status === "confirmed" &&
-				album.position !== update.position
-			) {
-				throw new Error("Cannot move confirmed album");
+		for (const { rankingAlbumId } of args.positions) {
+			const album = await ctx.db.get(rankingAlbumId);
+			if (!album) throw new Error(`Album ${rankingAlbumId} not found`);
+			if (album.yearId !== args.yearId) {
+				throw new Error(`Album ${rankingAlbumId} does not belong to this year`);
 			}
 		}
 
-		// Apply all position updates atomically
 		for (const { rankingAlbumId, position } of args.positions) {
 			await ctx.db.patch(rankingAlbumId, {
 				position,
 				updatedAt: now,
 			});
-		}
-	},
-});
-
-// Randomize order of unconfirmed albums
-export const randomizeOrder = mutation({
-	args: {
-		yearId: v.id("robRankingYears"),
-	},
-	handler: async (ctx, args) => {
-		const albums = await ctx.db
-			.query("robRankingAlbums")
-			.withIndex("by_yearId", (q) => q.eq("yearId", args.yearId))
-			.collect();
-
-		// Separate confirmed and non-confirmed albums
-		const confirmed = albums.filter((a) => a.status === "confirmed");
-		const nonConfirmed = albums.filter((a) => a.status !== "confirmed");
-
-		// Get positions occupied by confirmed albums
-		const confirmedPositions = new Set(confirmed.map((a) => a.position));
-
-		// Get available positions (not occupied by confirmed albums)
-		const availablePositions: number[] = [];
-		for (let i = 1; i <= albums.length; i++) {
-			if (!confirmedPositions.has(i)) {
-				availablePositions.push(i);
-			}
-		}
-
-		// Shuffle available positions
-		for (let i = availablePositions.length - 1; i > 0; i--) {
-			const j = Math.floor(Math.random() * (i + 1));
-			const temp = availablePositions[i];
-			const posJ = availablePositions[j];
-			if (temp !== undefined && posJ !== undefined) {
-				availablePositions[i] = posJ;
-				availablePositions[j] = temp;
-			}
-		}
-
-		// Assign shuffled positions to non-confirmed albums
-		const now = Date.now();
-		for (let i = 0; i < nonConfirmed.length; i++) {
-			const album = nonConfirmed[i];
-			const newPosition = availablePositions[i];
-			if (album && newPosition !== undefined) {
-				// Reset locked status when randomizing
-				await ctx.db.patch(album._id, {
-					position: newPosition,
-					status: "none",
-					updatedAt: now,
-				});
-			}
 		}
 	},
 });

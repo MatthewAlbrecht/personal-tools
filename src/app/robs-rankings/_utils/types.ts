@@ -1,12 +1,9 @@
 import type { Id } from "convex/_generated/dataModel";
 
-export type RankingStatus = "none" | "locked" | "confirmed";
-
 export type RankingAlbum = {
 	_id: Id<"robRankingAlbums">;
 	albumId: Id<"spotifyAlbums">;
 	position: number;
-	status: RankingStatus;
 	album: {
 		name: string;
 		artistName: string;
@@ -27,8 +24,8 @@ export type AvailableAlbum = {
 
 export type Bucket = {
 	label: string;
-	start: number; // inclusive
-	end: number; // inclusive
+	start: number;
+	end: number;
 };
 
 export const BUCKETS: Bucket[] = [
@@ -38,7 +35,3 @@ export const BUCKETS: Bucket[] = [
 	{ label: "31-40", start: 31, end: 40 },
 	{ label: "41-50", start: 41, end: 50 },
 ];
-
-export function getBucketForPosition(position: number): Bucket | undefined {
-	return BUCKETS.find((b) => position >= b.start && position <= b.end);
-}
