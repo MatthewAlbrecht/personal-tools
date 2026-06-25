@@ -3,7 +3,7 @@
 import { useQuery } from "convex/react";
 import { ListMusic } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { cn } from "~/lib/utils";
 import { api } from "../../../../convex/_generated/api";
@@ -13,6 +13,14 @@ import {
 } from "./_components/top-50-year-view";
 
 export default function PublicRobsTop50Page() {
+	return (
+		<Suspense fallback={<PublicRobsTop50PageSkeleton />}>
+			<PublicRobsTop50PageInner />
+		</Suspense>
+	);
+}
+
+function PublicRobsTop50PageInner() {
 	const publishedYears = useQuery(api.robRankings.listPublishedYears, {});
 	const searchParams = useSearchParams();
 	const yearParam = searchParams?.get("year") ?? null;
@@ -96,6 +104,24 @@ export default function PublicRobsTop50Page() {
 							)}
 						</>
 					)}
+				</CardContent>
+			</Card>
+		</main>
+	);
+}
+
+function PublicRobsTop50PageSkeleton() {
+	return (
+		<main className="mx-auto max-w-2xl px-4 py-10">
+			<Card>
+				<CardHeader>
+					<CardTitle className="flex items-center gap-2 text-2xl">
+						<ListMusic className="h-6 w-6" />
+						Rob&apos;s Top 50
+					</CardTitle>
+				</CardHeader>
+				<CardContent>
+					<Top50YearViewSkeleton />
 				</CardContent>
 			</Card>
 		</main>
