@@ -624,11 +624,6 @@ async function hydrateForLaterAlbumRow(
 const FOR_LATER_RECOMMENDATION_SCAN_LIMIT = 2000;
 const FOR_LATER_RECOMMENDATION_SUBGENRE_LIMIT = 15;
 
-type RecommendationAlbumGenreTags = {
-	primaryGenreKeys: string[];
-	allGenreKeys: string[];
-};
-
 type ForLaterRecommendationHydratedCandidate = {
 	row: ForLaterAlbumRow;
 	candidate: ForLaterRecommendationCandidate;
@@ -755,83 +750,10 @@ async function loadTopLevelGenreKeySet(
 	return new Set(topLevelGenres.map((genre) => genre.key));
 }
 
-async function loadRecommendationAlbumGenreTagsByScrapeId(
-	ctx: QueryCtx,
-	scrapeIds: Id<"rateYourMusicScrapes">[],
-): Promise<Map<Id<"rateYourMusicScrapes">, RecommendationAlbumGenreTags>> {
-	const tagsByScrapeId = new Map<
-		Id<"rateYourMusicScrapes">,
-		RecommendationAlbumGenreTags
-	>();
-	const genreKeyById = new Map<Id<"rateYourMusicGenres">, string>();
-
-	for (const scrapeId of scrapeIds) {
-		const genreLinks = await ctx.db
-			.query("rateYourMusicReleaseGenres")
-			.withIndex("by_scrapeId", (q) => q.eq("scrapeId", scrapeId))
-			.collect();
-		const primaryGenreKeys: string[] = [];
-		const allGenreKeys: string[] = [];
-
-		for (const link of genreLinks) {
-			let genreKey = genreKeyById.get(link.genreId);
-			if (genreKey === undefined) {
-				const genre = await ctx.db.get(link.genreId);
-				if (!genre) {
-					continue;
-				}
-				genreKey = genre.key;
-				genreKeyById.set(link.genreId, genreKey);
-			}
-
-			allGenreKeys.push(genreKey);
-			if (link.role === "primary") {
-				primaryGenreKeys.push(genreKey);
-			}
-		}
-
-		tagsByScrapeId.set(scrapeId, {
-			primaryGenreKeys,
-			allGenreKeys,
-		});
-	}
-
-	return tagsByScrapeId;
-}
-
-async function loadRecommendationAlbumGenreTagsForItems(
-	ctx: QueryCtx,
+function recommendationFilterGenreKeysForItems(
 	items: Doc<"forLaterAlbumItems">[],
-): Promise<RecommendationAlbumGenreTags[]> {
-	const scrapeIds = [
-		...new Set(
-			items
-				.map((item) => item.rymScrapeId)
-				.filter((scrapeId): scrapeId is Id<"rateYourMusicScrapes"> =>
-					Boolean(scrapeId),
-				),
-		),
-	];
-	const tagsByScrapeId = await loadRecommendationAlbumGenreTagsByScrapeId(
-		ctx,
-		scrapeIds,
-	);
-
-	return items.map((item) => {
-		if (!item.rymScrapeId) {
-			return {
-				primaryGenreKeys: [],
-				allGenreKeys: [],
-			};
-		}
-
-		return (
-			tagsByScrapeId.get(item.rymScrapeId) ?? {
-				primaryGenreKeys: [],
-				allGenreKeys: [],
-			}
-		);
-	});
+): string[][] {
+	return items.map((item) => item.filterGenreKeysSorted ?? []);
 }
 
 async function collectForLaterRecommendationTagOptions(
@@ -843,12 +765,11 @@ async function collectForLaterRecommendationTagOptions(
 	const items = await collectVisibleActiveForLaterRecommendationItems(ctx, {
 		userId: args.userId,
 	});
-	const [albumGenreTags, parentKeysByChild, topLevelGenreKeys] =
-		await Promise.all([
-			loadRecommendationAlbumGenreTagsForItems(ctx, items),
-			loadRymGenreParentKeysByChild(ctx),
-			loadTopLevelGenreKeySet(ctx),
-		]);
+	const albumFilterGenreKeys = recommendationFilterGenreKeysForItems(items);
+	const [parentKeysByChild, topLevelGenreKeys] = await Promise.all([
+		loadRymGenreParentKeysByChild(ctx),
+		loadTopLevelGenreKeySet(ctx),
+	]);
 
 	if (args.parentGenreKey) {
 		const relationships = await ctx.db
@@ -860,7 +781,7 @@ async function collectForLaterRecommendationTagOptions(
 			childKeysByParent,
 		);
 		const genreOptions = buildSubgenreCountsForTopLevel({
-			albumAllGenreKeys: albumGenreTags.map((tags) => tags.allGenreKeys),
+			albumAllGenreKeys: albumFilterGenreKeys,
 			topLevelGenreKey: args.parentGenreKey,
 			descendantGenreKeys,
 			limit: FOR_LATER_RECOMMENDATION_SUBGENRE_LIMIT,
@@ -876,7 +797,7 @@ async function collectForLaterRecommendationTagOptions(
 	}
 
 	const topLevelCounts = buildTopLevelGenreCounts({
-		albumPrimaryGenreKeys: albumGenreTags.map((tags) => tags.primaryGenreKeys),
+		albumPrimaryGenreKeys: albumFilterGenreKeys,
 		topLevelGenreKeys,
 		parentKeysByChild,
 	});

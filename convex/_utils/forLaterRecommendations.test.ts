@@ -469,6 +469,26 @@ test("buildTopLevelGenreCounts rolls primary genres up to top-level buckets", ()
 	assert.equal(counts.get("ambient"), 2);
 });
 
+test("buildTopLevelGenreCounts counts albums from filterGenreKeysSorted ancestor expansion", () => {
+	const parentKeysByChild = new Map<string, string[]>([
+		["bebop", ["jazz"]],
+	]);
+	const topLevelGenreKeys = new Set(["jazz", "rock"]);
+
+	const counts = buildTopLevelGenreCounts({
+		albumPrimaryGenreKeys: [
+			["bebop", "jazz"],
+			["rock"],
+			["jazz"],
+		],
+		topLevelGenreKeys,
+		parentKeysByChild,
+	});
+
+	assert.equal(counts.get("jazz"), 2);
+	assert.equal(counts.get("rock"), 1);
+});
+
 test("buildSubgenreCountsForTopLevel counts attached tags and limits results", () => {
 	const descendantGenreKeys = new Set([
 		"blues",

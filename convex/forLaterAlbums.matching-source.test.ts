@@ -25,3 +25,18 @@ test("For Later album upsert calls RYM matching after item upsert", () => {
 	);
 	assert.match(source, /rymMatch/);
 });
+
+test("recommendation genre counts use filterGenreKeysSorted not item.rymScrapeId", () => {
+	assert.match(
+		source,
+		/recommendationFilterGenreKeysForItems[\s\S]*filterGenreKeysSorted/,
+	);
+	assert.doesNotMatch(
+		source,
+		/loadRecommendationAlbumGenreTagsForItems/,
+	);
+	assert.doesNotMatch(
+		source,
+		/collectForLaterRecommendationTagOptions[\s\S]*item\.rymScrapeId/,
+	);
+});
