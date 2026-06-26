@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery } from "convex/react";
-import { ExternalLink, ListMusic, Plus, Upload } from "lucide-react";
+import { ExternalLink, ListMusic, PenLine, Plus, Upload } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -11,8 +11,11 @@ import { useSpotifyAuth } from "~/lib/hooks/use-spotify-auth";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { AddAlbumDialog } from "./_components/add-album-dialog";
+import { AddManualAlbumDialog } from "./_components/add-manual-album-dialog";
+import { EditAlbumDialog } from "./_components/edit-album-dialog";
 import { ImportPlaylistDialog } from "./_components/import-playlist-dialog";
 import { RankingBoard } from "./_components/ranking-board";
+import type { RankingAlbum } from "./_utils/types";
 
 export default function RobsRankingsPage() {
 	const {
@@ -24,10 +27,16 @@ export default function RobsRankingsPage() {
 	const [yearId, setYearId] = useState<Id<"robRankingYears"> | null>(null);
 	const [isImportOpen, setIsImportOpen] = useState(false);
 	const [isAddOpen, setIsAddOpen] = useState(false);
+	const [isManualAddOpen, setIsManualAddOpen] = useState(false);
+	const [editingAlbum, setEditingAlbum] = useState<RankingAlbum | null>(null);
 	const initializedRef = useRef(false);
 
 	const getOrCreateYear = useMutation(api.robRankings.getOrCreateYear);
 	const addAlbumToYear = useMutation(api.robRankings.addAlbumToYear);
+	const addManualAlbumToYear = useMutation(api.robRankings.addManualAlbumToYear);
+	const updateRankingAlbumManual = useMutation(
+		api.robRankings.updateRankingAlbumManual,
+	);
 	const removeAlbumFromYear = useMutation(api.robRankings.removeAlbumFromYear);
 	const batchUpdatePositions = useMutation(
 		api.robRankings.batchUpdatePositions,
@@ -189,6 +198,16 @@ export default function RobsRankingsPage() {
 					</Button>
 					<Button
 						type="button"
+						variant="outline"
+						size="sm"
+						onClick={() => setIsManualAddOpen(true)}
+						disabled={albums.length >= 50}
+					>
+						<PenLine className="mr-2 h-4 w-4" />
+						Add manual
+					</Button>
+					<Button
+						type="button"
 						variant={isPublished ? "secondary" : "default"}
 						size="sm"
 						onClick={() => void handlePublishToggle()}
@@ -234,6 +253,7 @@ export default function RobsRankingsPage() {
 							})),
 						});
 					}}
+					onEditAlbum={setEditingAlbum}
 					onRemoveAlbum={(rankingAlbumId) => {
 						void removeAlbumFromYear({
 							rankingAlbumId: rankingAlbumId as Id<"robRankingAlbums">,
@@ -259,6 +279,37 @@ export default function RobsRankingsPage() {
 						entryCount={albums.length}
 						onAddAlbum={(albumId) => {
 							void addAlbumToYear({ userId, yearId, albumId });
+						}}
+					/>
+					<AddManualAlbumDialog
+						open={isManualAddOpen}
+						onOpenChange={setIsManualAddOpen}
+						entryCount={albums.length}
+						onAddManualAlbum={async (data) => {
+							await addManualAlbumToYear({
+								userId,
+								yearId,
+								artistName: data.artistName,
+								albumTitle: data.albumTitle,
+								imageUrl: data.imageUrl,
+								position: data.position,
+							});
+						}}
+					/>
+					<EditAlbumDialog
+						open={editingAlbum !== null}
+						onOpenChange={(open) => {
+							if (!open) setEditingAlbum(null);
+						}}
+						album={editingAlbum}
+						onSave={async (data) => {
+							if (!editingAlbum) return;
+							await updateRankingAlbumManual({
+								rankingAlbumId: editingAlbum._id,
+								artistName: data.artistName,
+								albumTitle: data.albumTitle,
+								imageUrl: data.imageUrl,
+							});
 						}}
 					/>
 				</>

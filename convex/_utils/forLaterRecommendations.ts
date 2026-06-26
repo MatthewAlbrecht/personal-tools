@@ -1,8 +1,11 @@
+import { resolveTopLevelGenreKey } from "./rymGenreHierarchy";
+
 export type AddedTimeframeAnswer =
 	| "day"
 	| "week"
 	| "month"
 	| "two_months"
+	| "older_than_two_months"
 	| "any";
 
 export type ReleaseTimeAnswer =
@@ -105,6 +108,8 @@ export function addedTimeframeMatches(
 			return ageMs > 7 * DAY_MS && ageMs <= 30 * DAY_MS;
 		case "two_months":
 			return ageMs > 30 * DAY_MS && ageMs <= 60 * DAY_MS;
+		case "older_than_two_months":
+			return ageMs > 60 * DAY_MS;
 	}
 }
 
@@ -222,6 +227,88 @@ export function chooseRecommendationRows<
 		0,
 		normalizeRecommendationCount(count),
 	);
+}
+
+export function buildTopLevelGenreCounts(args: {
+	albumPrimaryGenreKeys: readonly (readonly string[])[];
+	topLevelGenreKeys: ReadonlySet<string>;
+	parentKeysByChild: ReadonlyMap<string, readonly string[]>;
+}): Map<string, number> {
+	const counts = new Map<string, number>();
+
+	for (const primaryGenreKeys of args.albumPrimaryGenreKeys) {
+		const topLevelsForAlbum = new Set<string>();
+
+		for (const genreKey of primaryGenreKeys) {
+			const topLevelKey = resolveTopLevelGenreKey(
+				genreKey,
+				args.parentKeysByChild,
+				args.topLevelGenreKeys,
+			);
+			if (topLevelKey !== undefined) {
+				topLevelsForAlbum.add(topLevelKey);
+			}
+		}
+
+		for (const topLevelKey of topLevelsForAlbum) {
+			counts.set(topLevelKey, (counts.get(topLevelKey) ?? 0) + 1);
+		}
+	}
+
+	return counts;
+}
+
+export function buildSubgenreCountsForTopLevel(args: {
+	albumAllGenreKeys: readonly (readonly string[])[];
+	topLevelGenreKey: string;
+	descendantGenreKeys: ReadonlySet<string>;
+	limit: number;
+}): RecommendationTagOption[] {
+	const counts = new Map<string, number>();
+
+	for (const genreKeys of args.albumAllGenreKeys) {
+		const seenInAlbum = new Set<string>();
+
+		for (const genreKey of genreKeys) {
+			if (
+				genreKey === args.topLevelGenreKey ||
+				!args.descendantGenreKeys.has(genreKey) ||
+				seenInAlbum.has(genreKey)
+			) {
+				continue;
+			}
+
+			seenInAlbum.add(genreKey);
+			counts.set(genreKey, (counts.get(genreKey) ?? 0) + 1);
+		}
+	}
+
+	return [...counts.entries()]
+		.map(([key, count]) => ({
+			key,
+			label: key,
+			count,
+		}))
+		.sort((left, right) => {
+			if (right.count !== left.count) {
+				return right.count - left.count;
+			}
+
+			return left.key.localeCompare(right.key);
+		})
+		.slice(0, Math.max(0, Math.trunc(args.limit)));
+}
+
+export function sortRecommendationTagOptionsByCount(
+	options: readonly RecommendationTagOption[],
+): RecommendationTagOption[] {
+	return [...options].sort((left, right) => {
+		if (right.count !== left.count) {
+			return right.count - left.count;
+		}
+
+		return left.label.localeCompare(right.label);
+	});
 }
 
 export function selectRandomTagOptions(

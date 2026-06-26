@@ -1,5 +1,49 @@
 import { v } from "convex/values";
+import type { Doc } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
+
+type RankingAlbumDisplay = {
+	name: string;
+	artistName: string;
+	imageUrl?: string;
+	releaseDate?: string;
+};
+
+function isManualRankingEntry(ranking: Doc<"robRankingAlbums">): boolean {
+	if (ranking.source === "manual") return true;
+	if (ranking.source === "spotify") return false;
+	return ranking.manualAlbumTitle !== undefined && ranking.albumId === undefined;
+}
+
+function resolveRankingAlbumDisplay(
+	ranking: Doc<"robRankingAlbums">,
+	spotifyAlbum: Doc<"spotifyAlbums"> | null,
+): RankingAlbumDisplay | null {
+	if (isManualRankingEntry(ranking)) {
+		return {
+			name: ranking.manualAlbumTitle ?? "Unknown",
+			artistName: ranking.manualArtistName ?? "Unknown",
+			imageUrl: ranking.manualImageUrl,
+		};
+	}
+
+	if (spotifyAlbum) {
+		return {
+			name: spotifyAlbum.name,
+			artistName: spotifyAlbum.artistName,
+			imageUrl: spotifyAlbum.imageUrl,
+			releaseDate: spotifyAlbum.releaseDate,
+		};
+	}
+
+	return null;
+}
+
+function getRankingSource(
+	ranking: Doc<"robRankingAlbums">,
+): "spotify" | "manual" {
+	return isManualRankingEntry(ranking) ? "manual" : "spotify";
+}
 
 // Get or create a year entry for Rob's rankings
 export const getOrCreateYear = mutation({
@@ -113,17 +157,12 @@ export const getPublishedAlbumsForYear = query({
 
 		const albumsWithData = await Promise.all(
 			rankings.map(async (ranking) => {
-				const album = await ctx.db.get(ranking.albumId);
+				const album = ranking.albumId
+					? await ctx.db.get(ranking.albumId)
+					: null;
 				return {
 					position: ranking.position,
-					album: album
-						? {
-								name: album.name,
-								artistName: album.artistName,
-								imageUrl: album.imageUrl,
-								releaseDate: album.releaseDate,
-							}
-						: null,
+					album: resolveRankingAlbumDisplay(ranking, album),
 				};
 			}),
 		);
@@ -145,19 +184,15 @@ export const getAlbumsForYear = query({
 
 		const albumsWithData = await Promise.all(
 			rankings.map(async (ranking) => {
-				const album = await ctx.db.get(ranking.albumId);
+				const album = ranking.albumId
+					? await ctx.db.get(ranking.albumId)
+					: null;
 				return {
 					_id: ranking._id,
 					albumId: ranking.albumId,
+					source: getRankingSource(ranking),
 					position: ranking.position,
-					album: album
-						? {
-								name: album.name,
-								artistName: album.artistName,
-								imageUrl: album.imageUrl,
-								releaseDate: album.releaseDate,
-							}
-						: null,
+					album: resolveRankingAlbumDisplay(ranking, album),
 				};
 			}),
 		);
@@ -177,7 +212,12 @@ export const getAvailableAlbums = query({
 			.withIndex("by_yearId", (q) => q.eq("yearId", args.yearId))
 			.collect();
 
-		const usedAlbumIds = new Set(rankings.map((r) => r.albumId.toString()));
+		const usedAlbumIds = new Set(
+			rankings
+				.filter((r) => r.albumId !== undefined)
+				.map((r) => r.albumId?.toString())
+				.filter((id): id is string => id !== undefined),
+		);
 
 		const allAlbums = await ctx.db.query("spotifyAlbums").collect();
 
@@ -256,6 +296,7 @@ export const replaceYearFromAlbums = mutation({
 				userId: args.userId,
 				yearId: args.yearId,
 				albumId,
+				source: "spotify",
 				position: i + 1,
 				status: "none",
 				createdAt: now,
@@ -286,7 +327,9 @@ export const addAlbumToYear = mutation({
 		}
 
 		const alreadyAdded = existing.find(
-			(e) => e.albumId.toString() === args.albumId.toString(),
+			(e) =>
+				e.albumId !== undefined &&
+				e.albumId.toString() === args.albumId.toString(),
 		);
 		if (alreadyAdded) {
 			throw new Error("Album already in rankings");
@@ -297,7 +340,109 @@ export const addAlbumToYear = mutation({
 			userId: args.userId,
 			yearId: args.yearId,
 			albumId: args.albumId,
+			source: "spotify",
 			position: existing.length + 1,
+			status: "none",
+			createdAt: now,
+			updatedAt: now,
+		});
+	},
+});
+
+export const updateRankingAlbumManual = mutation({
+	args: {
+		rankingAlbumId: v.id("robRankingAlbums"),
+		artistName: v.string(),
+		albumTitle: v.string(),
+		imageUrl: v.optional(v.string()),
+	},
+	handler: async (ctx, args) => {
+		const ranking = await ctx.db.get(args.rankingAlbumId);
+		if (!ranking) throw new Error("Entry not found");
+
+		const trimmedTitle = args.albumTitle.trim();
+		const trimmedArtist = args.artistName.trim();
+		if (!trimmedTitle) throw new Error("Album title is required");
+		if (!trimmedArtist) throw new Error("Artist name is required");
+
+		const trimmedImageUrl = args.imageUrl?.trim();
+
+		await ctx.db.patch(args.rankingAlbumId, {
+			source: "manual",
+			albumId: undefined,
+			manualArtistName: trimmedArtist,
+			manualAlbumTitle: trimmedTitle,
+			manualImageUrl: trimmedImageUrl || undefined,
+			updatedAt: Date.now(),
+		});
+	},
+});
+
+export const addManualAlbumToYear = mutation({
+	args: {
+		userId: v.string(),
+		yearId: v.id("robRankingYears"),
+		artistName: v.string(),
+		albumTitle: v.string(),
+		imageUrl: v.optional(v.string()),
+		position: v.optional(v.number()),
+	},
+	handler: async (ctx, args) => {
+		const yearRow = await ctx.db.get(args.yearId);
+		if (!yearRow) throw new Error("Year not found");
+		if (yearRow.userId !== args.userId) {
+			throw new Error("Not authorized for this year");
+		}
+
+		const existing = await ctx.db
+			.query("robRankingAlbums")
+			.withIndex("by_yearId", (q) => q.eq("yearId", args.yearId))
+			.collect();
+
+		if (existing.length >= 50) {
+			throw new Error("Cannot add more than 50 albums");
+		}
+
+		const trimmedTitle = args.albumTitle.trim();
+		const trimmedArtist = args.artistName.trim();
+		if (!trimmedTitle) throw new Error("Album title is required");
+		if (!trimmedArtist) throw new Error("Artist name is required");
+
+		const trimmedImageUrl = args.imageUrl?.trim();
+		const targetPosition = args.position ?? existing.length + 1;
+
+		if (targetPosition < 1 || targetPosition > 50) {
+			throw new Error("Position must be between 1 and 50");
+		}
+		if (targetPosition > existing.length + 1) {
+			throw new Error(
+				`Position must be at most ${existing.length + 1} (next available slot)`,
+			);
+		}
+
+		const now = Date.now();
+
+		if (targetPosition <= existing.length) {
+			const toShift = existing
+				.filter((entry) => entry.position >= targetPosition)
+				.sort((a, b) => b.position - a.position);
+
+			for (const entry of toShift) {
+				await ctx.db.patch(entry._id, {
+					position: entry.position + 1,
+					updatedAt: now,
+				});
+			}
+		}
+
+		return await ctx.db.insert("robRankingAlbums", {
+			userId: args.userId,
+			yearId: args.yearId,
+			source: "manual",
+			manualArtistName: trimmedArtist,
+			manualAlbumTitle: trimmedTitle,
+			manualImageUrl: trimmedImageUrl || undefined,
+			position: targetPosition,
 			status: "none",
 			createdAt: now,
 			updatedAt: now,

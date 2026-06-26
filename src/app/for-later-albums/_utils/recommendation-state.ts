@@ -2,7 +2,6 @@ export type RecommendationQuestionId =
 	| "addedTimeframe"
 	| "genre"
 	| "releaseTime"
-	| "descriptor"
 	| "rating"
 	| "count";
 
@@ -11,6 +10,7 @@ export type AddedTimeframeAnswer =
 	| "week"
 	| "month"
 	| "two_months"
+	| "older_than_two_months"
 	| "any";
 
 export type ReleaseTimeAnswer =
@@ -39,14 +39,12 @@ export type RecommendationOption = {
 
 export type RecommendationSummaryOptions = {
 	genreOptions?: readonly RecommendationOption[];
-	descriptorOptions?: readonly RecommendationOption[];
 };
 
 export const QUESTION_ORDER = [
 	"addedTimeframe",
 	"genre",
 	"releaseTime",
-	"descriptor",
 	"rating",
 	"count",
 ] as const satisfies readonly RecommendationQuestionId[];
@@ -55,7 +53,6 @@ export const QUESTION_LABELS: Record<RecommendationQuestionId, string> = {
 	addedTimeframe: "Added",
 	genre: "Genre",
 	releaseTime: "Release",
-	descriptor: "Descriptors",
 	rating: "Rating",
 	count: "# of recs",
 };
@@ -66,6 +63,7 @@ export const ADDED_TIMEFRAME_OPTIONS = [
 	{ key: "week", label: "Week" },
 	{ key: "month", label: "Month" },
 	{ key: "two_months", label: "2 months" },
+	{ key: "older_than_two_months", label: "Older than 2 months" },
 ] as const satisfies readonly RecommendationOption[];
 
 export const RELEASE_TIME_OPTIONS = [
@@ -106,10 +104,7 @@ export function nextRecommendationQuestion(
 
 export function recommendationAnswerSummary(
 	answers: RecommendationAnswers,
-	{
-		genreOptions = [],
-		descriptorOptions = [],
-	}: RecommendationSummaryOptions = {},
+	{ genreOptions = [] }: RecommendationSummaryOptions = {},
 ): string[] {
 	const summary: string[] = [];
 
@@ -124,11 +119,6 @@ export function recommendationAnswerSummary(
 	if (answers.releaseTime !== "any") {
 		summary.push(
 			`Release: ${optionLabel(RELEASE_TIME_OPTIONS, answers.releaseTime)}`,
-		);
-	}
-	if (answers.descriptorKey !== "any") {
-		summary.push(
-			`Descriptor: ${optionLabel(descriptorOptions, answers.descriptorKey)}`,
 		);
 	}
 	if (answers.ratingTier !== "any") {

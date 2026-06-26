@@ -14,6 +14,58 @@ type AlbumEntry = {
 	} | null;
 };
 
+function isSpotifyImageUrl(imageUrl: string): boolean {
+	try {
+		return new URL(imageUrl).hostname === "i.scdn.co";
+	} catch {
+		return false;
+	}
+}
+
+function AlbumCoverImage({
+	imageUrl,
+	name,
+	size,
+	priority = false,
+}: {
+	imageUrl?: string;
+	name: string;
+	size: "hero" | "row";
+	priority?: boolean;
+}) {
+	if (!imageUrl) {
+		return (
+			<div className="flex h-full w-full items-center justify-center">
+				<Disc3
+					className={
+						size === "hero"
+							? "h-8 w-8 text-muted-foreground"
+							: "h-4 w-4 text-muted-foreground"
+					}
+				/>
+			</div>
+		);
+	}
+
+	if (!isSpotifyImageUrl(imageUrl)) {
+		return (
+			// biome-ignore lint/performance/noImgElement: manual entries may use any host
+			<img src={imageUrl} alt={name} className="h-full w-full object-cover" />
+		);
+	}
+
+	return (
+		<Image
+			src={imageUrl}
+			alt={name}
+			fill
+			className="object-cover"
+			sizes={size === "hero" ? "96px" : "40px"}
+			priority={priority}
+		/>
+	);
+}
+
 export function Top50YearView({ albums }: { albums: AlbumEntry[] }) {
 	const topAlbum = albums.find((a) => a.position === 1);
 
@@ -22,20 +74,12 @@ export function Top50YearView({ albums }: { albums: AlbumEntry[] }) {
 			{topAlbum?.album && (
 				<div className="flex items-center gap-4 rounded-lg border bg-muted/30 p-4">
 					<div className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-md bg-muted shadow-sm">
-						{topAlbum.album.imageUrl ? (
-							<Image
-								src={topAlbum.album.imageUrl}
-								alt={topAlbum.album.name}
-								fill
-								className="object-cover"
-								sizes="96px"
-								priority
-							/>
-						) : (
-							<div className="flex h-full w-full items-center justify-center">
-								<Disc3 className="h-8 w-8 text-muted-foreground" />
-							</div>
-						)}
+						<AlbumCoverImage
+							imageUrl={topAlbum.album.imageUrl}
+							name={topAlbum.album.name}
+							size="hero"
+							priority
+						/>
 					</div>
 					<div>
 						<p className="font-bold text-3xl text-primary">#1</p>
@@ -55,19 +99,11 @@ export function Top50YearView({ albums }: { albums: AlbumEntry[] }) {
 							{entry.position}
 						</span>
 						<div className="relative h-10 w-10 flex-shrink-0 overflow-hidden rounded bg-muted">
-							{entry.album?.imageUrl ? (
-								<Image
-									src={entry.album.imageUrl}
-									alt={entry.album.name}
-									fill
-									className="object-cover"
-									sizes="40px"
-								/>
-							) : (
-								<div className="flex h-full w-full items-center justify-center">
-									<Disc3 className="h-4 w-4 text-muted-foreground" />
-								</div>
-							)}
+							<AlbumCoverImage
+								imageUrl={entry.album?.imageUrl}
+								name={entry.album?.name ?? "Unknown album"}
+								size="row"
+							/>
 						</div>
 						<div className="min-w-0 flex-1">
 							<p className="truncate font-medium text-sm">

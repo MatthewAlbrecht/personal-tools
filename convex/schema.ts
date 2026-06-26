@@ -526,6 +526,7 @@ export default defineSchema({
 				v.literal("week"),
 				v.literal("month"),
 				v.literal("two_months"),
+				v.literal("older_than_two_months"),
 				v.literal("any"),
 			),
 			genreKey: v.string(),
@@ -683,7 +684,11 @@ export default defineSchema({
 	robRankingAlbums: defineTable({
 		userId: v.string(),
 		yearId: v.id("robRankingYears"),
-		albumId: v.id("spotifyAlbums"),
+		albumId: v.optional(v.id("spotifyAlbums")),
+		source: v.optional(v.union(v.literal("spotify"), v.literal("manual"))),
+		manualArtistName: v.optional(v.string()),
+		manualAlbumTitle: v.optional(v.string()),
+		manualImageUrl: v.optional(v.string()),
 		position: v.number(), // 1-50
 		status: v.string(), // "none" | "locked" | "confirmed"
 		createdAt: v.number(),

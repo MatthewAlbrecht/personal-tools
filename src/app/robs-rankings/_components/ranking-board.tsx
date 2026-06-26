@@ -16,12 +16,14 @@ type RankingBoardProps = {
 	albums: RankingAlbum[];
 	onBatchUpdatePositions: (positions: PositionUpdate[]) => void;
 	onRemoveAlbum: (rankingAlbumId: string) => void;
+	onEditAlbum: (album: RankingAlbum) => void;
 };
 
 export function RankingBoard({
 	albums,
 	onBatchUpdatePositions,
 	onRemoveAlbum,
+	onEditAlbum,
 }: RankingBoardProps) {
 	const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 	const [optimisticUpdates, setOptimisticUpdates] = useState<
@@ -222,12 +224,14 @@ export function RankingBoard({
 												name={album.album?.name ?? "Unknown"}
 												artistName={album.album?.artistName ?? "Unknown"}
 												imageUrl={album.album?.imageUrl}
+												isManual={album.source === "manual"}
 												isSelected={isSelected}
 												onSelect={
 													idx !== undefined
 														? () => setSelectedIndex(idx)
 														: undefined
 												}
+												onEdit={() => onEditAlbum(album)}
 												onRemove={() => onRemoveAlbum(album._id)}
 											/>
 										);

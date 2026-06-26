@@ -2,9 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
 	buildParentKeysByChildKey,
+	buildChildKeysByParentKey,
+	collectDescendantGenreKeys,
 	expandGenreKeysWithAncestorKeys,
 	flattenRymGenreHierarchy,
 	parseRymGenreHierarchyHtml,
+	resolveTopLevelGenreKey,
 } from "./rymGenreHierarchy";
 
 const SAMPLE_HTML = `
@@ -164,5 +167,45 @@ test("expandGenreKeysWithAncestorKeys walks every parent branch", () => {
 			parentKeysByChild,
 		),
 		["acoustic blues", "acoustic texas blues", "blues", "country blues"],
+	);
+});
+
+test("resolveTopLevelGenreKey walks parents to the nearest top-level genre", () => {
+	const parentKeysByChild = buildParentKeysByChildKey([
+		{ parentKey: "blues", childKey: "acoustic blues" },
+		{ parentKey: "blues", childKey: "country blues" },
+		{ parentKey: "acoustic blues", childKey: "acoustic texas blues" },
+	]);
+	const topLevelGenreKeys = new Set(["blues", "ambient"]);
+
+	assert.equal(
+		resolveTopLevelGenreKey(
+			"acoustic texas blues",
+			parentKeysByChild,
+			topLevelGenreKeys,
+		),
+		"blues",
+	);
+	assert.equal(
+		resolveTopLevelGenreKey("ambient", parentKeysByChild, topLevelGenreKeys),
+		"ambient",
+	);
+});
+
+test("collectDescendantGenreKeys includes nested subgenres", () => {
+	const childKeysByParent = buildChildKeysByParentKey([
+		{ parentKey: "blues", childKey: "acoustic blues" },
+		{ parentKey: "blues", childKey: "country blues" },
+		{ parentKey: "acoustic blues", childKey: "acoustic texas blues" },
+	]);
+
+	assert.deepEqual(
+		[...collectDescendantGenreKeys("blues", childKeysByParent)].sort(),
+		[
+			"acoustic blues",
+			"acoustic texas blues",
+			"blues",
+			"country blues",
+		],
 	);
 });

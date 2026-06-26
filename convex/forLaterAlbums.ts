@@ -42,12 +42,18 @@ import {
 	type RecommendationTagOption,
 	type ReleaseTimeAnswer,
 	buildSavedRecommendationAlbumRefs,
+	buildSubgenreCountsForTopLevel,
+	buildTopLevelGenreCounts,
 	candidateMatchesRecommendationAnswers,
 	chooseRecommendationRows,
 	normalizeRecommendationCount,
-	selectRandomTagOptions,
+	sortRecommendationTagOptionsByCount,
 } from "./_utils/forLaterRecommendations";
 import { buildOpenableGoogleRymSearchLinks } from "./_utils/google_rym_lucky_search";
+import {
+	buildChildKeysByParentKey,
+	collectDescendantGenreKeys,
+} from "./_utils/rymGenreHierarchy";
 import {
 	collectMappedRymScrapeIds,
 	isRymScrapeMappedElsewhere,
@@ -101,6 +107,7 @@ const recommendationAddedTimeframeValidator = v.union(
 	v.literal("week"),
 	v.literal("month"),
 	v.literal("two_months"),
+	v.literal("older_than_two_months"),
 	v.literal("any"),
 );
 
@@ -615,7 +622,12 @@ async function hydrateForLaterAlbumRow(
 }
 
 const FOR_LATER_RECOMMENDATION_SCAN_LIMIT = 2000;
-const FOR_LATER_RECOMMENDATION_OPTION_LIMIT = 10;
+const FOR_LATER_RECOMMENDATION_SUBGENRE_LIMIT = 15;
+
+type RecommendationAlbumGenreTags = {
+	primaryGenreKeys: string[];
+	allGenreKeys: string[];
+};
 
 type ForLaterRecommendationHydratedCandidate = {
 	row: ForLaterAlbumRow;
@@ -722,23 +734,6 @@ async function loadRecommendationGenreLabels(
 	return labels;
 }
 
-async function loadRecommendationDescriptorLabels(
-	ctx: QueryCtx,
-	keys: string[],
-): Promise<Map<string, string>> {
-	const labels = new Map<string, string>();
-	for (const key of keys) {
-		const descriptor = await ctx.db
-			.query("rateYourMusicDescriptors")
-			.withIndex("by_key", (q) => q.eq("key", key))
-			.first();
-		if (descriptor) {
-			labels.set(key, descriptor.label);
-		}
-	}
-	return labels;
-}
-
 function applyRecommendationOptionLabels(
 	options: RecommendationTagOption[],
 	labels: Map<string, string>,
@@ -749,49 +744,156 @@ function applyRecommendationOptionLabels(
 	}));
 }
 
+async function loadTopLevelGenreKeySet(
+	ctx: QueryCtx,
+): Promise<Set<string>> {
+	const topLevelGenres = await ctx.db
+		.query("rateYourMusicGenres")
+		.withIndex("by_isTopLevel", (q) => q.eq("isTopLevel", true))
+		.collect();
+
+	return new Set(topLevelGenres.map((genre) => genre.key));
+}
+
+async function loadRecommendationAlbumGenreTagsByScrapeId(
+	ctx: QueryCtx,
+	scrapeIds: Id<"rateYourMusicScrapes">[],
+): Promise<Map<Id<"rateYourMusicScrapes">, RecommendationAlbumGenreTags>> {
+	const tagsByScrapeId = new Map<
+		Id<"rateYourMusicScrapes">,
+		RecommendationAlbumGenreTags
+	>();
+	const genreKeyById = new Map<Id<"rateYourMusicGenres">, string>();
+
+	for (const scrapeId of scrapeIds) {
+		const genreLinks = await ctx.db
+			.query("rateYourMusicReleaseGenres")
+			.withIndex("by_scrapeId", (q) => q.eq("scrapeId", scrapeId))
+			.collect();
+		const primaryGenreKeys: string[] = [];
+		const allGenreKeys: string[] = [];
+
+		for (const link of genreLinks) {
+			let genreKey = genreKeyById.get(link.genreId);
+			if (genreKey === undefined) {
+				const genre = await ctx.db.get(link.genreId);
+				if (!genre) {
+					continue;
+				}
+				genreKey = genre.key;
+				genreKeyById.set(link.genreId, genreKey);
+			}
+
+			allGenreKeys.push(genreKey);
+			if (link.role === "primary") {
+				primaryGenreKeys.push(genreKey);
+			}
+		}
+
+		tagsByScrapeId.set(scrapeId, {
+			primaryGenreKeys,
+			allGenreKeys,
+		});
+	}
+
+	return tagsByScrapeId;
+}
+
+async function loadRecommendationAlbumGenreTagsForItems(
+	ctx: QueryCtx,
+	items: Doc<"forLaterAlbumItems">[],
+): Promise<RecommendationAlbumGenreTags[]> {
+	const scrapeIds = [
+		...new Set(
+			items
+				.map((item) => item.rymScrapeId)
+				.filter((scrapeId): scrapeId is Id<"rateYourMusicScrapes"> =>
+					Boolean(scrapeId),
+				),
+		),
+	];
+	const tagsByScrapeId = await loadRecommendationAlbumGenreTagsByScrapeId(
+		ctx,
+		scrapeIds,
+	);
+
+	return items.map((item) => {
+		if (!item.rymScrapeId) {
+			return {
+				primaryGenreKeys: [],
+				allGenreKeys: [],
+			};
+		}
+
+		return (
+			tagsByScrapeId.get(item.rymScrapeId) ?? {
+				primaryGenreKeys: [],
+				allGenreKeys: [],
+			}
+		);
+	});
+}
+
 async function collectForLaterRecommendationTagOptions(
 	ctx: QueryCtx,
-	args: { userId: string; genreSeed: string; descriptorSeed: string },
+	args: { userId: string; parentGenreKey?: string },
 ): Promise<{
 	genres: RecommendationTagOption[];
-	descriptors: RecommendationTagOption[];
 }> {
 	const items = await collectVisibleActiveForLaterRecommendationItems(ctx, {
 		userId: args.userId,
 	});
-	const genreOptions = selectRandomTagOptions(
-		items.flatMap((item) =>
-			(item.filterGenreKeysSorted ?? []).map(recommendationTagInputFromKey),
-		),
-		args.genreSeed,
-		FOR_LATER_RECOMMENDATION_OPTION_LIMIT,
-	);
-	const descriptorOptions = selectRandomTagOptions(
-		items.flatMap((item) =>
-			(item.filterDescriptorKeysSorted ?? []).map(
-				recommendationTagInputFromKey,
-			),
-		),
-		args.descriptorSeed,
-		FOR_LATER_RECOMMENDATION_OPTION_LIMIT,
-	);
-	const [genreLabels, descriptorLabels] = await Promise.all([
-		loadRecommendationGenreLabels(
+	const [albumGenreTags, parentKeysByChild, topLevelGenreKeys] =
+		await Promise.all([
+			loadRecommendationAlbumGenreTagsForItems(ctx, items),
+			loadRymGenreParentKeysByChild(ctx),
+			loadTopLevelGenreKeySet(ctx),
+		]);
+
+	if (args.parentGenreKey) {
+		const relationships = await ctx.db
+			.query("rateYourMusicGenreRelationships")
+			.collect();
+		const childKeysByParent = buildChildKeysByParentKey(relationships);
+		const descendantGenreKeys = collectDescendantGenreKeys(
+			args.parentGenreKey,
+			childKeysByParent,
+		);
+		const genreOptions = buildSubgenreCountsForTopLevel({
+			albumAllGenreKeys: albumGenreTags.map((tags) => tags.allGenreKeys),
+			topLevelGenreKey: args.parentGenreKey,
+			descendantGenreKeys,
+			limit: FOR_LATER_RECOMMENDATION_SUBGENRE_LIMIT,
+		});
+		const genreLabels = await loadRecommendationGenreLabels(
 			ctx,
 			genreOptions.map((option) => option.key),
-		),
-		loadRecommendationDescriptorLabels(
-			ctx,
-			descriptorOptions.map((option) => option.key),
-		),
-	]);
+		);
+
+		return {
+			genres: applyRecommendationOptionLabels(genreOptions, genreLabels),
+		};
+	}
+
+	const topLevelCounts = buildTopLevelGenreCounts({
+		albumPrimaryGenreKeys: albumGenreTags.map((tags) => tags.primaryGenreKeys),
+		topLevelGenreKeys,
+		parentKeysByChild,
+	});
+	const genreOptions = sortRecommendationTagOptionsByCount(
+		[...topLevelCounts.entries()].map(([key, count]) => ({
+			key,
+			label: readableRecommendationLabelFromKey(key),
+			count,
+		})),
+	);
+	const genreLabels = await loadRecommendationGenreLabels(
+		ctx,
+		genreOptions.map((option) => option.key),
+	);
 
 	return {
 		genres: applyRecommendationOptionLabels(genreOptions, genreLabels),
-		descriptors: applyRecommendationOptionLabels(
-			descriptorOptions,
-			descriptorLabels,
-		),
 	};
 }
 
@@ -1571,25 +1673,21 @@ export const getForLaterUiSummary = query({
 export const listForLaterRecommendationOptions = query({
 	args: {
 		userId: v.string(),
-		genreSeed: v.string(),
-		descriptorSeed: v.string(),
+		parentGenreKey: v.optional(v.string()),
 	},
 	returns: v.object({
 		genres: v.array(recommendationOptionValidator),
-		descriptors: v.array(recommendationOptionValidator),
 	}),
 	handler: async (
 		ctx,
 		args,
 	): Promise<{
 		genres: Array<{ key: string; label: string; count: number }>;
-		descriptors: Array<{ key: string; label: string; count: number }>;
 	}> => {
 		requireAuth(ctx);
 		return await collectForLaterRecommendationTagOptions(ctx, {
 			userId: args.userId,
-			genreSeed: args.genreSeed,
-			descriptorSeed: args.descriptorSeed,
+			parentGenreKey: args.parentGenreKey?.trim() || undefined,
 		});
 	},
 });

@@ -4,12 +4,15 @@ import {
 	type ForLaterRecommendationCandidate,
 	addedTimeframeMatches,
 	buildSavedRecommendationAlbumRefs,
+	buildSubgenreCountsForTopLevel,
+	buildTopLevelGenreCounts,
 	candidateMatchesRecommendationAnswers,
 	chooseRecommendationRows,
 	normalizeRecommendationCount,
 	ratingTierMatches,
 	releaseTimeMatches,
 	selectRandomTagOptions,
+	sortRecommendationTagOptionsByCount,
 } from "./forLaterRecommendations";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -97,6 +100,30 @@ test("addedTimeframeMatches uses mutually exclusive buckets", () => {
 		addedTimeframeMatches(
 			candidate({ playlistAddedAt: NOW - 12 * DAY_MS }),
 			"two_months",
+			NOW,
+		),
+		false,
+	);
+	assert.equal(
+		addedTimeframeMatches(
+			candidate({ playlistAddedAt: NOW - 90 * DAY_MS }),
+			"older_than_two_months",
+			NOW,
+		),
+		true,
+	);
+	assert.equal(
+		addedTimeframeMatches(
+			candidate({ playlistAddedAt: NOW - 45 * DAY_MS }),
+			"older_than_two_months",
+			NOW,
+		),
+		false,
+	);
+	assert.equal(
+		addedTimeframeMatches(
+			candidate({ playlistAddedAt: NOW - 60 * DAY_MS }),
+			"older_than_two_months",
 			NOW,
 		),
 		false,
@@ -417,5 +444,67 @@ test("buildSavedRecommendationAlbumRefs stores chosen album identifiers", () => 
 			albumIds: ["album-1", "album-2"],
 			spotifyAlbumIds: ["spotify-1", "spotify-2"],
 		},
+	);
+});
+
+test("buildTopLevelGenreCounts rolls primary genres up to top-level buckets", () => {
+	const parentKeysByChild = new Map<string, string[]>([
+		["acoustic blues", ["blues"]],
+		["acoustic texas blues", ["acoustic blues"]],
+	]);
+	const topLevelGenreKeys = new Set(["blues", "ambient"]);
+
+	const counts = buildTopLevelGenreCounts({
+		albumPrimaryGenreKeys: [
+			["acoustic texas blues"],
+			["blues"],
+			["ambient"],
+			["acoustic texas blues", "ambient"],
+		],
+		topLevelGenreKeys,
+		parentKeysByChild,
+	});
+
+	assert.equal(counts.get("blues"), 3);
+	assert.equal(counts.get("ambient"), 2);
+});
+
+test("buildSubgenreCountsForTopLevel counts attached tags and limits results", () => {
+	const descendantGenreKeys = new Set([
+		"blues",
+		"acoustic blues",
+		"acoustic texas blues",
+		"country blues",
+	]);
+
+	const options = buildSubgenreCountsForTopLevel({
+		albumAllGenreKeys: [
+			["acoustic texas blues", "country blues"],
+			["acoustic blues", "acoustic texas blues"],
+			["blues"],
+		],
+		topLevelGenreKey: "blues",
+		descendantGenreKeys,
+		limit: 2,
+	});
+
+	assert.deepEqual(options, [
+		{ key: "acoustic texas blues", label: "acoustic texas blues", count: 2 },
+		{ key: "acoustic blues", label: "acoustic blues", count: 1 },
+	]);
+});
+
+test("sortRecommendationTagOptionsByCount orders by count descending", () => {
+	assert.deepEqual(
+		sortRecommendationTagOptionsByCount([
+			{ key: "ambient", label: "Ambient", count: 2 },
+			{ key: "blues", label: "Blues", count: 5 },
+			{ key: "folk", label: "Folk", count: 5 },
+		]),
+		[
+			{ key: "blues", label: "Blues", count: 5 },
+			{ key: "folk", label: "Folk", count: 5 },
+			{ key: "ambient", label: "Ambient", count: 2 },
+		],
 	);
 });

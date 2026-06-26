@@ -106,6 +106,69 @@ export function buildParentKeysByChildKey(
 	return parentKeysByChild;
 }
 
+export function buildChildKeysByParentKey(
+	relationships: Array<{ parentKey: string; childKey: string }>,
+): Map<string, string[]> {
+	const childKeysByParent = new Map<string, string[]>();
+
+	for (const relationship of relationships) {
+		const children = childKeysByParent.get(relationship.parentKey) ?? [];
+		if (!children.includes(relationship.childKey)) {
+			children.push(relationship.childKey);
+		}
+		childKeysByParent.set(relationship.parentKey, children);
+	}
+
+	return childKeysByParent;
+}
+
+export function resolveTopLevelGenreKey(
+	genreKey: string,
+	parentKeysByChild: ReadonlyMap<string, readonly string[]>,
+	topLevelGenreKeys: ReadonlySet<string>,
+): string | undefined {
+	const visited = new Set<string>();
+	let current: string | undefined = genreKey;
+
+	while (current !== undefined && !visited.has(current)) {
+		visited.add(current);
+		if (topLevelGenreKeys.has(current)) {
+			return current;
+		}
+
+		const lookupKey = current;
+		const parentKeys: readonly string[] =
+			parentKeysByChild.get(lookupKey) ?? [];
+		current = parentKeys[0];
+	}
+
+	return undefined;
+}
+
+export function collectDescendantGenreKeys(
+	topLevelGenreKey: string,
+	childKeysByParent: ReadonlyMap<string, readonly string[]>,
+): Set<string> {
+	const descendants = new Set<string>([topLevelGenreKey]);
+	const pending = [topLevelGenreKey];
+
+	while (pending.length > 0) {
+		const current = pending.pop();
+		if (!current) {
+			continue;
+		}
+
+		for (const childKey of childKeysByParent.get(current) ?? []) {
+			if (!descendants.has(childKey)) {
+				descendants.add(childKey);
+				pending.push(childKey);
+			}
+		}
+	}
+
+	return descendants;
+}
+
 /** Adds every ancestor key so parent-genre filters match subgenre-tagged albums. */
 export function expandGenreKeysWithAncestorKeys(
 	directKeys: Iterable<string>,

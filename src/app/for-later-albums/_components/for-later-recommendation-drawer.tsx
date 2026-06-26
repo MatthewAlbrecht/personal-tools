@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery } from "convex/react";
-import { Disc3, ExternalLink, RefreshCw } from "lucide-react";
+import { ChevronLeft, Disc3, ExternalLink } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { AlbumRatingBadge } from "~/components/album-rating-badge";
@@ -36,7 +36,6 @@ import type { ForLaterAlbumRowData } from "../_utils/types";
 
 type RecommendationOptionsResult = {
 	genres: RecommendationOption[];
-	descriptors: RecommendationOption[];
 };
 
 type RecommendationResult = {
@@ -63,8 +62,10 @@ export function ForLaterRecommendationDrawer({
 	const [answers, setAnswers] = useState<RecommendationAnswers>(() =>
 		createDefaultRecommendationAnswers(),
 	);
-	const [genreSeed, setGenreSeed] = useState("initial-genres");
-	const [descriptorSeed, setDescriptorSeed] = useState("initial-descriptors");
+	const [selectedTopLevelGenre, setSelectedTopLevelGenre] = useState<{
+		key: string;
+		label: string;
+	} | null>(null);
 	const [recommendationResult, setRecommendationResult] =
 		useState<RecommendationResult | null>(null);
 	const [recommendationError, setRecommendationError] = useState<string | null>(
@@ -83,14 +84,26 @@ export function ForLaterRecommendationDrawer({
 		resetRecommendationState();
 	}, [open]);
 
+	useEffect(() => {
+		if (activeQuestion === "genre") {
+			return;
+		}
+
+		setSelectedTopLevelGenre(null);
+	}, [activeQuestion]);
+
 	const recommendationOptions: RecommendationOptionsResult | undefined =
 		useQuery(
 			api.forLaterAlbums.listForLaterRecommendationOptions,
-			open ? { userId, genreSeed, descriptorSeed } : "skip",
+			open
+				? {
+						userId,
+						parentGenreKey: selectedTopLevelGenre?.key,
+					}
+				: "skip",
 		);
 
 	const genreOptions = recommendationOptions?.genres ?? [];
-	const descriptorOptions = recommendationOptions?.descriptors ?? [];
 
 	async function handleRecommendNow(
 		answersForRecommendation = answers,
@@ -119,6 +132,7 @@ export function ForLaterRecommendationDrawer({
 		setAnswers(createDefaultRecommendationAnswers());
 		setActiveQuestion("addedTimeframe");
 		setFurthestQuestionIndex(0);
+		setSelectedTopLevelGenre(null);
 		clearRecommendationRequest();
 	}
 
@@ -146,16 +160,38 @@ export function ForLaterRecommendationDrawer({
 		setFurthestQuestionIndex((current) => Math.max(current, nextQuestionIndex));
 	}
 
-	function handleShuffleGenres(): void {
-		setAnswers((current) => ({ ...current, genreKey: "any" }));
-		clearRecommendationRequest();
-		setGenreSeed(createClientSeed());
+	function handleGenreSelected(genreKey: string): void {
+		if (genreKey === "any") {
+			setSelectedTopLevelGenre(null);
+			handleQuestionAnswered({ genreKey });
+			return;
+		}
+
+		if (selectedTopLevelGenre === null) {
+			const label =
+				genreOptions.find((option) => option.key === genreKey)?.label ??
+				readableGenreLabelFromKey(genreKey);
+			setSelectedTopLevelGenre({ key: genreKey, label });
+			clearRecommendationRequest();
+			return;
+		}
+
+		setSelectedTopLevelGenre(null);
+		handleQuestionAnswered({ genreKey });
 	}
 
-	function handleShuffleDescriptors(): void {
-		setAnswers((current) => ({ ...current, descriptorKey: "any" }));
+	function handleGenreBack(): void {
+		setSelectedTopLevelGenre(null);
 		clearRecommendationRequest();
-		setDescriptorSeed(createClientSeed());
+	}
+
+	function handleActiveQuestionChange(
+		question: RecommendationQuestionId,
+	): void {
+		if (question !== "genre") {
+			setSelectedTopLevelGenre(null);
+		}
+		setActiveQuestion(question);
 	}
 
 	return (
@@ -181,7 +217,7 @@ export function ForLaterRecommendationDrawer({
 							<StepNavigation
 								activeQuestion={activeQuestion}
 								furthestQuestionIndex={furthestQuestionIndex}
-								onChange={setActiveQuestion}
+								onChange={handleActiveQuestionChange}
 								onReachQuestion={(question) =>
 									setFurthestQuestionIndex((current) =>
 										Math.max(current, questionIndex(question)),
@@ -190,16 +226,16 @@ export function ForLaterRecommendationDrawer({
 							/>
 
 							<section className="bg-card p-4">
-								<QuestionBody
-									activeQuestion={activeQuestion}
-									answers={answers}
-									genreOptions={genreOptions}
-									descriptorOptions={descriptorOptions}
-									optionsLoading={open && recommendationOptions === undefined}
-									onAnswer={handleQuestionAnswered}
-									onShuffleGenres={handleShuffleGenres}
-									onShuffleDescriptors={handleShuffleDescriptors}
-								/>
+							<QuestionBody
+								activeQuestion={activeQuestion}
+								answers={answers}
+								genreOptions={genreOptions}
+								selectedTopLevelGenre={selectedTopLevelGenre}
+								optionsLoading={open && recommendationOptions === undefined}
+								onAnswer={handleQuestionAnswered}
+								onGenreSelected={handleGenreSelected}
+								onGenreBack={handleGenreBack}
+							/>
 							</section>
 						</div>
 					)}
@@ -294,20 +330,20 @@ function QuestionBody({
 	activeQuestion,
 	answers,
 	genreOptions,
-	descriptorOptions,
+	selectedTopLevelGenre,
 	optionsLoading,
 	onAnswer,
-	onShuffleGenres,
-	onShuffleDescriptors,
+	onGenreSelected,
+	onGenreBack,
 }: {
 	activeQuestion: RecommendationQuestionId;
 	answers: RecommendationAnswers;
 	genreOptions: RecommendationOption[];
-	descriptorOptions: RecommendationOption[];
+	selectedTopLevelGenre: { key: string; label: string } | null;
 	optionsLoading: boolean;
 	onAnswer: (partialAnswers: Partial<RecommendationAnswers>) => void;
-	onShuffleGenres: () => void;
-	onShuffleDescriptors: () => void;
+	onGenreSelected: (genreKey: string) => void;
+	onGenreBack: () => void;
 }) {
 	if (activeQuestion === "addedTimeframe") {
 		return (
@@ -329,13 +365,13 @@ function QuestionBody({
 
 	if (activeQuestion === "genre") {
 		return (
-			<TagQuestionSection
-				title="Genre:"
+			<GenreQuestionSection
 				selectedKey={answers.genreKey}
 				options={genreOptions}
+				selectedTopLevelGenre={selectedTopLevelGenre}
 				optionsLoading={optionsLoading}
-				onSelect={(genreKey) => onAnswer({ genreKey })}
-				onShuffle={onShuffleGenres}
+				onSelect={onGenreSelected}
+				onBack={onGenreBack}
 				emptyOptionsMessage="Genre choices appear after RYM data is linked for for-later albums."
 			/>
 		);
@@ -356,20 +392,6 @@ function QuestionBody({
 					</ChoiceButton>
 				))}
 			</QuestionSection>
-		);
-	}
-
-	if (activeQuestion === "descriptor") {
-		return (
-			<TagQuestionSection
-				title="Descriptors:"
-				selectedKey={answers.descriptorKey}
-				options={descriptorOptions}
-				optionsLoading={optionsLoading}
-				onSelect={(descriptorKey) => onAnswer({ descriptorKey })}
-				onShuffle={onShuffleDescriptors}
-				emptyOptionsMessage="Descriptor choices appear after RYM data is linked for for-later albums."
-			/>
 		);
 	}
 
@@ -406,50 +428,62 @@ function QuestionBody({
 	);
 }
 
-function QuestionSection({
-	title,
-	children,
-}: {
-	title: string;
-	children: React.ReactNode;
-}) {
-	return (
-		<div className="space-y-3">
-			<h3 className="font-semibold text-base">{title}</h3>
-			<div className="flex flex-wrap gap-2">{children}</div>
-		</div>
-	);
-}
-
-function TagQuestionSection({
-	title,
+function GenreQuestionSection({
 	selectedKey,
 	options,
+	selectedTopLevelGenre,
 	optionsLoading,
 	onSelect,
-	onShuffle,
+	onBack,
 	emptyOptionsMessage,
 }: {
-	title: string;
 	selectedKey: string;
 	options: RecommendationOption[];
+	selectedTopLevelGenre: { key: string; label: string } | null;
 	optionsLoading: boolean;
 	onSelect: (key: string) => void;
-	onShuffle: () => void;
+	onBack: () => void;
 	emptyOptionsMessage: string;
 }) {
+	const isSubgenreStep = selectedTopLevelGenre !== null;
+
 	return (
-		<QuestionSection title={title}>
-			<ChoiceButton
-				selected={selectedKey === "any"}
-				onClick={() => onSelect("any")}
-			>
-				Doesn't matter
-			</ChoiceButton>
+		<QuestionSection
+			title={isSubgenreStep ? "Subgenre:" : "Genre:"}
+			description={
+				isSubgenreStep
+					? `Popular subgenres in ${selectedTopLevelGenre.label}`
+					: "Top-level genres from your For Later library"
+			}
+		>
+			{isSubgenreStep ? (
+				<Button
+					type="button"
+					variant="outline"
+					size="sm"
+					className="rounded-full"
+					onClick={onBack}
+				>
+					<ChevronLeft className="size-3.5" />
+					Back
+				</Button>
+			) : (
+				<ChoiceButton selected={selectedKey === "any"} onClick={() => onSelect("any")}>
+					Doesn't matter
+				</ChoiceButton>
+			)}
+			{isSubgenreStep ? (
+				<ChoiceButton
+					selected={selectedKey === selectedTopLevelGenre.key}
+					onClick={() => onSelect(selectedTopLevelGenre.key)}
+				>
+					<span>Any {selectedTopLevelGenre.label}</span>
+				</ChoiceButton>
+			) : null}
 			{options.map((option) => (
 				<ChoiceButton
 					key={option.key}
-					selected={selectedKey === option.key}
+					selected={!isSubgenreStep ? false : selectedKey === option.key}
 					onClick={() => onSelect(option.key)}
 				>
 					<span>{option.label}</span>
@@ -458,16 +492,6 @@ function TagQuestionSection({
 					</span>
 				</ChoiceButton>
 			))}
-			<Button
-				type="button"
-				variant="outline"
-				size="sm"
-				className="rounded-full"
-				onClick={onShuffle}
-			>
-				<RefreshCw className="size-3.5" />
-				Shuffle
-			</Button>
 			{optionsLoading ? (
 				<span className="self-center text-muted-foreground text-xs">
 					Loading options...
@@ -479,6 +503,28 @@ function TagQuestionSection({
 				</p>
 			) : null}
 		</QuestionSection>
+	);
+}
+
+function QuestionSection({
+	title,
+	description,
+	children,
+}: {
+	title: string;
+	description?: string;
+	children: React.ReactNode;
+}) {
+	return (
+		<div className="space-y-3">
+			<div className="space-y-1">
+				<h3 className="font-semibold text-base">{title}</h3>
+				{description ? (
+					<p className="text-muted-foreground text-sm">{description}</p>
+				) : null}
+			</div>
+			<div className="flex flex-wrap gap-2">{children}</div>
+		</div>
 	);
 }
 
@@ -667,6 +713,14 @@ function buildSpotifyAlbumUrl(spotifyAlbumId: string): string | null {
 
 function createClientSeed(): string {
 	return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+
+function readableGenreLabelFromKey(key: string): string {
+	return key
+		.split(/[\s_-]+/)
+		.filter(Boolean)
+		.map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+		.join(" ");
 }
 
 function questionIndex(question: RecommendationQuestionId): number {

@@ -26,8 +26,7 @@ test("createDefaultRecommendationAnswers treats every filter as any and count as
 test("nextRecommendationQuestion advances until the final question", () => {
 	assert.equal(nextRecommendationQuestion("addedTimeframe"), "genre");
 	assert.equal(nextRecommendationQuestion("genre"), "releaseTime");
-	assert.equal(nextRecommendationQuestion("releaseTime"), "descriptor");
-	assert.equal(nextRecommendationQuestion("descriptor"), "rating");
+	assert.equal(nextRecommendationQuestion("releaseTime"), "rating");
 	assert.equal(nextRecommendationQuestion("rating"), "count");
 	assert.equal(nextRecommendationQuestion("count"), "count");
 });
@@ -37,7 +36,6 @@ test("QUESTION_ORDER has the approved question order", () => {
 		"addedTimeframe",
 		"genre",
 		"releaseTime",
-		"descriptor",
 		"rating",
 		"count",
 	]);
@@ -47,7 +45,6 @@ test("QUESTION_LABELS has the approved labels", () => {
 	assert.equal(QUESTION_LABELS.addedTimeframe, "Added");
 	assert.equal(QUESTION_LABELS.genre, "Genre");
 	assert.equal(QUESTION_LABELS.releaseTime, "Release");
-	assert.equal(QUESTION_LABELS.descriptor, "Descriptors");
 	assert.equal(QUESTION_LABELS.rating, "Rating");
 	assert.equal(QUESTION_LABELS.count, "# of recs");
 });
@@ -59,6 +56,7 @@ test("ADDED_TIMEFRAME_OPTIONS has the approved added timeframe options", () => {
 		{ key: "week", label: "Week" },
 		{ key: "month", label: "Month" },
 		{ key: "two_months", label: "2 months" },
+		{ key: "older_than_two_months", label: "Older than 2 months" },
 	]);
 });
 
@@ -99,22 +97,21 @@ test("recommendationAnswerSummary omits unanswered filters but includes count", 
 	);
 });
 
-test("recommendationAnswerSummary uses genre and descriptor labels when available", () => {
+test("recommendationAnswerSummary uses genre labels when available", () => {
 	assert.deepEqual(
 		recommendationAnswerSummary(
 			{
 				addedTimeframe: "any",
 				genreKey: "hip_hop",
 				releaseTime: "any",
-				descriptorKey: "warm",
+				descriptorKey: "any",
 				ratingTier: "any",
 				count: 1,
 			},
 			{
 				genreOptions: [{ key: "hip_hop", label: "Hip Hop" }],
-				descriptorOptions: [{ key: "warm", label: "Warm" }],
 			},
 		),
-		["Genre: Hip Hop", "Descriptor: Warm", "1 rec"],
+		["Genre: Hip Hop", "1 rec"],
 	);
 });
