@@ -8,6 +8,7 @@ import {
 	buildTopLevelGenreCounts,
 	candidateMatchesRecommendationAnswers,
 	chooseRecommendationRows,
+	durationTierMatches,
 	normalizeRecommendationCount,
 	ratingTierMatches,
 	releaseTimeMatches,
@@ -29,6 +30,7 @@ function candidate(
 		releaseYear: 2020,
 		filterGenreKeysSorted: [],
 		filterDescriptorKeysSorted: [],
+		filterDurationMs: undefined,
 		rating: undefined,
 		markedAsSingle: undefined,
 		removedFromForLater: undefined,
@@ -278,6 +280,22 @@ test("ratingTierMatches includes boundaries and excludes lower categories", () =
 	}
 });
 
+test("durationTierMatches maps playlist duration to short medium and long tiers", () => {
+	const shortMs = 30 * 60 * 1000;
+	const mediumMs = 45 * 60 * 1000;
+	const longMs = 60 * 60 * 1000;
+
+	assert.equal(durationTierMatches(shortMs, "short"), true);
+	assert.equal(durationTierMatches(shortMs, "medium"), false);
+	assert.equal(durationTierMatches(mediumMs, "medium"), true);
+	assert.equal(durationTierMatches(longMs, "long"), true);
+	assert.equal(durationTierMatches(35 * 60 * 1000, "medium"), true);
+	assert.equal(durationTierMatches(55 * 60 * 1000, "medium"), true);
+	assert.equal(durationTierMatches(55 * 60 * 1000 + 1, "long"), true);
+	assert.equal(durationTierMatches(undefined, "short"), false);
+	assert.equal(durationTierMatches(undefined, "any"), true);
+});
+
 test("candidateMatchesRecommendationAnswers applies genre descriptor and rating filters", () => {
 	const row = candidate({
 		filterGenreKeysSorted: ["slowcore", "rock"],
@@ -293,6 +311,7 @@ test("candidateMatchesRecommendationAnswers applies genre descriptor and rating 
 				releaseTime: "any",
 				descriptorKey: "melancholic",
 				ratingTier: "really_enjoyed",
+				durationTier: "any",
 				count: 1,
 			},
 			NOW,
@@ -308,6 +327,7 @@ test("candidateMatchesRecommendationAnswers applies genre descriptor and rating 
 				releaseTime: "any",
 				descriptorKey: "melancholic",
 				ratingTier: "really_enjoyed",
+				durationTier: "any",
 				count: 1,
 			},
 			NOW,
@@ -323,6 +343,61 @@ test("candidateMatchesRecommendationAnswers applies genre descriptor and rating 
 				releaseTime: "any",
 				descriptorKey: "warm",
 				ratingTier: "really_enjoyed",
+				durationTier: "any",
+				count: 1,
+			},
+			NOW,
+		),
+		false,
+	);
+});
+
+test("candidateMatchesRecommendationAnswers applies duration tier filter", () => {
+	const row = candidate({
+		filterDurationMs: 40 * 60 * 1000,
+	});
+	assert.equal(
+		candidateMatchesRecommendationAnswers(
+			row,
+			{
+				addedTimeframe: "any",
+				genreKey: "any",
+				releaseTime: "any",
+				descriptorKey: "any",
+				ratingTier: "any",
+				durationTier: "medium",
+				count: 1,
+			},
+			NOW,
+		),
+		true,
+	);
+	assert.equal(
+		candidateMatchesRecommendationAnswers(
+			row,
+			{
+				addedTimeframe: "any",
+				genreKey: "any",
+				releaseTime: "any",
+				descriptorKey: "any",
+				ratingTier: "any",
+				durationTier: "short",
+				count: 1,
+			},
+			NOW,
+		),
+		false,
+	);
+	assert.equal(
+		candidateMatchesRecommendationAnswers(
+			candidate({ filterDurationMs: undefined }),
+			{
+				addedTimeframe: "any",
+				genreKey: "any",
+				releaseTime: "any",
+				descriptorKey: "any",
+				ratingTier: "any",
+				durationTier: "short",
 				count: 1,
 			},
 			NOW,
@@ -341,6 +416,7 @@ test("candidateMatchesRecommendationAnswers excludes hidden rows and unrated row
 				releaseTime: "any",
 				descriptorKey: "any",
 				ratingTier: "holy_moly",
+				durationTier: "any",
 				count: 1,
 			},
 			NOW,
@@ -356,6 +432,7 @@ test("candidateMatchesRecommendationAnswers excludes hidden rows and unrated row
 				releaseTime: "any",
 				descriptorKey: "any",
 				ratingTier: "holy_moly",
+				durationTier: "any",
 				count: 1,
 			},
 			NOW,
@@ -371,6 +448,7 @@ test("candidateMatchesRecommendationAnswers excludes hidden rows and unrated row
 				releaseTime: "any",
 				descriptorKey: "any",
 				ratingTier: "holy_moly",
+				durationTier: "any",
 				count: 1,
 			},
 			NOW,
@@ -470,17 +548,11 @@ test("buildTopLevelGenreCounts rolls primary genres up to top-level buckets", ()
 });
 
 test("buildTopLevelGenreCounts counts albums from filterGenreKeysSorted ancestor expansion", () => {
-	const parentKeysByChild = new Map<string, string[]>([
-		["bebop", ["jazz"]],
-	]);
+	const parentKeysByChild = new Map<string, string[]>([["bebop", ["jazz"]]]);
 	const topLevelGenreKeys = new Set(["jazz", "rock"]);
 
 	const counts = buildTopLevelGenreCounts({
-		albumPrimaryGenreKeys: [
-			["bebop", "jazz"],
-			["rock"],
-			["jazz"],
-		],
+		albumPrimaryGenreKeys: [["bebop", "jazz"], ["rock"], ["jazz"]],
 		topLevelGenreKeys,
 		parentKeysByChild,
 	});

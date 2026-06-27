@@ -133,6 +133,16 @@ export function ForLaterFilters({
 						/>
 					</div>
 					<div className="flex flex-col gap-1.5">
+						<Label id="for-later-filter-duration">Duration (min)</Label>
+						<DurationFilterControls
+							durationMinMinutes={filters.durationMinMinutes}
+							durationMaxMinutes={filters.durationMaxMinutes}
+							onCommit={({ durationMinMinutes, durationMaxMinutes }) =>
+								patchFilters({ durationMinMinutes, durationMaxMinutes })
+							}
+						/>
+					</div>
+					<div className="flex flex-col gap-1.5">
 						<Label id="for-later-filter-listened">Listened</Label>
 						<fieldset
 							className="m-0 inline-flex min-w-0 self-start rounded-md border border-border bg-background px-0.5 py-0.5"
@@ -339,6 +349,8 @@ export function ForLaterFilters({
 							search: undefined,
 							yearMin: undefined,
 							yearMax: undefined,
+							durationMinMinutes: undefined,
+							durationMaxMinutes: undefined,
 							listened: "all",
 							rymStatus: "all",
 							genreMatch: "all",
@@ -350,6 +362,142 @@ export function ForLaterFilters({
 				</Button>
 			</div>
 		</section>
+	);
+}
+
+type DurationPreset = "any" | "short" | "medium" | "long";
+
+function durationPresetFromFilters(filters: {
+	durationMinMinutes?: number;
+	durationMaxMinutes?: number;
+}): DurationPreset | undefined {
+	if (
+		filters.durationMinMinutes === undefined &&
+		filters.durationMaxMinutes === undefined
+	) {
+		return "any";
+	}
+	if (
+		filters.durationMinMinutes === undefined &&
+		filters.durationMaxMinutes === 34
+	) {
+		return "short";
+	}
+	if (filters.durationMinMinutes === 35 && filters.durationMaxMinutes === 55) {
+		return "medium";
+	}
+	if (
+		filters.durationMinMinutes === 56 &&
+		filters.durationMaxMinutes === undefined
+	) {
+		return "long";
+	}
+	return undefined;
+}
+
+function durationBoundsForPreset(preset: DurationPreset): {
+	durationMinMinutes?: number;
+	durationMaxMinutes?: number;
+} {
+	switch (preset) {
+		case "short":
+			return { durationMaxMinutes: 34 };
+		case "medium":
+			return { durationMinMinutes: 35, durationMaxMinutes: 55 };
+		case "long":
+			return { durationMinMinutes: 56 };
+		default:
+			return {
+				durationMinMinutes: undefined,
+				durationMaxMinutes: undefined,
+			};
+	}
+}
+
+function DurationFilterControls({
+	durationMinMinutes,
+	durationMaxMinutes,
+	onCommit,
+}: {
+	durationMinMinutes?: number;
+	durationMaxMinutes?: number;
+	onCommit: (bounds: {
+		durationMinMinutes?: number;
+		durationMaxMinutes?: number;
+	}) => void;
+}) {
+	const activePreset = durationPresetFromFilters({
+		durationMinMinutes,
+		durationMaxMinutes,
+	});
+
+	return (
+		<div className="space-y-2">
+			<fieldset
+				className="m-0 inline-flex min-w-0 flex-wrap gap-1 self-start rounded-md border border-border bg-background px-0.5 py-0.5"
+				aria-label="Filter by playlist duration preset"
+			>
+				{(
+					[
+						["any", "Any"],
+						["short", "< 35"],
+						["medium", "35–55"],
+						["long", "> 55"],
+					] as const
+				).map(([preset, label]) => (
+					<button
+						key={preset}
+						type="button"
+						onClick={() => onCommit(durationBoundsForPreset(preset))}
+						className={cn(
+							"rounded px-2.5 py-1 font-medium text-sm",
+							activePreset === preset
+								? "bg-muted shadow-sm"
+								: "text-muted-foreground hover:text-foreground",
+						)}
+					>
+						{label}
+					</button>
+				))}
+			</fieldset>
+			<div className="flex items-center gap-2">
+				<Input
+					id="for-later-filter-duration-min"
+					type="number"
+					min={0}
+					inputMode="numeric"
+					placeholder="Min"
+					value={durationMinMinutes ?? ""}
+					onChange={(event) => {
+						const raw = event.target.value.trim();
+						onCommit({
+							durationMinMinutes:
+								raw.length > 0 ? Number.parseInt(raw, 10) : undefined,
+							durationMaxMinutes,
+						});
+					}}
+					className="h-9"
+				/>
+				<span className="text-muted-foreground text-sm">–</span>
+				<Input
+					id="for-later-filter-duration-max"
+					type="number"
+					min={0}
+					inputMode="numeric"
+					placeholder="Max"
+					value={durationMaxMinutes ?? ""}
+					onChange={(event) => {
+						const raw = event.target.value.trim();
+						onCommit({
+							durationMinMinutes,
+							durationMaxMinutes:
+								raw.length > 0 ? Number.parseInt(raw, 10) : undefined,
+						});
+					}}
+					className="h-9"
+				/>
+			</div>
+		</div>
 	);
 }
 

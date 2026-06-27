@@ -371,6 +371,8 @@ export default defineSchema({
 		totalTracks: v.number(),
 		genres: v.optional(v.array(v.string())),
 		rawData: v.optional(v.string()), // JSON stringified full Spotify response
+		/** Sum of playlist track durations seen for this album (ms). */
+		totalDurationMs: v.optional(v.number()),
 		createdAt: v.number(),
 		updatedAt: v.number(),
 	})
@@ -436,6 +438,8 @@ export default defineSchema({
 		filterRemovedFromForLater: v.optional(v.boolean()),
 		filterGenreKeysSorted: v.optional(v.array(v.string())),
 		filterDescriptorKeysSorted: v.optional(v.array(v.string())),
+		/** Copied from `spotifyAlbums.totalDurationMs` for list filters (ms). */
+		filterDurationMs: v.optional(v.number()),
 		/** Album title + artist; Convex FTS (`search_forLaterAlbumItems`). */
 		filterSearchText: v.optional(v.string()),
 	})
@@ -542,6 +546,12 @@ export default defineSchema({
 				v.literal("holy_moly"),
 				v.literal("really_enjoyed"),
 				v.literal("good"),
+				v.literal("any"),
+			),
+			durationTier: v.union(
+				v.literal("short"),
+				v.literal("medium"),
+				v.literal("long"),
 				v.literal("any"),
 			),
 			count: v.number(),

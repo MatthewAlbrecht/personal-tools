@@ -17,12 +17,15 @@ export type ReleaseTimeAnswer =
 
 export type RatingTierAnswer = "holy_moly" | "really_enjoyed" | "good" | "any";
 
+export type DurationTierAnswer = "short" | "medium" | "long" | "any";
+
 export type ForLaterRecommendationCandidate = {
 	id: string;
 	playlistAddedAt?: number;
 	firstSeenAt?: number;
 	createdAt: number;
 	releaseYear?: number;
+	filterDurationMs?: number;
 	filterGenreKeysSorted: string[];
 	filterDescriptorKeysSorted: string[];
 	rating?: number;
@@ -36,6 +39,7 @@ export type ForLaterRecommendationAnswers = {
 	releaseTime: ReleaseTimeAnswer;
 	descriptorKey: string;
 	ratingTier: RatingTierAnswer;
+	durationTier: DurationTierAnswer;
 	count: number;
 };
 
@@ -49,6 +53,9 @@ export type RecommendationTagOption = RecommendationTagInput & {
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const MINUTE_MS = 60 * 1000;
+const SHORT_DURATION_MAX_MS = 35 * MINUTE_MS;
+const LONG_DURATION_MIN_MS = 55 * MINUTE_MS;
 const MIN_RECOMMENDATION_COUNT = 1;
 const MAX_RECOMMENDATION_COUNT = 5;
 
@@ -167,6 +174,31 @@ export function ratingTierMatches(
 	}
 }
 
+export function durationTierMatches(
+	filterDurationMs: number | undefined,
+	durationTier: DurationTierAnswer,
+): boolean {
+	if (durationTier === "any") {
+		return true;
+	}
+
+	if (filterDurationMs === undefined) {
+		return false;
+	}
+
+	switch (durationTier) {
+		case "short":
+			return filterDurationMs < SHORT_DURATION_MAX_MS;
+		case "medium":
+			return (
+				filterDurationMs >= SHORT_DURATION_MAX_MS &&
+				filterDurationMs <= LONG_DURATION_MIN_MS
+			);
+		case "long":
+			return filterDurationMs > LONG_DURATION_MIN_MS;
+	}
+}
+
 export function candidateMatchesRecommendationAnswers(
 	candidate: ForLaterRecommendationCandidate,
 	answers: ForLaterRecommendationAnswers,
@@ -181,6 +213,10 @@ export function candidateMatchesRecommendationAnswers(
 	}
 
 	if (!releaseTimeMatches(candidate, answers.releaseTime, now)) {
+		return false;
+	}
+
+	if (!durationTierMatches(candidate.filterDurationMs, answers.durationTier)) {
 		return false;
 	}
 

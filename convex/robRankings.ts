@@ -1,6 +1,16 @@
 import { v } from "convex/values";
-import type { Doc } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
+import type { MutationCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
+import {
+	buildSpotifyAlbumRymMatchArgs,
+	matchRymForSpotifyAlbum,
+} from "./_utils/albumMatching";
+import {
+	type ArtistFinishInput,
+	buildArtistStatsRows,
+	resolveArtistNamesFromRaw,
+} from "./_utils/robRankingArtistStats";
 
 type RankingAlbumDisplay = {
 	name: string;
@@ -12,7 +22,9 @@ type RankingAlbumDisplay = {
 function isManualRankingEntry(ranking: Doc<"robRankingAlbums">): boolean {
 	if (ranking.source === "manual") return true;
 	if (ranking.source === "spotify") return false;
-	return ranking.manualAlbumTitle !== undefined && ranking.albumId === undefined;
+	return (
+		ranking.manualAlbumTitle !== undefined && ranking.albumId === undefined
+	);
 }
 
 function resolveRankingAlbumDisplay(
@@ -43,6 +55,20 @@ function getRankingSource(
 	ranking: Doc<"robRankingAlbums">,
 ): "spotify" | "manual" {
 	return isManualRankingEntry(ranking) ? "manual" : "spotify";
+}
+
+async function attemptRymMatchForRankingAlbum(
+	ctx: MutationCtx,
+	albumId: Id<"spotifyAlbums">,
+	now: number,
+): Promise<void> {
+	const album = await ctx.db.get(albumId);
+	if (!album) return;
+
+	await matchRymForSpotifyAlbum(ctx, {
+		...buildSpotifyAlbumRymMatchArgs(album),
+		now,
+	});
 }
 
 // Get or create a year entry for Rob's rankings
@@ -130,6 +156,75 @@ export const listPublishedYears = query({
 		return years
 			.map((y) => ({ year: y.year, publishedAt: y.publishedAt }))
 			.sort((a, b) => b.year - a.year);
+	},
+});
+
+const publishedArtistStatsRowValidator = v.object({
+	artistKey: v.string(),
+	displayName: v.string(),
+	wins: v.number(),
+	top3: v.number(),
+	top5: v.number(),
+	top10: v.number(),
+	top25: v.number(),
+	top50: v.number(),
+	yearsAppeared: v.number(),
+});
+
+async function resolveArtistNamesForRanking(
+	ctx: {
+		db: {
+			get: (
+				id: Doc<"spotifyAlbums">["_id"],
+			) => Promise<Doc<"spotifyAlbums"> | null>;
+		};
+	},
+	ranking: Doc<"robRankingAlbums">,
+): Promise<string[]> {
+	if (isManualRankingEntry(ranking)) {
+		const manualArtist = ranking.manualArtistName?.trim();
+		if (!manualArtist) return [];
+		return resolveArtistNamesFromRaw(manualArtist);
+	}
+
+	if (!ranking.albumId) return [];
+
+	const spotifyAlbum = await ctx.db.get(ranking.albumId);
+	if (!spotifyAlbum?.artistName) return [];
+
+	return resolveArtistNamesFromRaw(spotifyAlbum.artistName);
+}
+
+export const getPublishedArtistStats = query({
+	args: {},
+	returns: v.array(publishedArtistStatsRowValidator),
+	handler: async (ctx) => {
+		const years = await ctx.db
+			.query("robRankingYears")
+			.withIndex("by_published", (q) => q.eq("published", true))
+			.collect();
+
+		const entries: ArtistFinishInput[] = [];
+
+		for (const yearRow of years) {
+			const rankings = await ctx.db
+				.query("robRankingAlbums")
+				.withIndex("by_yearId", (q) => q.eq("yearId", yearRow._id))
+				.collect();
+
+			for (const ranking of rankings) {
+				const artistNames = await resolveArtistNamesForRanking(ctx, ranking);
+				if (artistNames.length === 0) continue;
+
+				entries.push({
+					position: ranking.position,
+					artistNames,
+					year: yearRow.year,
+				});
+			}
+		}
+
+		return buildArtistStatsRows(entries);
 	},
 });
 
@@ -302,6 +397,7 @@ export const replaceYearFromAlbums = mutation({
 				createdAt: now,
 				updatedAt: now,
 			});
+			await attemptRymMatchForRankingAlbum(ctx, albumId, now);
 		}
 
 		await ctx.db.patch(args.yearId, { updatedAt: now });
@@ -336,7 +432,7 @@ export const addAlbumToYear = mutation({
 		}
 
 		const now = Date.now();
-		return await ctx.db.insert("robRankingAlbums", {
+		const rankingAlbumId = await ctx.db.insert("robRankingAlbums", {
 			userId: args.userId,
 			yearId: args.yearId,
 			albumId: args.albumId,
@@ -346,6 +442,10 @@ export const addAlbumToYear = mutation({
 			createdAt: now,
 			updatedAt: now,
 		});
+
+		await attemptRymMatchForRankingAlbum(ctx, args.albumId, now);
+
+		return rankingAlbumId;
 	},
 });
 

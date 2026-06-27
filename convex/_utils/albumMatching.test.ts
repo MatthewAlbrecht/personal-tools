@@ -3,6 +3,7 @@ import test from "node:test";
 import {
 	matchForLaterAlbumsForRymScrape,
 	matchRymForForLaterAlbum,
+	matchRymForSpotifyAlbum,
 } from "./albumMatching";
 import {
 	artistKeysIntersect,
@@ -104,6 +105,10 @@ test("findTitleArtistMatch rejects same title with no artist overlap", () => {
 
 test("albumMatching exports the For Later to RYM matching entry point", () => {
 	assert.equal(typeof matchRymForForLaterAlbum, "function");
+});
+
+test("albumMatching exports the shared Spotify album RYM matcher", () => {
+	assert.equal(typeof matchRymForSpotifyAlbum, "function");
 });
 
 test("albumMatching exports the RYM scrape to For Later matching entry point", () => {

@@ -9,6 +9,8 @@ test("parseForLaterFilters returns defaults for an empty query", () => {
 		search: undefined,
 		yearMin: undefined,
 		yearMax: undefined,
+		durationMinMinutes: undefined,
+		durationMaxMinutes: undefined,
 		listened: "all",
 		rymStatus: "all",
 		genreMatch: "all",
@@ -35,6 +37,8 @@ test("parseForLaterFilters reads q, genres, descriptors, and taxonomy match mode
 		search: "blue note",
 		yearMin: 1971,
 		yearMax: 1971,
+		durationMinMinutes: undefined,
+		durationMaxMinutes: undefined,
 		listened: "not_listened",
 		rymStatus: "not_on_rym",
 		genreMatch: "any",
@@ -46,6 +50,23 @@ test("parseForLaterFilters legacy match applies when genreMatch and descriptorMa
 	const params = new URLSearchParams("match=any");
 	assert.equal(parseForLaterFilters(params).genreMatch, "any");
 	assert.equal(parseForLaterFilters(params).descriptorMatch, "any");
+});
+
+test("parseForLaterFilters reads durationMin and durationMax URL params", () => {
+	const params = new URLSearchParams("durationMin=35&durationMax=55");
+	assert.deepEqual(parseForLaterFilters(params), {
+		genreKeys: [],
+		descriptorKeys: [],
+		search: undefined,
+		yearMin: undefined,
+		yearMax: undefined,
+		durationMinMinutes: 35,
+		durationMaxMinutes: 55,
+		listened: "all",
+		rymStatus: "all",
+		genreMatch: "all",
+		descriptorMatch: "all",
+	});
 });
 
 test("parseForLaterFilters merges legacy title and artist into search when q absent", () => {
@@ -61,6 +82,8 @@ test("serializeForLaterFilters omits default values", () => {
 		search: undefined,
 		yearMin: undefined,
 		yearMax: undefined,
+		durationMinMinutes: undefined,
+		durationMaxMinutes: undefined,
 		listened: "all",
 		rymStatus: "all",
 		genreMatch: "all",
@@ -78,6 +101,8 @@ test("parseForLaterFilters maps legacy year param to min and max", () => {
 		search: undefined,
 		yearMin: 1984,
 		yearMax: 1984,
+		durationMinMinutes: undefined,
+		durationMaxMinutes: undefined,
 		listened: "all",
 		rymStatus: "all",
 		genreMatch: "all",
@@ -92,6 +117,8 @@ test("serializeForLaterFilters writes yearMin and yearMax", () => {
 		search: undefined,
 		yearMin: 1970,
 		yearMax: 1979,
+		durationMinMinutes: undefined,
+		durationMaxMinutes: undefined,
 		listened: "all",
 		rymStatus: "all",
 		genreMatch: "all",
@@ -108,6 +135,8 @@ test("serializeForLaterFilters repeats genre and descriptor keys and sets q", ()
 		search: "coltrane",
 		yearMin: undefined,
 		yearMax: undefined,
+		durationMinMinutes: 35,
+		durationMaxMinutes: 55,
 		listened: "all",
 		rymStatus: "all",
 		genreMatch: "any",
@@ -120,4 +149,6 @@ test("serializeForLaterFilters repeats genre and descriptor keys and sets q", ()
 	assert.equal(next.get("q"), "coltrane");
 	assert.equal(next.get("genreMatch"), "any");
 	assert.equal(next.get("descriptorMatch"), null);
+	assert.equal(next.get("durationMin"), "35");
+	assert.equal(next.get("durationMax"), "55");
 });

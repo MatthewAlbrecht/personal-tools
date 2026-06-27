@@ -15,6 +15,8 @@ export type ForLaterUiFilters = {
 	yearMax?: number;
 	/** @deprecated Use yearMin/yearMax; still accepted for backward compatibility. */
 	year?: number;
+	durationMinMinutes?: number;
+	durationMaxMinutes?: number;
 	listened: ForLaterListenedFilter;
 	rymStatus: ForLaterRymFilter;
 	/** Among selected genre tags: every tag ("all") vs at least one ("any"). */
@@ -59,6 +61,8 @@ export function normalizeForLaterFilters(
 		search: normalizeOptionalString(input.search),
 		yearMin: input.yearMin ?? input.year,
 		yearMax: input.yearMax ?? input.year,
+		durationMinMinutes: input.durationMinMinutes,
+		durationMaxMinutes: input.durationMaxMinutes,
 		listened: input.listened ?? "all",
 		rymStatus: input.rymStatus ?? "all",
 		genreMatch: resolveTaxonomyMatch(input.genreMatch, legacy),
@@ -92,6 +96,36 @@ export function releaseYearMatchesForLaterFilter(
 		return false;
 	}
 	if (filters.yearMax !== undefined && releaseYear > filters.yearMax) {
+		return false;
+	}
+	return true;
+}
+
+const MINUTE_MS = 60 * 1000;
+
+export function durationMsMatchesForLaterFilter(
+	durationMs: number | undefined,
+	filters: ForLaterUiFilters,
+): boolean {
+	if (
+		filters.durationMinMinutes === undefined &&
+		filters.durationMaxMinutes === undefined
+	) {
+		return true;
+	}
+	if (durationMs === undefined) {
+		return false;
+	}
+	if (
+		filters.durationMinMinutes !== undefined &&
+		durationMs < filters.durationMinMinutes * MINUTE_MS
+	) {
+		return false;
+	}
+	if (
+		filters.durationMaxMinutes !== undefined &&
+		durationMs > filters.durationMaxMinutes * MINUTE_MS
+	) {
 		return false;
 	}
 	return true;
@@ -206,6 +240,7 @@ export type ForLaterAlbumRowFilterInput = {
 	descriptors: Array<{ key: string }>;
 	/** Denormalized scrape tags plus ancestor keys; preferred for genre filters. */
 	filterGenreKeysSorted?: string[];
+	durationMs?: number;
 };
 
 function albumGenreKeySet(r: ForLaterAlbumRowFilterInput): Set<string> {
@@ -241,6 +276,13 @@ export function rowMatchesFilters(
 
 	if (filters.yearMin !== undefined || filters.yearMax !== undefined) {
 		preds.push((r) => releaseYearMatchesForLaterFilter(r.releaseYear, filters));
+	}
+
+	if (
+		filters.durationMinMinutes !== undefined ||
+		filters.durationMaxMinutes !== undefined
+	) {
+		preds.push((r) => durationMsMatchesForLaterFilter(r.durationMs, filters));
 	}
 
 	if (filters.listened === "listened") {

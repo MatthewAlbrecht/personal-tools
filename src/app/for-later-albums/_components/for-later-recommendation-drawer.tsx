@@ -19,6 +19,8 @@ import { api } from "../../../../convex/_generated/api";
 import {
 	ADDED_TIMEFRAME_OPTIONS,
 	type AddedTimeframeAnswer,
+	DURATION_TIER_OPTIONS,
+	type DurationTierAnswer,
 	QUESTION_LABELS,
 	QUESTION_ORDER,
 	RATING_TIER_OPTIONS,
@@ -226,16 +228,16 @@ export function ForLaterRecommendationDrawer({
 							/>
 
 							<section className="bg-card p-4">
-							<QuestionBody
-								activeQuestion={activeQuestion}
-								answers={answers}
-								genreOptions={genreOptions}
-								selectedTopLevelGenre={selectedTopLevelGenre}
-								optionsLoading={open && recommendationOptions === undefined}
-								onAnswer={handleQuestionAnswered}
-								onGenreSelected={handleGenreSelected}
-								onGenreBack={handleGenreBack}
-							/>
+								<QuestionBody
+									activeQuestion={activeQuestion}
+									answers={answers}
+									genreOptions={genreOptions}
+									selectedTopLevelGenre={selectedTopLevelGenre}
+									optionsLoading={open && recommendationOptions === undefined}
+									onAnswer={handleQuestionAnswered}
+									onGenreSelected={handleGenreSelected}
+									onGenreBack={handleGenreBack}
+								/>
 							</section>
 						</div>
 					)}
@@ -395,6 +397,24 @@ function QuestionBody({
 		);
 	}
 
+	if (activeQuestion === "duration") {
+		return (
+			<QuestionSection title="Playlist duration:">
+				{DURATION_TIER_OPTIONS.map((option) => (
+					<ChoiceButton
+						key={option.key}
+						selected={answers.durationTier === option.key}
+						onClick={() =>
+							onAnswer({ durationTier: option.key as DurationTierAnswer })
+						}
+					>
+						{option.label}
+					</ChoiceButton>
+				))}
+			</QuestionSection>
+		);
+	}
+
 	if (activeQuestion === "rating") {
 		return (
 			<QuestionSection title="Rating:">
@@ -468,7 +488,10 @@ function GenreQuestionSection({
 					Back
 				</Button>
 			) : (
-				<ChoiceButton selected={selectedKey === "any"} onClick={() => onSelect("any")}>
+				<ChoiceButton
+					selected={selectedKey === "any"}
+					onClick={() => onSelect("any")}
+				>
 					Doesn't matter
 				</ChoiceButton>
 			)}

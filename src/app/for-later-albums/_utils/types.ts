@@ -17,6 +17,8 @@ export type ForLaterFilters = {
 	search?: string;
 	yearMin?: number;
 	yearMax?: number;
+	durationMinMinutes?: number;
+	durationMaxMinutes?: number;
 	listened: ForLaterListenedFilter;
 	rymStatus: ForLaterRymFilter;
 	genreMatch: ForLaterTaxonomyMatch;

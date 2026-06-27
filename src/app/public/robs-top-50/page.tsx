@@ -7,6 +7,7 @@ import { Suspense, useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { cn } from "~/lib/utils";
 import { api } from "../../../../convex/_generated/api";
+import { PublicTop50Nav } from "./_components/public-top-50-nav";
 import {
 	Top50YearView,
 	Top50YearViewSkeleton,
@@ -67,6 +68,7 @@ function PublicRobsTop50PageInner() {
 					</CardTitle>
 				</CardHeader>
 				<CardContent>
+					<PublicTop50Nav />
 					{isLoadingYears ? (
 						<Top50YearViewSkeleton />
 					) : !publishedYears || publishedYears.length === 0 ? (

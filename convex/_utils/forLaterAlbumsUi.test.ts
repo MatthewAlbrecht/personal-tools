@@ -29,6 +29,8 @@ test("normalizeForLaterFilters applies defaults", () => {
 		search: undefined,
 		yearMin: undefined,
 		yearMax: undefined,
+		durationMinMinutes: undefined,
+		durationMaxMinutes: undefined,
 		listened: "all",
 		rymStatus: "all",
 		genreMatch: "all",
@@ -418,6 +420,29 @@ test("rowMatchesFilters applies year range on releaseYear", () => {
 	};
 	const inRange = normalizeForLaterFilters({ yearMin: 1970, yearMax: 1979 });
 	const outOfRange = normalizeForLaterFilters({ yearMin: 1980, yearMax: 1989 });
+	assert.equal(rowMatchesFilters(row, inRange), true);
+	assert.equal(rowMatchesFilters(row, outOfRange), false);
+});
+
+test("rowMatchesFilters applies duration range on durationMs", () => {
+	const row: ForLaterAlbumRowFilterInput = {
+		name: "x",
+		artistName: "y",
+		hasListened: false,
+		rymStatus: "matched",
+		primaryGenres: [],
+		secondaryGenres: [],
+		descriptors: [],
+		durationMs: 40 * 60 * 1000,
+	};
+	const inRange = normalizeForLaterFilters({
+		durationMinMinutes: 35,
+		durationMaxMinutes: 55,
+	});
+	const outOfRange = normalizeForLaterFilters({
+		durationMinMinutes: 56,
+		durationMaxMinutes: 90,
+	});
 	assert.equal(rowMatchesFilters(row, inRange), true);
 	assert.equal(rowMatchesFilters(row, outOfRange), false);
 });

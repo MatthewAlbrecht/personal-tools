@@ -3,6 +3,10 @@ import { api, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { action, mutation, query } from "./_generated/server";
+import {
+	buildSpotifyAlbumRymMatchArgs,
+	matchRymForSpotifyAlbum,
+} from "./_utils/albumMatching";
 import { buildSpotifyAlbumListItems } from "./_utils/spotify_album_list";
 
 async function refreshForLaterProjectionsForUserAlbum(
@@ -1456,6 +1460,29 @@ export const upsertAlbum = mutation({
 			createdAt: now,
 			updatedAt: now,
 		});
+	},
+});
+
+export const attemptRymMatchForAlbum = mutation({
+	args: {
+		albumId: v.id("spotifyAlbums"),
+	},
+	handler: async (ctx, args) => {
+		const album = await ctx.db.get(args.albumId);
+		if (!album) {
+			return { matched: false as const };
+		}
+
+		const now = Date.now();
+		const rymMatch = await matchRymForSpotifyAlbum(ctx, {
+			...buildSpotifyAlbumRymMatchArgs(album),
+			now,
+		});
+
+		return {
+			matched: rymMatch.scrapeId !== undefined,
+			rymMatch,
+		};
 	},
 });
 

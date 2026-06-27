@@ -2,6 +2,7 @@ export type RecommendationQuestionId =
 	| "addedTimeframe"
 	| "genre"
 	| "releaseTime"
+	| "duration"
 	| "rating"
 	| "count";
 
@@ -22,12 +23,15 @@ export type ReleaseTimeAnswer =
 
 export type RatingTierAnswer = "holy_moly" | "really_enjoyed" | "good" | "any";
 
+export type DurationTierAnswer = "short" | "medium" | "long" | "any";
+
 export type RecommendationAnswers = {
 	addedTimeframe: AddedTimeframeAnswer;
 	genreKey: string | "any";
 	releaseTime: ReleaseTimeAnswer;
 	descriptorKey: string | "any";
 	ratingTier: RatingTierAnswer;
+	durationTier: DurationTierAnswer;
 	count: number;
 };
 
@@ -45,6 +49,7 @@ export const QUESTION_ORDER = [
 	"addedTimeframe",
 	"genre",
 	"releaseTime",
+	"duration",
 	"rating",
 	"count",
 ] as const satisfies readonly RecommendationQuestionId[];
@@ -53,6 +58,7 @@ export const QUESTION_LABELS: Record<RecommendationQuestionId, string> = {
 	addedTimeframe: "Added",
 	genre: "Genre",
 	releaseTime: "Release",
+	duration: "Duration",
 	rating: "Rating",
 	count: "# of recs",
 };
@@ -74,6 +80,13 @@ export const RELEASE_TIME_OPTIONS = [
 	{ key: "old", label: "Old" },
 ] as const satisfies readonly RecommendationOption[];
 
+export const DURATION_TIER_OPTIONS = [
+	{ key: "any", label: "Doesn't matter" },
+	{ key: "short", label: "Short (< 35 min)" },
+	{ key: "medium", label: "Medium (35–55 min)" },
+	{ key: "long", label: "Long (> 55 min)" },
+] as const satisfies readonly RecommendationOption[];
+
 export const RATING_TIER_OPTIONS = [
 	{ key: "any", label: "Doesn't matter" },
 	{ key: "holy_moly", label: "Holy Moly" },
@@ -90,6 +103,7 @@ export function createDefaultRecommendationAnswers(): RecommendationAnswers {
 		releaseTime: "any",
 		descriptorKey: "any",
 		ratingTier: "any",
+		durationTier: "any",
 		count: 1,
 	};
 }
@@ -119,6 +133,11 @@ export function recommendationAnswerSummary(
 	if (answers.releaseTime !== "any") {
 		summary.push(
 			`Release: ${optionLabel(RELEASE_TIME_OPTIONS, answers.releaseTime)}`,
+		);
+	}
+	if (answers.durationTier !== "any") {
+		summary.push(
+			`Duration: ${optionLabel(DURATION_TIER_OPTIONS, answers.durationTier)}`,
 		);
 	}
 	if (answers.ratingTier !== "any") {

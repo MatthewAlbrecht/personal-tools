@@ -2,6 +2,7 @@ export type ForLaterPlaylistTrackInput = {
 	added_at: string;
 	track: {
 		id: string;
+		duration_ms?: number;
 		album: {
 			id: string;
 		};
@@ -11,6 +12,7 @@ export type ForLaterPlaylistTrackInput = {
 export type ForLaterPlaylistAlbumInput = {
 	spotifyAlbumId: string;
 	sourceTrackIds: string[];
+	totalDurationMs: number;
 	playlistAddedAt?: number;
 };
 
@@ -55,12 +57,14 @@ export function buildForLaterPlaylistAlbums(
 		}
 
 		const spotifyAlbumId = item.track.album.id;
+		const trackDurationMs = item.track.duration_ms ?? 0;
 		const addedAt = Date.parse(item.added_at);
 		const playlistAddedAt = Number.isNaN(addedAt) ? undefined : addedAt;
 		const existing = albums.get(spotifyAlbumId);
 
 		if (existing) {
 			existing.sourceTrackIds.push(item.track.id);
+			existing.totalDurationMs += trackDurationMs;
 			if (
 				playlistAddedAt !== undefined &&
 				(existing.playlistAddedAt === undefined ||
@@ -74,6 +78,7 @@ export function buildForLaterPlaylistAlbums(
 		albums.set(spotifyAlbumId, {
 			spotifyAlbumId,
 			sourceTrackIds: [item.track.id],
+			totalDurationMs: trackDurationMs,
 			playlistAddedAt,
 		});
 	}

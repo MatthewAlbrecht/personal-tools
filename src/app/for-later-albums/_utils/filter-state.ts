@@ -55,13 +55,28 @@ function parseTaxonomyMatch(primary: string | null, legacy: string | null) {
 	return parsedPrimary ?? parsedLegacy ?? "all";
 }
 
-function parseYearBound(params: URLSearchParams, key: string): number | undefined {
+function parseYearBound(
+	params: URLSearchParams,
+	key: string,
+): number | undefined {
 	const raw = params.get(key);
 	if (!raw || !/^\d{4}$/.test(raw)) {
 		return undefined;
 	}
 	const value = Number.parseInt(raw, 10);
 	return Number.isFinite(value) ? value : undefined;
+}
+
+function parseDurationBound(
+	params: URLSearchParams,
+	key: string,
+): number | undefined {
+	const raw = params.get(key);
+	if (!raw || !/^\d+$/.test(raw)) {
+		return undefined;
+	}
+	const value = Number.parseInt(raw, 10);
+	return Number.isFinite(value) && value >= 0 ? value : undefined;
 }
 
 export function parseForLaterFilters(params: URLSearchParams): ForLaterFilters {
@@ -89,6 +104,8 @@ export function parseForLaterFilters(params: URLSearchParams): ForLaterFilters {
 		search: legacySearch,
 		yearMin,
 		yearMax,
+		durationMinMinutes: parseDurationBound(params, "durationMin"),
+		durationMaxMinutes: parseDurationBound(params, "durationMax"),
 		listened: parseEnum(params.get("listened"), LISTENED_VALUES, "all"),
 		rymStatus: parseEnum(params.get("rymStatus"), RYM_VALUES, "all"),
 		genreMatch: parseTaxonomyMatch(params.get("genreMatch"), legacyMatch),
@@ -115,6 +132,12 @@ export function serializeForLaterFilters(
 	}
 	if (filters.yearMax !== undefined) {
 		params.set("yearMax", String(filters.yearMax));
+	}
+	if (filters.durationMinMinutes !== undefined) {
+		params.set("durationMin", String(filters.durationMinMinutes));
+	}
+	if (filters.durationMaxMinutes !== undefined) {
+		params.set("durationMax", String(filters.durationMaxMinutes));
 	}
 	setIfNotDefault(params, "listened", filters.listened, "all");
 	setIfNotDefault(params, "rymStatus", filters.rymStatus, "all");

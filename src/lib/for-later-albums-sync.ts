@@ -251,6 +251,7 @@ export async function syncForLaterAlbums({
 					artistKeys,
 					sourceTrackIds: playlistAlbum.sourceTrackIds,
 					playlistAddedAt: playlistAlbum.playlistAddedAt,
+					totalDurationMs: playlistAlbum.totalDurationMs,
 					seenAt: startedAt,
 				},
 			);

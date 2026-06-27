@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
 	ADDED_TIMEFRAME_OPTIONS,
+	DURATION_TIER_OPTIONS,
 	QUESTION_LABELS,
 	QUESTION_ORDER,
 	RATING_TIER_OPTIONS,
@@ -19,6 +20,7 @@ test("createDefaultRecommendationAnswers treats every filter as any and count as
 		releaseTime: "any",
 		descriptorKey: "any",
 		ratingTier: "any",
+		durationTier: "any",
 		count: 1,
 	});
 });
@@ -26,7 +28,8 @@ test("createDefaultRecommendationAnswers treats every filter as any and count as
 test("nextRecommendationQuestion advances until the final question", () => {
 	assert.equal(nextRecommendationQuestion("addedTimeframe"), "genre");
 	assert.equal(nextRecommendationQuestion("genre"), "releaseTime");
-	assert.equal(nextRecommendationQuestion("releaseTime"), "rating");
+	assert.equal(nextRecommendationQuestion("releaseTime"), "duration");
+	assert.equal(nextRecommendationQuestion("duration"), "rating");
 	assert.equal(nextRecommendationQuestion("rating"), "count");
 	assert.equal(nextRecommendationQuestion("count"), "count");
 });
@@ -36,6 +39,7 @@ test("QUESTION_ORDER has the approved question order", () => {
 		"addedTimeframe",
 		"genre",
 		"releaseTime",
+		"duration",
 		"rating",
 		"count",
 	]);
@@ -45,6 +49,7 @@ test("QUESTION_LABELS has the approved labels", () => {
 	assert.equal(QUESTION_LABELS.addedTimeframe, "Added");
 	assert.equal(QUESTION_LABELS.genre, "Genre");
 	assert.equal(QUESTION_LABELS.releaseTime, "Release");
+	assert.equal(QUESTION_LABELS.duration, "Duration");
 	assert.equal(QUESTION_LABELS.rating, "Rating");
 	assert.equal(QUESTION_LABELS.count, "# of recs");
 });
@@ -70,6 +75,15 @@ test("RELEASE_TIME_OPTIONS has the approved release time options", () => {
 	]);
 });
 
+test("DURATION_TIER_OPTIONS has the approved duration tiers", () => {
+	assert.deepEqual(DURATION_TIER_OPTIONS, [
+		{ key: "any", label: "Doesn't matter" },
+		{ key: "short", label: "Short (< 35 min)" },
+		{ key: "medium", label: "Medium (35–55 min)" },
+		{ key: "long", label: "Long (> 55 min)" },
+	]);
+});
+
 test("RATING_TIER_OPTIONS has only the approved recommendation tiers", () => {
 	assert.deepEqual(RATING_TIER_OPTIONS, [
 		{ key: "any", label: "Doesn't matter" },
@@ -91,9 +105,25 @@ test("recommendationAnswerSummary omits unanswered filters but includes count", 
 			releaseTime: "modern",
 			descriptorKey: "any",
 			ratingTier: "good",
+			durationTier: "any",
 			count: 3,
 		}),
 		["Genre: slowcore", "Release: Modern", "Rating: Good", "3 recs"],
+	);
+});
+
+test("recommendationAnswerSummary includes duration when set", () => {
+	assert.deepEqual(
+		recommendationAnswerSummary({
+			addedTimeframe: "any",
+			genreKey: "any",
+			releaseTime: "any",
+			descriptorKey: "any",
+			ratingTier: "any",
+			durationTier: "medium",
+			count: 2,
+		}),
+		["Duration: Medium (35–55 min)", "2 recs"],
 	);
 });
 
@@ -106,6 +136,7 @@ test("recommendationAnswerSummary uses genre labels when available", () => {
 				releaseTime: "any",
 				descriptorKey: "any",
 				ratingTier: "any",
+				durationTier: "any",
 				count: 1,
 			},
 			{

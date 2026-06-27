@@ -130,6 +130,24 @@ test("projectionMatchesFilters applies inclusive year range on filterReleaseYear
 	assert.equal(projectionMatchesFilters(doc, outOfRange), false);
 });
 
+test("projectionMatchesFilters applies inclusive duration range on filterDurationMs", () => {
+	const doc = stubDoc({
+		_id: "itemDuration" as Id<"forLaterAlbumItems">,
+		_creationTime: 0,
+		filterDurationMs: 40 * 60 * 1000,
+	});
+	const inRange = normalizeForLaterFilters({
+		durationMinMinutes: 35,
+		durationMaxMinutes: 55,
+	});
+	const outOfRange = normalizeForLaterFilters({
+		durationMinMinutes: 56,
+		durationMaxMinutes: 90,
+	});
+	assert.equal(projectionMatchesFilters(doc, inRange), true);
+	assert.equal(projectionMatchesFilters(doc, outOfRange), false);
+});
+
 test("projectionMatchesFilters excludes marked-as-single rows from all lists", () => {
 	const single = stubDoc({
 		_id: "item8" as Id<"forLaterAlbumItems">,

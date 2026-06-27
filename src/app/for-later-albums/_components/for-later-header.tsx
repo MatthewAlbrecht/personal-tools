@@ -3,18 +3,30 @@
 import { useMutation } from "convex/react";
 import {
 	DatabaseBackup,
+	ListMusic,
 	MoreHorizontal,
 	RefreshCw,
 	Sparkles,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "~/components/ui/alert-dialog";
 import { Button } from "~/components/ui/button";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuLabel,
+	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { api } from "../../../../convex/_generated/api";
@@ -51,17 +63,20 @@ export function ForLaterHeader({
 	summary?: ForLaterSummary;
 	onOpenRecommendationDrawer: () => void;
 }) {
-	const [isSyncing, setIsSyncing] = useState(false);
+	const [syncMode, setSyncMode] = useState<"idle" | "incremental" | "full">(
+		"idle",
+	);
 	const [isBackfilling, setIsBackfilling] = useState(false);
+	const [fullSyncDialogOpen, setFullSyncDialogOpen] = useState(false);
 
 	const runBackfillBatch = useMutation(
 		api.forLaterAlbums.runBackfillFilterProjectionBatch,
 	);
 
-	const isBusy = isSyncing || isBackfilling;
+	const isBusy = syncMode !== "idle" || isBackfilling;
 
-	async function handleSyncNow(): Promise<void> {
-		setIsSyncing(true);
+	async function runSync(fullPlaylist: boolean): Promise<void> {
+		setSyncMode(fullPlaylist ? "full" : "incremental");
 		try {
 			const accessToken = await getValidAccessToken();
 			if (!accessToken) {
@@ -77,19 +92,36 @@ export function ForLaterHeader({
 				body: JSON.stringify({
 					userId,
 					source: "manual",
-					fullPlaylist: false,
+					fullPlaylist,
 				}),
 			});
 			if (!response.ok) {
 				throw new Error("Sync failed");
 			}
-			toast.success("For Later Albums synced");
+			toast.success(
+				fullPlaylist
+					? "Full playlist sync completed"
+					: "For Later Albums synced",
+			);
 		} catch (error) {
 			console.error("For Later sync failed:", error);
-			toast.error("Could not sync For Later Albums");
+			toast.error(
+				fullPlaylist
+					? "Could not complete full playlist sync"
+					: "Could not sync For Later Albums",
+			);
 		} finally {
-			setIsSyncing(false);
+			setSyncMode("idle");
 		}
+	}
+
+	async function handleSyncNow(): Promise<void> {
+		await runSync(false);
+	}
+
+	async function handleFullPlaylistSync(): Promise<void> {
+		setFullSyncDialogOpen(false);
+		await runSync(true);
 	}
 
 	async function handleBackfillProjections(): Promise<void> {
@@ -183,8 +215,19 @@ export function ForLaterHeader({
 								onSelect={() => void handleSyncNow()}
 							>
 								<RefreshCw className="size-4" />
-								{isSyncing ? "Syncing…" : "Sync now"}
+								{syncMode === "incremental" ? "Syncing…" : "Sync now"}
 							</DropdownMenuItem>
+							<DropdownMenuItem
+								disabled={!isConnected || isBusy}
+								onSelect={(event) => {
+									event.preventDefault();
+									setFullSyncDialogOpen(true);
+								}}
+							>
+								<ListMusic className="size-4" />
+								{syncMode === "full" ? "Full syncing…" : "Full playlist sync"}
+							</DropdownMenuItem>
+							<DropdownMenuSeparator />
 							<DropdownMenuItem
 								disabled={isBusy}
 								onSelect={() => void handleBackfillProjections()}
@@ -196,6 +239,25 @@ export function ForLaterHeader({
 					</DropdownMenu>
 				</div>
 			</div>
+
+			<AlertDialog open={fullSyncDialogOpen} onOpenChange={setFullSyncDialogOpen}>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>Run full playlist sync?</AlertDialogTitle>
+						<AlertDialogDescription>
+							This fetches every track in the For Later playlist and refreshes
+							all album data, including durations. It ignores the incremental
+							sync cutoff and may take longer than a normal sync.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>Cancel</AlertDialogCancel>
+						<AlertDialogAction onClick={() => void handleFullPlaylistSync()}>
+							Run full sync
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 		</header>
 	);
 }

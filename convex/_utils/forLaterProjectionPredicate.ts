@@ -1,6 +1,7 @@
 import type { Doc } from "../_generated/dataModel";
 import {
 	type ForLaterUiFilters,
+	durationMsMatchesForLaterFilter,
 	releaseYearMatchesForLaterFilter,
 	taxonomyKeysPassAgainstSet,
 } from "./forLaterAlbumsUi";
@@ -43,6 +44,15 @@ export function projectionMatchesFilters(
 	if (filters.yearMin !== undefined || filters.yearMax !== undefined) {
 		preds.push((d) =>
 			releaseYearMatchesForLaterFilter(d.filterReleaseYear, filters),
+		);
+	}
+
+	if (
+		filters.durationMinMinutes !== undefined ||
+		filters.durationMaxMinutes !== undefined
+	) {
+		preds.push((d) =>
+			durationMsMatchesForLaterFilter(d.filterDurationMs, filters),
 		);
 	}
 

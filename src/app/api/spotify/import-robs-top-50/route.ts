@@ -51,6 +51,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 				totalTracks: album.total_tracks,
 				genres: album.genres,
 			});
+			await convex.mutation(api.spotify.attemptRymMatchForAlbum, {
+				albumId,
+			});
 			convexAlbumIds.push(albumId);
 		}
 

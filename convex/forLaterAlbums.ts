@@ -35,6 +35,7 @@ import { chooseIndexedForLaterListScan } from "./_utils/forLaterIndexedList";
 import { projectionMatchesFilters } from "./_utils/forLaterProjectionPredicate";
 import {
 	type AddedTimeframeAnswer,
+	type DurationTierAnswer,
 	type ForLaterRecommendationAnswers,
 	type ForLaterRecommendationCandidate,
 	type RatingTierAnswer,
@@ -100,6 +101,8 @@ const forLaterFiltersValidator = v.object({
 	descriptorMatch: v.optional(taxonomyMatchValidator),
 	/** @deprecated Use genreMatch and descriptorMatch; still accepted for backward compatibility. */
 	filterMatch: v.optional(taxonomyMatchValidator),
+	durationMinMinutes: v.optional(v.number()),
+	durationMaxMinutes: v.optional(v.number()),
 });
 
 const recommendationAddedTimeframeValidator = v.union(
@@ -126,12 +129,20 @@ const recommendationRatingTierValidator = v.union(
 	v.literal("any"),
 );
 
+const recommendationDurationTierValidator = v.union(
+	v.literal("short"),
+	v.literal("medium"),
+	v.literal("long"),
+	v.literal("any"),
+);
+
 const recommendationAnswersValidator = v.object({
 	addedTimeframe: recommendationAddedTimeframeValidator,
 	genreKey: v.string(),
 	releaseTime: recommendationReleaseTimeValidator,
 	descriptorKey: v.string(),
 	ratingTier: recommendationRatingTierValidator,
+	durationTier: recommendationDurationTierValidator,
 	count: v.number(),
 });
 
@@ -255,6 +266,7 @@ function forLaterRowFilterInput(
 		secondaryGenres: row.secondaryGenres,
 		descriptors: row.descriptors,
 		filterGenreKeysSorted: item.filterGenreKeysSorted,
+		durationMs: item.filterDurationMs,
 	};
 }
 
@@ -522,6 +534,9 @@ async function syncForLaterItemFilterProjection(
 		...(filterReleaseYear !== undefined
 			? { filterReleaseYear }
 			: { filterReleaseYear: undefined }),
+		...(album?.totalDurationMs !== undefined
+			? { filterDurationMs: album.totalDurationMs }
+			: { filterDurationMs: undefined }),
 		filterHasListened,
 		filterRymMatched,
 		filterHasRymUrl,
@@ -674,6 +689,7 @@ function recommendationCandidateFromItem(
 		releaseYear: item.filterReleaseYear,
 		filterGenreKeysSorted: item.filterGenreKeysSorted ?? [],
 		filterDescriptorKeysSorted: item.filterDescriptorKeysSorted ?? [],
+		filterDurationMs: item.filterDurationMs,
 		markedAsSingle: item.markedAsSingle,
 		removedFromForLater: item.removedFromForLater,
 	};
@@ -691,6 +707,7 @@ function recommendationCandidateFromRow(
 		releaseYear: row.releaseYear,
 		filterGenreKeysSorted: item.filterGenreKeysSorted ?? [],
 		filterDescriptorKeysSorted: item.filterDescriptorKeysSorted ?? [],
+		filterDurationMs: item.filterDurationMs,
 		rating: row.rating,
 		markedAsSingle: row.markedAsSingle,
 		removedFromForLater: row.removedFromForLater,
@@ -739,9 +756,7 @@ function applyRecommendationOptionLabels(
 	}));
 }
 
-async function loadTopLevelGenreKeySet(
-	ctx: QueryCtx,
-): Promise<Set<string>> {
+async function loadTopLevelGenreKeySet(ctx: QueryCtx): Promise<Set<string>> {
 	const topLevelGenres = await ctx.db
 		.query("rateYourMusicGenres")
 		.withIndex("by_isTopLevel", (q) => q.eq("isTopLevel", true))
@@ -866,6 +881,7 @@ function normalizeRecommendationAnswers(answers: {
 	releaseTime: ReleaseTimeAnswer;
 	descriptorKey: string;
 	ratingTier: RatingTierAnswer;
+	durationTier: DurationTierAnswer;
 	count: number;
 }): ForLaterRecommendationAnswers {
 	return {
@@ -874,6 +890,7 @@ function normalizeRecommendationAnswers(answers: {
 		releaseTime: answers.releaseTime,
 		descriptorKey: answers.descriptorKey.trim() || "any",
 		ratingTier: answers.ratingTier,
+		durationTier: answers.durationTier ?? "any",
 		count: normalizeRecommendationCount(answers.count),
 	};
 }
@@ -1322,6 +1339,7 @@ export const upsertForLaterAlbumItem = mutation({
 		artistKeys: v.array(v.string()),
 		sourceTrackIds: v.array(v.string()),
 		playlistAddedAt: v.optional(v.number()),
+		totalDurationMs: v.optional(v.number()),
 		seenAt: v.number(),
 	},
 	handler: async (
@@ -1343,6 +1361,13 @@ export const upsertForLaterAlbumItem = mutation({
 			canonicalAlbum !== null
 				? spotifyAlbumArtistKeys(canonicalAlbum)
 				: args.artistKeys;
+
+		if (args.totalDurationMs !== undefined) {
+			await ctx.db.patch(args.albumId, {
+				totalDurationMs: args.totalDurationMs,
+				updatedAt: args.seenAt,
+			});
+		}
 
 		const existing = await ctx.db
 			.query("forLaterAlbumItems")
@@ -1629,6 +1654,7 @@ export const getForLaterRecommendations = query({
 			releaseTime: args.answers.releaseTime as ReleaseTimeAnswer,
 			descriptorKey: args.answers.descriptorKey,
 			ratingTier: args.answers.ratingTier as RatingTierAnswer,
+			durationTier: args.answers.durationTier as DurationTierAnswer,
 			count: args.answers.count,
 		});
 
@@ -1664,6 +1690,7 @@ export const createForLaterRecommendation = mutation({
 			releaseTime: args.answers.releaseTime as ReleaseTimeAnswer,
 			descriptorKey: args.answers.descriptorKey,
 			ratingTier: args.answers.ratingTier as RatingTierAnswer,
+			durationTier: args.answers.durationTier as DurationTierAnswer,
 			count: args.answers.count,
 		});
 		const result = await buildForLaterRecommendationResult(ctx, {
