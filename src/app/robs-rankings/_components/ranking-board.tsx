@@ -17,6 +17,10 @@ type RankingBoardProps = {
 	onBatchUpdatePositions: (positions: PositionUpdate[]) => void;
 	onRemoveAlbum: (rankingAlbumId: string) => void;
 	onEditAlbum: (album: RankingAlbum) => void;
+	onSingleArtistChange: (
+		rankingAlbumId: string,
+		singleArtist: boolean,
+	) => void;
 };
 
 export function RankingBoard({
@@ -24,6 +28,7 @@ export function RankingBoard({
 	onBatchUpdatePositions,
 	onRemoveAlbum,
 	onEditAlbum,
+	onSingleArtistChange,
 }: RankingBoardProps) {
 	const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 	const [optimisticUpdates, setOptimisticUpdates] = useState<
@@ -225,6 +230,8 @@ export function RankingBoard({
 												artistName={album.album?.artistName ?? "Unknown"}
 												imageUrl={album.album?.imageUrl}
 												isManual={album.source === "manual"}
+												isSingleArtist={album.artistNames?.length === 1}
+												showSingleArtistToggle={album.source === "spotify"}
 												isSelected={isSelected}
 												onSelect={
 													idx !== undefined
@@ -233,6 +240,9 @@ export function RankingBoard({
 												}
 												onEdit={() => onEditAlbum(album)}
 												onRemove={() => onRemoveAlbum(album._id)}
+												onSingleArtistChange={(singleArtist) =>
+													onSingleArtistChange(album._id, singleArtist)
+												}
 											/>
 										);
 									})}

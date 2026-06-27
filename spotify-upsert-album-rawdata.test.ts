@@ -3,11 +3,20 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
-test("upsertAlbum does not persist album rawData", () => {
+test("upsertAlbum persists rawData when provided on insert and patch", () => {
 	const spotifySource = readFileSync(
 		join(process.cwd(), "convex", "spotify.ts"),
 		"utf8",
 	);
 
-	assert.equal(spotifySource.includes("rawData: args.rawData"), false);
+	assert.match(
+		spotifySource,
+		/\.\.\.\(args\.rawData !== undefined \? \{ rawData: args\.rawData \} : \{\}\)/,
+	);
+	assert.equal(
+		(spotifySource.match(
+			/\.\.\.\(args\.rawData !== undefined \? \{ rawData: args\.rawData \} : \{\}\)/g,
+		) ?? []).length,
+		2,
+	);
 });

@@ -25,6 +25,21 @@ export type ArtistHighestPlacementRow = {
 	bestPlacementYear: number;
 };
 
+export type ArtistUniqueTier =
+	| "wins"
+	| "top3"
+	| "top5"
+	| "top10"
+	| "top25"
+	| "top50";
+
+export type ArtistUniqueTierRow = {
+	artistKey: string;
+	displayName: string;
+	tierBestPlacement: number;
+	tierBestPlacementYear: number;
+};
+
 type ArtistAccumulator = {
 	displayName: string;
 	wins: number;
@@ -43,7 +58,7 @@ export function splitArtistNames(raw: string): string[] {
 		.filter((segment) => segment.length > 0);
 }
 
-function dedupeArtistNames(names: string[]): string[] {
+export function dedupeArtistNames(names: string[]): string[] {
 	const seenKeys = new Set<string>();
 	const resolved: string[] = [];
 
@@ -95,7 +110,33 @@ export function resolveArtistNamesFromSpotifyAlbum(album: {
 	}
 
 	if (!album.artistName.trim()) return [];
+
 	return resolveArtistNamesFromRaw(album.artistName);
+}
+
+export function resolveArtistNamesForRankingEntry(
+	ranking: {
+		artistNames?: string[];
+		manualArtistName?: string;
+	},
+	options: {
+		isManual: boolean;
+		spotifyAlbum: { artistName: string; rawData?: string } | null;
+	},
+): string[] {
+	if (ranking.artistNames && ranking.artistNames.length > 0) {
+		return dedupeArtistNames(ranking.artistNames);
+	}
+
+	if (options.isManual) {
+		const manualArtist = ranking.manualArtistName?.trim();
+		if (!manualArtist) return [];
+		return resolveSingleArtistName(manualArtist);
+	}
+
+	if (!options.spotifyAlbum?.artistName) return [];
+
+	return resolveArtistNamesFromSpotifyAlbum(options.spotifyAlbum);
 }
 
 function titleCaseArtistKey(key: string): string {
@@ -226,6 +267,87 @@ export function buildArtistHighestPlacementRows(
 		.sort((a, b) => {
 			if (a.bestPlacement !== b.bestPlacement) {
 				return a.bestPlacement - b.bestPlacement;
+			}
+			return a.displayName.localeCompare(b.displayName);
+		});
+}
+
+function getTierMaxPosition(tier: ArtistUniqueTier): number {
+	switch (tier) {
+		case "wins":
+			return 1;
+		case "top3":
+			return 3;
+		case "top5":
+			return 5;
+		case "top10":
+			return 10;
+		case "top25":
+			return 25;
+		case "top50":
+			return 50;
+	}
+}
+
+type UniqueTierAccumulator = {
+	displayName: string;
+	tierBestPlacement: number;
+	tierBestPlacementYear: number;
+};
+
+export function buildArtistUniqueTierRows(
+	entries: ArtistFinishInput[],
+	tier: ArtistUniqueTier,
+): ArtistUniqueTierRow[] {
+	const maxPosition = getTierMaxPosition(tier);
+	const sortedEntries = [...entries].sort((a, b) => b.year - a.year);
+	const byKey = new Map<string, UniqueTierAccumulator>();
+
+	for (const entry of sortedEntries) {
+		if (entry.position > maxPosition) continue;
+
+		const seenInEntry = new Set<string>();
+
+		for (const artistName of entry.artistNames) {
+			const artistKey = normalizeArtistName(artistName);
+			if (!artistKey || seenInEntry.has(artistKey)) continue;
+			seenInEntry.add(artistKey);
+
+			const existing = byKey.get(artistKey);
+			if (!existing) {
+				byKey.set(artistKey, {
+					displayName: artistName.trim() || titleCaseArtistKey(artistKey),
+					tierBestPlacement: entry.position,
+					tierBestPlacementYear: entry.year,
+				});
+				continue;
+			}
+
+			if (entry.position < existing.tierBestPlacement) {
+				existing.tierBestPlacement = entry.position;
+				existing.tierBestPlacementYear = entry.year;
+				continue;
+			}
+
+			if (
+				entry.position === existing.tierBestPlacement &&
+				entry.year > existing.tierBestPlacementYear
+			) {
+				existing.tierBestPlacementYear = entry.year;
+			}
+		}
+	}
+
+	return [...byKey.entries()]
+		.map(([artistKey, accumulator]) => ({
+			artistKey,
+			displayName: accumulator.displayName,
+			tierBestPlacement: accumulator.tierBestPlacement,
+			tierBestPlacementYear: accumulator.tierBestPlacementYear,
+		}))
+		.sort((a, b) => {
+			if (a.tierBestPlacement !== b.tierBestPlacement) {
+				return a.tierBestPlacement - b.tierBestPlacement;
 			}
 			return a.displayName.localeCompare(b.displayName);
 		});

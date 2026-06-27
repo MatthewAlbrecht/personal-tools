@@ -5,6 +5,8 @@ import Image from "next/image";
 import { type KeyboardEvent, forwardRef } from "react";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { Checkbox } from "~/components/ui/checkbox";
+import { Label } from "~/components/ui/label";
 import { cn } from "~/lib/utils";
 
 type RankingAlbumCardProps = {
@@ -13,10 +15,13 @@ type RankingAlbumCardProps = {
 	artistName: string;
 	imageUrl?: string;
 	isManual?: boolean;
+	isSingleArtist?: boolean;
+	showSingleArtistToggle?: boolean;
 	isSelected?: boolean;
 	onSelect?: () => void;
 	onEdit?: () => void;
 	onRemove?: () => void;
+	onSingleArtistChange?: (singleArtist: boolean) => void;
 };
 
 function AlbumCover({
@@ -64,10 +69,13 @@ export const RankingAlbumCard = forwardRef<
 		artistName,
 		imageUrl,
 		isManual = false,
+		isSingleArtist = false,
+		showSingleArtistToggle = false,
 		isSelected = false,
 		onSelect,
 		onEdit,
 		onRemove,
+		onSingleArtistChange,
 	},
 	ref,
 ) {
@@ -110,6 +118,25 @@ export const RankingAlbumCard = forwardRef<
 					)}
 				</div>
 				<p className="truncate text-muted-foreground text-xs">{artistName}</p>
+				{showSingleArtistToggle && onSingleArtistChange && (
+					<div className="mt-1 flex items-center gap-1.5">
+						<Checkbox
+							id={`single-artist-${position}`}
+							checked={isSingleArtist}
+							onCheckedChange={(checked) => {
+								onSingleArtistChange(checked === true);
+							}}
+							onClick={(e) => e.stopPropagation()}
+						/>
+						<Label
+							htmlFor={`single-artist-${position}`}
+							className="cursor-pointer text-[10px] text-muted-foreground leading-none"
+							onClick={(e) => e.stopPropagation()}
+						>
+							Single artist (don&apos;t split on commas)
+						</Label>
+					</div>
+				)}
 			</div>
 
 			{onEdit && (

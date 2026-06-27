@@ -4,6 +4,8 @@ import {
 	type ArtistFinishInput,
 	buildArtistHighestPlacementRows,
 	buildArtistStatsRows,
+	buildArtistUniqueTierRows,
+	resolveArtistNamesForRankingEntry,
 	resolveArtistNamesFromRaw,
 	resolveArtistNamesFromSpotifyAlbum,
 	resolveSingleArtistName,
@@ -192,6 +194,63 @@ test("resolveArtistNamesFromSpotifyAlbum falls back to comma split without rawDa
 	);
 });
 
+test("resolveArtistNamesForRankingEntry uses stored artistNames when present", () => {
+	assert.deepEqual(
+		resolveArtistNamesForRankingEntry(
+			{ artistNames: ["Tyler, The Creator"] },
+			{
+				isManual: false,
+				spotifyAlbum: { artistName: "Tyler, The Creator" },
+			},
+		),
+		["Tyler, The Creator"],
+	);
+});
+
+test("resolveArtistNamesForRankingEntry Tyler override wins over comma split fallback", () => {
+	assert.deepEqual(
+		resolveArtistNamesForRankingEntry(
+			{ artistNames: ["Tyler, The Creator"] },
+			{
+				isManual: false,
+				spotifyAlbum: { artistName: "Tyler, The Creator" },
+			},
+		),
+		["Tyler, The Creator"],
+	);
+
+	assert.deepEqual(
+		resolveArtistNamesForRankingEntry(
+			{},
+			{
+				isManual: false,
+				spotifyAlbum: { artistName: "Tyler, The Creator" },
+			},
+		),
+		["Tyler", "The Creator"],
+	);
+});
+
+test("resolveArtistNamesForRankingEntry dedupes stored artistNames", () => {
+	assert.deepEqual(
+		resolveArtistNamesForRankingEntry(
+			{ artistNames: ["Big Thief", " big thief ", "Adrianne Lenker"] },
+			{ isManual: false, spotifyAlbum: null },
+		),
+		["Big Thief", "Adrianne Lenker"],
+	);
+});
+
+test("resolveArtistNamesForRankingEntry manual fallback keeps comma-containing names", () => {
+	assert.deepEqual(
+		resolveArtistNamesForRankingEntry(
+			{ manualArtistName: "Tyler, The Creator" },
+			{ isManual: true, spotifyAlbum: null },
+		),
+		["Tyler, The Creator"],
+	);
+});
+
 test("buildArtistHighestPlacementRows tracks best finish per artist", () => {
 	const entries: ArtistFinishInput[] = [
 		{ position: 12, artistNames: ["Big Thief"], year: 2020 },
@@ -226,4 +285,86 @@ test("buildArtistHighestPlacementRows prefers most recent year for tied best pla
 	assert.ok(row);
 	assert.equal(row.bestPlacement, 5);
 	assert.equal(row.bestPlacementYear, 2022);
+});
+
+test("buildArtistUniqueTierRows includes each artist once per tier", () => {
+	const entries: ArtistFinishInput[] = [
+		{ position: 1, artistNames: ["Radiohead"], year: 2016 },
+		{ position: 8, artistNames: ["Radiohead"], year: 2020 },
+		{ position: 2, artistNames: ["Big Thief"], year: 2024 },
+		{ position: 12, artistNames: ["Big Thief"], year: 2022 },
+		{ position: 5, artistNames: ["Weyes Blood"], year: 2019 },
+	];
+
+	const top3Rows = buildArtistUniqueTierRows(entries, "top3");
+	assert.deepEqual(
+		top3Rows.map((row) => ({
+			displayName: row.displayName,
+			tierBestPlacement: row.tierBestPlacement,
+		})),
+		[
+			{ displayName: "Radiohead", tierBestPlacement: 1 },
+			{ displayName: "Big Thief", tierBestPlacement: 2 },
+		],
+	);
+});
+
+test("buildArtistUniqueTierRows uses best finish within tier range", () => {
+	const entries: ArtistFinishInput[] = [
+		{ position: 7, artistNames: ["Radiohead"], year: 2020 },
+		{ position: 4, artistNames: ["Radiohead"], year: 2018 },
+		{ position: 10, artistNames: ["Radiohead"], year: 2022 },
+	];
+
+	const top5Rows = buildArtistUniqueTierRows(entries, "top5");
+	assert.equal(top5Rows.length, 1);
+	assert.equal(top5Rows[0]?.tierBestPlacement, 4);
+});
+
+test("buildArtistUniqueTierRows excludes artists outside tier range", () => {
+	const entries: ArtistFinishInput[] = [
+		{ position: 15, artistNames: ["Weyes Blood"], year: 2019 },
+	];
+
+	assert.equal(buildArtistUniqueTierRows(entries, "top10").length, 0);
+	assert.equal(buildArtistUniqueTierRows(entries, "top25").length, 1);
+});
+
+test("buildArtistUniqueTierRows wins tier only includes #1 finishes", () => {
+	const entries: ArtistFinishInput[] = [
+		{ position: 1, artistNames: ["Alpha Artist"], year: 2021 },
+		{ position: 2, artistNames: ["Beta Artist"], year: 2022 },
+	];
+
+	const winsRows = buildArtistUniqueTierRows(entries, "wins");
+	assert.deepEqual(
+		winsRows.map((row) => row.displayName),
+		["Alpha Artist"],
+	);
+});
+
+test("buildArtistUniqueTierRows sorts by tier best placement then name", () => {
+	const entries: ArtistFinishInput[] = [
+		{ position: 3, artistNames: ["Zebra Artist"], year: 2020 },
+		{ position: 1, artistNames: ["Beta Artist"], year: 2021 },
+		{ position: 2, artistNames: ["Alpha Artist"], year: 2022 },
+	];
+
+	const top3Rows = buildArtistUniqueTierRows(entries, "top3");
+	assert.deepEqual(
+		top3Rows.map((row) => row.displayName),
+		["Beta Artist", "Alpha Artist", "Zebra Artist"],
+	);
+});
+
+test("buildArtistUniqueTierRows prefers most recent year for tied tier placement", () => {
+	const entries: ArtistFinishInput[] = [
+		{ position: 3, artistNames: ["Big Thief"], year: 2020 },
+		{ position: 3, artistNames: ["Big Thief"], year: 2024 },
+	];
+
+	const row = buildArtistUniqueTierRows(entries, "top3")[0];
+	assert.ok(row);
+	assert.equal(row.tierBestPlacement, 3);
+	assert.equal(row.tierBestPlacementYear, 2024);
 });

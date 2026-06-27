@@ -698,6 +698,7 @@ export default defineSchema({
 		yearId: v.id("robRankingYears"),
 		albumId: v.optional(v.id("spotifyAlbums")),
 		source: v.optional(v.union(v.literal("spotify"), v.literal("manual"))),
+		artistNames: v.optional(v.array(v.string())),
 		manualArtistName: v.optional(v.string()),
 		manualAlbumTitle: v.optional(v.string()),
 		manualImageUrl: v.optional(v.string()),

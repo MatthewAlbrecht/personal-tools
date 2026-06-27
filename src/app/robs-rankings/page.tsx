@@ -37,6 +37,9 @@ export default function RobsRankingsPage() {
 	const updateRankingAlbumManual = useMutation(
 		api.robRankings.updateRankingAlbumManual,
 	);
+	const setRankingArtistNames = useMutation(
+		api.robRankings.setRankingArtistNames,
+	);
 	const removeAlbumFromYear = useMutation(api.robRankings.removeAlbumFromYear);
 	const batchUpdatePositions = useMutation(
 		api.robRankings.batchUpdatePositions,
@@ -257,6 +260,18 @@ export default function RobsRankingsPage() {
 					onRemoveAlbum={(rankingAlbumId) => {
 						void removeAlbumFromYear({
 							rankingAlbumId: rankingAlbumId as Id<"robRankingAlbums">,
+						});
+					}}
+					onSingleArtistChange={(rankingAlbumId, singleArtist) => {
+						void setRankingArtistNames({
+							rankingAlbumId: rankingAlbumId as Id<"robRankingAlbums">,
+							singleArtist,
+						}).catch((error) => {
+							toast.error(
+								error instanceof Error
+									? error.message
+									: "Failed to update artist mode",
+							);
 						});
 					}}
 				/>

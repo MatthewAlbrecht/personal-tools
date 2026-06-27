@@ -4,6 +4,7 @@ export type RankingAlbum = {
 	_id: Id<"robRankingAlbums">;
 	albumId?: Id<"spotifyAlbums">;
 	source: "spotify" | "manual";
+	artistNames?: string[];
 	position: number;
 	album: {
 		name: string;

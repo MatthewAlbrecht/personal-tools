@@ -1444,6 +1444,7 @@ export const upsertAlbum = mutation({
 				releaseDate: args.releaseDate,
 				totalTracks: args.totalTracks,
 				genres: args.genres,
+				...(args.rawData !== undefined ? { rawData: args.rawData } : {}),
 				updatedAt: now,
 			});
 			return existing._id;
@@ -1457,6 +1458,7 @@ export const upsertAlbum = mutation({
 			releaseDate: args.releaseDate,
 			totalTracks: args.totalTracks,
 			genres: args.genres,
+			...(args.rawData !== undefined ? { rawData: args.rawData } : {}),
 			createdAt: now,
 			updatedAt: now,
 		});

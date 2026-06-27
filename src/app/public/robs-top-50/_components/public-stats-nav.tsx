@@ -10,6 +10,10 @@ const STATS_NAV_OPTIONS = [
 		href: "/public/robs-top-50/stats/highest-placement",
 		label: "Highest placement",
 	},
+	{
+		href: "/public/robs-top-50/stats/unique-artists",
+		label: "Unique artists",
+	},
 ] as const;
 
 export function PublicStatsNav() {
