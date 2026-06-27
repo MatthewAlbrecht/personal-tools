@@ -8,6 +8,7 @@ import {
 	buildTopLevelGenreCounts,
 	candidateMatchesRecommendationAnswers,
 	chooseRecommendationRows,
+	durationBucketMatchesAnswer,
 	durationTierMatches,
 	normalizeRecommendationCount,
 	ratingTierMatches,
@@ -278,6 +279,14 @@ test("ratingTierMatches includes boundaries and excludes lower categories", () =
 		assert.equal(ratingTierMatches(rating, "really_enjoyed"), false);
 		assert.equal(ratingTierMatches(rating, "holy_moly"), false);
 	}
+});
+
+test("durationBucketMatchesAnswer maps playlist duration to minute buckets", () => {
+	const ms = 45 * 60 * 1000;
+	assert.equal(durationBucketMatchesAnswer(ms, "40_50"), true);
+	assert.equal(durationBucketMatchesAnswer(ms, "50_60"), false);
+	assert.equal(durationBucketMatchesAnswer(undefined, "40_50"), false);
+	assert.equal(durationBucketMatchesAnswer(undefined, "any"), true);
 });
 
 test("durationTierMatches maps playlist duration to short medium and long tiers", () => {

@@ -449,6 +449,59 @@ test("rowMatchesFilters applies duration range on durationMs", () => {
 	assert.equal(rowMatchesFilters(row, outOfRange), false);
 });
 
+test("rowMatchesFilters applies duration bucket on durationMs", () => {
+	const row: ForLaterAlbumRowFilterInput = {
+		name: "x",
+		artistName: "y",
+		hasListened: false,
+		rymStatus: "matched",
+		primaryGenres: [],
+		secondaryGenres: [],
+		descriptors: [],
+		durationMs: 45 * 60 * 1000,
+	};
+	const matchingBucket = normalizeForLaterFilters({ durationBucketKey: "40_50" });
+	const otherBucket = normalizeForLaterFilters({ durationBucketKey: "50_60" });
+	assert.equal(rowMatchesFilters(row, matchingBucket), true);
+	assert.equal(rowMatchesFilters(row, otherBucket), false);
+});
+
+test("forLaterFiltersAllowIndexedScan rejects duration bucket and custom range", () => {
+	assert.equal(
+		forLaterFiltersAllowIndexedScan(
+			normalizeForLaterFilters({ durationBucketKey: "40_50" }),
+		),
+		false,
+	);
+	assert.equal(
+		forLaterFiltersAllowIndexedScan(
+			normalizeForLaterFilters({ durationMinMinutes: 20 }),
+		),
+		false,
+	);
+});
+
+test("forLaterFiltersAllowDurationFacetPagination allows bucket-only filters", () => {
+	assert.equal(
+		forLaterFiltersAllowDurationFacetPagination(
+			normalizeForLaterFilters({ durationBucketKey: "40_50" }),
+		),
+		true,
+	);
+	assert.equal(
+		forLaterFiltersAllowDurationFacetPagination(
+			normalizeForLaterFilters({ durationBucketKey: "40_50", search: "x" }),
+		),
+		false,
+	);
+	assert.equal(
+		forLaterFiltersAllowDurationFacetPagination(
+			normalizeForLaterFilters({ durationMinMinutes: 20 }),
+		),
+		false,
+	);
+});
+
 test("sortForLaterRows orders lastSeenAt, playlistAddedAt, then createdAt descending", () => {
 	const rows = [
 		{ id: "old", lastSeenAt: 10, playlistAddedAt: 100, createdAt: 1000 },

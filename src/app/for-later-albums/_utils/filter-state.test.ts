@@ -166,6 +166,7 @@ test("serializeForLaterFilters repeats genre and descriptor keys and sets q", ()
 		yearMax: undefined,
 		durationMinMinutes: 35,
 		durationMaxMinutes: 55,
+		durationBucketKey: undefined,
 		listened: "all",
 		rymStatus: "all",
 		genreMatch: "any",

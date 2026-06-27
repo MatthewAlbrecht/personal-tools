@@ -130,6 +130,16 @@ test("projectionMatchesFilters applies inclusive year range on filterReleaseYear
 	assert.equal(projectionMatchesFilters(doc, outOfRange), false);
 });
 
+test("projectionMatchesFilters applies duration bucket on filterDurationMs", () => {
+	const doc = {
+		filterDurationMs: 45 * 60 * 1000,
+	} as Doc<"forLaterAlbumItems">;
+	const matchingBucket = normalizeForLaterFilters({ durationBucketKey: "40_50" });
+	const otherBucket = normalizeForLaterFilters({ durationBucketKey: "50_60" });
+	assert.equal(projectionMatchesFilters(doc, matchingBucket), true);
+	assert.equal(projectionMatchesFilters(doc, otherBucket), false);
+});
+
 test("projectionMatchesFilters applies inclusive duration range on filterDurationMs", () => {
 	const doc = stubDoc({
 		_id: "itemDuration" as Id<"forLaterAlbumItems">,
