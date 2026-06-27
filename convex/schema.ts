@@ -548,11 +548,13 @@ export default defineSchema({
 				v.literal("good"),
 				v.literal("any"),
 			),
-			durationTier: v.union(
-				v.literal("short"),
-				v.literal("medium"),
-				v.literal("long"),
-				v.literal("any"),
+			durationTier: v.optional(
+				v.union(
+					v.literal("short"),
+					v.literal("medium"),
+					v.literal("long"),
+					v.literal("any"),
+				),
 			),
 			count: v.number(),
 		}),

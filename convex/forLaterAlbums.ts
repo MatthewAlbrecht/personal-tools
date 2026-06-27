@@ -142,7 +142,7 @@ const recommendationAnswersValidator = v.object({
 	releaseTime: recommendationReleaseTimeValidator,
 	descriptorKey: v.string(),
 	ratingTier: recommendationRatingTierValidator,
-	durationTier: recommendationDurationTierValidator,
+	durationTier: v.optional(recommendationDurationTierValidator),
 	count: v.number(),
 });
 
