@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
-import type { MutationCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import {
 	buildSpotifyAlbumRymMatchArgs,
@@ -8,8 +8,10 @@ import {
 } from "./_utils/albumMatching";
 import {
 	type ArtistFinishInput,
+	buildArtistHighestPlacementRows,
 	buildArtistStatsRows,
-	resolveArtistNamesFromRaw,
+	resolveArtistNamesFromSpotifyAlbum,
+	resolveSingleArtistName,
 } from "./_utils/robRankingArtistStats";
 
 type RankingAlbumDisplay = {
@@ -171,20 +173,21 @@ const publishedArtistStatsRowValidator = v.object({
 	yearsAppeared: v.number(),
 });
 
+const publishedArtistHighestPlacementRowValidator = v.object({
+	artistKey: v.string(),
+	displayName: v.string(),
+	bestPlacement: v.number(),
+	bestPlacementYear: v.number(),
+});
+
 async function resolveArtistNamesForRanking(
-	ctx: {
-		db: {
-			get: (
-				id: Doc<"spotifyAlbums">["_id"],
-			) => Promise<Doc<"spotifyAlbums"> | null>;
-		};
-	},
+	ctx: QueryCtx,
 	ranking: Doc<"robRankingAlbums">,
 ): Promise<string[]> {
 	if (isManualRankingEntry(ranking)) {
 		const manualArtist = ranking.manualArtistName?.trim();
 		if (!manualArtist) return [];
-		return resolveArtistNamesFromRaw(manualArtist);
+		return resolveSingleArtistName(manualArtist);
 	}
 
 	if (!ranking.albumId) return [];
@@ -192,39 +195,55 @@ async function resolveArtistNamesForRanking(
 	const spotifyAlbum = await ctx.db.get(ranking.albumId);
 	if (!spotifyAlbum?.artistName) return [];
 
-	return resolveArtistNamesFromRaw(spotifyAlbum.artistName);
+	return resolveArtistNamesFromSpotifyAlbum(spotifyAlbum);
+}
+
+async function collectPublishedArtistFinishEntries(
+	ctx: QueryCtx,
+): Promise<ArtistFinishInput[]> {
+	const years = await ctx.db
+		.query("robRankingYears")
+		.withIndex("by_published", (q) => q.eq("published", true))
+		.collect();
+
+	const entries: ArtistFinishInput[] = [];
+
+	for (const yearRow of years) {
+		const rankings = await ctx.db
+			.query("robRankingAlbums")
+			.withIndex("by_yearId", (q) => q.eq("yearId", yearRow._id))
+			.collect();
+
+		for (const ranking of rankings) {
+			const artistNames = await resolveArtistNamesForRanking(ctx, ranking);
+			if (artistNames.length === 0) continue;
+
+			entries.push({
+				position: ranking.position,
+				artistNames,
+				year: yearRow.year,
+			});
+		}
+	}
+
+	return entries;
 }
 
 export const getPublishedArtistStats = query({
 	args: {},
 	returns: v.array(publishedArtistStatsRowValidator),
 	handler: async (ctx) => {
-		const years = await ctx.db
-			.query("robRankingYears")
-			.withIndex("by_published", (q) => q.eq("published", true))
-			.collect();
-
-		const entries: ArtistFinishInput[] = [];
-
-		for (const yearRow of years) {
-			const rankings = await ctx.db
-				.query("robRankingAlbums")
-				.withIndex("by_yearId", (q) => q.eq("yearId", yearRow._id))
-				.collect();
-
-			for (const ranking of rankings) {
-				const artistNames = await resolveArtistNamesForRanking(ctx, ranking);
-				if (artistNames.length === 0) continue;
-
-				entries.push({
-					position: ranking.position,
-					artistNames,
-					year: yearRow.year,
-				});
-			}
-		}
-
+		const entries = await collectPublishedArtistFinishEntries(ctx);
 		return buildArtistStatsRows(entries);
+	},
+});
+
+export const getPublishedArtistHighestPlacements = query({
+	args: {},
+	returns: v.array(publishedArtistHighestPlacementRowValidator),
+	handler: async (ctx) => {
+		const entries = await collectPublishedArtistFinishEntries(ctx);
+		return buildArtistHighestPlacementRows(entries);
 	},
 });
 

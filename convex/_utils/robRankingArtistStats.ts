@@ -18,6 +18,13 @@ export type ArtistStatsRow = {
 	yearsAppeared: number;
 };
 
+export type ArtistHighestPlacementRow = {
+	artistKey: string;
+	displayName: string;
+	bestPlacement: number;
+	bestPlacementYear: number;
+};
+
 type ArtistAccumulator = {
 	displayName: string;
 	wins: number;
@@ -36,19 +43,59 @@ export function splitArtistNames(raw: string): string[] {
 		.filter((segment) => segment.length > 0);
 }
 
-export function resolveArtistNamesFromRaw(raw: string): string[] {
-	const names = splitArtistNames(raw);
+function dedupeArtistNames(names: string[]): string[] {
 	const seenKeys = new Set<string>();
 	const resolved: string[] = [];
 
 	for (const name of names) {
-		const key = normalizeArtistName(name);
+		const trimmed = name.trim();
+		if (!trimmed) continue;
+		const key = normalizeArtistName(trimmed);
 		if (!key || seenKeys.has(key)) continue;
 		seenKeys.add(key);
-		resolved.push(name.trim());
+		resolved.push(trimmed);
 	}
 
 	return resolved;
+}
+
+/** Manual rankings: one artist string, no comma splitting. */
+export function resolveSingleArtistName(raw: string): string[] {
+	const trimmed = raw.trim();
+	if (!trimmed) return [];
+	const key = normalizeArtistName(trimmed);
+	if (!key) return [];
+	return [trimmed];
+}
+
+export function resolveArtistNamesFromRaw(raw: string): string[] {
+	return dedupeArtistNames(splitArtistNames(raw));
+}
+
+/** Spotify albums: structured artists from rawData; comma-split artistName as fallback. */
+export function resolveArtistNamesFromSpotifyAlbum(album: {
+	artistName: string;
+	rawData?: string;
+}): string[] {
+	if (album.rawData) {
+		try {
+			const parsed = JSON.parse(album.rawData) as {
+				artists?: Array<{ name?: string }>;
+			};
+			const names =
+				parsed.artists
+					?.map((artist) => artist.name)
+					.filter((name): name is string => Boolean(name)) ?? [];
+			if (names.length > 0) {
+				return dedupeArtistNames(names);
+			}
+		} catch {
+			// fall through to artistName
+		}
+	}
+
+	if (!album.artistName.trim()) return [];
+	return resolveArtistNamesFromRaw(album.artistName);
 }
 
 function titleCaseArtistKey(key: string): string {
@@ -120,6 +167,66 @@ export function buildArtistStatsRows(
 		.sort((a, b) => {
 			if (b.wins !== a.wins) return b.wins - a.wins;
 			if (b.top3 !== a.top3) return b.top3 - a.top3;
+			return a.displayName.localeCompare(b.displayName);
+		});
+}
+
+type HighestPlacementAccumulator = {
+	displayName: string;
+	bestPlacement: number;
+	bestPlacementYear: number;
+};
+
+export function buildArtistHighestPlacementRows(
+	entries: ArtistFinishInput[],
+): ArtistHighestPlacementRow[] {
+	const sortedEntries = [...entries].sort((a, b) => b.year - a.year);
+	const byKey = new Map<string, HighestPlacementAccumulator>();
+
+	for (const entry of sortedEntries) {
+		const seenInEntry = new Set<string>();
+
+		for (const artistName of entry.artistNames) {
+			const artistKey = normalizeArtistName(artistName);
+			if (!artistKey || seenInEntry.has(artistKey)) continue;
+			seenInEntry.add(artistKey);
+
+			const existing = byKey.get(artistKey);
+			if (!existing) {
+				byKey.set(artistKey, {
+					displayName: artistName.trim() || titleCaseArtistKey(artistKey),
+					bestPlacement: entry.position,
+					bestPlacementYear: entry.year,
+				});
+				continue;
+			}
+
+			if (entry.position < existing.bestPlacement) {
+				existing.bestPlacement = entry.position;
+				existing.bestPlacementYear = entry.year;
+				continue;
+			}
+
+			if (
+				entry.position === existing.bestPlacement &&
+				entry.year > existing.bestPlacementYear
+			) {
+				existing.bestPlacementYear = entry.year;
+			}
+		}
+	}
+
+	return [...byKey.entries()]
+		.map(([artistKey, accumulator]) => ({
+			artistKey,
+			displayName: accumulator.displayName,
+			bestPlacement: accumulator.bestPlacement,
+			bestPlacementYear: accumulator.bestPlacementYear,
+		}))
+		.sort((a, b) => {
+			if (a.bestPlacement !== b.bestPlacement) {
+				return a.bestPlacement - b.bestPlacement;
+			}
 			return a.displayName.localeCompare(b.displayName);
 		});
 }

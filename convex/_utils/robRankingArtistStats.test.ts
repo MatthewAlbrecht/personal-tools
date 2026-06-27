@@ -2,8 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
 	type ArtistFinishInput,
+	buildArtistHighestPlacementRows,
 	buildArtistStatsRows,
 	resolveArtistNamesFromRaw,
+	resolveArtistNamesFromSpotifyAlbum,
+	resolveSingleArtistName,
 	splitArtistNames,
 } from "./robRankingArtistStats";
 
@@ -140,4 +143,87 @@ test("resolveArtistNamesFromRaw dedupes normalized segments", () => {
 		resolveArtistNamesFromRaw("Big Thief, big thief, Adrianne Lenker"),
 		["Big Thief", "Adrianne Lenker"],
 	);
+});
+
+test("resolveSingleArtistName keeps comma-containing names intact", () => {
+	assert.deepEqual(resolveSingleArtistName("Tyler, The Creator"), [
+		"Tyler, The Creator",
+	]);
+});
+
+test("resolveArtistNamesFromSpotifyAlbum uses rawData artists array", () => {
+	const rawData = JSON.stringify({
+		artists: [{ name: "Tyler, The Creator" }],
+	});
+
+	assert.deepEqual(
+		resolveArtistNamesFromSpotifyAlbum({
+			artistName: "Tyler, The Creator",
+			rawData,
+		}),
+		["Tyler, The Creator"],
+	);
+});
+
+test("resolveArtistNamesFromSpotifyAlbum credits each structured artist on collabs", () => {
+	const rawData = JSON.stringify({
+		artists: [
+			{ name: "Phoebe Bridgers" },
+			{ name: "Lucy Dacus" },
+			{ name: "Julien Baker" },
+		],
+	});
+
+	assert.deepEqual(
+		resolveArtistNamesFromSpotifyAlbum({
+			artistName: "Phoebe Bridgers, Lucy Dacus, Julien Baker",
+			rawData,
+		}),
+		["Phoebe Bridgers", "Lucy Dacus", "Julien Baker"],
+	);
+});
+
+test("resolveArtistNamesFromSpotifyAlbum falls back to comma split without rawData", () => {
+	assert.deepEqual(
+		resolveArtistNamesFromSpotifyAlbum({
+			artistName: "Big Thief, Adrianne Lenker",
+		}),
+		["Big Thief", "Adrianne Lenker"],
+	);
+});
+
+test("buildArtistHighestPlacementRows tracks best finish per artist", () => {
+	const entries: ArtistFinishInput[] = [
+		{ position: 12, artistNames: ["Big Thief"], year: 2020 },
+		{ position: 3, artistNames: ["Big Thief"], year: 2024 },
+		{ position: 8, artistNames: ["Radiohead"], year: 2022 },
+	];
+
+	const rows = buildArtistHighestPlacementRows(entries);
+	assert.deepEqual(rows, [
+		{
+			artistKey: "big thief",
+			displayName: "Big Thief",
+			bestPlacement: 3,
+			bestPlacementYear: 2024,
+		},
+		{
+			artistKey: "radiohead",
+			displayName: "Radiohead",
+			bestPlacement: 8,
+			bestPlacementYear: 2022,
+		},
+	]);
+});
+
+test("buildArtistHighestPlacementRows prefers most recent year for tied best placement", () => {
+	const entries: ArtistFinishInput[] = [
+		{ position: 5, artistNames: ["Weyes Blood"], year: 2019 },
+		{ position: 5, artistNames: ["Weyes Blood"], year: 2022 },
+	];
+
+	const row = buildArtistHighestPlacementRows(entries)[0];
+	assert.ok(row);
+	assert.equal(row.bestPlacement, 5);
+	assert.equal(row.bestPlacementYear, 2022);
 });

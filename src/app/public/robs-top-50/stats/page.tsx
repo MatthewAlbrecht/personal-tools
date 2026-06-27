@@ -13,6 +13,7 @@ import {
 	ArtistStatsTable,
 	ArtistStatsTableSkeleton,
 } from "../_components/artist-stats-table";
+import { PublicStatsNav } from "../_components/public-stats-nav";
 import { PublicTop50Nav } from "../_components/public-top-50-nav";
 
 export default function PublicRobsTop50StatsPage() {
@@ -59,6 +60,7 @@ function PublicRobsTop50StatsPageInner() {
 				</CardHeader>
 				<CardContent>
 					<PublicTop50Nav />
+					<PublicStatsNav />
 
 					{isLoadingYears || isLoadingStats ? (
 						<>
