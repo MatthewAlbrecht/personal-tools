@@ -20,6 +20,10 @@ import { Label } from "~/components/ui/label";
 import { useDebouncedState } from "~/lib/hooks/use-debounced-state";
 import { cn } from "~/lib/utils";
 import { api } from "../../../../convex/_generated/api";
+import {
+	FOR_LATER_DURATION_BUCKET_DEFINITIONS,
+	type ForLaterDurationBucketKey,
+} from "../../../../convex/_utils/forLaterDurationBuckets";
 import type {
 	ForLaterFilters as ForLaterFiltersState,
 	ForLaterTaxonomyMatch,
@@ -27,9 +31,11 @@ import type {
 import { YearRangePicker } from "./year-range-picker";
 
 export function ForLaterFilters({
+	userId,
 	filters,
 	onChange,
 }: {
+	userId: string;
 	filters: ForLaterFiltersState;
 	onChange: (filters: ForLaterFiltersState) => void;
 }) {
@@ -43,6 +49,18 @@ export function ForLaterFilters({
 		api.rateYourMusicScrapes.listRateYourMusicDescriptorKeys,
 		{ limit: 500 },
 	);
+	const durationBucketCounts = useQuery(
+		api.forLaterAlbums.listForLaterDurationBucketCounts,
+		{ userId },
+	);
+
+	const durationBucketCountByKey = useMemo(() => {
+		const counts = new Map<string, number>();
+		for (const option of durationBucketCounts ?? []) {
+			counts.set(option.key, option.count);
+		}
+		return counts;
+	}, [durationBucketCounts]);
 
 	const genreKeysPool = useMemo(
 		() => (genreOptions ?? []).map((g) => g.key).sort(),
@@ -132,13 +150,29 @@ export function ForLaterFilters({
 							}
 						/>
 					</div>
-					<div className="flex flex-col gap-1.5">
+					<div className="flex flex-col gap-1.5 md:col-span-2">
 						<Label id="for-later-filter-duration">Duration (min)</Label>
 						<DurationFilterControls
+							durationBucketKey={filters.durationBucketKey}
 							durationMinMinutes={filters.durationMinMinutes}
 							durationMaxMinutes={filters.durationMaxMinutes}
-							onCommit={({ durationMinMinutes, durationMaxMinutes }) =>
-								patchFilters({ durationMinMinutes, durationMaxMinutes })
+							durationBucketCountByKey={durationBucketCountByKey}
+							onSelectBucket={(durationBucketKey) =>
+								patchFilters({
+									durationBucketKey,
+									durationMinMinutes: undefined,
+									durationMaxMinutes: undefined,
+								})
+							}
+							onCommitCustomRange={({
+								durationMinMinutes,
+								durationMaxMinutes,
+							}) =>
+								patchFilters({
+									durationBucketKey: undefined,
+									durationMinMinutes,
+									durationMaxMinutes,
+								})
 							}
 						/>
 					</div>
@@ -351,6 +385,7 @@ export function ForLaterFilters({
 							yearMax: undefined,
 							durationMinMinutes: undefined,
 							durationMaxMinutes: undefined,
+							durationBucketKey: undefined,
 							listened: "all",
 							rymStatus: "all",
 							genreMatch: "all",
@@ -365,98 +400,62 @@ export function ForLaterFilters({
 	);
 }
 
-type DurationPreset = "any" | "short" | "medium" | "long";
-
-function durationPresetFromFilters(filters: {
-	durationMinMinutes?: number;
-	durationMaxMinutes?: number;
-}): DurationPreset | undefined {
-	if (
-		filters.durationMinMinutes === undefined &&
-		filters.durationMaxMinutes === undefined
-	) {
-		return "any";
-	}
-	if (
-		filters.durationMinMinutes === undefined &&
-		filters.durationMaxMinutes === 34
-	) {
-		return "short";
-	}
-	if (filters.durationMinMinutes === 35 && filters.durationMaxMinutes === 55) {
-		return "medium";
-	}
-	if (
-		filters.durationMinMinutes === 56 &&
-		filters.durationMaxMinutes === undefined
-	) {
-		return "long";
-	}
-	return undefined;
-}
-
-function durationBoundsForPreset(preset: DurationPreset): {
-	durationMinMinutes?: number;
-	durationMaxMinutes?: number;
-} {
-	switch (preset) {
-		case "short":
-			return { durationMaxMinutes: 34 };
-		case "medium":
-			return { durationMinMinutes: 35, durationMaxMinutes: 55 };
-		case "long":
-			return { durationMinMinutes: 56 };
-		default:
-			return {
-				durationMinMinutes: undefined,
-				durationMaxMinutes: undefined,
-			};
-	}
-}
-
 function DurationFilterControls({
+	durationBucketKey,
 	durationMinMinutes,
 	durationMaxMinutes,
-	onCommit,
+	durationBucketCountByKey,
+	onSelectBucket,
+	onCommitCustomRange,
 }: {
+	durationBucketKey?: ForLaterDurationBucketKey;
 	durationMinMinutes?: number;
 	durationMaxMinutes?: number;
-	onCommit: (bounds: {
+	durationBucketCountByKey: Map<string, number>;
+	onSelectBucket: (bucketKey: ForLaterDurationBucketKey | undefined) => void;
+	onCommitCustomRange: (bounds: {
 		durationMinMinutes?: number;
 		durationMaxMinutes?: number;
 	}) => void;
 }) {
-	const activePreset = durationPresetFromFilters({
-		durationMinMinutes,
-		durationMaxMinutes,
-	});
+	const hasCustomRange =
+		durationBucketKey === undefined &&
+		(durationMinMinutes !== undefined || durationMaxMinutes !== undefined);
 
 	return (
 		<div className="space-y-2">
 			<fieldset
 				className="m-0 inline-flex min-w-0 flex-wrap gap-1 self-start rounded-md border border-border bg-background px-0.5 py-0.5"
-				aria-label="Filter by playlist duration preset"
+				aria-label="Filter by playlist duration bucket"
 			>
-				{(
-					[
-						["any", "Any"],
-						["short", "< 35"],
-						["medium", "35–55"],
-						["long", "> 55"],
-					] as const
-				).map(([preset, label]) => (
+				<button
+					type="button"
+					onClick={() => onSelectBucket(undefined)}
+					className={cn(
+						"rounded px-2.5 py-1 font-medium text-sm",
+						durationBucketKey === undefined && !hasCustomRange
+							? "bg-muted shadow-sm"
+							: "text-muted-foreground hover:text-foreground",
+					)}
+				>
+					Any
+				</button>
+				{FOR_LATER_DURATION_BUCKET_DEFINITIONS.map((definition) => (
 					<button
-						key={preset}
+						key={definition.key}
 						type="button"
-						onClick={() => onCommit(durationBoundsForPreset(preset))}
+						onClick={() => onSelectBucket(definition.key)}
 						className={cn(
 							"rounded px-2.5 py-1 font-medium text-sm",
-							activePreset === preset
+							durationBucketKey === definition.key
 								? "bg-muted shadow-sm"
 								: "text-muted-foreground hover:text-foreground",
 						)}
 					>
-						{label}
+						{definition.label}
+						<span className="ml-1 text-muted-foreground text-xs">
+							({durationBucketCountByKey.get(definition.key) ?? 0})
+						</span>
 					</button>
 				))}
 			</fieldset>
@@ -470,7 +469,7 @@ function DurationFilterControls({
 					value={durationMinMinutes ?? ""}
 					onChange={(event) => {
 						const raw = event.target.value.trim();
-						onCommit({
+						onCommitCustomRange({
 							durationMinMinutes:
 								raw.length > 0 ? Number.parseInt(raw, 10) : undefined,
 							durationMaxMinutes,
@@ -488,7 +487,7 @@ function DurationFilterControls({
 					value={durationMaxMinutes ?? ""}
 					onChange={(event) => {
 						const raw = event.target.value.trim();
-						onCommit({
+						onCommitCustomRange({
 							durationMinMinutes,
 							durationMaxMinutes:
 								raw.length > 0 ? Number.parseInt(raw, 10) : undefined,

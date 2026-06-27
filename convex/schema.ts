@@ -440,6 +440,8 @@ export default defineSchema({
 		filterDescriptorKeysSorted: v.optional(v.array(v.string())),
 		/** Copied from `spotifyAlbums.totalDurationMs` for list filters (ms). */
 		filterDurationMs: v.optional(v.number()),
+		/** Minute bucket key derived from `filterDurationMs` for facet pagination. */
+		filterDurationBucketKey: v.optional(v.string()),
 		/** Album title + artist; Convex FTS (`search_forLaterAlbumItems`). */
 		filterSearchText: v.optional(v.string()),
 	})
@@ -504,6 +506,21 @@ export default defineSchema({
 		])
 		.index("by_itemId", ["itemId"]),
 
+	/** One row per (item, duration bucket) for indexed duration-filtered list pagination. */
+	forLaterAlbumDurationFacets: defineTable({
+		userId: v.string(),
+		itemId: v.id("forLaterAlbumItems"),
+		durationBucketKey: v.string(),
+		/** Denormalized from `forLaterAlbumItems.lastSeenAt` for sort alignment. */
+		lastSeenAt: v.number(),
+	})
+		.index("by_userId_durationBucketKey_lastSeenAt", [
+			"userId",
+			"durationBucketKey",
+			"lastSeenAt",
+		])
+		.index("by_itemId", ["itemId"]),
+
 	/** One row per (item, descriptor tag) for indexed descriptor-filtered list pagination. */
 	forLaterAlbumDescriptorFacets: defineTable({
 		userId: v.string(),
@@ -548,6 +565,19 @@ export default defineSchema({
 				v.literal("good"),
 				v.literal("any"),
 			),
+			durationBucket: v.optional(
+				v.union(
+					v.literal("under_20"),
+					v.literal("20_30"),
+					v.literal("30_40"),
+					v.literal("40_50"),
+					v.literal("50_60"),
+					v.literal("60_70"),
+					v.literal("70_plus"),
+					v.literal("any"),
+				),
+			),
+			/** @deprecated Use durationBucket */
 			durationTier: v.optional(
 				v.union(
 					v.literal("short"),

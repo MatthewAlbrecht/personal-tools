@@ -1,3 +1,4 @@
+import { durationBucketKeyFromMinutes } from "../../../../convex/_utils/forLaterDurationBuckets";
 import type {
 	ForLaterFilters,
 	ForLaterListenedFilter,
@@ -106,6 +107,7 @@ export function parseForLaterFilters(params: URLSearchParams): ForLaterFilters {
 		yearMax,
 		durationMinMinutes: parseDurationBound(params, "durationMin"),
 		durationMaxMinutes: parseDurationBound(params, "durationMax"),
+		durationBucketKey: durationBucketKeyFromMinutes(params.get("durationBucket") ?? undefined),
 		listened: parseEnum(params.get("listened"), LISTENED_VALUES, "all"),
 		rymStatus: parseEnum(params.get("rymStatus"), RYM_VALUES, "all"),
 		genreMatch: parseTaxonomyMatch(params.get("genreMatch"), legacyMatch),
@@ -138,6 +140,9 @@ export function serializeForLaterFilters(
 	}
 	if (filters.durationMaxMinutes !== undefined) {
 		params.set("durationMax", String(filters.durationMaxMinutes));
+	}
+	if (filters.durationBucketKey !== undefined) {
+		params.set("durationBucket", filters.durationBucketKey);
 	}
 	setIfNotDefault(params, "listened", filters.listened, "all");
 	setIfNotDefault(params, "rymStatus", filters.rymStatus, "all");

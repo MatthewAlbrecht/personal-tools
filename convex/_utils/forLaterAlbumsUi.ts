@@ -1,3 +1,9 @@
+import type { ForLaterDurationBucketKey } from "./forLaterDurationBuckets";
+import {
+	durationBucketKeyFromMinutes,
+	durationBucketMatches,
+} from "./forLaterDurationBuckets";
+
 export type ForLaterListenedFilter = "all" | "listened" | "not_listened";
 export type ForLaterRymFilter =
 	| "all"
@@ -17,6 +23,7 @@ export type ForLaterUiFilters = {
 	year?: number;
 	durationMinMinutes?: number;
 	durationMaxMinutes?: number;
+	durationBucketKey?: ForLaterDurationBucketKey;
 	listened: ForLaterListenedFilter;
 	rymStatus: ForLaterRymFilter;
 	/** Among selected genre tags: every tag ("all") vs at least one ("any"). */
@@ -26,7 +33,11 @@ export type ForLaterUiFilters = {
 };
 
 /** Accept legacy `filterMatch` when normalizing Convex / bookmarked URLs. */
-export type ForLaterFiltersNormalizeInput = Partial<ForLaterUiFilters> & {
+export type ForLaterFiltersNormalizeInput = Omit<
+	Partial<ForLaterUiFilters>,
+	"durationBucketKey"
+> & {
+	durationBucketKey?: ForLaterDurationBucketKey | string;
 	filterMatch?: ForLaterFilterMatch;
 };
 
@@ -63,6 +74,7 @@ export function normalizeForLaterFilters(
 		yearMax: input.yearMax ?? input.year,
 		durationMinMinutes: input.durationMinMinutes,
 		durationMaxMinutes: input.durationMaxMinutes,
+		durationBucketKey: durationBucketKeyFromMinutes(input.durationBucketKey),
 		listened: input.listened ?? "all",
 		rymStatus: input.rymStatus ?? "all",
 		genreMatch: resolveTaxonomyMatch(input.genreMatch, legacy),
@@ -107,6 +119,10 @@ export function durationMsMatchesForLaterFilter(
 	durationMs: number | undefined,
 	filters: ForLaterUiFilters,
 ): boolean {
+	if (filters.durationBucketKey !== undefined) {
+		return durationBucketMatches(durationMs, filters.durationBucketKey);
+	}
+
 	if (
 		filters.durationMinMinutes === undefined &&
 		filters.durationMaxMinutes === undefined
@@ -162,14 +178,17 @@ export function forLaterPostFilterScanSize(requested: number): number {
 	return Math.min(overscan, FOR_LATER_POST_FILTER_SCAN_CAP);
 }
 
-/** True when list pagination can use denormalized projection indexes (no genre/descriptor/search). */
+/** True when list pagination can use denormalized projection indexes (no genre/descriptor/search/duration). */
 export function forLaterFiltersAllowIndexedScan(
 	filters: ForLaterUiFilters,
 ): boolean {
 	if (
 		filters.genreKeys.length > 0 ||
 		filters.descriptorKeys.length > 0 ||
-		Boolean(filters.search?.trim())
+		Boolean(filters.search?.trim()) ||
+		filters.durationBucketKey !== undefined ||
+		filters.durationMinMinutes !== undefined ||
+		filters.durationMaxMinutes !== undefined
 	) {
 		return false;
 	}
@@ -220,6 +239,24 @@ export function forLaterFiltersAllowDescriptorFacetPagination(
 		return false;
 	}
 	if (filters.descriptorMatch === "any" && filters.descriptorKeys.length > 1) {
+		return false;
+	}
+	return true;
+}
+
+/**
+ * True when we can paginate `forLaterAlbumDurationFacets` so `isDone` reflects albums
+ * in the selected duration bucket, not the whole playlist.
+ *
+ * Skipped when search is active. Used when genre/descriptor facet branches do not apply.
+ */
+export function forLaterFiltersAllowDurationFacetPagination(
+	filters: ForLaterUiFilters,
+): boolean {
+	if (filters.search?.trim()) {
+		return false;
+	}
+	if (filters.durationBucketKey === undefined) {
 		return false;
 	}
 	return true;
@@ -279,6 +316,7 @@ export function rowMatchesFilters(
 	}
 
 	if (
+		filters.durationBucketKey !== undefined ||
 		filters.durationMinMinutes !== undefined ||
 		filters.durationMaxMinutes !== undefined
 	) {

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
 	ADDED_TIMEFRAME_OPTIONS,
-	DURATION_TIER_OPTIONS,
+	DURATION_BUCKET_OPTIONS,
 	QUESTION_LABELS,
 	QUESTION_ORDER,
 	RATING_TIER_OPTIONS,
@@ -20,7 +20,7 @@ test("createDefaultRecommendationAnswers treats every filter as any and count as
 		releaseTime: "any",
 		descriptorKey: "any",
 		ratingTier: "any",
-		durationTier: "any",
+		durationBucket: "any",
 		count: 1,
 	});
 });
@@ -75,12 +75,16 @@ test("RELEASE_TIME_OPTIONS has the approved release time options", () => {
 	]);
 });
 
-test("DURATION_TIER_OPTIONS has the approved duration tiers", () => {
-	assert.deepEqual(DURATION_TIER_OPTIONS, [
+test("DURATION_BUCKET_OPTIONS has the approved duration buckets", () => {
+	assert.deepEqual(DURATION_BUCKET_OPTIONS, [
 		{ key: "any", label: "Doesn't matter" },
-		{ key: "short", label: "Short (< 35 min)" },
-		{ key: "medium", label: "Medium (35–55 min)" },
-		{ key: "long", label: "Long (> 55 min)" },
+		{ key: "under_20", label: "< 20 min" },
+		{ key: "20_30", label: "20–30 min" },
+		{ key: "30_40", label: "30–40 min" },
+		{ key: "40_50", label: "40–50 min" },
+		{ key: "50_60", label: "50–60 min" },
+		{ key: "60_70", label: "60–70 min" },
+		{ key: "70_plus", label: "70+ min" },
 	]);
 });
 
@@ -105,7 +109,7 @@ test("recommendationAnswerSummary omits unanswered filters but includes count", 
 			releaseTime: "modern",
 			descriptorKey: "any",
 			ratingTier: "good",
-			durationTier: "any",
+			durationBucket: "any",
 			count: 3,
 		}),
 		["Genre: slowcore", "Release: Modern", "Rating: Good", "3 recs"],
@@ -120,10 +124,10 @@ test("recommendationAnswerSummary includes duration when set", () => {
 			releaseTime: "any",
 			descriptorKey: "any",
 			ratingTier: "any",
-			durationTier: "medium",
+			durationBucket: "40_50",
 			count: 2,
 		}),
-		["Duration: Medium (35–55 min)", "2 recs"],
+		["Duration: 40–50 min", "2 recs"],
 	);
 });
 
@@ -136,7 +140,7 @@ test("recommendationAnswerSummary uses genre labels when available", () => {
 				releaseTime: "any",
 				descriptorKey: "any",
 				ratingTier: "any",
-				durationTier: "any",
+				durationBucket: "any",
 				count: 1,
 			},
 			{

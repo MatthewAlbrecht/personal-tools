@@ -11,6 +11,7 @@ test("parseForLaterFilters returns defaults for an empty query", () => {
 		yearMax: undefined,
 		durationMinMinutes: undefined,
 		durationMaxMinutes: undefined,
+		durationBucketKey: undefined,
 		listened: "all",
 		rymStatus: "all",
 		genreMatch: "all",
@@ -39,6 +40,7 @@ test("parseForLaterFilters reads q, genres, descriptors, and taxonomy match mode
 		yearMax: 1971,
 		durationMinMinutes: undefined,
 		durationMaxMinutes: undefined,
+		durationBucketKey: undefined,
 		listened: "not_listened",
 		rymStatus: "not_on_rym",
 		genreMatch: "any",
@@ -62,6 +64,7 @@ test("parseForLaterFilters reads durationMin and durationMax URL params", () => 
 		yearMax: undefined,
 		durationMinMinutes: 35,
 		durationMaxMinutes: 55,
+		durationBucketKey: undefined,
 		listened: "all",
 		rymStatus: "all",
 		genreMatch: "all",
@@ -84,6 +87,7 @@ test("serializeForLaterFilters omits default values", () => {
 		yearMax: undefined,
 		durationMinMinutes: undefined,
 		durationMaxMinutes: undefined,
+		durationBucketKey: undefined,
 		listened: "all",
 		rymStatus: "all",
 		genreMatch: "all",
@@ -103,6 +107,7 @@ test("parseForLaterFilters maps legacy year param to min and max", () => {
 		yearMax: 1984,
 		durationMinMinutes: undefined,
 		durationMaxMinutes: undefined,
+		durationBucketKey: undefined,
 		listened: "all",
 		rymStatus: "all",
 		genreMatch: "all",
@@ -119,6 +124,7 @@ test("serializeForLaterFilters writes yearMin and yearMax", () => {
 		yearMax: 1979,
 		durationMinMinutes: undefined,
 		durationMaxMinutes: undefined,
+		durationBucketKey: undefined,
 		listened: "all",
 		rymStatus: "all",
 		genreMatch: "all",
@@ -126,6 +132,29 @@ test("serializeForLaterFilters writes yearMin and yearMax", () => {
 	});
 	assert.equal(params.get("yearMin"), "1970");
 	assert.equal(params.get("yearMax"), "1979");
+});
+
+test("parseForLaterFilters reads durationBucket URL param", () => {
+	const params = new URLSearchParams("durationBucket=40_50");
+	assert.equal(parseForLaterFilters(params).durationBucketKey, "40_50");
+});
+
+test("serializeForLaterFilters writes durationBucket", () => {
+	const params = serializeForLaterFilters({
+		genreKeys: [],
+		descriptorKeys: [],
+		search: undefined,
+		yearMin: undefined,
+		yearMax: undefined,
+		durationMinMinutes: undefined,
+		durationMaxMinutes: undefined,
+		durationBucketKey: "50_60",
+		listened: "all",
+		rymStatus: "all",
+		genreMatch: "all",
+		descriptorMatch: "all",
+	});
+	assert.equal(params.get("durationBucket"), "50_60");
 });
 
 test("serializeForLaterFilters repeats genre and descriptor keys and sets q", () => {

@@ -1,4 +1,5 @@
 import type { Id } from "../../../../convex/_generated/dataModel";
+import type { ForLaterDurationBucketKey } from "../../../../convex/_utils/forLaterDurationBuckets";
 
 export type ForLaterListenedFilter = "all" | "listened" | "not_listened";
 export type ForLaterRymFilter =
@@ -19,6 +20,7 @@ export type ForLaterFilters = {
 	yearMax?: number;
 	durationMinMinutes?: number;
 	durationMaxMinutes?: number;
+	durationBucketKey?: ForLaterDurationBucketKey;
 	listened: ForLaterListenedFilter;
 	rymStatus: ForLaterRymFilter;
 	genreMatch: ForLaterTaxonomyMatch;

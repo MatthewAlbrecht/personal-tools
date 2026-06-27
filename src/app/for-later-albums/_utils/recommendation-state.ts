@@ -1,3 +1,5 @@
+import { FOR_LATER_DURATION_BUCKET_DEFINITIONS } from "../../../../convex/_utils/forLaterDurationBuckets";
+
 export type RecommendationQuestionId =
 	| "addedTimeframe"
 	| "genre"
@@ -23,7 +25,15 @@ export type ReleaseTimeAnswer =
 
 export type RatingTierAnswer = "holy_moly" | "really_enjoyed" | "good" | "any";
 
-export type DurationTierAnswer = "short" | "medium" | "long" | "any";
+export type DurationBucketAnswer =
+	| "under_20"
+	| "20_30"
+	| "30_40"
+	| "40_50"
+	| "50_60"
+	| "60_70"
+	| "70_plus"
+	| "any";
 
 export type RecommendationAnswers = {
 	addedTimeframe: AddedTimeframeAnswer;
@@ -31,7 +41,7 @@ export type RecommendationAnswers = {
 	releaseTime: ReleaseTimeAnswer;
 	descriptorKey: string | "any";
 	ratingTier: RatingTierAnswer;
-	durationTier: DurationTierAnswer;
+	durationBucket: DurationBucketAnswer;
 	count: number;
 };
 
@@ -43,6 +53,7 @@ export type RecommendationOption = {
 
 export type RecommendationSummaryOptions = {
 	genreOptions?: readonly RecommendationOption[];
+	durationOptions?: readonly RecommendationOption[];
 };
 
 export const QUESTION_ORDER = [
@@ -80,11 +91,12 @@ export const RELEASE_TIME_OPTIONS = [
 	{ key: "old", label: "Old" },
 ] as const satisfies readonly RecommendationOption[];
 
-export const DURATION_TIER_OPTIONS = [
+export const DURATION_BUCKET_OPTIONS = [
 	{ key: "any", label: "Doesn't matter" },
-	{ key: "short", label: "Short (< 35 min)" },
-	{ key: "medium", label: "Medium (35–55 min)" },
-	{ key: "long", label: "Long (> 55 min)" },
+	...FOR_LATER_DURATION_BUCKET_DEFINITIONS.map((definition) => ({
+		key: definition.key,
+		label: definition.label,
+	})),
 ] as const satisfies readonly RecommendationOption[];
 
 export const RATING_TIER_OPTIONS = [
@@ -103,7 +115,7 @@ export function createDefaultRecommendationAnswers(): RecommendationAnswers {
 		releaseTime: "any",
 		descriptorKey: "any",
 		ratingTier: "any",
-		durationTier: "any",
+		durationBucket: "any",
 		count: 1,
 	};
 }
@@ -118,7 +130,10 @@ export function nextRecommendationQuestion(
 
 export function recommendationAnswerSummary(
 	answers: RecommendationAnswers,
-	{ genreOptions = [] }: RecommendationSummaryOptions = {},
+	{
+		genreOptions = [],
+		durationOptions = DURATION_BUCKET_OPTIONS,
+	}: RecommendationSummaryOptions = {},
 ): string[] {
 	const summary: string[] = [];
 
@@ -135,9 +150,9 @@ export function recommendationAnswerSummary(
 			`Release: ${optionLabel(RELEASE_TIME_OPTIONS, answers.releaseTime)}`,
 		);
 	}
-	if (answers.durationTier !== "any") {
+	if (answers.durationBucket !== "any") {
 		summary.push(
-			`Duration: ${optionLabel(DURATION_TIER_OPTIONS, answers.durationTier)}`,
+			`Duration: ${optionLabel(durationOptions, answers.durationBucket)}`,
 		);
 	}
 	if (answers.ratingTier !== "any") {

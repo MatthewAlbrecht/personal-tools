@@ -48,6 +48,7 @@ export function projectionMatchesFilters(
 	}
 
 	if (
+		filters.durationBucketKey !== undefined ||
 		filters.durationMinMinutes !== undefined ||
 		filters.durationMaxMinutes !== undefined
 	) {

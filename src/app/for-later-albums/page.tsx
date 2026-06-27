@@ -144,7 +144,11 @@ function ForLaterAlbumsPageInner() {
 					summary={summary}
 					onOpenRecommendationDrawer={openRecommendationDrawer}
 				/>
-				<ForLaterFilters filters={filters} onChange={updateFilters} />
+				<ForLaterFilters
+					userId={userId}
+					filters={filters}
+					onChange={updateFilters}
+				/>
 				<ForLaterList
 					rows={rows.results ?? []}
 					userId={userId}

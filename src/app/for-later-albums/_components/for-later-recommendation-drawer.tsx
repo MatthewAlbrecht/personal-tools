@@ -19,8 +19,7 @@ import { api } from "../../../../convex/_generated/api";
 import {
 	ADDED_TIMEFRAME_OPTIONS,
 	type AddedTimeframeAnswer,
-	DURATION_TIER_OPTIONS,
-	type DurationTierAnswer,
+	type DurationBucketAnswer,
 	QUESTION_LABELS,
 	QUESTION_ORDER,
 	RATING_TIER_OPTIONS,
@@ -38,6 +37,7 @@ import type { ForLaterAlbumRowData } from "../_utils/types";
 
 type RecommendationOptionsResult = {
 	genres: RecommendationOption[];
+	durations: RecommendationOption[];
 };
 
 type RecommendationResult = {
@@ -106,6 +106,7 @@ export function ForLaterRecommendationDrawer({
 		);
 
 	const genreOptions = recommendationOptions?.genres ?? [];
+	const durationOptions = recommendationOptions?.durations ?? [];
 
 	async function handleRecommendNow(
 		answersForRecommendation = answers,
@@ -232,6 +233,7 @@ export function ForLaterRecommendationDrawer({
 									activeQuestion={activeQuestion}
 									answers={answers}
 									genreOptions={genreOptions}
+									durationOptions={durationOptions}
 									selectedTopLevelGenre={selectedTopLevelGenre}
 									optionsLoading={open && recommendationOptions === undefined}
 									onAnswer={handleQuestionAnswered}
@@ -332,6 +334,7 @@ function QuestionBody({
 	activeQuestion,
 	answers,
 	genreOptions,
+	durationOptions,
 	selectedTopLevelGenre,
 	optionsLoading,
 	onAnswer,
@@ -341,6 +344,7 @@ function QuestionBody({
 	activeQuestion: RecommendationQuestionId;
 	answers: RecommendationAnswers;
 	genreOptions: RecommendationOption[];
+	durationOptions: RecommendationOption[];
 	selectedTopLevelGenre: { key: string; label: string } | null;
 	optionsLoading: boolean;
 	onAnswer: (partialAnswers: Partial<RecommendationAnswers>) => void;
@@ -400,17 +404,33 @@ function QuestionBody({
 	if (activeQuestion === "duration") {
 		return (
 			<QuestionSection title="Playlist duration:">
-				{DURATION_TIER_OPTIONS.map((option) => (
+				<ChoiceButton
+					selected={answers.durationBucket === "any"}
+					onClick={() => onAnswer({ durationBucket: "any" })}
+				>
+					Doesn't matter
+				</ChoiceButton>
+				{durationOptions.map((option) => (
 					<ChoiceButton
 						key={option.key}
-						selected={answers.durationTier === option.key}
+						selected={answers.durationBucket === option.key}
 						onClick={() =>
-							onAnswer({ durationTier: option.key as DurationTierAnswer })
+							onAnswer({
+								durationBucket: option.key as DurationBucketAnswer,
+							})
 						}
 					>
-						{option.label}
+						<span>{option.label}</span>
+						<span className="text-muted-foreground text-xs">
+							({option.count ?? 0})
+						</span>
 					</ChoiceButton>
 				))}
+				{optionsLoading ? (
+					<span className="self-center text-muted-foreground text-xs">
+						Loading options...
+					</span>
+				) : null}
 			</QuestionSection>
 		);
 	}

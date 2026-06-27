@@ -12,9 +12,11 @@ import {
 } from "./_utils/albumMatching";
 import {
 	type ForLaterAlbumRowFilterInput,
+	type ForLaterFiltersNormalizeInput,
 	type ForLaterUiFilters,
 	deriveRymStatus,
 	forLaterFiltersAllowDescriptorFacetPagination,
+	forLaterFiltersAllowDurationFacetPagination,
 	forLaterFiltersAllowGenreFacetPagination,
 	forLaterFiltersAllowIndexedScan,
 	forLaterPostFilterScanSize,
@@ -23,6 +25,7 @@ import {
 	rowMatchesFilters,
 	sortForLaterRows,
 } from "./_utils/forLaterAlbumsUi";
+import { durationMsToBucketKey } from "./_utils/forLaterDurationBuckets";
 import {
 	buildDirectFilterGenreKeys,
 	buildFilterDescriptorKeysSorted,
@@ -35,6 +38,7 @@ import { chooseIndexedForLaterListScan } from "./_utils/forLaterIndexedList";
 import { projectionMatchesFilters } from "./_utils/forLaterProjectionPredicate";
 import {
 	type AddedTimeframeAnswer,
+	type DurationBucketAnswer,
 	type DurationTierAnswer,
 	type ForLaterRecommendationAnswers,
 	type ForLaterRecommendationCandidate,
@@ -43,6 +47,7 @@ import {
 	type RecommendationTagOption,
 	type ReleaseTimeAnswer,
 	buildSavedRecommendationAlbumRefs,
+	buildDurationBucketRecommendationOptions,
 	buildSubgenreCountsForTopLevel,
 	buildTopLevelGenreCounts,
 	candidateMatchesRecommendationAnswers,
@@ -103,6 +108,7 @@ const forLaterFiltersValidator = v.object({
 	filterMatch: v.optional(taxonomyMatchValidator),
 	durationMinMinutes: v.optional(v.number()),
 	durationMaxMinutes: v.optional(v.number()),
+	durationBucketKey: v.optional(v.string()),
 });
 
 const recommendationAddedTimeframeValidator = v.union(
@@ -129,6 +135,17 @@ const recommendationRatingTierValidator = v.union(
 	v.literal("any"),
 );
 
+const recommendationDurationBucketValidator = v.union(
+	v.literal("under_20"),
+	v.literal("20_30"),
+	v.literal("30_40"),
+	v.literal("40_50"),
+	v.literal("50_60"),
+	v.literal("60_70"),
+	v.literal("70_plus"),
+	v.literal("any"),
+);
+
 const recommendationDurationTierValidator = v.union(
 	v.literal("short"),
 	v.literal("medium"),
@@ -142,6 +159,8 @@ const recommendationAnswersValidator = v.object({
 	releaseTime: recommendationReleaseTimeValidator,
 	descriptorKey: v.string(),
 	ratingTier: recommendationRatingTierValidator,
+	durationBucket: v.optional(recommendationDurationBucketValidator),
+	/** @deprecated Use durationBucket */
 	durationTier: v.optional(recommendationDurationTierValidator),
 	count: v.number(),
 });
@@ -480,6 +499,33 @@ async function syncForLaterAlbumDescriptorFacets(
 	}
 }
 
+async function syncForLaterAlbumDurationFacets(
+	ctx: MutationCtx,
+	args: {
+		itemId: Id<"forLaterAlbumItems">;
+		userId: string;
+		lastSeenAt: number;
+		durationBucketKey?: string;
+	},
+): Promise<void> {
+	const existing = await ctx.db
+		.query("forLaterAlbumDurationFacets")
+		.withIndex("by_itemId", (q) => q.eq("itemId", args.itemId))
+		.collect();
+	for (const row of existing) {
+		await ctx.db.delete(row._id);
+	}
+	if (args.durationBucketKey === undefined) {
+		return;
+	}
+	await ctx.db.insert("forLaterAlbumDurationFacets", {
+		userId: args.userId,
+		itemId: args.itemId,
+		durationBucketKey: args.durationBucketKey,
+		lastSeenAt: args.lastSeenAt,
+	});
+}
+
 async function syncForLaterItemFilterProjection(
 	ctx: MutationCtx,
 	itemId: Id<"forLaterAlbumItems">,
@@ -529,14 +575,20 @@ async function syncForLaterItemFilterProjection(
 	const filterDescriptorKeysSorted = buildFilterDescriptorKeysSorted(
 		tags.descriptors,
 	);
+	const filterDurationMs =
+		album?.totalDurationMs !== undefined ? album.totalDurationMs : undefined;
+	const filterDurationBucketKey = durationMsToBucketKey(filterDurationMs);
 
 	await ctx.db.patch(itemId, {
 		...(filterReleaseYear !== undefined
 			? { filterReleaseYear }
 			: { filterReleaseYear: undefined }),
-		...(album?.totalDurationMs !== undefined
-			? { filterDurationMs: album.totalDurationMs }
+		...(filterDurationMs !== undefined
+			? { filterDurationMs }
 			: { filterDurationMs: undefined }),
+		...(filterDurationBucketKey !== undefined
+			? { filterDurationBucketKey }
+			: { filterDurationBucketKey: undefined }),
 		filterHasListened,
 		filterRymMatched,
 		filterHasRymUrl,
@@ -565,6 +617,13 @@ async function syncForLaterItemFilterProjection(
 		userId: item.userId,
 		lastSeenAt: item.lastSeenAt,
 		descriptorKeysSorted: filterDescriptorKeysSorted,
+	});
+
+	await syncForLaterAlbumDurationFacets(ctx, {
+		itemId,
+		userId: item.userId,
+		lastSeenAt: item.lastSeenAt,
+		durationBucketKey: filterDurationBucketKey,
 	});
 }
 
@@ -776,10 +835,12 @@ async function collectForLaterRecommendationTagOptions(
 	args: { userId: string; parentGenreKey?: string },
 ): Promise<{
 	genres: RecommendationTagOption[];
+	durations: RecommendationTagOption[];
 }> {
 	const items = await collectVisibleActiveForLaterRecommendationItems(ctx, {
 		userId: args.userId,
 	});
+	const durationOptions = buildDurationBucketRecommendationOptions(items);
 	const albumFilterGenreKeys = recommendationFilterGenreKeysForItems(items);
 	const [parentKeysByChild, topLevelGenreKeys] = await Promise.all([
 		loadRymGenreParentKeysByChild(ctx),
@@ -808,6 +869,7 @@ async function collectForLaterRecommendationTagOptions(
 
 		return {
 			genres: applyRecommendationOptionLabels(genreOptions, genreLabels),
+			durations: durationOptions,
 		};
 	}
 
@@ -830,6 +892,7 @@ async function collectForLaterRecommendationTagOptions(
 
 	return {
 		genres: applyRecommendationOptionLabels(genreOptions, genreLabels),
+		durations: durationOptions,
 	};
 }
 
@@ -881,7 +944,8 @@ function normalizeRecommendationAnswers(answers: {
 	releaseTime: ReleaseTimeAnswer;
 	descriptorKey: string;
 	ratingTier: RatingTierAnswer;
-	durationTier: DurationTierAnswer;
+	durationBucket?: DurationBucketAnswer;
+	durationTier?: DurationTierAnswer;
 	count: number;
 }): ForLaterRecommendationAnswers {
 	return {
@@ -890,8 +954,36 @@ function normalizeRecommendationAnswers(answers: {
 		releaseTime: answers.releaseTime,
 		descriptorKey: answers.descriptorKey.trim() || "any",
 		ratingTier: answers.ratingTier,
-		durationTier: answers.durationTier ?? "any",
+		...resolveNormalizedDurationAnswers(answers),
 		count: normalizeRecommendationCount(answers.count),
+	};
+}
+
+function resolveNormalizedDurationAnswers(answers: {
+	durationBucket?: DurationBucketAnswer;
+	durationTier?: DurationTierAnswer;
+}): Pick<ForLaterRecommendationAnswers, "durationBucket" | "durationTier"> {
+	if (answers.durationBucket !== undefined && answers.durationBucket !== "any") {
+		return {
+			durationBucket: answers.durationBucket,
+			durationTier: undefined,
+		};
+	}
+
+	if (
+		answers.durationTier === "short" ||
+		answers.durationTier === "medium" ||
+		answers.durationTier === "long"
+	) {
+		return {
+			durationBucket: "any",
+			durationTier: answers.durationTier,
+		};
+	}
+
+	return {
+		durationBucket: answers.durationBucket ?? "any",
+		durationTier: undefined,
 	};
 }
 
@@ -1129,7 +1221,7 @@ async function loadForLaterAlbumRows(
 	ctx: QueryCtx,
 	args: {
 		userId: string;
-		filters: Partial<ForLaterUiFilters>;
+		filters: ForLaterFiltersNormalizeInput;
 		paginationOpts: { numItems: number; cursor: string | null };
 	},
 ): Promise<LoadForLaterAlbumRowsResult> {
@@ -1273,6 +1365,41 @@ async function loadForLaterAlbumRows(
 			.query("forLaterAlbumDescriptorFacets")
 			.withIndex("by_userId_descriptorKey_lastSeenAt", (q) =>
 				q.eq("userId", args.userId).eq("descriptorKey", primaryDescriptorKey),
+			)
+			.order("desc")
+			.paginate({
+				numItems: scanSize,
+				cursor: args.paginationOpts.cursor,
+			});
+
+		const matches = await hydrateMatchingRowsFromFacetItemRefs(ctx, {
+			userId: args.userId,
+			filters,
+			facetRows: facetBatch.page,
+		});
+
+		return {
+			page: sortForLaterRows(matches),
+			isDone: facetBatch.isDone,
+			continueCursor: facetBatch.continueCursor,
+		};
+	}
+
+	if (forLaterFiltersAllowDurationFacetPagination(filters)) {
+		const durationBucketKey = filters.durationBucketKey;
+		if (durationBucketKey === undefined) {
+			throw new Error(
+				"forLaterFiltersAllowDurationFacetPagination requires durationBucketKey",
+			);
+		}
+		const scanSize = forLaterPostFilterScanSize(requested);
+
+		const facetBatch = await ctx.db
+			.query("forLaterAlbumDurationFacets")
+			.withIndex("by_userId_durationBucketKey_lastSeenAt", (q) =>
+				q
+					.eq("userId", args.userId)
+					.eq("durationBucketKey", durationBucketKey),
 			)
 			.order("desc")
 			.paginate({
@@ -1623,18 +1750,34 @@ export const listForLaterRecommendationOptions = query({
 	},
 	returns: v.object({
 		genres: v.array(recommendationOptionValidator),
+		durations: v.array(recommendationOptionValidator),
 	}),
 	handler: async (
 		ctx,
 		args,
 	): Promise<{
 		genres: Array<{ key: string; label: string; count: number }>;
+		durations: Array<{ key: string; label: string; count: number }>;
 	}> => {
 		requireAuth(ctx);
 		return await collectForLaterRecommendationTagOptions(ctx, {
 			userId: args.userId,
 			parentGenreKey: args.parentGenreKey?.trim() || undefined,
 		});
+	},
+});
+
+export const listForLaterDurationBucketCounts = query({
+	args: {
+		userId: v.string(),
+	},
+	returns: v.array(recommendationOptionValidator),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+		const items = await collectVisibleActiveForLaterRecommendationItems(ctx, {
+			userId: args.userId,
+		});
+		return buildDurationBucketRecommendationOptions(items);
 	},
 });
 
@@ -1654,7 +1797,8 @@ export const getForLaterRecommendations = query({
 			releaseTime: args.answers.releaseTime as ReleaseTimeAnswer,
 			descriptorKey: args.answers.descriptorKey,
 			ratingTier: args.answers.ratingTier as RatingTierAnswer,
-			durationTier: args.answers.durationTier as DurationTierAnswer,
+			durationBucket: args.answers.durationBucket as DurationBucketAnswer,
+			durationTier: args.answers.durationTier as DurationTierAnswer | undefined,
 			count: args.answers.count,
 		});
 
@@ -1690,7 +1834,8 @@ export const createForLaterRecommendation = mutation({
 			releaseTime: args.answers.releaseTime as ReleaseTimeAnswer,
 			descriptorKey: args.answers.descriptorKey,
 			ratingTier: args.answers.ratingTier as RatingTierAnswer,
-			durationTier: args.answers.durationTier as DurationTierAnswer,
+			durationBucket: args.answers.durationBucket as DurationBucketAnswer,
+			durationTier: args.answers.durationTier as DurationTierAnswer | undefined,
 			count: args.answers.count,
 		});
 		const result = await buildForLaterRecommendationResult(ctx, {

@@ -1,4 +1,11 @@
 import { resolveTopLevelGenreKey } from "./rymGenreHierarchy";
+import {
+	type DurationBucketAnswer,
+	durationBucketMatches,
+	buildDurationBucketCounts,
+} from "./forLaterDurationBuckets";
+
+export type { DurationBucketAnswer } from "./forLaterDurationBuckets";
 
 export type AddedTimeframeAnswer =
 	| "day"
@@ -17,6 +24,7 @@ export type ReleaseTimeAnswer =
 
 export type RatingTierAnswer = "holy_moly" | "really_enjoyed" | "good" | "any";
 
+/** @deprecated Legacy short/medium/long tiers for stored recommendations. */
 export type DurationTierAnswer = "short" | "medium" | "long" | "any";
 
 export type ForLaterRecommendationCandidate = {
@@ -39,7 +47,9 @@ export type ForLaterRecommendationAnswers = {
 	releaseTime: ReleaseTimeAnswer;
 	descriptorKey: string;
 	ratingTier: RatingTierAnswer;
-	durationTier: DurationTierAnswer;
+	durationBucket: DurationBucketAnswer;
+	/** Legacy stored answers only; ignored when durationBucket is set. */
+	durationTier?: DurationTierAnswer;
 	count: number;
 };
 
@@ -174,6 +184,14 @@ export function ratingTierMatches(
 	}
 }
 
+export function durationBucketMatchesAnswer(
+	filterDurationMs: number | undefined,
+	durationBucket: DurationBucketAnswer,
+): boolean {
+	return durationBucketMatches(filterDurationMs, durationBucket);
+}
+
+/** @deprecated Legacy tier matching for stored recommendations. */
 export function durationTierMatches(
 	filterDurationMs: number | undefined,
 	durationTier: DurationTierAnswer,
@@ -199,6 +217,12 @@ export function durationTierMatches(
 	}
 }
 
+export function buildDurationBucketRecommendationOptions(
+	items: readonly { filterDurationMs?: number }[],
+): RecommendationTagOption[] {
+	return buildDurationBucketCounts(items);
+}
+
 export function candidateMatchesRecommendationAnswers(
 	candidate: ForLaterRecommendationCandidate,
 	answers: ForLaterRecommendationAnswers,
@@ -216,7 +240,20 @@ export function candidateMatchesRecommendationAnswers(
 		return false;
 	}
 
-	if (!durationTierMatches(candidate.filterDurationMs, answers.durationTier)) {
+	if (answers.durationBucket !== "any") {
+		if (
+			!durationBucketMatchesAnswer(
+				candidate.filterDurationMs,
+				answers.durationBucket,
+			)
+		) {
+			return false;
+		}
+	} else if (
+		answers.durationTier !== undefined &&
+		answers.durationTier !== "any" &&
+		!durationTierMatches(candidate.filterDurationMs, answers.durationTier)
+	) {
 		return false;
 	}
 

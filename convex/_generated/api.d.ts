@@ -18,6 +18,7 @@ import type * as _utils_albumMatchingCore from "../_utils/albumMatchingCore.js";
 import type * as _utils_concertEventDedupe from "../_utils/concertEventDedupe.js";
 import type * as _utils_forLaterAlbums from "../_utils/forLaterAlbums.js";
 import type * as _utils_forLaterAlbumsUi from "../_utils/forLaterAlbumsUi.js";
+import type * as _utils_forLaterDurationBuckets from "../_utils/forLaterDurationBuckets.js";
 import type * as _utils_forLaterFilterProjection from "../_utils/forLaterFilterProjection.js";
 import type * as _utils_forLaterIndexedList from "../_utils/forLaterIndexedList.js";
 import type * as _utils_forLaterProjectionPredicate from "../_utils/forLaterProjectionPredicate.js";
@@ -69,6 +70,7 @@ declare const fullApi: ApiFromModules<{
   "_utils/concertEventDedupe": typeof _utils_concertEventDedupe;
   "_utils/forLaterAlbums": typeof _utils_forLaterAlbums;
   "_utils/forLaterAlbumsUi": typeof _utils_forLaterAlbumsUi;
+  "_utils/forLaterDurationBuckets": typeof _utils_forLaterDurationBuckets;
   "_utils/forLaterFilterProjection": typeof _utils_forLaterFilterProjection;
   "_utils/forLaterIndexedList": typeof _utils_forLaterIndexedList;
   "_utils/forLaterProjectionPredicate": typeof _utils_forLaterProjectionPredicate;
