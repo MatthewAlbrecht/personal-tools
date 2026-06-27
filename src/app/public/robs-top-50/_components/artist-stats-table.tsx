@@ -22,6 +22,19 @@ export type ArtistStatTier =
 	| "top25"
 	| "top50";
 
+export const ARTIST_STAT_TIER_CONFIG: Record<
+	ArtistStatTier,
+	{ limit: number; minCount: number }
+> = {
+	wins: { limit: 15, minCount: 1 },
+	top3: { limit: 15, minCount: 1 },
+	top5: { limit: 15, minCount: 1 },
+	top10: { limit: 25, minCount: 2 },
+	top25: { limit: 35, minCount: 2 },
+	top50: { limit: 50, minCount: 2 },
+};
+
+/** @deprecated Use ARTIST_STAT_TIER_CONFIG[tier].limit instead. */
 export const ARTIST_STAT_LIST_LIMIT = 15;
 
 export const ARTIST_STAT_TIER_OPTIONS: Array<{
@@ -57,14 +70,23 @@ function getTierCount(row: ArtistStatsRow, tier: ArtistStatTier): number {
 export function sortArtistStatsByTier(
 	rows: ArtistStatsRow[],
 	tier: ArtistStatTier,
+	minCount = 1,
 ): ArtistStatsRow[] {
 	return [...rows]
-		.filter((row) => getTierCount(row, tier) > 0)
+		.filter((row) => getTierCount(row, tier) >= minCount)
 		.sort((a, b) => {
 			const countDiff = getTierCount(b, tier) - getTierCount(a, tier);
 			if (countDiff !== 0) return countDiff;
 			return a.displayName.localeCompare(b.displayName);
 		});
+}
+
+export function getArtistStatsListForTier(
+	rows: ArtistStatsRow[],
+	tier: ArtistStatTier,
+): ArtistStatsRow[] {
+	const { limit, minCount } = ARTIST_STAT_TIER_CONFIG[tier];
+	return sortArtistStatsByTier(rows, tier, minCount).slice(0, limit);
 }
 
 /** 1224-style placement: tied artists share a rank; the next rank skips occupied places. */
@@ -90,10 +112,7 @@ export function ArtistStatsTable({
 	tier: ArtistStatTier;
 }) {
 	const tierOption = ARTIST_STAT_TIER_OPTIONS.find((option) => option.id === tier);
-	const sortedRows = sortArtistStatsByTier(rows, tier).slice(
-		0,
-		ARTIST_STAT_LIST_LIMIT,
-	);
+	const sortedRows = getArtistStatsListForTier(rows, tier);
 
 	if (sortedRows.length === 0) {
 		return (
