@@ -4,6 +4,7 @@ import { useMutation } from "convex/react";
 import { Copy, Disc3, Download, MoreHorizontal } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { AlbumRatingBadge } from "~/components/album-rating-badge";
 import { Button } from "~/components/ui/button";
 import {
 	DropdownMenu,
@@ -29,12 +30,14 @@ type AllAlbumsViewProps = {
 	albums: AlbumLibraryRowData[];
 	isLoading: boolean;
 	onAddListen: (album: AlbumLibraryRowData) => void;
+	onRateAlbum: (album: AlbumLibraryRowData) => void;
 };
 
 export function AllAlbumsView({
 	albums,
 	isLoading,
 	onAddListen,
+	onRateAlbum,
 }: AllAlbumsViewProps) {
 	const [searchQuery, setSearchQuery] = useState("");
 	const [rymFilter, setRymFilter] = useState<AlbumLibraryRymStatus>("all");
@@ -279,6 +282,7 @@ export function AllAlbumsView({
 							key={album._id}
 							album={album}
 							onAddListen={() => onAddListen(album)}
+							onRate={() => onRateAlbum(album)}
 							onLinkRym={() => setRymAssociateAlbum(album)}
 							onSetRymNotOnSite={(notOnSite) =>
 								handleSetRymNotOnSite(album, notOnSite)
@@ -302,18 +306,20 @@ export function AllAlbumsView({
 function AlbumCardRow({
 	album,
 	onAddListen,
+	onRate,
 	onLinkRym,
 	onSetRymNotOnSite,
 }: {
 	album: AlbumLibraryRowData;
 	onAddListen: () => void;
+	onRate: () => void;
 	onLinkRym: () => void;
 	onSetRymNotOnSite: (notOnSite: boolean) => Promise<void>;
 }) {
 	const artworkUrl = album.imageUrl;
 
 	return (
-		<div className="group flex items-center gap-3 rounded-lg p-2 transition-colors hover:bg-muted/50">
+		<div className="group flex items-start gap-3 rounded-lg p-2 transition-colors hover:bg-muted/50">
 			{/* Album Cover */}
 			<div className="relative h-10 w-10 flex-shrink-0 overflow-hidden rounded bg-muted">
 				{artworkUrl ? (
@@ -357,9 +363,13 @@ function AlbumCardRow({
 				)}
 
 				{album.rating !== undefined && (
-					<span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 font-medium text-muted-foreground text-xs">
-						★ {album.rating}
-					</span>
+					<AlbumRatingBadge
+						rating={album.rating}
+						onClick={(event) => {
+							event.stopPropagation();
+							onRate();
+						}}
+					/>
 				)}
 
 				{album.listenCount > 0 && (
