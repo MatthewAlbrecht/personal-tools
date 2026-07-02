@@ -446,6 +446,7 @@ export function RankingsView({
 												artistName={ua.album?.artistName ?? "Unknown Artist"}
 												imageUrl={ua.album?.imageUrl}
 												releaseDate={ua.album?.releaseDate}
+												listenCount={ua.listenCount}
 												showReleaseYear
 												isSelected={isSelected}
 												showSaved={ua._id === savedAlbumId}
@@ -485,6 +486,7 @@ export function RankingsView({
 												artistName={ua.album?.artistName ?? "Unknown Artist"}
 												imageUrl={ua.album?.imageUrl}
 												releaseDate={ua.album?.releaseDate}
+												listenCount={ua.listenCount}
 												showReleaseYear
 												isSelected={isSelected}
 												showSaved={ua._id === savedAlbumId}
@@ -524,6 +526,7 @@ export function RankingsView({
 												artistName={ua.album?.artistName ?? "Unknown Artist"}
 												imageUrl={ua.album?.imageUrl}
 												releaseDate={ua.album?.releaseDate}
+												listenCount={ua.listenCount}
 												showReleaseYear
 												isSelected={isSelected}
 												showSaved={ua._id === savedAlbumId}

@@ -17,10 +17,7 @@ type RankingBoardProps = {
 	onBatchUpdatePositions: (positions: PositionUpdate[]) => void;
 	onRemoveAlbum: (rankingAlbumId: string) => void;
 	onEditAlbum: (album: RankingAlbum) => void;
-	onSingleArtistChange: (
-		rankingAlbumId: string,
-		singleArtist: boolean,
-	) => void;
+	onSingleArtistChange: (rankingAlbumId: string, singleArtist: boolean) => void;
 };
 
 export function RankingBoard({

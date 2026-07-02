@@ -371,6 +371,7 @@ export default defineSchema({
 		totalTracks: v.number(),
 		genres: v.optional(v.array(v.string())),
 		rawData: v.optional(v.string()), // JSON stringified full Spotify response
+		rymNotOnSite: v.optional(v.boolean()),
 		/** Sum of playlist track durations seen for this album (ms). */
 		totalDurationMs: v.optional(v.number()),
 		createdAt: v.number(),

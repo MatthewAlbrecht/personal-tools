@@ -43,7 +43,6 @@ function AlbumCover({
 
 	if (isManual) {
 		return (
-			// biome-ignore lint/performance/noImgElement: arbitrary user-provided URLs
 			<img src={imageUrl} alt={name} className="h-full w-full object-cover" />
 		);
 	}

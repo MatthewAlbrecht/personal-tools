@@ -7,21 +7,15 @@ import { useAlbums } from "../_context/albums-context";
 
 export default function AllAlbumsPage() {
 	const { userId, openAddListenDrawer } = useAlbums();
-
-	// Fetch all albums
-	const allAlbums = useQuery(api.spotify.getAllAlbums, {});
-
-	// Fetch user albums for listen data
-	const userAlbums = useQuery(
-		api.spotify.getUserAlbums,
+	const albums = useQuery(
+		api.spotify.listAlbumLibraryRows,
 		userId ? { userId } : "skip",
 	);
 
 	return (
 		<AllAlbumsView
-			albums={allAlbums ?? []}
-			userAlbums={userAlbums ?? []}
-			isLoading={allAlbums === undefined}
+			albums={albums ?? []}
+			isLoading={albums === undefined}
 			onAddListen={(album) => openAddListenDrawer(album, "album")}
 		/>
 	);

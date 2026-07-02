@@ -15,6 +15,7 @@ type AlbumCardProps = {
 	releaseDate?: string;
 	listenedAt?: number;
 	listenOrdinal?: number; // Which listen this was (1 = first, 2 = second, etc.)
+	listenCount?: number; // Total listens for aggregate album rows.
 	rating?: number; // 1-15 rating if rated
 	showListenDate?: boolean;
 	showReleaseYear?: boolean;
@@ -34,6 +35,7 @@ export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
 			releaseDate,
 			listenedAt,
 			listenOrdinal,
+			listenCount,
 			rating,
 			showListenDate = false,
 			showReleaseYear = false,
@@ -139,6 +141,12 @@ export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
 					{/* Listen ordinal */}
 					{listenOrdinal !== undefined ? (
 						<AlbumListenCountBadge listenCount={listenOrdinal} />
+					) : null}
+
+					{listenCount !== undefined && listenCount > 0 ? (
+						<span className="inline-flex items-center rounded-full bg-muted px-1.5 py-0.5 font-medium text-[10px] text-muted-foreground">
+							{listenCount}×
+						</span>
 					) : null}
 
 					{/* Date/Year */}

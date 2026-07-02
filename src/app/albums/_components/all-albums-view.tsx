@@ -1,119 +1,87 @@
 "use client";
 
-import { Copy, Disc3, Download } from "lucide-react";
+import { useMutation } from "convex/react";
+import { Copy, Disc3, Download, MoreHorizontal } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { extractReleaseYear } from "~/lib/album-tiers";
+import { Button } from "~/components/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuLabel,
+	DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
+import { api } from "../../../../convex/_generated/api";
+import type { Id } from "../../../../convex/_generated/dataModel";
+import {
+	type AlbumLibraryAlbumType,
+	type AlbumLibraryListenStatus,
+	type AlbumLibraryRobRankingStatus,
+	type AlbumLibraryRymStatus,
+	rowMatchesAlbumLibraryFilters,
+} from "../../../../convex/_utils/albumLibraryRows";
 import { formatRelativeTime } from "../_utils/formatters";
-import type { AlbumItem, UserAlbumData } from "../_utils/types";
-
-type UserAlbumRecord = {
-	album: { spotifyAlbumId: string } | null;
-	listenCount: number;
-	lastListenedAt?: number;
-	firstListenedAt?: number;
-	rating?: number;
-};
+import type { AlbumLibraryRowData } from "../_utils/types";
+import { AlbumRymAssociateDrawer } from "./album-rym-associate-drawer";
 
 type AllAlbumsViewProps = {
-	albums: AlbumItem[];
-	userAlbums: UserAlbumRecord[];
+	albums: AlbumLibraryRowData[];
 	isLoading: boolean;
-	onAddListen: (album: AlbumItem) => void;
+	onAddListen: (album: AlbumLibraryRowData) => void;
 };
 
 export function AllAlbumsView({
 	albums,
-	userAlbums,
 	isLoading,
 	onAddListen,
 }: AllAlbumsViewProps) {
 	const [searchQuery, setSearchQuery] = useState("");
-	const [hideSingles, setHideSingles] = useState(true);
-	const [listenFilter, setListenFilter] = useState<
-		"all" | "listened" | "unlistened"
-	>("all");
+	const [rymFilter, setRymFilter] = useState<AlbumLibraryRymStatus>("all");
+	const [robRankingFilter, setRobRankingFilter] =
+		useState<AlbumLibraryRobRankingStatus>("all");
+	const [listenFilter, setListenFilter] =
+		useState<AlbumLibraryListenStatus>("all");
+	const [albumTypeFilter, setAlbumTypeFilter] =
+		useState<AlbumLibraryAlbumType>("album");
 	const [yearFilter, setYearFilter] = useState<string>("all");
-
-	// Create a map for user album data lookup (keyed by spotifyAlbumId)
-	const userAlbumsMap = useMemo(() => {
-		const map = new Map<string, UserAlbumData>();
-		for (const ua of userAlbums) {
-			if (ua.album?.spotifyAlbumId) {
-				map.set(ua.album.spotifyAlbumId, {
-					listenCount: ua.listenCount,
-					lastListenedAt: ua.lastListenedAt,
-					firstListenedAt: ua.firstListenedAt,
-					rating: ua.rating,
-				});
-			}
-		}
-		return map;
-	}, [userAlbums]);
+	const [rymAssociateAlbum, setRymAssociateAlbum] =
+		useState<AlbumLibraryRowData | null>(null);
+	const setRymNotOnSite = useMutation(api.spotify.setSpotifyAlbumRymNotOnSite);
+	const associateRymScrape = useMutation(
+		api.spotify.associateSpotifyAlbumWithRymScrape,
+	);
 
 	// Extract available years from albums
 	const availableYears = useMemo(() => {
 		const years = new Set<number>();
 		for (const album of albums) {
-			const year = extractReleaseYear(album.releaseDate);
-			if (year) years.add(year);
+			if (album.releaseYear) years.add(album.releaseYear);
 		}
 		return Array.from(years).sort((a, b) => b - a);
 	}, [albums]);
 
 	const filteredAlbums = useMemo(() => {
-		let result = albums;
+		const selectedYear =
+			yearFilter === "all" ? undefined : Number.parseInt(yearFilter, 10);
 
-		// Filter by release year
-		if (yearFilter !== "all") {
-			const filterYear = Number.parseInt(yearFilter, 10);
-			result = result.filter((album) => {
-				const year = extractReleaseYear(album.releaseDate);
-				return year === filterYear;
-			});
-		}
-
-		// Filter by listen status
-		if (listenFilter === "listened") {
-			result = result.filter((album) => {
-				const userAlbumData = userAlbumsMap.get(album.spotifyAlbumId);
-				return userAlbumData?.listenCount && userAlbumData.listenCount > 0;
-			});
-		} else if (listenFilter === "unlistened") {
-			result = result.filter((album) => {
-				const userAlbumData = userAlbumsMap.get(album.spotifyAlbumId);
-				return (
-					!userAlbumData ||
-					!userAlbumData?.listenCount ||
-					userAlbumData.listenCount === 0
-				);
-			});
-		}
-
-		// Filter out singles if enabled
-		if (hideSingles) {
-			result = result.filter(
-				(album) => !album.totalTracks || album.totalTracks >= 3,
-			);
-		}
-
-		// Apply search filter
-		if (searchQuery.trim()) {
-			const query = searchQuery.toLowerCase();
-			result = result.filter(
-				(album) =>
-					album.name.toLowerCase().includes(query) ||
-					album.artistName.toLowerCase().includes(query),
-			);
-		}
-
-		return result;
+		return albums.filter((album) =>
+			rowMatchesAlbumLibraryFilters(album, {
+				search: searchQuery,
+				rymStatus: rymFilter,
+				robRankingStatus: robRankingFilter,
+				listenStatus: listenFilter,
+				albumType: albumTypeFilter,
+				releaseYear: selectedYear,
+			}),
+		);
 	}, [
 		albums,
-		userAlbumsMap,
 		yearFilter,
+		rymFilter,
+		robRankingFilter,
 		listenFilter,
-		hideSingles,
+		albumTypeFilter,
 		searchQuery,
 	]);
 
@@ -137,6 +105,43 @@ export function AllAlbumsView({
 				</div>
 			</div>
 		);
+	}
+
+	async function handleSetRymNotOnSite(
+		album: AlbumLibraryRowData,
+		notOnSite: boolean,
+	): Promise<void> {
+		try {
+			await setRymNotOnSite({
+				albumId: album._id as Id<"spotifyAlbums">,
+				notOnSite,
+			});
+			toast.success(
+				notOnSite ? "Marked as not on RYM" : "Cleared not-on-RYM mark",
+			);
+		} catch (error) {
+			console.error("Failed to update RYM availability:", error);
+			toast.error("Could not update RYM availability");
+		}
+	}
+
+	async function handleAssociateRymScrape(
+		scrapeId: Id<"rateYourMusicScrapes">,
+	): Promise<void> {
+		if (!rymAssociateAlbum) return;
+
+		const albumName = rymAssociateAlbum.name;
+		try {
+			await associateRymScrape({
+				albumId: rymAssociateAlbum._id as Id<"spotifyAlbums">,
+				scrapeId,
+			});
+			setRymAssociateAlbum(null);
+			toast.success(`Linked RYM page for "${albumName}"`);
+		} catch (error) {
+			console.error("Failed to associate RYM scrape:", error);
+			toast.error("Could not link RYM scrape");
+		}
 	}
 
 	return (
@@ -176,18 +181,35 @@ export function AllAlbumsView({
 						</select>
 					</div>
 
+					{/* Album Type Filter */}
+					<div className="flex items-center gap-2">
+						<label htmlFor="album-type-filter" className="font-medium text-sm">
+							Type:
+						</label>
+						<select
+							id="album-type-filter"
+							value={albumTypeFilter}
+							onChange={(e) =>
+								setAlbumTypeFilter(e.target.value as AlbumLibraryAlbumType)
+							}
+							className="rounded-md border bg-background px-2 py-1 text-sm"
+						>
+							<option value="all">All Types</option>
+							<option value="album">Albums</option>
+							<option value="single">Singles</option>
+						</select>
+					</div>
+
 					{/* Listen Status Filter */}
 					<div className="flex items-center gap-2">
 						<label htmlFor="listen-filter" className="font-medium text-sm">
-							Show:
+							Listens:
 						</label>
 						<select
 							id="listen-filter"
 							value={listenFilter}
 							onChange={(e) =>
-								setListenFilter(
-									e.target.value as "all" | "listened" | "unlistened",
-								)
+								setListenFilter(e.target.value as AlbumLibraryListenStatus)
 							}
 							className="rounded-md border bg-background px-2 py-1 text-sm"
 						>
@@ -197,19 +219,49 @@ export function AllAlbumsView({
 						</select>
 					</div>
 
-					{/* Hide Singles Checkbox */}
+					{/* RYM Status Filter */}
 					<div className="flex items-center gap-2">
-						<input
-							type="checkbox"
-							id="hide-singles"
-							checked={hideSingles}
-							onChange={(e) => setHideSingles(e.target.checked)}
-							className="rounded border bg-background"
-						/>
-						<label htmlFor="hide-singles" className="font-medium text-sm">
-							Hide singles
+						<label htmlFor="rym-filter" className="font-medium text-sm">
+							RYM:
 						</label>
+						<select
+							id="rym-filter"
+							value={rymFilter}
+							onChange={(e) =>
+								setRymFilter(e.target.value as AlbumLibraryRymStatus)
+							}
+							className="rounded-md border bg-background px-2 py-1 text-sm"
+						>
+							<option value="all">All</option>
+							<option value="linked">Linked</option>
+							<option value="unlinked">Unlinked</option>
+						</select>
 					</div>
+
+					{/* Rob Ranking Filter */}
+					<div className="flex items-center gap-2">
+						<label htmlFor="rob-ranking-filter" className="font-medium text-sm">
+							Rob:
+						</label>
+						<select
+							id="rob-ranking-filter"
+							value={robRankingFilter}
+							onChange={(e) =>
+								setRobRankingFilter(
+									e.target.value as AlbumLibraryRobRankingStatus,
+								)
+							}
+							className="rounded-md border bg-background px-2 py-1 text-sm"
+						>
+							<option value="all">All</option>
+							<option value="appears">Appears</option>
+							<option value="not_appears">Does not appear</option>
+						</select>
+					</div>
+
+					<p className="text-muted-foreground text-sm">
+						Showing {filteredAlbums.length} of {albums.length}
+					</p>
 				</div>
 			</div>
 
@@ -218,7 +270,7 @@ export function AllAlbumsView({
 				{filteredAlbums.length === 0 ? (
 					<div className="flex h-32 items-center justify-center rounded-lg border border-dashed">
 						<p className="text-muted-foreground text-sm">
-							No albums match your search
+							No albums match the selected filters
 						</p>
 					</div>
 				) : (
@@ -226,24 +278,37 @@ export function AllAlbumsView({
 						<AlbumCardRow
 							key={album._id}
 							album={album}
-							userAlbum={userAlbumsMap.get(album.spotifyAlbumId)}
 							onAddListen={() => onAddListen(album)}
+							onLinkRym={() => setRymAssociateAlbum(album)}
+							onSetRymNotOnSite={(notOnSite) =>
+								handleSetRymNotOnSite(album, notOnSite)
+							}
 						/>
 					))
 				)}
 			</div>
+			<AlbumRymAssociateDrawer
+				album={rymAssociateAlbum}
+				open={rymAssociateAlbum !== null}
+				onOpenChange={(open) => {
+					if (!open) setRymAssociateAlbum(null);
+				}}
+				onAssociate={handleAssociateRymScrape}
+			/>
 		</div>
 	);
 }
 
 function AlbumCardRow({
 	album,
-	userAlbum,
 	onAddListen,
+	onLinkRym,
+	onSetRymNotOnSite,
 }: {
-	album: AlbumItem;
-	userAlbum?: UserAlbumData;
+	album: AlbumLibraryRowData;
 	onAddListen: () => void;
+	onLinkRym: () => void;
+	onSetRymNotOnSite: (notOnSite: boolean) => Promise<void>;
 }) {
 	const artworkUrl = album.imageUrl;
 
@@ -269,26 +334,37 @@ function AlbumCardRow({
 				<p className="truncate font-medium text-sm">{album.name}</p>
 				<p className="truncate text-muted-foreground text-xs">
 					{album.artistName}
-					{album.releaseDate && (
+					{album.releaseYear && (
 						<span className="text-muted-foreground/60">
 							{" · "}
-							{extractReleaseYear(album.releaseDate)}
+							{album.releaseYear}
 						</span>
 					)}
 				</p>
+				<div className="mt-1 flex flex-wrap gap-1">
+					<RymStatusBadge album={album} />
+					<RobRankingBadge years={album.robRankingYears} />
+				</div>
+				<TaxonomyLines album={album} />
 			</div>
 
 			{/* Listen Info */}
 			<div className="flex flex-shrink-0 items-center gap-2">
-				{userAlbum?.lastListenedAt && (
+				{album.lastListenedAt && (
 					<span className="flex-shrink-0 text-muted-foreground text-xs">
-						{formatRelativeTime(userAlbum.lastListenedAt)}
+						{formatRelativeTime(album.lastListenedAt)}
 					</span>
 				)}
 
-				{userAlbum?.listenCount && userAlbum.listenCount > 0 && (
+				{album.rating !== undefined && (
+					<span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 font-medium text-muted-foreground text-xs">
+						★ {album.rating}
+					</span>
+				)}
+
+				{album.listenCount > 0 && (
 					<span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 font-medium text-primary text-xs">
-						{userAlbum.listenCount}×
+						{album.listenCount}×
 					</span>
 				)}
 
@@ -335,9 +411,131 @@ function AlbumCardRow({
 				>
 					+ Listen
 				</button>
+				<AlbumRymActionsMenu
+					album={album}
+					onLinkRym={onLinkRym}
+					onSetRymNotOnSite={onSetRymNotOnSite}
+				/>
 			</div>
 		</div>
 	);
+}
+
+function RymStatusBadge({ album }: { album: AlbumLibraryRowData }) {
+	if (album.rymNotOnSite) {
+		return (
+			<span className="rounded-full border px-2 py-0.5 text-muted-foreground text-xs">
+				Not on RYM
+			</span>
+		);
+	}
+
+	if (album.rymStatus === "linked") {
+		return (
+			<span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-emerald-700 text-xs dark:text-emerald-300">
+				RYM linked
+			</span>
+		);
+	}
+
+	return (
+		<span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-amber-700 text-xs dark:text-amber-300">
+			Needs RYM
+		</span>
+	);
+}
+
+function AlbumRymActionsMenu({
+	album,
+	onLinkRym,
+	onSetRymNotOnSite,
+}: {
+	album: AlbumLibraryRowData;
+	onLinkRym: () => void;
+	onSetRymNotOnSite: (notOnSite: boolean) => Promise<void>;
+}) {
+	const isLinked = album.rymStatus === "linked";
+
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<Button
+					type="button"
+					variant="ghost"
+					size="icon"
+					className="size-7 shrink-0 p-0"
+					aria-label="Open album actions"
+				>
+					<MoreHorizontal className="size-4" />
+				</Button>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="end" className="w-52">
+				<DropdownMenuLabel>RYM Actions</DropdownMenuLabel>
+				{!isLinked && !album.rymNotOnSite ? (
+					<DropdownMenuItem onSelect={onLinkRym}>
+						Link RYM scrape
+					</DropdownMenuItem>
+				) : null}
+				{album.rymNotOnSite ? (
+					<DropdownMenuItem onSelect={() => void onSetRymNotOnSite(false)}>
+						Clear not-on-RYM mark
+					</DropdownMenuItem>
+				) : !isLinked ? (
+					<DropdownMenuItem onSelect={() => void onSetRymNotOnSite(true)}>
+						Mark as Not on RYM
+					</DropdownMenuItem>
+				) : (
+					<DropdownMenuItem disabled>RYM already linked</DropdownMenuItem>
+				)}
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+
+function RobRankingBadge({ years }: { years: number[] }) {
+	if (years.length === 0) return null;
+	return (
+		<span className="rounded-full border px-2 py-0.5 text-muted-foreground text-xs">
+			Rob&apos;s Top 50 {years.slice(0, 3).join(", ")}
+			{years.length > 3 ? ` +${years.length - 3}` : ""}
+		</span>
+	);
+}
+
+function TaxonomyLines({ album }: { album: AlbumLibraryRowData }) {
+	if (
+		album.primaryGenres.length === 0 &&
+		album.secondaryGenres.length === 0 &&
+		album.descriptors.length === 0
+	) {
+		return null;
+	}
+
+	return (
+		<div className="mt-1 space-y-0.5">
+			<TaxonomyLine tags={album.primaryGenres} className="text-sm" />
+			<TaxonomyLine
+				tags={album.secondaryGenres}
+				className="text-muted-foreground text-xs"
+			/>
+			<TaxonomyLine
+				tags={album.descriptors}
+				className="text-muted-foreground text-xs"
+			/>
+		</div>
+	);
+}
+
+function TaxonomyLine({
+	tags,
+	className,
+}: {
+	tags: Array<{ key: string; label: string }>;
+	className: string;
+}) {
+	if (tags.length === 0) return null;
+
+	return <p className={className}>{tags.map((tag) => tag.label).join(", ")}</p>;
 }
 
 async function copyArtworkUrl(url: string): Promise<void> {
@@ -349,7 +547,10 @@ async function copyArtworkUrl(url: string): Promise<void> {
 	}
 }
 
-async function downloadArtwork(url: string, album: AlbumItem): Promise<void> {
+async function downloadArtwork(
+	url: string,
+	album: AlbumLibraryRowData,
+): Promise<void> {
 	try {
 		const response = await fetch(url);
 		if (!response.ok) {
@@ -371,7 +572,10 @@ async function downloadArtwork(url: string, album: AlbumItem): Promise<void> {
 	}
 }
 
-function getArtworkFilename(album: AlbumItem, contentType: string): string {
+function getArtworkFilename(
+	album: AlbumLibraryRowData,
+	contentType: string,
+): string {
 	const extension = getImageExtension(contentType);
 	const name = `${album.artistName}-${album.name}`
 		.toLowerCase()

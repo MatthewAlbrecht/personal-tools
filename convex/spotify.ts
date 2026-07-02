@@ -1,10 +1,15 @@
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import type { MutationCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { action, mutation, query } from "./_generated/server";
 import {
+	getAlbumLibraryAlbumType,
+	getAlbumLibraryRymStatus,
+} from "./_utils/albumLibraryRows";
+import {
 	buildSpotifyAlbumRymMatchArgs,
+	linkRymScrapeToSpotifyAlbum,
 	matchRymForSpotifyAlbum,
 } from "./_utils/albumMatching";
 import { buildSpotifyAlbumListItems } from "./_utils/spotify_album_list";
@@ -1488,6 +1493,79 @@ export const attemptRymMatchForAlbum = mutation({
 	},
 });
 
+export const setSpotifyAlbumRymNotOnSite = mutation({
+	args: {
+		albumId: v.id("spotifyAlbums"),
+		notOnSite: v.boolean(),
+	},
+	returns: v.null(),
+	handler: async (ctx, args): Promise<null> => {
+		const album = await ctx.db.get(args.albumId);
+		if (!album) {
+			throw new Error("Album not found");
+		}
+
+		await ctx.db.patch(args.albumId, {
+			rymNotOnSite: args.notOnSite ? true : undefined,
+			updatedAt: Date.now(),
+		});
+
+		return null;
+	},
+});
+
+export const associateSpotifyAlbumWithRymScrape = mutation({
+	args: {
+		albumId: v.id("spotifyAlbums"),
+		scrapeId: v.id("rateYourMusicScrapes"),
+	},
+	returns: v.null(),
+	handler: async (ctx, args): Promise<null> => {
+		const [album, scrape] = await Promise.all([
+			ctx.db.get(args.albumId),
+			ctx.db.get(args.scrapeId),
+		]);
+
+		if (!album) {
+			throw new Error("Album not found");
+		}
+		if (!scrape) {
+			throw new Error("RYM scrape not found");
+		}
+
+		const existingForLaterItems = await ctx.db
+			.query("forLaterAlbumItems")
+			.withIndex("by_rymScrapeId", (q) => q.eq("rymScrapeId", args.scrapeId))
+			.collect();
+		if (existingForLaterItems.some((item) => item.albumId !== args.albumId)) {
+			throw new Error("This RYM scrape is already linked to another album");
+		}
+
+		const existingAlbumLinks = await ctx.db
+			.query("rateYourMusicSpotifyAlbumLinks")
+			.withIndex("by_scrapeId", (q) => q.eq("scrapeId", args.scrapeId))
+			.collect();
+		if (existingAlbumLinks.some((link) => link.albumId !== args.albumId)) {
+			throw new Error("This RYM scrape is already linked to another album");
+		}
+
+		const now = Date.now();
+		await linkRymScrapeToSpotifyAlbum(ctx, {
+			scrapeId: args.scrapeId,
+			albumId: args.albumId,
+			spotifyAlbumId: album.spotifyAlbumId,
+			method: "manual",
+			now,
+		});
+		await ctx.db.patch(args.albumId, {
+			rymNotOnSite: undefined,
+			updatedAt: now,
+		});
+
+		return null;
+	},
+});
+
 // Upsert canonical track data (global, shared across users)
 export const upsertCanonicalTrack = mutation({
 	args: {
@@ -1959,6 +2037,279 @@ export const getSpotifyAlbumsBySpotifyIds = query({
 		}
 
 		return albums;
+	},
+});
+
+type AlbumLibraryTaxonomyTag = {
+	key: string;
+	label: string;
+};
+
+type AlbumLibraryTaxonomy = {
+	primaryGenres: AlbumLibraryTaxonomyTag[];
+	secondaryGenres: AlbumLibraryTaxonomyTag[];
+	descriptors: AlbumLibraryTaxonomyTag[];
+};
+
+async function loadRymTaxonomyForScrape(
+	ctx: QueryCtx,
+	scrapeId: Id<"rateYourMusicScrapes">,
+): Promise<AlbumLibraryTaxonomy> {
+	const releaseGenres = await ctx.db
+		.query("rateYourMusicReleaseGenres")
+		.withIndex("by_scrapeId", (q) => q.eq("scrapeId", scrapeId))
+		.collect();
+
+	const primaryGenres: AlbumLibraryTaxonomyTag[] = [];
+	const secondaryGenres: AlbumLibraryTaxonomyTag[] = [];
+
+	for (const releaseGenre of releaseGenres) {
+		const genre = await ctx.db.get(releaseGenre.genreId);
+		if (!genre) continue;
+
+		const tag = {
+			key: genre.key,
+			label: genre.label,
+		};
+
+		if (releaseGenre.role === "primary") {
+			primaryGenres.push(tag);
+		} else {
+			secondaryGenres.push(tag);
+		}
+	}
+
+	const releaseDescriptors = await ctx.db
+		.query("rateYourMusicReleaseDescriptors")
+		.withIndex("by_scrapeId", (q) => q.eq("scrapeId", scrapeId))
+		.collect();
+	const descriptors: AlbumLibraryTaxonomyTag[] = [];
+
+	for (const releaseDescriptor of releaseDescriptors) {
+		const descriptor = await ctx.db.get(releaseDescriptor.descriptorId);
+		if (!descriptor) continue;
+
+		descriptors.push({
+			key: descriptor.key,
+			label: descriptor.label,
+		});
+	}
+
+	return { primaryGenres, secondaryGenres, descriptors };
+}
+
+function parseAlbumReleaseYear(
+	releaseDate: string | undefined,
+): number | undefined {
+	if (!releaseDate) return undefined;
+
+	const year = Number.parseInt(releaseDate.slice(0, 4), 10);
+	return Number.isFinite(year) ? year : undefined;
+}
+
+function getEmptyAlbumLibraryTaxonomy(): AlbumLibraryTaxonomy {
+	return {
+		primaryGenres: [],
+		secondaryGenres: [],
+		descriptors: [],
+	};
+}
+
+const albumLibraryTaxonomyTagValidator = v.object({
+	key: v.string(),
+	label: v.string(),
+});
+
+export const listAlbumLibraryRows = query({
+	args: { userId: v.string() },
+	returns: v.array(
+		v.object({
+			_id: v.id("spotifyAlbums"),
+			spotifyAlbumId: v.string(),
+			name: v.string(),
+			artistName: v.string(),
+			imageUrl: v.optional(v.string()),
+			releaseDate: v.optional(v.string()),
+			releaseYear: v.optional(v.number()),
+			totalTracks: v.number(),
+			albumType: v.union(v.literal("album"), v.literal("single")),
+			createdAt: v.number(),
+			listenCount: v.number(),
+			firstListenedAt: v.optional(v.number()),
+			lastListenedAt: v.optional(v.number()),
+			rating: v.optional(v.number()),
+			rymStatus: v.union(v.literal("linked"), v.literal("unlinked")),
+			rymNotOnSite: v.optional(v.boolean()),
+			rymLink: v.optional(
+				v.object({
+					scrapeId: v.id("rateYourMusicScrapes"),
+					method: v.union(
+						v.literal("spotify_id"),
+						v.literal("title_artist"),
+						v.literal("manual"),
+					),
+					rymUrl: v.optional(v.string()),
+					updatedAt: v.number(),
+				}),
+			),
+			appearsInRobRankings: v.boolean(),
+			robRankingYears: v.array(v.number()),
+			primaryGenres: v.array(albumLibraryTaxonomyTagValidator),
+			secondaryGenres: v.array(albumLibraryTaxonomyTagValidator),
+			descriptors: v.array(albumLibraryTaxonomyTagValidator),
+		}),
+	),
+	handler: async (ctx, args) => {
+		const albums = await ctx.db
+			.query("spotifyAlbums")
+			.withIndex("by_createdAt")
+			.collect();
+
+		const userAlbums = await ctx.db
+			.query("userAlbums")
+			.withIndex("by_userId_lastListenedAt", (q) => q.eq("userId", args.userId))
+			.order("desc")
+			.collect();
+		const userAlbumByAlbumId = new Map(
+			userAlbums.map((userAlbum) => [userAlbum.albumId, userAlbum]),
+		);
+
+		const robRankingYears = await ctx.db
+			.query("robRankingYears")
+			.withIndex("by_userId_year", (q) => q.eq("userId", args.userId))
+			.collect();
+		const robRankingYearsById = new Map(
+			robRankingYears.map((year) => [year._id, year.year]),
+		);
+		const robRankingYearsByAlbumId = new Map<Id<"spotifyAlbums">, number[]>();
+
+		for (const robRankingYear of robRankingYears) {
+			const robRankingAlbums = await ctx.db
+				.query("robRankingAlbums")
+				.withIndex("by_yearId", (q) => q.eq("yearId", robRankingYear._id))
+				.collect();
+
+			for (const robRankingAlbum of robRankingAlbums) {
+				if (!robRankingAlbum.albumId) continue;
+
+				const year = robRankingYearsById.get(robRankingAlbum.yearId);
+				if (year === undefined) continue;
+
+				const yearsForAlbum =
+					robRankingYearsByAlbumId.get(robRankingAlbum.albumId) ?? [];
+				yearsForAlbum.push(year);
+				robRankingYearsByAlbumId.set(robRankingAlbum.albumId, yearsForAlbum);
+			}
+		}
+
+		for (const years of robRankingYearsByAlbumId.values()) {
+			years.sort((a, b) => b - a);
+		}
+
+		const albumIds = new Set(albums.map((album) => album._id));
+		const rymLinks = await ctx.db
+			.query("rateYourMusicSpotifyAlbumLinks")
+			.collect();
+		const latestRymLinkByAlbumId = new Map<
+			Id<"spotifyAlbums">,
+			Doc<"rateYourMusicSpotifyAlbumLinks">
+		>();
+
+		for (const link of rymLinks) {
+			if (!albumIds.has(link.albumId)) continue;
+
+			const existing = latestRymLinkByAlbumId.get(link.albumId);
+			if (!existing || link.updatedAt > existing.updatedAt) {
+				latestRymLinkByAlbumId.set(link.albumId, link);
+			}
+		}
+
+		const scrapeIds = [
+			...new Set(
+				Array.from(latestRymLinkByAlbumId.values()).map(
+					(link) => link.scrapeId,
+				),
+			),
+		];
+		const scrapeEntries = await Promise.all(
+			scrapeIds.map(async (scrapeId) => ({
+				scrapeId,
+				scrape: await ctx.db.get(scrapeId),
+			})),
+		);
+		const scrapeById = new Map<
+			Id<"rateYourMusicScrapes">,
+			Doc<"rateYourMusicScrapes">
+		>();
+
+		for (const entry of scrapeEntries) {
+			if (entry.scrape) {
+				scrapeById.set(entry.scrapeId, entry.scrape);
+			}
+		}
+
+		const taxonomyEntries = await Promise.all(
+			Array.from(scrapeById.keys()).map(async (scrapeId) => ({
+				scrapeId,
+				taxonomy: await loadRymTaxonomyForScrape(ctx, scrapeId),
+			})),
+		);
+		const taxonomyByScrapeId = new Map<
+			Id<"rateYourMusicScrapes">,
+			AlbumLibraryTaxonomy
+		>();
+
+		for (const entry of taxonomyEntries) {
+			taxonomyByScrapeId.set(entry.scrapeId, entry.taxonomy);
+		}
+
+		const rows = albums.map((album) => {
+			const userAlbum = userAlbumByAlbumId.get(album._id);
+			const robRankingYearsForAlbum =
+				robRankingYearsByAlbumId.get(album._id) ?? [];
+			const latestLink = latestRymLinkByAlbumId.get(album._id);
+			const scrape = latestLink
+				? scrapeById.get(latestLink.scrapeId)
+				: undefined;
+			const taxonomy = latestLink
+				? (taxonomyByScrapeId.get(latestLink.scrapeId) ??
+					getEmptyAlbumLibraryTaxonomy())
+				: getEmptyAlbumLibraryTaxonomy();
+
+			return {
+				_id: album._id,
+				spotifyAlbumId: album.spotifyAlbumId,
+				name: album.name,
+				artistName: album.artistName,
+				imageUrl: album.imageUrl,
+				releaseDate: album.releaseDate,
+				releaseYear: parseAlbumReleaseYear(album.releaseDate),
+				totalTracks: album.totalTracks,
+				albumType: getAlbumLibraryAlbumType(album.totalTracks),
+				createdAt: album.createdAt,
+				listenCount: userAlbum?.listenCount ?? 0,
+				firstListenedAt: userAlbum?.firstListenedAt,
+				lastListenedAt: userAlbum?.lastListenedAt,
+				rating: userAlbum?.rating,
+				rymStatus: getAlbumLibraryRymStatus(latestLink !== undefined),
+				rymNotOnSite: album.rymNotOnSite === true ? true : undefined,
+				rymLink: latestLink
+					? {
+							scrapeId: latestLink.scrapeId,
+							method: latestLink.method,
+							rymUrl: scrape?.rymUrl,
+							updatedAt: latestLink.updatedAt,
+						}
+					: undefined,
+				appearsInRobRankings: robRankingYearsForAlbum.length > 0,
+				robRankingYears: robRankingYearsForAlbum,
+				primaryGenres: taxonomy.primaryGenres,
+				secondaryGenres: taxonomy.secondaryGenres,
+				descriptors: taxonomy.descriptors,
+			};
+		});
+
+		return rows.sort((a, b) => b.createdAt - a.createdAt);
 	},
 });
 

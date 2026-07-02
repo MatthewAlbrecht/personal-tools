@@ -24,6 +24,7 @@ export type RankedAlbumItem = {
 	albumId: string;
 	rating?: number;
 	position?: number;
+	listenCount: number;
 	album: AlbumInfo | null;
 };
 
@@ -66,6 +67,36 @@ export type AlbumItem = {
 	releaseDate?: string;
 	totalTracks?: number;
 	createdAt: number;
+};
+
+export type AlbumLibraryRowData = {
+	_id: string;
+	spotifyAlbumId: string;
+	name: string;
+	artistName: string;
+	imageUrl?: string;
+	releaseDate?: string;
+	releaseYear?: number;
+	totalTracks: number;
+	albumType: "album" | "single";
+	createdAt: number;
+	listenCount: number;
+	firstListenedAt?: number;
+	lastListenedAt?: number;
+	rating?: number;
+	rymStatus: "linked" | "unlinked";
+	rymNotOnSite?: boolean;
+	rymLink?: {
+		scrapeId: string;
+		method: "spotify_id" | "title_artist" | "manual";
+		rymUrl?: string;
+		updatedAt: number;
+	};
+	appearsInRobRankings: boolean;
+	robRankingYears: number[];
+	primaryGenres: Array<{ key: string; label: string }>;
+	secondaryGenres: Array<{ key: string; label: string }>;
+	descriptors: Array<{ key: string; label: string }>;
 };
 
 // User album data for listen tracking

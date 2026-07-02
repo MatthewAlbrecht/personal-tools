@@ -13,6 +13,7 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
+import type * as _utils_albumLibraryRows from "../_utils/albumLibraryRows.js";
 import type * as _utils_albumMatching from "../_utils/albumMatching.js";
 import type * as _utils_albumMatchingCore from "../_utils/albumMatchingCore.js";
 import type * as _utils_concertEventDedupe from "../_utils/concertEventDedupe.js";
@@ -65,6 +66,7 @@ import type * as spotify from "../spotify.js";
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  "_utils/albumLibraryRows": typeof _utils_albumLibraryRows;
   "_utils/albumMatching": typeof _utils_albumMatching;
   "_utils/albumMatchingCore": typeof _utils_albumMatchingCore;
   "_utils/concertEventDedupe": typeof _utils_concertEventDedupe;
