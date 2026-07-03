@@ -2,13 +2,14 @@
 
 import { useMutation } from "convex/react";
 import {
+	Check,
 	Copy,
 	DatabaseBackup,
 	Disc3,
 	Download,
 	MoreHorizontal,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AlbumRatingBadge } from "~/components/album-rating-badge";
 import {
@@ -42,6 +43,8 @@ import {
 import { formatRelativeTime } from "../_utils/formatters";
 import type { AlbumLibraryRowData } from "../_utils/types";
 import { AlbumRymAssociateDrawer } from "./album-rym-associate-drawer";
+
+type CopiedField = "album" | "artist";
 
 type AllAlbumsViewProps = {
 	albums: AlbumLibraryRowData[];
@@ -452,6 +455,36 @@ function AlbumCardRow({
 	onSetRymNotOnSite: (notOnSite: boolean) => Promise<void>;
 }) {
 	const artworkUrl = album.imageUrl;
+	const [copiedField, setCopiedField] = useState<CopiedField | null>(null);
+	const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	useEffect(() => {
+		return () => {
+			if (copiedTimeoutRef.current) {
+				clearTimeout(copiedTimeoutRef.current);
+			}
+		};
+	}, []);
+
+	async function handleCopyText(
+		text: string,
+		field: CopiedField,
+	): Promise<void> {
+		try {
+			await navigator.clipboard.writeText(text);
+			setCopiedField(field);
+
+			if (copiedTimeoutRef.current) {
+				clearTimeout(copiedTimeoutRef.current);
+			}
+
+			copiedTimeoutRef.current = setTimeout(() => {
+				setCopiedField(null);
+			}, 1400);
+		} catch (error) {
+			console.error("Failed to copy text:", error);
+		}
+	}
 
 	return (
 		<div className="group flex items-start gap-3 rounded-lg p-2 transition-colors hover:bg-muted/50">
@@ -472,15 +505,33 @@ function AlbumCardRow({
 
 			{/* Album Info */}
 			<div className="min-w-0 flex-1">
-				<p className="truncate font-medium text-sm">{album.name}</p>
-				<p className="truncate text-muted-foreground text-xs">
-					{album.artistName}
+				<p className="flex min-w-0 items-center gap-2 font-medium text-sm">
+					<button
+						type="button"
+						className="min-w-0 truncate rounded-sm text-left underline-offset-2 transition-colors hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+						title="Copy album name"
+						onClick={() => void handleCopyText(album.name, "album")}
+					>
+						{album.name}
+					</button>
+					<CopiedIndicator visible={copiedField === "album"} />
+				</p>
+				<p className="flex min-w-0 items-center gap-2 text-muted-foreground text-xs">
+					<button
+						type="button"
+						className="min-w-0 truncate rounded-sm text-left underline-offset-2 transition-colors hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+						title="Copy artist name"
+						onClick={() => void handleCopyText(album.artistName, "artist")}
+					>
+						{album.artistName}
+					</button>
 					{album.releaseYear && (
 						<span className="text-muted-foreground/60">
 							{" · "}
 							{album.releaseYear}
 						</span>
 					)}
+					<CopiedIndicator visible={copiedField === "artist"} />
 				</p>
 				<div className="mt-1 flex flex-wrap gap-1">
 					<RymStatusBadge album={album} />
@@ -563,6 +614,19 @@ function AlbumCardRow({
 				/>
 			</div>
 		</div>
+	);
+}
+
+function CopiedIndicator({ visible }: { visible: boolean }) {
+	if (!visible) {
+		return null;
+	}
+
+	return (
+		<span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-1.5 py-0.5 font-medium text-[10px] text-emerald-700 dark:text-emerald-300">
+			<Check className="size-3" />
+			Copied
+		</span>
 	);
 }
 
