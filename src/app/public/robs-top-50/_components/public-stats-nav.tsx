@@ -14,6 +14,10 @@ const STATS_NAV_OPTIONS = [
 		href: "/public/robs-top-50/stats/unique-artists",
 		label: "Unique artists",
 	},
+	{
+		href: "/public/robs-top-50/stats/genres",
+		label: "Genres",
+	},
 ] as const;
 
 export function PublicStatsNav() {
@@ -25,7 +29,7 @@ export function PublicStatsNav() {
 				const isActive =
 					option.href === "/public/robs-top-50/stats"
 						? pathname === option.href
-						: pathname?.startsWith(option.href) ?? false;
+						: (pathname?.startsWith(option.href) ?? false);
 
 				return (
 					<Link

@@ -6,6 +6,7 @@ import {
 	buildSpotifyAlbumRymMatchArgs,
 	matchRymForSpotifyAlbum,
 } from "./_utils/albumMatching";
+import { loadRymGenreParentKeysByChild } from "./_utils/forLaterFilterProjection";
 import {
 	type ArtistFinishInput,
 	buildArtistHighestPlacementRows,
@@ -13,6 +14,11 @@ import {
 	buildArtistUniqueTierRows,
 	resolveArtistNamesForRankingEntry,
 } from "./_utils/robRankingArtistStats";
+import {
+	type RobRankingTopLevelGenre,
+	buildRobRankingGenreCountSummary,
+} from "./_utils/robRankingGenreStats";
+import { resolveTopLevelGenreKey } from "./_utils/rymGenreHierarchy";
 
 type RankingAlbumDisplay = {
 	name: string;
@@ -196,6 +202,20 @@ const publishedArtistUniqueTierRowValidator = v.object({
 	tierBestPlacementYear: v.number(),
 });
 
+const publishedTopLevelGenreCountRowValidator = v.object({
+	genreKey: v.string(),
+	label: v.string(),
+	count: v.number(),
+});
+
+const publishedTopLevelGenreCountSummaryValidator = v.object({
+	year: v.number(),
+	totalAlbums: v.number(),
+	albumsWithGenreData: v.number(),
+	albumsMissingGenreData: v.number(),
+	genres: v.array(publishedTopLevelGenreCountRowValidator),
+});
+
 async function resolveArtistNamesForRanking(
 	ctx: QueryCtx,
 	ranking: Doc<"robRankingAlbums">,
@@ -269,6 +289,128 @@ export const getPublishedArtistUniqueTierPlacements = query({
 		return buildArtistUniqueTierRows(entries, args.tier);
 	},
 });
+
+export const getPublishedTopLevelGenreCountsForYear = query({
+	args: {
+		year: v.number(),
+	},
+	returns: publishedTopLevelGenreCountSummaryValidator,
+	handler: async (ctx, args) => {
+		const yearRow = await ctx.db
+			.query("robRankingYears")
+			.filter((q) =>
+				q.and(
+					q.eq(q.field("year"), args.year),
+					q.eq(q.field("published"), true),
+				),
+			)
+			.first();
+
+		if (!yearRow) {
+			return buildRobRankingGenreCountSummary({
+				year: args.year,
+				totalAlbums: 0,
+				albumTopLevelGenres: [],
+			});
+		}
+
+		const rankings = await ctx.db
+			.query("robRankingAlbums")
+			.withIndex("by_yearId", (q) => q.eq("yearId", yearRow._id))
+			.collect();
+
+		const [parentKeysByChild, topLevelGenres] = await Promise.all([
+			loadRymGenreParentKeysByChild(ctx),
+			ctx.db
+				.query("rateYourMusicGenres")
+				.withIndex("by_isTopLevel", (q) => q.eq("isTopLevel", true))
+				.collect(),
+		]);
+
+		const topLevelGenreKeys = new Set(topLevelGenres.map((genre) => genre.key));
+		const labelsByKey = new Map(
+			topLevelGenres.map((genre) => [genre.key, genre.label]),
+		);
+		const albumTopLevelGenres: RobRankingTopLevelGenre[][] = [];
+
+		for (const ranking of rankings) {
+			if (!ranking.albumId) {
+				albumTopLevelGenres.push([]);
+				continue;
+			}
+
+			const link = await loadLatestRymLinkForAlbum(ctx, ranking.albumId);
+			if (!link) {
+				albumTopLevelGenres.push([]);
+				continue;
+			}
+
+			albumTopLevelGenres.push(
+				await loadTopLevelGenresForScrape(
+					ctx,
+					link.scrapeId,
+					parentKeysByChild,
+					topLevelGenreKeys,
+					labelsByKey,
+				),
+			);
+		}
+
+		return buildRobRankingGenreCountSummary({
+			year: yearRow.year,
+			totalAlbums: rankings.length,
+			albumTopLevelGenres,
+		});
+	},
+});
+
+async function loadLatestRymLinkForAlbum(
+	ctx: QueryCtx,
+	albumId: Id<"spotifyAlbums">,
+): Promise<Doc<"rateYourMusicSpotifyAlbumLinks"> | null> {
+	const links = await ctx.db
+		.query("rateYourMusicSpotifyAlbumLinks")
+		.withIndex("by_albumId", (q) => q.eq("albumId", albumId))
+		.collect();
+
+	return [...links].sort((a, b) => b.updatedAt - a.updatedAt)[0] ?? null;
+}
+
+async function loadTopLevelGenresForScrape(
+	ctx: QueryCtx,
+	scrapeId: Id<"rateYourMusicScrapes">,
+	parentKeysByChild: Map<string, string[]>,
+	topLevelGenreKeys: Set<string>,
+	labelsByKey: Map<string, string>,
+): Promise<RobRankingTopLevelGenre[]> {
+	const releaseGenres = await ctx.db
+		.query("rateYourMusicReleaseGenres")
+		.withIndex("by_scrapeId", (q) => q.eq("scrapeId", scrapeId))
+		.collect();
+
+	const topLevelGenres = new Map<string, string>();
+
+	for (const releaseGenre of releaseGenres) {
+		if (releaseGenre.role === "primary") {
+			const genre = await ctx.db.get(releaseGenre.genreId);
+			if (!genre) continue;
+
+			const topLevelKey = resolveTopLevelGenreKey(
+				genre.key,
+				parentKeysByChild,
+				topLevelGenreKeys,
+			);
+			if (!topLevelKey) continue;
+
+			topLevelGenres.set(
+				topLevelKey,
+				labelsByKey.get(topLevelKey) ?? genre.label,
+			);
+		}
+	}
+
+	return [...topLevelGenres.entries()].map(([key, label]) => ({ key, label }));
+}
 
 export const getPublishedAlbumsForYear = query({
 	args: {
