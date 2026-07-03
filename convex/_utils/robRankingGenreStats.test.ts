@@ -40,8 +40,18 @@ test("buildRobRankingGenreCountSummary counts albums by top-level genre", () => 
 			label: "Rock",
 			count: 2,
 			albums: [
-				{ position: 1, albumName: "First Album", artistName: "Artist A" },
-				{ position: 2, albumName: "Second Album", artistName: "Artist B" },
+				{
+					position: 1,
+					albumName: "First Album",
+					artistName: "Artist A",
+					throughGenres: ["Rock"],
+				},
+				{
+					position: 2,
+					albumName: "Second Album",
+					artistName: "Artist B",
+					throughGenres: ["Rock"],
+				},
 			],
 		},
 		{
@@ -49,7 +59,12 @@ test("buildRobRankingGenreCountSummary counts albums by top-level genre", () => 
 			label: "Hip Hop",
 			count: 1,
 			albums: [
-				{ position: 3, albumName: "Third Album", artistName: "Artist C" },
+				{
+					position: 3,
+					albumName: "Third Album",
+					artistName: "Artist C",
+					throughGenres: ["Hip Hop"],
+				},
 			],
 		},
 	]);
@@ -92,11 +107,13 @@ test("buildRobRankingGenreCountSummary deduplicates duplicate top-level keys wit
 					position: 1,
 					albumName: "A Love Supreme",
 					artistName: "John Coltrane",
+					throughGenres: ["Jazz"],
 				},
 				{
 					position: 2,
 					albumName: "Head Hunters",
 					artistName: "Herbie Hancock",
+					throughGenres: ["Jazz"],
 				},
 			],
 		},
@@ -123,16 +140,76 @@ test("buildRobRankingGenreCountSummary counts one album in multiple top-level ge
 			genreKey: "electronic",
 			label: "Electronic",
 			count: 1,
-			albums: [{ position: 1, albumName: "Multi Genre", artistName: "Artist" }],
+			albums: [
+				{
+					position: 1,
+					albumName: "Multi Genre",
+					artistName: "Artist",
+					throughGenres: ["Electronic"],
+				},
+			],
 		},
 		{
 			genreKey: "pop",
 			label: "Pop",
 			count: 1,
-			albums: [{ position: 1, albumName: "Multi Genre", artistName: "Artist" }],
+			albums: [
+				{
+					position: 1,
+					albumName: "Multi Genre",
+					artistName: "Artist",
+					throughGenres: ["Pop"],
+				},
+			],
 		},
 	]);
 	assert.equal(summary.albumsWithGenreData, 1);
+});
+
+test("buildRobRankingGenreCountSummary records the direct genres that contributed each album row", () => {
+	const summary = buildRobRankingGenreCountSummary({
+		year: 2022,
+		totalAlbums: 1,
+		albumTopLevelGenres: [
+			{
+				album: { position: 1, albumName: "Source Album", artistName: "Artist" },
+				genres: [
+					{ key: "pop", label: "Pop", throughGenreLabel: "Art Pop" },
+					{ key: "pop", label: "Pop", throughGenreLabel: "Pop Soul" },
+					{ key: "r&b", label: "R&B", throughGenreLabel: "Pop Soul" },
+				],
+			},
+		],
+	});
+
+	assert.deepEqual(summary.genres, [
+		{
+			genreKey: "pop",
+			label: "Pop",
+			count: 1,
+			albums: [
+				{
+					position: 1,
+					albumName: "Source Album",
+					artistName: "Artist",
+					throughGenres: ["Art Pop", "Pop Soul"],
+				},
+			],
+		},
+		{
+			genreKey: "r&b",
+			label: "R&B",
+			count: 1,
+			albums: [
+				{
+					position: 1,
+					albumName: "Source Album",
+					artistName: "Artist",
+					throughGenres: ["Pop Soul"],
+				},
+			],
+		},
+	]);
 });
 
 test("buildRobRankingGenreCountSummary computes missing genre data from total albums and coverage", () => {

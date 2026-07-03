@@ -212,6 +212,7 @@ const publishedTopLevelGenreCountRowValidator = v.object({
 			position: v.number(),
 			albumName: v.string(),
 			artistName: v.string(),
+			throughGenres: v.array(v.string()),
 		}),
 	),
 });
@@ -407,7 +408,7 @@ async function loadTopLevelGenresForScrape(
 		.withIndex("by_scrapeId", (q) => q.eq("scrapeId", scrapeId))
 		.collect();
 
-	const topLevelGenres = new Map<string, string>();
+	const topLevelGenres: RobRankingTopLevelGenre[] = [];
 
 	for (const releaseGenre of releaseGenres) {
 		if (releaseGenre.role === "primary") {
@@ -421,15 +422,16 @@ async function loadTopLevelGenresForScrape(
 			);
 
 			for (const topLevelKey of topLevelKeys) {
-				topLevelGenres.set(
-					topLevelKey,
-					labelsByKey.get(topLevelKey) ?? genre.label,
-				);
+				topLevelGenres.push({
+					key: topLevelKey,
+					label: labelsByKey.get(topLevelKey) ?? genre.label,
+					throughGenreLabel: genre.label,
+				});
 			}
 		}
 	}
 
-	return [...topLevelGenres.entries()].map(([key, label]) => ({ key, label }));
+	return topLevelGenres;
 }
 
 export const getPublishedAlbumsForYear = query({

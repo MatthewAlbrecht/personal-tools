@@ -1,16 +1,21 @@
 export type RobRankingTopLevelGenre = {
 	key: string;
 	label: string;
+	throughGenreLabel?: string;
 };
 
-export type RobRankingGenreAlbum = {
+export type RobRankingGenreAlbumInput = {
 	position: number;
 	albumName: string;
 	artistName: string;
 };
 
+export type RobRankingGenreAlbum = RobRankingGenreAlbumInput & {
+	throughGenres: string[];
+};
+
 export type RobRankingAlbumGenreInput = {
-	album?: RobRankingGenreAlbum;
+	album?: RobRankingGenreAlbumInput;
 	genres: RobRankingTopLevelGenre[];
 };
 
@@ -45,9 +50,21 @@ export function buildRobRankingGenreCountSummary({
 	let albumsWithGenreData = 0;
 
 	for (const entry of albumTopLevelGenres) {
-		const uniqueGenres = new Map<string, string>();
+		const uniqueGenres = new Map<
+			string,
+			{ label: string; throughGenres: Set<string> }
+		>();
 		for (const genre of entry.genres) {
-			uniqueGenres.set(genre.key, genre.label);
+			const throughGenreLabel = genre.throughGenreLabel ?? genre.label;
+			const existing = uniqueGenres.get(genre.key);
+			if (existing) {
+				existing.throughGenres.add(throughGenreLabel);
+			} else {
+				uniqueGenres.set(genre.key, {
+					label: genre.label,
+					throughGenres: new Set([throughGenreLabel]),
+				});
+			}
 		}
 
 		if (uniqueGenres.size === 0) {
@@ -56,13 +73,19 @@ export function buildRobRankingGenreCountSummary({
 
 		albumsWithGenreData += 1;
 
-		for (const [key, label] of uniqueGenres.entries()) {
+		for (const [key, genre] of uniqueGenres.entries()) {
 			const existing = countsByKey.get(key);
 			countsByKey.set(key, {
-				label,
+				label: genre.label,
 				count: (existing?.count ?? 0) + 1,
 				albums: entry.album
-					? [...(existing?.albums ?? []), entry.album]
+					? [
+							...(existing?.albums ?? []),
+							{
+								...entry.album,
+								throughGenres: [...genre.throughGenres].sort(),
+							},
+						]
 					: (existing?.albums ?? []),
 			});
 		}

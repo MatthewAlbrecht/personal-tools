@@ -35,5 +35,6 @@ test("rob rankings exposes published top-level genre counts query", () => {
 	assert.match(body, /resolveRankingAlbumDisplay/);
 	assert.match(body, /albumName: display\.name/);
 	assert.match(body, /artistName: display\.artistName/);
+	assert.match(body, /throughGenreLabel: genre\.label/);
 	assert.match(body, /buildRobRankingGenreCountSummary/);
 });

@@ -10,6 +10,7 @@ export type TopLevelGenreCountRow = {
 		position: number;
 		albumName: string;
 		artistName: string;
+		throughGenres: string[];
 	}>;
 };
 
@@ -57,6 +58,9 @@ export function TopLevelGenreCountsTable({
 									<span className="min-w-0 truncate text-muted-foreground">
 										<span className="text-foreground">{album.albumName}</span>{" "}
 										<span>by {album.artistName}</span>
+										{album.throughGenres.length > 0 ? (
+											<span> (thru {album.throughGenres.join(", ")})</span>
+										) : null}
 									</span>
 								</li>
 							))}
