@@ -2039,6 +2039,7 @@ const unmappedRymScrapeRowValidator = v.object({
 export const searchUnmappedRymScrapes = query({
 	args: {
 		search: v.optional(v.string()),
+		includeMapped: v.optional(v.boolean()),
 		limit: v.optional(v.number()),
 	},
 	returns: v.array(unmappedRymScrapeRowValidator),
@@ -2048,7 +2049,9 @@ export const searchUnmappedRymScrapes = query({
 		const limit = Math.min(Math.max(args.limit ?? 50, 1), 100);
 		const searchTerm = args.search?.trim() ?? "";
 
-		const mappedIds = await collectMappedRymScrapeIds(ctx);
+		const mappedIds = args.includeMapped
+			? new Set<Id<"rateYourMusicScrapes">>()
+			: await collectMappedRymScrapeIds(ctx);
 
 		const scrapes = await ctx.db
 			.query("rateYourMusicScrapes")

@@ -2,7 +2,7 @@
 
 import { useQuery } from "convex/react";
 import { Search } from "lucide-react";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
 	Drawer,
 	DrawerContent,
@@ -31,17 +31,20 @@ export function AlbumRymAssociateDrawer({
 		"",
 		250,
 	);
+	const [includeMapped, setIncludeMapped] = useState(false);
 	const searchInputRef = useRef<HTMLInputElement>(null);
 
 	useEffect(() => {
 		if (!open) {
 			setSearchInput("");
+			setIncludeMapped(false);
 			return;
 		}
 		if (!album) {
 			return;
 		}
 		setSearchInput(album.artistName);
+		setIncludeMapped(false);
 		const focusTimer = window.setTimeout(() => {
 			searchInputRef.current?.focus();
 		}, 0);
@@ -57,7 +60,7 @@ export function AlbumRymAssociateDrawer({
 
 	const scrapes = useQuery(
 		api.forLaterAlbums.searchUnmappedRymScrapes,
-		open ? { search: searchArg, limit: 50 } : "skip",
+		open ? { search: searchArg, includeMapped, limit: 50 } : "skip",
 	);
 
 	return (
@@ -86,7 +89,18 @@ export function AlbumRymAssociateDrawer({
 						<p className="text-muted-foreground text-sm">Loading scrapes...</p>
 					) : scrapes.length === 0 ? (
 						<p className="text-muted-foreground text-sm">
-							No unlinked RYM scrapes match this search.
+							{includeMapped
+								? "No RYM scrapes match this search."
+								: "No unlinked RYM scrapes match this search. "}
+							{includeMapped ? null : (
+								<button
+									type="button"
+									className="font-medium text-foreground underline underline-offset-4 hover:text-primary"
+									onClick={() => setIncludeMapped(true)}
+								>
+									Search already linked albums too.
+								</button>
+							)}
 						</p>
 					) : (
 						<ul className="divide-y rounded-lg border">

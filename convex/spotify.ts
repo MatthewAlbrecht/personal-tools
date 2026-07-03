@@ -1602,22 +1602,6 @@ export const associateSpotifyAlbumWithRymScrape = mutation({
 			throw new Error("RYM scrape not found");
 		}
 
-		const existingForLaterItems = await ctx.db
-			.query("forLaterAlbumItems")
-			.withIndex("by_rymScrapeId", (q) => q.eq("rymScrapeId", args.scrapeId))
-			.collect();
-		if (existingForLaterItems.some((item) => item.albumId !== args.albumId)) {
-			throw new Error("This RYM scrape is already linked to another album");
-		}
-
-		const existingAlbumLinks = await ctx.db
-			.query("rateYourMusicSpotifyAlbumLinks")
-			.withIndex("by_scrapeId", (q) => q.eq("scrapeId", args.scrapeId))
-			.collect();
-		if (existingAlbumLinks.some((link) => link.albumId !== args.albumId)) {
-			throw new Error("This RYM scrape is already linked to another album");
-		}
-
 		const now = Date.now();
 		await linkRymScrapeToSpotifyAlbum(ctx, {
 			scrapeId: args.scrapeId,
