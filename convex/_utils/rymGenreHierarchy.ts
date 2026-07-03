@@ -145,6 +145,35 @@ export function resolveTopLevelGenreKey(
 	return undefined;
 }
 
+export function resolveTopLevelGenreKeys(
+	genreKey: string,
+	parentKeysByChild: ReadonlyMap<string, readonly string[]>,
+	topLevelGenreKeys: ReadonlySet<string>,
+): string[] {
+	const resolved = new Set<string>();
+	const pending = [genreKey];
+	const visited = new Set<string>();
+
+	while (pending.length > 0) {
+		const current = pending.pop();
+		if (!current || visited.has(current)) {
+			continue;
+		}
+		visited.add(current);
+
+		if (topLevelGenreKeys.has(current)) {
+			resolved.add(current);
+			continue;
+		}
+
+		for (const parentKey of parentKeysByChild.get(current) ?? []) {
+			pending.push(parentKey);
+		}
+	}
+
+	return [...resolved].sort();
+}
+
 export function collectDescendantGenreKeys(
 	topLevelGenreKey: string,
 	childKeysByParent: ReadonlyMap<string, readonly string[]>,

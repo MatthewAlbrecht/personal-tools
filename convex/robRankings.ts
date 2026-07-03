@@ -19,7 +19,7 @@ import {
 	type RobRankingTopLevelGenre,
 	buildRobRankingGenreCountSummary,
 } from "./_utils/robRankingGenreStats";
-import { resolveTopLevelGenreKey } from "./_utils/rymGenreHierarchy";
+import { resolveTopLevelGenreKeys } from "./_utils/rymGenreHierarchy";
 
 type RankingAlbumDisplay = {
 	name: string;
@@ -414,17 +414,18 @@ async function loadTopLevelGenresForScrape(
 			const genre = await ctx.db.get(releaseGenre.genreId);
 			if (!genre) continue;
 
-			const topLevelKey = resolveTopLevelGenreKey(
+			const topLevelKeys = resolveTopLevelGenreKeys(
 				genre.key,
 				parentKeysByChild,
 				topLevelGenreKeys,
 			);
-			if (!topLevelKey) continue;
 
-			topLevelGenres.set(
-				topLevelKey,
-				labelsByKey.get(topLevelKey) ?? genre.label,
-			);
+			for (const topLevelKey of topLevelKeys) {
+				topLevelGenres.set(
+					topLevelKey,
+					labelsByKey.get(topLevelKey) ?? genre.label,
+				);
+			}
 		}
 	}
 
