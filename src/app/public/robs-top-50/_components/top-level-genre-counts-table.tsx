@@ -6,6 +6,11 @@ export type TopLevelGenreCountRow = {
 	genreKey: string;
 	label: string;
 	count: number;
+	albums: Array<{
+		position: number;
+		albumName: string;
+		artistName: string;
+	}>;
 };
 
 export function TopLevelGenreCountsTable({
@@ -26,17 +31,37 @@ export function TopLevelGenreCountsTable({
 			{rows.map((row, index) => (
 				<li
 					key={row.genreKey}
-					className="flex items-center gap-3 rounded-md px-2 py-2 hover:bg-muted/40"
+					className="rounded-md px-2 py-2 hover:bg-muted/40"
 				>
-					<span className="w-8 flex-shrink-0 text-right font-mono text-muted-foreground text-sm">
-						{index + 1}
-					</span>
-					<div className="min-w-0 flex-1">
-						<p className="truncate font-medium text-sm">{row.label}</p>
+					<div className="flex items-center gap-3">
+						<span className="w-8 flex-shrink-0 text-right font-mono text-muted-foreground text-sm">
+							{index + 1}
+						</span>
+						<div className="min-w-0 flex-1">
+							<p className="truncate font-medium text-sm">{row.label}</p>
+						</div>
+						<span className="flex-shrink-0 font-mono text-sm tabular-nums">
+							{row.count}
+						</span>
 					</div>
-					<span className="flex-shrink-0 font-mono text-sm tabular-nums">
-						{row.count}
-					</span>
+					{row.albums.length > 0 ? (
+						<ol className="mt-2 ml-11 space-y-1">
+							{row.albums.map((album) => (
+								<li
+									key={`${row.genreKey}-${album.position}-${album.albumName}`}
+									className="flex min-w-0 items-baseline gap-2 text-sm"
+								>
+									<span className="flex-shrink-0 font-mono text-muted-foreground text-xs">
+										#{album.position}
+									</span>
+									<span className="min-w-0 truncate text-muted-foreground">
+										<span className="text-foreground">{album.albumName}</span>{" "}
+										<span>by {album.artistName}</span>
+									</span>
+								</li>
+							))}
+						</ol>
+					) : null}
 				</li>
 			))}
 		</ol>

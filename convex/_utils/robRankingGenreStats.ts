@@ -3,10 +3,22 @@ export type RobRankingTopLevelGenre = {
 	label: string;
 };
 
+export type RobRankingGenreAlbum = {
+	position: number;
+	albumName: string;
+	artistName: string;
+};
+
+export type RobRankingAlbumGenreInput = {
+	album?: RobRankingGenreAlbum;
+	genres: RobRankingTopLevelGenre[];
+};
+
 export type RobRankingGenreCountRow = {
 	genreKey: string;
 	label: string;
 	count: number;
+	albums: RobRankingGenreAlbum[];
 };
 
 export type RobRankingGenreCountSummary = {
@@ -24,14 +36,17 @@ export function buildRobRankingGenreCountSummary({
 }: {
 	year: number;
 	totalAlbums: number;
-	albumTopLevelGenres: RobRankingTopLevelGenre[][];
+	albumTopLevelGenres: RobRankingAlbumGenreInput[];
 }): RobRankingGenreCountSummary {
-	const countsByKey = new Map<string, { label: string; count: number }>();
+	const countsByKey = new Map<
+		string,
+		{ label: string; count: number; albums: RobRankingGenreAlbum[] }
+	>();
 	let albumsWithGenreData = 0;
 
-	for (const genresForAlbum of albumTopLevelGenres) {
+	for (const entry of albumTopLevelGenres) {
 		const uniqueGenres = new Map<string, string>();
-		for (const genre of genresForAlbum) {
+		for (const genre of entry.genres) {
 			uniqueGenres.set(genre.key, genre.label);
 		}
 
@@ -46,6 +61,9 @@ export function buildRobRankingGenreCountSummary({
 			countsByKey.set(key, {
 				label,
 				count: (existing?.count ?? 0) + 1,
+				albums: entry.album
+					? [...(existing?.albums ?? []), entry.album]
+					: (existing?.albums ?? []),
 			});
 		}
 	}
@@ -55,6 +73,7 @@ export function buildRobRankingGenreCountSummary({
 			genreKey,
 			label: value.label,
 			count: value.count,
+			albums: [...value.albums].sort((a, b) => a.position - b.position),
 		}))
 		.sort((a, b) => {
 			const countDiff = b.count - a.count;

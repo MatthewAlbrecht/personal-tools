@@ -15,6 +15,7 @@ import {
 	resolveArtistNamesForRankingEntry,
 } from "./_utils/robRankingArtistStats";
 import {
+	type RobRankingAlbumGenreInput,
 	type RobRankingTopLevelGenre,
 	buildRobRankingGenreCountSummary,
 } from "./_utils/robRankingGenreStats";
@@ -206,6 +207,13 @@ const publishedTopLevelGenreCountRowValidator = v.object({
 	genreKey: v.string(),
 	label: v.string(),
 	count: v.number(),
+	albums: v.array(
+		v.object({
+			position: v.number(),
+			albumName: v.string(),
+			artistName: v.string(),
+		}),
+	),
 });
 
 const publishedTopLevelGenreCountSummaryValidator = v.object({
@@ -331,29 +339,40 @@ export const getPublishedTopLevelGenreCountsForYear = query({
 		const labelsByKey = new Map(
 			topLevelGenres.map((genre) => [genre.key, genre.label]),
 		);
-		const albumTopLevelGenres: RobRankingTopLevelGenre[][] = [];
+		const albumTopLevelGenres: RobRankingAlbumGenreInput[] = [];
 
 		for (const ranking of rankings) {
 			if (!ranking.albumId) {
-				albumTopLevelGenres.push([]);
+				albumTopLevelGenres.push({ genres: [] });
 				continue;
 			}
+
+			const album = await ctx.db.get(ranking.albumId);
+			const display = resolveRankingAlbumDisplay(ranking, album);
+			const genreAlbum = display
+				? {
+						position: ranking.position,
+						albumName: display.name,
+						artistName: display.artistName,
+					}
+				: undefined;
 
 			const link = await loadLatestRymLinkForAlbum(ctx, ranking.albumId);
 			if (!link) {
-				albumTopLevelGenres.push([]);
+				albumTopLevelGenres.push({ album: genreAlbum, genres: [] });
 				continue;
 			}
 
-			albumTopLevelGenres.push(
-				await loadTopLevelGenresForScrape(
+			albumTopLevelGenres.push({
+				album: genreAlbum,
+				genres: await loadTopLevelGenresForScrape(
 					ctx,
 					link.scrapeId,
 					parentKeysByChild,
 					topLevelGenreKeys,
 					labelsByKey,
 				),
-			);
+			});
 		}
 
 		return buildRobRankingGenreCountSummary({

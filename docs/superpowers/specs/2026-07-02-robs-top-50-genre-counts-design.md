@@ -19,6 +19,7 @@ The UI should use counts only. It should not calculate or display percentages in
 - Add a new public stats subpage at `/public/robs-top-50/stats/genres`.
 - Let visitors select a published Rob ranking year using the same year-pill pattern as the public list page.
 - Show one row per top-level RYM genre with the number of ranked albums in that year that roll up to that genre.
+- Under each genre row, show indented album lines for every ranked album that contributed to that genre count.
 - Show a coverage line/count for ranked albums that do not have usable RYM genre data.
 - Keep the existing artist stats pages unchanged.
 
@@ -53,6 +54,7 @@ The page displays counts, not percentages:
 - Resolve each primary genre key up the RYM taxonomy tree to a top-level genre.
 - Deduplicate top-level genres per album before counting, so one album contributes at most `1` to a given top-level genre.
 - If an album has multiple primary genres that roll up to different top-level genres, count it once in each of those top-level genres.
+- The same album should appear under each top-level genre it contributes to, sorted by Rob ranking position.
 - If an entry is manual-only, lacks `albumId`, lacks an RYM link, lacks release genres, or cannot resolve a top-level genre, count it as missing genre data.
 
 ### Taxonomy Behavior
@@ -91,6 +93,11 @@ Returns:
 		genreKey: string,
 		label: string,
 		count: number,
+		albums: Array<{
+			position: number,
+			albumName: string,
+			artistName: string,
+		}>,
 	}>,
 }
 ```
@@ -140,6 +147,7 @@ Update:
   - Year selector pills.
   - Coverage text: `43 / 50 albums have genre data; 7 missing`.
   - Count-only genre rows: `Rock 18`, `Hip Hop 9`, etc.
+  - Indented album lines under each genre row, e.g. `#2 Album Title by Artist`.
 
 ### Empty States
 

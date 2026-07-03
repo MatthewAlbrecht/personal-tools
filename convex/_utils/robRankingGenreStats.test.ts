@@ -7,15 +7,51 @@ test("buildRobRankingGenreCountSummary counts albums by top-level genre", () => 
 		year: 2024,
 		totalAlbums: 3,
 		albumTopLevelGenres: [
-			[{ key: "rock", label: "Rock" }],
-			[{ key: "rock", label: "Rock" }],
-			[{ key: "hip hop", label: "Hip Hop" }],
+			{
+				album: {
+					position: 2,
+					albumName: "Second Album",
+					artistName: "Artist B",
+				},
+				genres: [{ key: "rock", label: "Rock" }],
+			},
+			{
+				album: {
+					position: 1,
+					albumName: "First Album",
+					artistName: "Artist A",
+				},
+				genres: [{ key: "rock", label: "Rock" }],
+			},
+			{
+				album: {
+					position: 3,
+					albumName: "Third Album",
+					artistName: "Artist C",
+				},
+				genres: [{ key: "hip hop", label: "Hip Hop" }],
+			},
 		],
 	});
 
 	assert.deepEqual(summary.genres, [
-		{ genreKey: "rock", label: "Rock", count: 2 },
-		{ genreKey: "hip hop", label: "Hip Hop", count: 1 },
+		{
+			genreKey: "rock",
+			label: "Rock",
+			count: 2,
+			albums: [
+				{ position: 1, albumName: "First Album", artistName: "Artist A" },
+				{ position: 2, albumName: "Second Album", artistName: "Artist B" },
+			],
+		},
+		{
+			genreKey: "hip hop",
+			label: "Hip Hop",
+			count: 1,
+			albums: [
+				{ position: 3, albumName: "Third Album", artistName: "Artist C" },
+			],
+		},
 	]);
 });
 
@@ -24,16 +60,46 @@ test("buildRobRankingGenreCountSummary deduplicates duplicate top-level keys wit
 		year: 2023,
 		totalAlbums: 2,
 		albumTopLevelGenres: [
-			[
-				{ key: "jazz", label: "Jazz" },
-				{ key: "jazz", label: "Jazz" },
-			],
-			[{ key: "jazz", label: "Jazz" }],
+			{
+				album: {
+					position: 1,
+					albumName: "A Love Supreme",
+					artistName: "John Coltrane",
+				},
+				genres: [
+					{ key: "jazz", label: "Jazz" },
+					{ key: "jazz", label: "Jazz" },
+				],
+			},
+			{
+				album: {
+					position: 2,
+					albumName: "Head Hunters",
+					artistName: "Herbie Hancock",
+				},
+				genres: [{ key: "jazz", label: "Jazz" }],
+			},
 		],
 	});
 
 	assert.deepEqual(summary.genres, [
-		{ genreKey: "jazz", label: "Jazz", count: 2 },
+		{
+			genreKey: "jazz",
+			label: "Jazz",
+			count: 2,
+			albums: [
+				{
+					position: 1,
+					albumName: "A Love Supreme",
+					artistName: "John Coltrane",
+				},
+				{
+					position: 2,
+					albumName: "Head Hunters",
+					artistName: "Herbie Hancock",
+				},
+			],
+		},
 	]);
 });
 
@@ -42,16 +108,29 @@ test("buildRobRankingGenreCountSummary counts one album in multiple top-level ge
 		year: 2022,
 		totalAlbums: 1,
 		albumTopLevelGenres: [
-			[
-				{ key: "electronic", label: "Electronic" },
-				{ key: "pop", label: "Pop" },
-			],
+			{
+				album: { position: 1, albumName: "Multi Genre", artistName: "Artist" },
+				genres: [
+					{ key: "electronic", label: "Electronic" },
+					{ key: "pop", label: "Pop" },
+				],
+			},
 		],
 	});
 
 	assert.deepEqual(summary.genres, [
-		{ genreKey: "electronic", label: "Electronic", count: 1 },
-		{ genreKey: "pop", label: "Pop", count: 1 },
+		{
+			genreKey: "electronic",
+			label: "Electronic",
+			count: 1,
+			albums: [{ position: 1, albumName: "Multi Genre", artistName: "Artist" }],
+		},
+		{
+			genreKey: "pop",
+			label: "Pop",
+			count: 1,
+			albums: [{ position: 1, albumName: "Multi Genre", artistName: "Artist" }],
+		},
 	]);
 	assert.equal(summary.albumsWithGenreData, 1);
 });
@@ -61,9 +140,15 @@ test("buildRobRankingGenreCountSummary computes missing genre data from total al
 		year: 2021,
 		totalAlbums: 5,
 		albumTopLevelGenres: [
-			[{ key: "rock", label: "Rock" }],
-			[],
-			[{ key: "pop", label: "Pop" }],
+			{
+				album: { position: 1, albumName: "Rock Album", artistName: "Artist" },
+				genres: [{ key: "rock", label: "Rock" }],
+			},
+			{ genres: [] },
+			{
+				album: { position: 3, albumName: "Pop Album", artistName: "Artist" },
+				genres: [{ key: "pop", label: "Pop" }],
+			},
 		],
 	});
 
@@ -78,17 +163,24 @@ test("buildRobRankingGenreCountSummary sorts rows by count descending then label
 		year: 2020,
 		totalAlbums: 5,
 		albumTopLevelGenres: [
-			[{ key: "soul", label: "Soul" }],
-			[{ key: "ambient", label: "Ambient" }],
-			[{ key: "rock", label: "Rock" }],
-			[{ key: "rock", label: "Rock" }],
-			[{ key: "ambient", label: "Ambient" }],
+			{ genres: [{ key: "soul", label: "Soul" }] },
+			{ genres: [{ key: "ambient", label: "Ambient" }] },
+			{ genres: [{ key: "rock", label: "Rock" }] },
+			{ genres: [{ key: "rock", label: "Rock" }] },
+			{ genres: [{ key: "ambient", label: "Ambient" }] },
 		],
 	});
 
-	assert.deepEqual(summary.genres, [
-		{ genreKey: "ambient", label: "Ambient", count: 2 },
-		{ genreKey: "rock", label: "Rock", count: 2 },
-		{ genreKey: "soul", label: "Soul", count: 1 },
-	]);
+	assert.deepEqual(
+		summary.genres.map(({ genreKey, label, count }) => ({
+			genreKey,
+			label,
+			count,
+		})),
+		[
+			{ genreKey: "ambient", label: "Ambient", count: 2 },
+			{ genreKey: "rock", label: "Rock", count: 2 },
+			{ genreKey: "soul", label: "Soul", count: 1 },
+		],
+	);
 });
