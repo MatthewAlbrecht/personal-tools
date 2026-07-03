@@ -11,6 +11,7 @@ import {
 	buildSpotifyAlbumRymMatchArgs,
 	linkRymScrapeToSpotifyAlbum,
 	matchRymForSpotifyAlbum,
+	normalizeAlbumTitle,
 } from "./_utils/albumMatching";
 import { buildSpotifyAlbumListItems } from "./_utils/spotify_album_list";
 
@@ -251,6 +252,71 @@ export const clearLegacyAlbumRawData = mutation({
 		}
 
 		return { cleared: result.page.length, done: result.isDone };
+	},
+});
+
+export const backfillSpotifyAlbumTitleKeys = mutation({
+	args: { batchSize: v.optional(v.number()) },
+	returns: v.object({
+		processed: v.number(),
+		updated: v.number(),
+		done: v.boolean(),
+	}),
+	handler: async (
+		ctx,
+		args,
+	): Promise<{
+		processed: number;
+		updated: number;
+		done: boolean;
+	}> => {
+		const size = Math.min(Math.max(args.batchSize ?? 200, 1), 500);
+		const key = "spotify-album-title-keys";
+
+		const progress = await ctx.db
+			.query("backfillProgress")
+			.withIndex("by_key", (q) => q.eq("key", key))
+			.first();
+
+		const result = await ctx.db
+			.query("spotifyAlbums")
+			.order("asc")
+			.paginate({
+				numItems: size,
+				cursor: (progress?.cursorStr as string | null | undefined) ?? null,
+			});
+
+		let updated = 0;
+		for (const album of result.page) {
+			const albumTitleKey = normalizeAlbumTitle(album.name);
+			if (album.albumTitleKey !== albumTitleKey) {
+				await ctx.db.patch(album._id, { albumTitleKey });
+				updated += 1;
+			}
+		}
+
+		if (result.isDone) {
+			if (progress) {
+				await ctx.db.delete(progress._id);
+			}
+			return { processed: result.page.length, updated, done: true };
+		}
+
+		if (progress) {
+			await ctx.db.patch(progress._id, {
+				cursorStr: result.continueCursor,
+				updatedAt: Date.now(),
+			});
+		} else {
+			await ctx.db.insert("backfillProgress", {
+				key,
+				cursor: 0,
+				cursorStr: result.continueCursor,
+				updatedAt: Date.now(),
+			});
+		}
+
+		return { processed: result.page.length, updated, done: false };
 	},
 });
 
@@ -1433,6 +1499,7 @@ export const upsertAlbum = mutation({
 	},
 	handler: async (ctx, args) => {
 		const now = Date.now();
+		const albumTitleKey = normalizeAlbumTitle(args.name);
 
 		const existing = await ctx.db
 			.query("spotifyAlbums")
@@ -1444,6 +1511,7 @@ export const upsertAlbum = mutation({
 		if (existing) {
 			await ctx.db.patch(existing._id, {
 				name: args.name,
+				albumTitleKey,
 				artistName: args.artistName,
 				imageUrl: args.imageUrl,
 				releaseDate: args.releaseDate,
@@ -1458,6 +1526,7 @@ export const upsertAlbum = mutation({
 		return await ctx.db.insert("spotifyAlbums", {
 			spotifyAlbumId: args.spotifyAlbumId,
 			name: args.name,
+			albumTitleKey,
 			artistName: args.artistName,
 			imageUrl: args.imageUrl,
 			releaseDate: args.releaseDate,

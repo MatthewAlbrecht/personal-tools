@@ -285,8 +285,7 @@ export async function matchRymScrapeToSpotifyAlbums(
 
 	const albums = await ctx.db
 		.query("spotifyAlbums")
-		.withIndex("by_createdAt")
-		.order("desc")
+		.withIndex("by_albumTitleKey", (q) => q.eq("albumTitleKey", albumTitleKey))
 		.take(limit);
 
 	const matchedCanonical: Array<{
@@ -295,9 +294,6 @@ export async function matchRymScrapeToSpotifyAlbums(
 	}> = [];
 	for (const album of albums) {
 		summary.checkedAlbums += 1;
-		if (normalizeAlbumTitle(album.name) !== albumTitleKey) {
-			continue;
-		}
 		const matchedArtistKey = artistKeysIntersect(
 			canonicalAlbumArtistKeys(album),
 			rymArtistKeys,

@@ -365,6 +365,7 @@ export default defineSchema({
 	spotifyAlbums: defineTable({
 		spotifyAlbumId: v.string(), // Spotify's album ID
 		name: v.string(),
+		albumTitleKey: v.optional(v.string()),
 		artistName: v.string(),
 		imageUrl: v.optional(v.string()),
 		releaseDate: v.optional(v.string()),
@@ -378,6 +379,7 @@ export default defineSchema({
 		updatedAt: v.number(),
 	})
 		.index("by_spotifyAlbumId", ["spotifyAlbumId"])
+		.index("by_albumTitleKey", ["albumTitleKey"])
 		.index("by_createdAt", ["createdAt"]),
 
 	forLaterAlbumItems: defineTable({

@@ -68,10 +68,14 @@ export function AllAlbumsView({
 	const [rymAssociateAlbum, setRymAssociateAlbum] =
 		useState<AlbumLibraryRowData | null>(null);
 	const [backfillDialogOpen, setBackfillDialogOpen] = useState(false);
+	const [isBackfillingTitleKeys, setIsBackfillingTitleKeys] = useState(false);
 	const [isBackfillingRymLinks, setIsBackfillingRymLinks] = useState(false);
 	const setRymNotOnSite = useMutation(api.spotify.setSpotifyAlbumRymNotOnSite);
 	const associateRymScrape = useMutation(
 		api.spotify.associateSpotifyAlbumWithRymScrape,
+	);
+	const backfillSpotifyAlbumTitleKeys = useMutation(
+		api.spotify.backfillSpotifyAlbumTitleKeys,
 	);
 	const backfillRymLinks = useMutation(
 		api.rateYourMusicScrapes.backfillRymScrapeSpotifyAlbumMatches,
@@ -166,6 +170,33 @@ export function AllAlbumsView({
 		} catch (error) {
 			console.error("Failed to associate RYM scrape:", error);
 			toast.error("Could not link RYM scrape");
+		}
+	}
+
+	async function handleBackfillTitleKeys(): Promise<void> {
+		setIsBackfillingTitleKeys(true);
+		const toastId = "spotify-album-title-key-backfill";
+		try {
+			toast.loading("Backfilling album title keys...", { id: toastId });
+			let updated = 0;
+			let processed = 0;
+			for (;;) {
+				const batch = await backfillSpotifyAlbumTitleKeys({ batchSize: 500 });
+				updated += batch.updated;
+				processed += batch.processed;
+				if (batch.done) {
+					break;
+				}
+			}
+			toast.success(
+				`Processed ${processed} album${processed === 1 ? "" : "s"} and updated ${updated} title key${updated === 1 ? "" : "s"}`,
+				{ id: toastId },
+			);
+		} catch (error) {
+			console.error("Album title key backfill failed:", error);
+			toast.error("Could not backfill album title keys", { id: toastId });
+		} finally {
+			setIsBackfillingTitleKeys(false);
 		}
 	}
 
@@ -326,7 +357,16 @@ export function AllAlbumsView({
 							<DropdownMenuLabel>Library Actions</DropdownMenuLabel>
 							<DropdownMenuSeparator />
 							<DropdownMenuItem
-								disabled={isBackfillingRymLinks}
+								disabled={isBackfillingTitleKeys || isBackfillingRymLinks}
+								onSelect={() => void handleBackfillTitleKeys()}
+							>
+								<DatabaseBackup className="size-4" />
+								{isBackfillingTitleKeys
+									? "Backfilling title keys..."
+									: "Backfill album title keys"}
+							</DropdownMenuItem>
+							<DropdownMenuItem
+								disabled={isBackfillingTitleKeys || isBackfillingRymLinks}
 								onSelect={(event) => {
 									event.preventDefault();
 									setBackfillDialogOpen(true);
