@@ -1,16 +1,33 @@
 "use client";
 
 import { useMutation } from "convex/react";
-import { Copy, Disc3, Download, MoreHorizontal } from "lucide-react";
+import {
+	Copy,
+	DatabaseBackup,
+	Disc3,
+	Download,
+	MoreHorizontal,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AlbumRatingBadge } from "~/components/album-rating-badge";
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "~/components/ui/alert-dialog";
 import { Button } from "~/components/ui/button";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuLabel,
+	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { api } from "../../../../convex/_generated/api";
@@ -50,9 +67,14 @@ export function AllAlbumsView({
 	const [yearFilter, setYearFilter] = useState<string>("all");
 	const [rymAssociateAlbum, setRymAssociateAlbum] =
 		useState<AlbumLibraryRowData | null>(null);
+	const [backfillDialogOpen, setBackfillDialogOpen] = useState(false);
+	const [isBackfillingRymLinks, setIsBackfillingRymLinks] = useState(false);
 	const setRymNotOnSite = useMutation(api.spotify.setSpotifyAlbumRymNotOnSite);
 	const associateRymScrape = useMutation(
 		api.spotify.associateSpotifyAlbumWithRymScrape,
+	);
+	const backfillRymLinks = useMutation(
+		api.rateYourMusicScrapes.backfillRymScrapeSpotifyAlbumMatches,
 	);
 
 	// Extract available years from albums
@@ -144,6 +166,29 @@ export function AllAlbumsView({
 		} catch (error) {
 			console.error("Failed to associate RYM scrape:", error);
 			toast.error("Could not link RYM scrape");
+		}
+	}
+
+	async function handleBackfillRymLinks(): Promise<void> {
+		setBackfillDialogOpen(false);
+		setIsBackfillingRymLinks(true);
+		const toastId = "rym-scrape-spotify-backfill";
+		try {
+			toast.loading("Backfilling recent RYM links...", { id: toastId });
+			const result = await backfillRymLinks({
+				limit: 100,
+				scanLimit: 1000,
+				albumLimit: 5000,
+			});
+			toast.success(
+				`Scanned ${result.scannedScrapes}, skipped ${result.skippedAlreadyLinked}, processed ${result.processedScrapes}, created ${result.linkedAlbums} link${result.linkedAlbums === 1 ? "" : "s"}`,
+				{ id: toastId },
+			);
+		} catch (error) {
+			console.error("RYM link backfill failed:", error);
+			toast.error("Could not backfill RYM links", { id: toastId });
+		} finally {
+			setIsBackfillingRymLinks(false);
 		}
 	}
 
@@ -265,6 +310,35 @@ export function AllAlbumsView({
 					<p className="text-muted-foreground text-sm">
 						Showing {filteredAlbums.length} of {albums.length}
 					</p>
+					<DropdownMenu>
+						<DropdownMenuTrigger asChild>
+							<Button
+								type="button"
+								variant="outline"
+								size="icon"
+								className="size-8"
+								aria-label="Open album library actions"
+							>
+								<MoreHorizontal className="size-4" />
+							</Button>
+						</DropdownMenuTrigger>
+						<DropdownMenuContent align="end" className="w-60">
+							<DropdownMenuLabel>Library Actions</DropdownMenuLabel>
+							<DropdownMenuSeparator />
+							<DropdownMenuItem
+								disabled={isBackfillingRymLinks}
+								onSelect={(event) => {
+									event.preventDefault();
+									setBackfillDialogOpen(true);
+								}}
+							>
+								<DatabaseBackup className="size-4" />
+								{isBackfillingRymLinks
+									? "Backfilling RYM links..."
+									: "Backfill recent RYM links"}
+							</DropdownMenuItem>
+						</DropdownMenuContent>
+					</DropdownMenu>
 				</div>
 			</div>
 
@@ -299,6 +373,27 @@ export function AllAlbumsView({
 				}}
 				onAssociate={handleAssociateRymScrape}
 			/>
+			<AlertDialog
+				open={backfillDialogOpen}
+				onOpenChange={setBackfillDialogOpen}
+			>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>Backfill recent RYM links?</AlertDialogTitle>
+						<AlertDialogDescription>
+							This checks the most recently updated RYM scrapes against your
+							Spotify album library and creates any safe matches. It will not
+							delete existing links or mark albums as not on RYM.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>Cancel</AlertDialogCancel>
+						<AlertDialogAction onClick={() => void handleBackfillRymLinks()}>
+							Run backfill
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 		</div>
 	);
 }

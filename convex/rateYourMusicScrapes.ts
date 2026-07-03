@@ -3,7 +3,8 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
-import { matchForLaterAlbumsForRymScrape } from "./_utils/albumMatching";
+import type { RymScrapeSpotifyAlbumMatchSummary } from "./_utils/albumMatching";
+import { matchRymScrapeToSpotifyAlbums } from "./_utils/albumMatching";
 import {
 	deleteReleaseDescriptorLinks,
 	deleteReleaseGenreLinks,
@@ -16,6 +17,22 @@ import { requireAuth } from "./auth";
 const rymNamedLinkValidator = v.object({
 	name: v.string(),
 	href: v.optional(v.string()),
+});
+
+const rymScrapeSpotifyAlbumMatchSummaryValidator = v.object({
+	scrapeId: v.id("rateYourMusicScrapes"),
+	checkedAlbums: v.number(),
+	linkedAlbums: v.number(),
+	skippedAlreadyLinked: v.number(),
+});
+
+const rymScrapeSpotifyAlbumBackfillSummaryValidator = v.object({
+	scannedScrapes: v.number(),
+	processedScrapes: v.number(),
+	checkedAlbums: v.number(),
+	linkedAlbums: v.number(),
+	skippedAlreadyLinked: v.number(),
+	summaries: v.array(rymScrapeSpotifyAlbumMatchSummaryValidator),
 });
 
 export function normalizeRateYourMusicReleaseUrl(raw: string): string {
@@ -197,7 +214,7 @@ export const upsertRateYourMusicScrape = mutation({
 
 		await syncReleaseTaxonomy(ctx, scrapeId, args, now);
 
-		await matchForLaterAlbumsForRymScrape(ctx, {
+		await matchRymScrapeToSpotifyAlbums(ctx, {
 			scrapeId,
 			spotifyAlbumId: args.spotifyAlbumId?.trim() || undefined,
 			albumTitle: args.albumTitle,
@@ -213,6 +230,74 @@ export const upsertRateYourMusicScrape = mutation({
 		);
 
 		return scrapeId;
+	},
+});
+
+export const backfillRymScrapeSpotifyAlbumMatches = mutation({
+	args: {
+		limit: v.optional(v.number()),
+		scanLimit: v.optional(v.number()),
+		albumLimit: v.optional(v.number()),
+	},
+	returns: rymScrapeSpotifyAlbumBackfillSummaryValidator,
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+
+		const limit = Math.min(Math.max(args.limit ?? 25, 1), 100);
+		const scanLimit = Math.min(Math.max(args.scanLimit ?? 1000, limit), 5000);
+		const albumLimit = Math.min(Math.max(args.albumLimit ?? 1024, 1), 5000);
+		const scrapes = await ctx.db
+			.query("rateYourMusicScrapes")
+			.withIndex("by_updatedAt")
+			.order("desc")
+			.take(scanLimit);
+
+		const summaries: RymScrapeSpotifyAlbumMatchSummary[] = [];
+		let scannedScrapes = 0;
+		let skippedAlreadyLinked = 0;
+		for (const scrape of scrapes) {
+			if (summaries.length >= limit) {
+				break;
+			}
+			scannedScrapes += 1;
+
+			const existingLink = await ctx.db
+				.query("rateYourMusicSpotifyAlbumLinks")
+				.withIndex("by_scrapeId", (q) => q.eq("scrapeId", scrape._id))
+				.first();
+			if (existingLink) {
+				skippedAlreadyLinked += 1;
+				continue;
+			}
+
+			const summary = await matchRymScrapeToSpotifyAlbums(ctx, {
+				scrapeId: scrape._id,
+				spotifyAlbumId: scrape.spotifyAlbumId,
+				albumTitle: scrape.albumTitle,
+				artists: scrape.artists,
+				now: Date.now(),
+				limit: albumLimit,
+			});
+			summaries.push(summary);
+		}
+
+		return {
+			scannedScrapes,
+			processedScrapes: summaries.length,
+			checkedAlbums: summaries.reduce(
+				(total, summary) => total + summary.checkedAlbums,
+				0,
+			),
+			linkedAlbums: summaries.reduce(
+				(total, summary) => total + summary.linkedAlbums,
+				0,
+			),
+			skippedAlreadyLinked: summaries.reduce(
+				(total, summary) => total + summary.skippedAlreadyLinked,
+				skippedAlreadyLinked,
+			),
+			summaries,
+		};
 	},
 });
 

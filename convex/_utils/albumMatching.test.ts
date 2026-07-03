@@ -4,6 +4,7 @@ import {
 	matchForLaterAlbumsForRymScrape,
 	matchRymForForLaterAlbum,
 	matchRymForSpotifyAlbum,
+	matchRymScrapeToSpotifyAlbums,
 } from "./albumMatching";
 import {
 	artistKeysIntersect,
@@ -113,4 +114,8 @@ test("albumMatching exports the shared Spotify album RYM matcher", () => {
 
 test("albumMatching exports the RYM scrape to For Later matching entry point", () => {
 	assert.equal(typeof matchForLaterAlbumsForRymScrape, "function");
+});
+
+test("albumMatching exports the explicit RYM scrape to Spotify albums matcher", () => {
+	assert.equal(typeof matchRymScrapeToSpotifyAlbums, "function");
 });
