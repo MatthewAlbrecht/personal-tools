@@ -9,6 +9,7 @@ import {
 	Download,
 	MoreHorizontal,
 } from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AlbumRatingBadge } from "~/components/album-rating-badge";
@@ -47,6 +48,36 @@ import { AlbumRymAssociateDrawer } from "./album-rym-associate-drawer";
 type CopiedField = "album" | "artist";
 type AlbumLibrarySort = "recent" | "artist";
 
+type AlbumLibraryFilterState = {
+	searchQuery: string;
+	rymFilter: AlbumLibraryRymStatus;
+	robRankingFilter: AlbumLibraryRobRankingStatus;
+	listenFilter: AlbumLibraryListenStatus;
+	albumTypeFilter: AlbumLibraryAlbumType;
+	yearFilter: string;
+	sortBy: AlbumLibrarySort;
+};
+
+const DEFAULT_ALBUM_LIBRARY_FILTERS: AlbumLibraryFilterState = {
+	searchQuery: "",
+	rymFilter: "all",
+	robRankingFilter: "all",
+	listenFilter: "all",
+	albumTypeFilter: "album",
+	yearFilter: "all",
+	sortBy: "recent",
+};
+
+const ALBUM_LIBRARY_QUERY_PARAMS = [
+	"search",
+	"rym",
+	"rob",
+	"listens",
+	"type",
+	"year",
+	"sort",
+] as const;
+
 type AllAlbumsViewProps = {
 	albums: AlbumLibraryRowData[];
 	isLoading: boolean;
@@ -60,16 +91,25 @@ export function AllAlbumsView({
 	onAddListen,
 	onRateAlbum,
 }: AllAlbumsViewProps) {
-	const [searchQuery, setSearchQuery] = useState("");
-	const [rymFilter, setRymFilter] = useState<AlbumLibraryRymStatus>("all");
-	const [robRankingFilter, setRobRankingFilter] =
-		useState<AlbumLibraryRobRankingStatus>("all");
-	const [listenFilter, setListenFilter] =
-		useState<AlbumLibraryListenStatus>("all");
-	const [albumTypeFilter, setAlbumTypeFilter] =
-		useState<AlbumLibraryAlbumType>("album");
-	const [yearFilter, setYearFilter] = useState<string>("all");
-	const [sortBy, setSortBy] = useState<AlbumLibrarySort>("recent");
+	const router = useRouter();
+	const pathname = usePathname();
+	const searchParams = useSearchParams();
+	const albumLibraryPathname = pathname ?? "/albums/all";
+	const searchParamsString = searchParams?.toString() ?? "";
+	const filterState = useMemo(
+		() => parseAlbumLibraryFilterState(new URLSearchParams(searchParamsString)),
+		[searchParamsString],
+	);
+	const {
+		searchQuery,
+		rymFilter,
+		robRankingFilter,
+		listenFilter,
+		albumTypeFilter,
+		yearFilter,
+		sortBy,
+	} = filterState;
+	const hasNonDefaultFilters = !albumLibraryFiltersAreDefault(filterState);
 	const [rymAssociateAlbum, setRymAssociateAlbum] =
 		useState<AlbumLibraryRowData | null>(null);
 	const [backfillDialogOpen, setBackfillDialogOpen] = useState(false);
@@ -235,6 +275,34 @@ export function AllAlbumsView({
 		}
 	}
 
+	function updateFilterQuery(patch: Partial<AlbumLibraryFilterState>): void {
+		const nextFilters = {
+			...filterState,
+			...patch,
+		};
+		const nextParams = serializeAlbumLibraryFilterState(
+			nextFilters,
+			new URLSearchParams(searchParamsString),
+		);
+		const query = nextParams.toString();
+		router.replace(
+			query ? `${albumLibraryPathname}?${query}` : albumLibraryPathname,
+			{ scroll: false },
+		);
+	}
+
+	function clearFilters(): void {
+		const nextParams = serializeAlbumLibraryFilterState(
+			DEFAULT_ALBUM_LIBRARY_FILTERS,
+			new URLSearchParams(searchParamsString),
+		);
+		const query = nextParams.toString();
+		router.replace(
+			query ? `${albumLibraryPathname}?${query}` : albumLibraryPathname,
+			{ scroll: false },
+		);
+	}
+
 	return (
 		<div className="space-y-4">
 			{/* Filters */}
@@ -245,7 +313,7 @@ export function AllAlbumsView({
 						type="text"
 						placeholder="Search albums by name or artist..."
 						value={searchQuery}
-						onChange={(e) => setSearchQuery(e.target.value)}
+						onChange={(e) => updateFilterQuery({ searchQuery: e.target.value })}
 						className="w-full rounded-md border bg-background px-3 py-2 text-sm"
 					/>
 				</div>
@@ -260,7 +328,9 @@ export function AllAlbumsView({
 						<select
 							id="year-filter"
 							value={yearFilter}
-							onChange={(e) => setYearFilter(e.target.value)}
+							onChange={(e) =>
+								updateFilterQuery({ yearFilter: e.target.value })
+							}
 							className="rounded-md border bg-background px-2 py-1 text-sm"
 						>
 							<option value="all">All Years</option>
@@ -281,7 +351,9 @@ export function AllAlbumsView({
 							id="album-type-filter"
 							value={albumTypeFilter}
 							onChange={(e) =>
-								setAlbumTypeFilter(e.target.value as AlbumLibraryAlbumType)
+								updateFilterQuery({
+									albumTypeFilter: e.target.value as AlbumLibraryAlbumType,
+								})
 							}
 							className="rounded-md border bg-background px-2 py-1 text-sm"
 						>
@@ -300,7 +372,9 @@ export function AllAlbumsView({
 							id="listen-filter"
 							value={listenFilter}
 							onChange={(e) =>
-								setListenFilter(e.target.value as AlbumLibraryListenStatus)
+								updateFilterQuery({
+									listenFilter: e.target.value as AlbumLibraryListenStatus,
+								})
 							}
 							className="rounded-md border bg-background px-2 py-1 text-sm"
 						>
@@ -319,7 +393,9 @@ export function AllAlbumsView({
 							id="rym-filter"
 							value={rymFilter}
 							onChange={(e) =>
-								setRymFilter(e.target.value as AlbumLibraryRymStatus)
+								updateFilterQuery({
+									rymFilter: e.target.value as AlbumLibraryRymStatus,
+								})
 							}
 							className="rounded-md border bg-background px-2 py-1 text-sm"
 						>
@@ -338,9 +414,10 @@ export function AllAlbumsView({
 							id="rob-ranking-filter"
 							value={robRankingFilter}
 							onChange={(e) =>
-								setRobRankingFilter(
-									e.target.value as AlbumLibraryRobRankingStatus,
-								)
+								updateFilterQuery({
+									robRankingFilter: e.target
+										.value as AlbumLibraryRobRankingStatus,
+								})
 							}
 							className="rounded-md border bg-background px-2 py-1 text-sm"
 						>
@@ -358,7 +435,11 @@ export function AllAlbumsView({
 						<select
 							id="album-sort"
 							value={sortBy}
-							onChange={(e) => setSortBy(e.target.value as AlbumLibrarySort)}
+							onChange={(e) =>
+								updateFilterQuery({
+									sortBy: e.target.value as AlbumLibrarySort,
+								})
+							}
 							className="rounded-md border bg-background px-2 py-1 text-sm"
 						>
 							<option value="recent">Recent</option>
@@ -369,6 +450,15 @@ export function AllAlbumsView({
 					<p className="text-muted-foreground text-sm">
 						Showing {filteredAlbums.length} of {albums.length}
 					</p>
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						disabled={!hasNonDefaultFilters}
+						onClick={clearFilters}
+					>
+						Clear filters
+					</Button>
 					<DropdownMenu>
 						<DropdownMenuTrigger asChild>
 							<Button
@@ -559,7 +649,7 @@ function AlbumCardRow({
 					<CopiedIndicator visible={copiedField === "artist"} />
 				</p>
 				<div className="mt-1 flex flex-wrap gap-1">
-					<RymStatusBadge album={album} />
+					<RymStatusBadge album={album} onLinkRym={onLinkRym} />
 					<RobRankingBadge years={album.robRankingYears} />
 				</div>
 				<TaxonomyLines album={album} />
@@ -655,7 +745,13 @@ function CopiedIndicator({ visible }: { visible: boolean }) {
 	);
 }
 
-function RymStatusBadge({ album }: { album: AlbumLibraryRowData }) {
+function RymStatusBadge({
+	album,
+	onLinkRym,
+}: {
+	album: AlbumLibraryRowData;
+	onLinkRym: () => void;
+}) {
 	if (album.rymNotOnSite) {
 		return (
 			<span className="rounded-full border px-2 py-0.5 text-muted-foreground text-xs">
@@ -673,9 +769,14 @@ function RymStatusBadge({ album }: { album: AlbumLibraryRowData }) {
 	}
 
 	return (
-		<span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-amber-700 text-xs dark:text-amber-300">
+		<button
+			type="button"
+			onClick={onLinkRym}
+			className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-amber-700 text-xs transition-colors hover:border-amber-500/50 hover:bg-amber-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-amber-300"
+			title="Link RYM scrape"
+		>
 			Needs RYM
-		</span>
+		</button>
 	);
 }
 
@@ -770,6 +871,110 @@ function TaxonomyLine({
 	if (tags.length === 0) return null;
 
 	return <p className={className}>{tags.map((tag) => tag.label).join(", ")}</p>;
+}
+
+function parseAlbumLibraryFilterState(
+	params: URLSearchParams,
+): AlbumLibraryFilterState {
+	return {
+		searchQuery:
+			params.get("search") ?? DEFAULT_ALBUM_LIBRARY_FILTERS.searchQuery,
+		rymFilter: parseAlbumLibraryRymStatus(params.get("rym")),
+		robRankingFilter: parseAlbumLibraryRobRankingStatus(params.get("rob")),
+		listenFilter: parseAlbumLibraryListenStatus(params.get("listens")),
+		albumTypeFilter: parseAlbumLibraryAlbumType(params.get("type")),
+		yearFilter: parseAlbumLibraryYear(params.get("year")),
+		sortBy: parseAlbumLibrarySort(params.get("sort")),
+	};
+}
+
+function serializeAlbumLibraryFilterState(
+	filters: AlbumLibraryFilterState,
+	baseParams: URLSearchParams,
+): URLSearchParams {
+	for (const param of ALBUM_LIBRARY_QUERY_PARAMS) {
+		baseParams.delete(param);
+	}
+
+	const search = filters.searchQuery.trim();
+	if (search) baseParams.set("search", search);
+	if (filters.rymFilter !== DEFAULT_ALBUM_LIBRARY_FILTERS.rymFilter) {
+		baseParams.set("rym", filters.rymFilter);
+	}
+	if (
+		filters.robRankingFilter !== DEFAULT_ALBUM_LIBRARY_FILTERS.robRankingFilter
+	) {
+		baseParams.set("rob", filters.robRankingFilter);
+	}
+	if (filters.listenFilter !== DEFAULT_ALBUM_LIBRARY_FILTERS.listenFilter) {
+		baseParams.set("listens", filters.listenFilter);
+	}
+	if (
+		filters.albumTypeFilter !== DEFAULT_ALBUM_LIBRARY_FILTERS.albumTypeFilter
+	) {
+		baseParams.set("type", filters.albumTypeFilter);
+	}
+	if (filters.yearFilter !== DEFAULT_ALBUM_LIBRARY_FILTERS.yearFilter) {
+		baseParams.set("year", filters.yearFilter);
+	}
+	if (filters.sortBy !== DEFAULT_ALBUM_LIBRARY_FILTERS.sortBy) {
+		baseParams.set("sort", filters.sortBy);
+	}
+
+	return baseParams;
+}
+
+function albumLibraryFiltersAreDefault(
+	filters: AlbumLibraryFilterState,
+): boolean {
+	return (
+		filters.searchQuery.trim() === DEFAULT_ALBUM_LIBRARY_FILTERS.searchQuery &&
+		filters.rymFilter === DEFAULT_ALBUM_LIBRARY_FILTERS.rymFilter &&
+		filters.robRankingFilter ===
+			DEFAULT_ALBUM_LIBRARY_FILTERS.robRankingFilter &&
+		filters.listenFilter === DEFAULT_ALBUM_LIBRARY_FILTERS.listenFilter &&
+		filters.albumTypeFilter === DEFAULT_ALBUM_LIBRARY_FILTERS.albumTypeFilter &&
+		filters.yearFilter === DEFAULT_ALBUM_LIBRARY_FILTERS.yearFilter &&
+		filters.sortBy === DEFAULT_ALBUM_LIBRARY_FILTERS.sortBy
+	);
+}
+
+function parseAlbumLibraryRymStatus(
+	value: string | null,
+): AlbumLibraryRymStatus {
+	if (value === "linked" || value === "unlinked") return value;
+	return DEFAULT_ALBUM_LIBRARY_FILTERS.rymFilter;
+}
+
+function parseAlbumLibraryRobRankingStatus(
+	value: string | null,
+): AlbumLibraryRobRankingStatus {
+	if (value === "appears" || value === "not_appears") return value;
+	return DEFAULT_ALBUM_LIBRARY_FILTERS.robRankingFilter;
+}
+
+function parseAlbumLibraryListenStatus(
+	value: string | null,
+): AlbumLibraryListenStatus {
+	if (value === "listened" || value === "unlistened") return value;
+	return DEFAULT_ALBUM_LIBRARY_FILTERS.listenFilter;
+}
+
+function parseAlbumLibraryAlbumType(
+	value: string | null,
+): AlbumLibraryAlbumType {
+	if (value === "all" || value === "single") return value;
+	return DEFAULT_ALBUM_LIBRARY_FILTERS.albumTypeFilter;
+}
+
+function parseAlbumLibraryYear(value: string | null): string {
+	if (value && /^\d+$/.test(value)) return value;
+	return DEFAULT_ALBUM_LIBRARY_FILTERS.yearFilter;
+}
+
+function parseAlbumLibrarySort(value: string | null): AlbumLibrarySort {
+	if (value === "artist") return value;
+	return DEFAULT_ALBUM_LIBRARY_FILTERS.sortBy;
 }
 
 function compareAlbumsByArtistName(
