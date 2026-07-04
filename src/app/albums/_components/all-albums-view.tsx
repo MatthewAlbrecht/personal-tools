@@ -45,6 +45,7 @@ import type { AlbumLibraryRowData } from "../_utils/types";
 import { AlbumRymAssociateDrawer } from "./album-rym-associate-drawer";
 
 type CopiedField = "album" | "artist";
+type AlbumLibrarySort = "recent" | "artist";
 
 type AllAlbumsViewProps = {
 	albums: AlbumLibraryRowData[];
@@ -68,6 +69,7 @@ export function AllAlbumsView({
 	const [albumTypeFilter, setAlbumTypeFilter] =
 		useState<AlbumLibraryAlbumType>("album");
 	const [yearFilter, setYearFilter] = useState<string>("all");
+	const [sortBy, setSortBy] = useState<AlbumLibrarySort>("recent");
 	const [rymAssociateAlbum, setRymAssociateAlbum] =
 		useState<AlbumLibraryRowData | null>(null);
 	const [backfillDialogOpen, setBackfillDialogOpen] = useState(false);
@@ -97,7 +99,7 @@ export function AllAlbumsView({
 		const selectedYear =
 			yearFilter === "all" ? undefined : Number.parseInt(yearFilter, 10);
 
-		return albums.filter((album) =>
+		const filtered = albums.filter((album) =>
 			rowMatchesAlbumLibraryFilters(album, {
 				search: searchQuery,
 				rymStatus: rymFilter,
@@ -107,6 +109,12 @@ export function AllAlbumsView({
 				releaseYear: selectedYear,
 			}),
 		);
+
+		if (sortBy === "artist") {
+			return filtered.sort(compareAlbumsByArtistName);
+		}
+
+		return filtered.sort(compareAlbumsByRecent);
 	}, [
 		albums,
 		yearFilter,
@@ -115,6 +123,7 @@ export function AllAlbumsView({
 		listenFilter,
 		albumTypeFilter,
 		searchQuery,
+		sortBy,
 	]);
 
 	if (isLoading) {
@@ -338,6 +347,22 @@ export function AllAlbumsView({
 							<option value="all">All</option>
 							<option value="appears">Appears</option>
 							<option value="not_appears">Does not appear</option>
+						</select>
+					</div>
+
+					{/* Sort Control */}
+					<div className="flex items-center gap-2">
+						<label htmlFor="album-sort" className="font-medium text-sm">
+							Sort:
+						</label>
+						<select
+							id="album-sort"
+							value={sortBy}
+							onChange={(e) => setSortBy(e.target.value as AlbumLibrarySort)}
+							className="rounded-md border bg-background px-2 py-1 text-sm"
+						>
+							<option value="recent">Recent</option>
+							<option value="artist">Artist name</option>
 						</select>
 					</div>
 
@@ -745,6 +770,32 @@ function TaxonomyLine({
 	if (tags.length === 0) return null;
 
 	return <p className={className}>{tags.map((tag) => tag.label).join(", ")}</p>;
+}
+
+function compareAlbumsByArtistName(
+	a: AlbumLibraryRowData,
+	b: AlbumLibraryRowData,
+): number {
+	const artistCompare = a.artistName.localeCompare(b.artistName, undefined, {
+		sensitivity: "base",
+	});
+
+	if (artistCompare !== 0) return artistCompare;
+
+	const albumCompare = a.name.localeCompare(b.name, undefined, {
+		sensitivity: "base",
+	});
+
+	if (albumCompare !== 0) return albumCompare;
+
+	return compareAlbumsByRecent(a, b);
+}
+
+function compareAlbumsByRecent(
+	a: AlbumLibraryRowData,
+	b: AlbumLibraryRowData,
+): number {
+	return b.createdAt - a.createdAt;
 }
 
 async function copyArtworkUrl(url: string): Promise<void> {
