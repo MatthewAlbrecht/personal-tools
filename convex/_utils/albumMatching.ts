@@ -256,26 +256,25 @@ export async function matchRymScrapeToSpotifyAlbums(
 			)
 			.first();
 
-		if (!album) {
+		if (album) {
+			summary.checkedAlbums += 1;
+
+			if (linkedAlbumIds.has(album._id)) {
+				summary.skippedAlreadyLinked += 1;
+				return summary;
+			}
+
+			await upsertRymSpotifyAlbumLink(ctx, {
+				scrapeId: args.scrapeId,
+				albumId: album._id,
+				spotifyAlbumId,
+				method: "spotify_id",
+				now: args.now,
+			});
+			await patchScrapeAlbumConvexId(ctx, args.scrapeId, album._id);
+			summary.linkedAlbums += 1;
 			return summary;
 		}
-		summary.checkedAlbums += 1;
-
-		if (linkedAlbumIds.has(album._id)) {
-			summary.skippedAlreadyLinked += 1;
-			return summary;
-		}
-
-		await upsertRymSpotifyAlbumLink(ctx, {
-			scrapeId: args.scrapeId,
-			albumId: album._id,
-			spotifyAlbumId,
-			method: "spotify_id",
-			now: args.now,
-		});
-		await patchScrapeAlbumConvexId(ctx, args.scrapeId, album._id);
-		summary.linkedAlbums += 1;
-		return summary;
 	}
 
 	const albumTitleKey = normalizeAlbumTitle(args.albumTitle);

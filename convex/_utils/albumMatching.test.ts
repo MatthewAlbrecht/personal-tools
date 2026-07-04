@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { Id } from "../_generated/dataModel";
+import type { MutationCtx } from "../_generated/server";
 import {
 	matchForLaterAlbumsForRymScrape,
 	matchRymForForLaterAlbum,
@@ -104,6 +106,53 @@ test("findTitleArtistMatch rejects same title with no artist overlap", () => {
 	assert.equal(match, null);
 });
 
+test("matchRymScrapeToSpotifyAlbums falls back to title and artist when Spotify ID misses", async () => {
+	const scrapeId = "scrape_ibeyi_ash" as Id<"rateYourMusicScrapes">;
+	const { ctx, inserts, patches } = createAlbumMatchingTestContext({
+		albums: [
+			{
+				_id: "album_ibeyi_ash",
+				spotifyAlbumId: "spotify_ibeyi_ash_library",
+				name: "Ash",
+				albumTitleKey: normalizeAlbumTitle("Ash"),
+				artistName: "Ibeyi",
+				rawData: JSON.stringify({ artists: [{ name: "Ibeyi" }] }),
+			},
+		],
+	});
+
+	const summary = await matchRymScrapeToSpotifyAlbums(ctx, {
+		scrapeId,
+		spotifyAlbumId: "spotify_ibeyi_ash_scrape_missing",
+		albumTitle: "Ash",
+		artists: [{ name: "Ibeyi" }],
+		now: 123,
+	});
+
+	assert.equal(summary.checkedAlbums, 1);
+	assert.equal(summary.linkedAlbums, 1);
+	assert.deepEqual(inserts, [
+		{
+			tableName: "rateYourMusicSpotifyAlbumLinks",
+			document: {
+				scrapeId: "scrape_ibeyi_ash",
+				albumId: "album_ibeyi_ash",
+				spotifyAlbumId: "spotify_ibeyi_ash_library",
+				method: "title_artist",
+				matchedArtistKey: "ibeyi",
+				updatedAt: 123,
+				createdAt: 123,
+			},
+		},
+	]);
+	assert.deepEqual(patches, [
+		{
+			id: "scrape_ibeyi_ash",
+			patch: { spotifyAlbumConvexId: "album_ibeyi_ash" },
+		},
+	]);
+});
+
 test("albumMatching exports the For Later to RYM matching entry point", () => {
 	assert.equal(typeof matchRymForForLaterAlbum, "function");
 });
@@ -119,3 +168,114 @@ test("albumMatching exports the RYM scrape to For Later matching entry point", (
 test("albumMatching exports the explicit RYM scrape to Spotify albums matcher", () => {
 	assert.equal(typeof matchRymScrapeToSpotifyAlbums, "function");
 });
+
+type TestAlbum = {
+	_id: string;
+	spotifyAlbumId: string;
+	name: string;
+	albumTitleKey?: string;
+	artistName: string;
+	rawData?: string;
+};
+
+type TestLink = {
+	_id: string;
+	scrapeId: string;
+	albumId: string;
+	spotifyAlbumId?: string;
+	method: string;
+	updatedAt: number;
+};
+
+type TestInsert = {
+	tableName: string;
+	document: Record<string, unknown>;
+};
+
+type TestPatch = {
+	id: string;
+	patch: Record<string, unknown>;
+};
+
+type FakeQueryChain = {
+	eq: (field: string, value: unknown) => FakeQueryChain;
+};
+
+function createAlbumMatchingTestContext({
+	albums,
+	links = [],
+}: {
+	albums: TestAlbum[];
+	links?: TestLink[];
+}): {
+	ctx: MutationCtx;
+	inserts: TestInsert[];
+	patches: TestPatch[];
+} {
+	const inserts: TestInsert[] = [];
+	const patches: TestPatch[] = [];
+
+	function query(tableName: string) {
+		let filters: Record<string, unknown> = {};
+		const chain = {
+			withIndex: (
+				_indexName: string,
+				filterBuilder: (q: FakeQueryChain) => unknown,
+			) => {
+				const nextFilters: Record<string, unknown> = {};
+				const q: FakeQueryChain = {
+					eq(field, value) {
+						nextFilters[field] = value;
+						return q;
+					},
+				};
+				filterBuilder(q);
+				filters = nextFilters;
+				return chain;
+			},
+			first: async () => firstMatchingRow(tableName, filters, albums, links),
+			collect: async () => matchingRows(tableName, filters, albums, links),
+			take: async (limit: number) =>
+				matchingRows(tableName, filters, albums, links).slice(0, limit),
+		};
+		return chain;
+	}
+
+	const ctx = {
+		db: {
+			query,
+			insert: async (tableName: string, document: Record<string, unknown>) => {
+				inserts.push({ tableName, document });
+				return `${tableName}_inserted`;
+			},
+			patch: async (id: string, patch: Record<string, unknown>) => {
+				patches.push({ id, patch });
+			},
+		},
+	} as unknown as MutationCtx;
+
+	return { ctx, inserts, patches };
+}
+
+function firstMatchingRow(
+	tableName: string,
+	filters: Record<string, unknown>,
+	albums: TestAlbum[],
+	links: TestLink[],
+): TestAlbum | TestLink | null {
+	return matchingRows(tableName, filters, albums, links)[0] ?? null;
+}
+
+function matchingRows(
+	tableName: string,
+	filters: Record<string, unknown>,
+	albums: TestAlbum[],
+	links: TestLink[],
+): Array<TestAlbum | TestLink> {
+	const rows = tableName === "spotifyAlbums" ? albums : links;
+	return rows.filter((row) =>
+		Object.entries(filters).every(
+			([field, value]) => row[field as keyof typeof row] === value,
+		),
+	);
+}
