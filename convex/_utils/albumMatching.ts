@@ -302,30 +302,27 @@ export async function matchRymScrapeToSpotifyAlbums(
 		}
 	}
 
-	if (matchedCanonical.length !== 1) {
+	if (matchedCanonical.length === 0) {
 		return summary;
 	}
 
-	const match = matchedCanonical[0];
-	if (!match) {
-		return summary;
-	}
+	for (const match of matchedCanonical) {
+		if (linkedAlbumIds.has(match.album._id)) {
+			summary.skippedAlreadyLinked += 1;
+			continue;
+		}
 
-	if (linkedAlbumIds.has(match.album._id)) {
-		summary.skippedAlreadyLinked += 1;
-		return summary;
+		await upsertRymSpotifyAlbumLink(ctx, {
+			scrapeId: args.scrapeId,
+			albumId: match.album._id,
+			spotifyAlbumId: match.album.spotifyAlbumId,
+			method: "title_artist",
+			matchedArtistKey: match.matchedArtistKey,
+			now: args.now,
+		});
+		await patchScrapeAlbumConvexId(ctx, args.scrapeId, match.album._id);
+		summary.linkedAlbums += 1;
 	}
-
-	await upsertRymSpotifyAlbumLink(ctx, {
-		scrapeId: args.scrapeId,
-		albumId: match.album._id,
-		spotifyAlbumId: match.album.spotifyAlbumId,
-		method: "title_artist",
-		matchedArtistKey: match.matchedArtistKey,
-		now: args.now,
-	});
-	await patchScrapeAlbumConvexId(ctx, args.scrapeId, match.album._id);
-	summary.linkedAlbums += 1;
 
 	return summary;
 }

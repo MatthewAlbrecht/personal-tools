@@ -153,6 +153,48 @@ test("matchRymScrapeToSpotifyAlbums falls back to title and artist when Spotify 
 	]);
 });
 
+test("matchRymScrapeToSpotifyAlbums links every title and artist match", async () => {
+	const scrapeId = "scrape_ibeyi_ash" as Id<"rateYourMusicScrapes">;
+	const { ctx, inserts, patches } = createAlbumMatchingTestContext({
+		albums: [
+			{
+				_id: "album_ibeyi_ash_standard",
+				spotifyAlbumId: "spotify_ibeyi_ash_standard",
+				name: "Ash",
+				albumTitleKey: normalizeAlbumTitle("Ash"),
+				artistName: "Ibeyi",
+				rawData: JSON.stringify({ artists: [{ name: "Ibeyi" }] }),
+			},
+			{
+				_id: "album_ibeyi_ash_deluxe",
+				spotifyAlbumId: "spotify_ibeyi_ash_deluxe",
+				name: "Ash",
+				albumTitleKey: normalizeAlbumTitle("Ash"),
+				artistName: "Ibeyi",
+				rawData: JSON.stringify({ artists: [{ name: "Ibeyi" }] }),
+			},
+		],
+	});
+
+	const summary = await matchRymScrapeToSpotifyAlbums(ctx, {
+		scrapeId,
+		albumTitle: "Ash",
+		artists: [{ name: "Ibeyi" }],
+		now: 123,
+	});
+
+	assert.equal(summary.checkedAlbums, 2);
+	assert.equal(summary.linkedAlbums, 2);
+	assert.deepEqual(
+		inserts.map((insert) => insert.document.albumId),
+		["album_ibeyi_ash_standard", "album_ibeyi_ash_deluxe"],
+	);
+	assert.deepEqual(
+		patches.map((patch) => patch.patch.spotifyAlbumConvexId),
+		["album_ibeyi_ash_standard", "album_ibeyi_ash_deluxe"],
+	);
+});
+
 test("albumMatching exports the For Later to RYM matching entry point", () => {
 	assert.equal(typeof matchRymForForLaterAlbum, "function");
 });
