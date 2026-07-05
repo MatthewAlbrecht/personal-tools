@@ -63,6 +63,7 @@ function AllAlbumsPageInner() {
 
 	return (
 		<AllAlbumsView
+			userId={userId}
 			albums={albums.results ?? []}
 			availableYears={releaseYears ?? []}
 			isLoading={albums.status === "LoadingFirstPage"}

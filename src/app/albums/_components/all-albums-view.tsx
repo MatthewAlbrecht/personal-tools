@@ -1,14 +1,7 @@
 "use client";
 
 import { useMutation } from "convex/react";
-import {
-	Check,
-	Copy,
-	DatabaseBackup,
-	Disc3,
-	Download,
-	MoreHorizontal,
-} from "lucide-react";
+import { Check, Copy, DatabaseBackup, Disc3, Download, MoreHorizontal } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -29,7 +22,6 @@ import {
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuLabel,
-	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { api } from "../../../../convex/_generated/api";
@@ -78,6 +70,7 @@ const ALBUM_LIBRARY_QUERY_PARAMS = [
 ] as const;
 
 type AllAlbumsViewProps = {
+	userId: string | null;
 	albums: AlbumLibraryRowData[];
 	availableYears: number[];
 	isLoading: boolean;
@@ -89,6 +82,7 @@ type AllAlbumsViewProps = {
 };
 
 export function AllAlbumsView({
+	userId,
 	albums,
 	availableYears,
 	isLoading,
@@ -120,14 +114,23 @@ export function AllAlbumsView({
 	const [rymAssociateAlbum, setRymAssociateAlbum] =
 		useState<AlbumLibraryRowData | null>(null);
 	const [backfillDialogOpen, setBackfillDialogOpen] = useState(false);
+	const [isBackfillingLibraryIndex, setIsBackfillingLibraryIndex] =
+		useState(false);
 	const [isBackfillingTitleKeys, setIsBackfillingTitleKeys] = useState(false);
 	const [isBackfillingRymLinks, setIsBackfillingRymLinks] = useState(false);
+	const isRunningLibraryAction =
+		isBackfillingLibraryIndex ||
+		isBackfillingTitleKeys ||
+		isBackfillingRymLinks;
 	const setRymNotOnSite = useMutation(api.spotify.setSpotifyAlbumRymNotOnSite);
 	const associateRymScrape = useMutation(
 		api.spotify.associateSpotifyAlbumWithRymScrape,
 	);
 	const backfillSpotifyAlbumTitleKeys = useMutation(
 		api.spotify.backfillSpotifyAlbumTitleKeys,
+	);
+	const backfillAlbumLibraryItems = useMutation(
+		api.spotify.backfillAlbumLibraryItems,
 	);
 	const backfillRymLinks = useMutation(
 		api.rateYourMusicScrapes.backfillRymScrapeSpotifyAlbumMatches,
@@ -181,6 +184,45 @@ export function AllAlbumsView({
 		} catch (error) {
 			console.error("Failed to associate RYM scrape:", error);
 			toast.error("Could not link RYM scrape");
+		}
+	}
+
+	async function handleBackfillLibraryIndex(): Promise<void> {
+		if (!userId) {
+			toast.error("Sign in to build the library index");
+			return;
+		}
+
+		setIsBackfillingLibraryIndex(true);
+		const toastId = "album-library-index-backfill";
+		try {
+			toast.loading("Building library index...", { id: toastId });
+			let processed = 0;
+			let cursor: string | undefined;
+			for (;;) {
+				const batch = await backfillAlbumLibraryItems({
+					userId,
+					batchSize: 500,
+					...(cursor === undefined ? {} : { cursor }),
+				});
+				processed += batch.processed;
+				if (batch.done) {
+					break;
+				}
+				cursor = batch.cursor;
+				toast.loading(`Building library index... ${processed} albums`, {
+					id: toastId,
+				});
+			}
+			toast.success(
+				`Library index built for ${processed} album${processed === 1 ? "" : "s"}`,
+				{ id: toastId },
+			);
+		} catch (error) {
+			console.error("Album library index backfill failed:", error);
+			toast.error("Could not build library index", { id: toastId });
+		} finally {
+			setIsBackfillingLibraryIndex(false);
 		}
 	}
 
@@ -418,44 +460,45 @@ export function AllAlbumsView({
 					>
 						Clear filters
 					</Button>
-					<DropdownMenu>
-						<DropdownMenuTrigger asChild>
-							<Button
-								type="button"
-								variant="outline"
-								size="icon"
-								className="size-8"
-								aria-label="Open album library actions"
-							>
-								<MoreHorizontal className="size-4" />
-							</Button>
-						</DropdownMenuTrigger>
-						<DropdownMenuContent align="end" className="w-60">
-							<DropdownMenuLabel>Library Actions</DropdownMenuLabel>
-							<DropdownMenuSeparator />
-							<DropdownMenuItem
-								disabled={isBackfillingTitleKeys || isBackfillingRymLinks}
-								onSelect={() => void handleBackfillTitleKeys()}
-							>
-								<DatabaseBackup className="size-4" />
-								{isBackfillingTitleKeys
-									? "Backfilling title keys..."
-									: "Backfill album title keys"}
-							</DropdownMenuItem>
-							<DropdownMenuItem
-								disabled={isBackfillingTitleKeys || isBackfillingRymLinks}
-								onSelect={(event) => {
-									event.preventDefault();
-									setBackfillDialogOpen(true);
-								}}
-							>
-								<DatabaseBackup className="size-4" />
-								{isBackfillingRymLinks
-									? "Backfilling RYM links..."
-									: "Backfill recent RYM links"}
-							</DropdownMenuItem>
-						</DropdownMenuContent>
-					</DropdownMenu>
+				</div>
+
+				<div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/30 p-3">
+					<p className="w-full font-medium text-sm">Library setup</p>
+					<Button
+						type="button"
+						size="sm"
+						disabled={isRunningLibraryAction || !userId}
+						onClick={() => void handleBackfillLibraryIndex()}
+					>
+						<DatabaseBackup className="size-4" />
+						{isBackfillingLibraryIndex
+							? "Building index..."
+							: "Build library index"}
+					</Button>
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						disabled={isRunningLibraryAction}
+						onClick={() => void handleBackfillTitleKeys()}
+					>
+						<DatabaseBackup className="size-4" />
+						{isBackfillingTitleKeys
+							? "Backfilling title keys..."
+							: "Backfill title keys"}
+					</Button>
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						disabled={isRunningLibraryAction}
+						onClick={() => setBackfillDialogOpen(true)}
+					>
+						<DatabaseBackup className="size-4" />
+						{isBackfillingRymLinks
+							? "Backfilling RYM links..."
+							: "Backfill RYM links"}
+					</Button>
 				</div>
 			</div>
 
@@ -466,6 +509,9 @@ export function AllAlbumsView({
 						hasFilters={hasNonDefaultFilters}
 						canLoadMore={canLoadMore}
 						isLoadingMore={isLoadingMore}
+						isBuildingLibraryIndex={isBackfillingLibraryIndex}
+						canBuildLibraryIndex={Boolean(userId)}
+						onBuildLibraryIndex={() => void handleBackfillLibraryIndex()}
 						onLoadMore={onLoadMore}
 					/>
 				) : (
@@ -528,11 +574,17 @@ function AllAlbumsEmptyState({
 	hasFilters,
 	canLoadMore,
 	isLoadingMore,
+	isBuildingLibraryIndex,
+	canBuildLibraryIndex,
+	onBuildLibraryIndex,
 	onLoadMore,
 }: {
 	hasFilters: boolean;
 	canLoadMore: boolean;
 	isLoadingMore: boolean;
+	isBuildingLibraryIndex: boolean;
+	canBuildLibraryIndex: boolean;
+	onBuildLibraryIndex: () => void;
 	onLoadMore: () => void;
 }) {
 	if (canLoadMore) {
@@ -563,8 +615,21 @@ function AllAlbumsEmptyState({
 				<p className="mt-1 text-muted-foreground text-sm">
 					{hasFilters
 						? "Try adjusting the filters to see more albums."
-						: "Albums will appear here after syncing your Spotify history"}
+						: "Build the library index once, or sync Spotify history first."}
 				</p>
+				{!hasFilters && canBuildLibraryIndex ? (
+					<Button
+						type="button"
+						className="mt-4"
+						disabled={isBuildingLibraryIndex}
+						onClick={onBuildLibraryIndex}
+					>
+						<DatabaseBackup className="size-4" />
+						{isBuildingLibraryIndex
+							? "Building index..."
+							: "Build library index"}
+					</Button>
+				) : null}
 			</div>
 		</div>
 	);
