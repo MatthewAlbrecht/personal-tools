@@ -218,14 +218,12 @@ export default function RobsRankingsPage() {
 					>
 						{isPublished ? "Unpublish" : "Publish"}
 					</Button>
-					{isPublished && (
-						<Button type="button" variant="ghost" size="sm" asChild>
-							<Link href="/public/robs-top-50" target="_blank">
-								<ExternalLink className="mr-2 h-4 w-4" />
-								View public page
-							</Link>
-						</Button>
-					)}
+					<Button type="button" variant="ghost" size="sm" asChild>
+						<Link href="/public/robs-top-50">
+							<ExternalLink className="mr-2 h-4 w-4" />
+							View public page
+						</Link>
+					</Button>
 				</div>
 			)}
 

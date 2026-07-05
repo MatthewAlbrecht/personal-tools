@@ -13,7 +13,10 @@ export function SiteHeader() {
 					<Link href="/" className="font-semibold tracking-tight">
 						moooose.dev
 					</Link>
-					<Link href="/public/robs-top-50" className="text-sm hover:underline">
+					<Link
+						href={isAuthenticated ? "/robs-rankings" : "/public/robs-top-50"}
+						className="text-sm hover:underline"
+					>
 						Rob&apos;s Top 50
 					</Link>
 					{isAuthenticated && (
@@ -38,9 +41,6 @@ export function SiteHeader() {
 								className="text-sm hover:underline"
 							>
 								For Later
-							</Link>
-							<Link href="/robs-rankings" className="text-sm hover:underline">
-								Rob&apos;s Top 50 — Editor
 							</Link>
 						</nav>
 					)}
