@@ -18,9 +18,6 @@ export function SiteHeader() {
 					</Link>
 					{isAuthenticated && (
 						<nav className="flex items-center gap-3">
-							<Link href="/books" className="text-sm hover:underline">
-								Books
-							</Link>
 							<Link href="/folio-society" className="text-sm hover:underline">
 								Folio Society
 							</Link>
@@ -29,12 +26,6 @@ export function SiteHeader() {
 							</Link>
 							<Link href="/playlist-lyrics" className="text-sm hover:underline">
 								Playlist Lyrics
-							</Link>
-							<Link
-								href="/spotify-playlister"
-								className="text-sm hover:underline"
-							>
-								Playlister
 							</Link>
 							<Link href="/albums" className="text-sm hover:underline">
 								Albums
@@ -50,9 +41,6 @@ export function SiteHeader() {
 							</Link>
 							<Link href="/robs-rankings" className="text-sm hover:underline">
 								Rob&apos;s Top 50 — Editor
-							</Link>
-							<Link href="/rooleases" className="text-sm hover:underline">
-								Rooleases
 							</Link>
 						</nav>
 					)}

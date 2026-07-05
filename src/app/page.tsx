@@ -22,12 +22,6 @@ export default async function Home() {
 						<>
 							<Link
 								className="rounded-lg bg-white/10 px-6 py-3 text-center font-semibold transition hover:bg-white/20"
-								href="/books"
-							>
-								Book Search Aggregator →
-							</Link>
-							<Link
-								className="rounded-lg bg-white/10 px-6 py-3 text-center font-semibold transition hover:bg-white/20"
 								href="/folio-society"
 							>
 								Folio Society Release Tracker →
@@ -37,12 +31,6 @@ export default async function Home() {
 								href="/lyrics"
 							>
 								Album Lyrics Aggregator →
-							</Link>
-							<Link
-								className="rounded-lg bg-white/10 px-6 py-3 text-center font-semibold transition hover:bg-white/20"
-								href="/spotify-playlister"
-							>
-								Spotify Playlister →
 							</Link>
 							<Link
 								className="rounded-lg bg-white/10 px-6 py-3 text-center font-semibold transition hover:bg-white/20"

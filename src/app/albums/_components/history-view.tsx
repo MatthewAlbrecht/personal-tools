@@ -45,21 +45,29 @@ export function HistoryView({
 		name: string;
 	} | null>(null);
 	const [onlyUnranked, setOnlyUnranked] = useState(false);
+	const [onlyFirstListens, setOnlyFirstListens] = useState(false);
 
-	// Filter listens to only show unranked albums if toggle is on
 	const filteredListensByMonth = useMemo(() => {
-		if (!onlyUnranked) return listensByMonth;
+		if (!onlyUnranked && !onlyFirstListens) return listensByMonth;
 		const filtered = new Map<string, HistoryListen[]>();
 		for (const [month, listens] of listensByMonth.entries()) {
-			const unrankedListens = listens.filter(
-				(listen) => !albumRatings.has(listen.albumId),
-			);
-			if (unrankedListens.length > 0) {
-				filtered.set(month, unrankedListens);
+			const matchingListens = listens.filter((listen) => {
+				if (onlyUnranked && albumRatings.has(listen.albumId)) return false;
+				if (onlyFirstListens && listenOrdinals.get(listen._id) !== 1) return false;
+				return true;
+			});
+			if (matchingListens.length > 0) {
+				filtered.set(month, matchingListens);
 			}
 		}
 		return filtered;
-	}, [listensByMonth, albumRatings, onlyUnranked]);
+	}, [
+		listensByMonth,
+		albumRatings,
+		listenOrdinals,
+		onlyUnranked,
+		onlyFirstListens,
+	]);
 
 	if (isLoading) {
 		return (
@@ -86,23 +94,37 @@ export function HistoryView({
 	return (
 		<>
 			{/* Filter Controls */}
-			<div className="mb-4 flex items-center gap-2">
-				<input
-					type="checkbox"
-					id="only-unranked"
-					checked={onlyUnranked}
-					onChange={(e) => setOnlyUnranked(e.target.checked)}
-					className="rounded border bg-background"
-				/>
-				<label htmlFor="only-unranked" className="font-medium text-sm">
-					Only unranked
-				</label>
+			<div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+				<div className="flex items-center gap-2">
+					<input
+						type="checkbox"
+						id="only-unranked"
+						checked={onlyUnranked}
+						onChange={(e) => setOnlyUnranked(e.target.checked)}
+						className="rounded border bg-background"
+					/>
+					<label htmlFor="only-unranked" className="font-medium text-sm">
+						Only unranked
+					</label>
+				</div>
+				<div className="flex items-center gap-2">
+					<input
+						type="checkbox"
+						id="only-first-listens"
+						checked={onlyFirstListens}
+						onChange={(e) => setOnlyFirstListens(e.target.checked)}
+						className="rounded border bg-background"
+					/>
+					<label htmlFor="only-first-listens" className="font-medium text-sm">
+						Only first listens
+					</label>
+				</div>
 			</div>
 
 			{filteredListensByMonth.size === 0 ? (
 				<div className="flex h-32 items-center justify-center rounded-lg border border-dashed">
 					<p className="text-muted-foreground text-sm">
-						No unranked albums in history
+						No albums match the current filters
 					</p>
 				</div>
 			) : (
