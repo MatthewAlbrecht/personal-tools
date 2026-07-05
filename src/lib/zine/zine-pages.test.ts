@@ -154,6 +154,59 @@ test("buildZinePages keeps separate instrumental pages when requested", () => {
 	);
 });
 
+test("buildZinePages inserts inside-back page before back cover when content exists", () => {
+	const pages = buildZinePages({
+		playlistTitle: "Test",
+		songs: [
+			{ id: "a", position: 1, title: "A", artistName: "X", lyrics: "line" },
+		],
+		insideBack: {
+			sections: [
+				{
+					type: "discography",
+					items: [{ albumTitle: "Kid A", blurb: "Great." }],
+				},
+			],
+		},
+	});
+
+	assert.equal(pages.length, 4);
+	assert.equal(pages[0]?.kind, "cover");
+	assert.equal(pages[1]?.kind, "song");
+	assert.equal(pages[2]?.kind, "inside-back");
+	assert.equal(pages[3]?.kind, "back-cover");
+});
+
+test("buildZinePages omits inside-back when no content and includeWhenEmpty false", () => {
+	const pages = buildZinePages({
+		playlistTitle: "Test",
+		songs: [
+			{ id: "a", position: 1, title: "A", artistName: "X", lyrics: "line" },
+		],
+		insideBack: { sections: [], includeWhenEmpty: false },
+	});
+
+	assert.equal(pages.length, 4);
+	assert.equal(
+		pages.some((page) => page.kind === "inside-back"),
+		false,
+	);
+	assert.equal(pages[pages.length - 1]?.kind, "back-cover");
+});
+
+test("buildZinePages includes empty inside-back when includeWhenEmpty true", () => {
+	const pages = buildZinePages({
+		playlistTitle: "Test",
+		songs: [
+			{ id: "a", position: 1, title: "A", artistName: "X", lyrics: "line" },
+		],
+		insideBack: { sections: [], includeWhenEmpty: true },
+	});
+
+	assert.equal(pages[2]?.kind, "inside-back");
+	assert.equal(pages[3]?.kind, "back-cover");
+});
+
 test("buildZinePages always produces a count divisible by four", () => {
 	for (let songCount = 0; songCount <= 15; songCount += 1) {
 		const songs = Array.from({ length: songCount }, (_, index) => ({
