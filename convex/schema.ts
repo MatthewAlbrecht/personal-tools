@@ -463,6 +463,79 @@ export default defineSchema({
 		.index("by_albumTitleKey", ["albumTitleKey"])
 		.index("by_createdAt", ["createdAt"]),
 
+	albumLibraryItems: defineTable({
+		userId: v.string(),
+		albumId: v.id("spotifyAlbums"),
+		spotifyAlbumId: v.string(),
+		name: v.string(),
+		artistName: v.string(),
+		artistSortKey: v.string(),
+		albumSortKey: v.string(),
+		imageUrl: v.optional(v.string()),
+		releaseDate: v.optional(v.string()),
+		releaseYear: v.optional(v.number()),
+		totalTracks: v.number(),
+		albumType: v.union(v.literal("album"), v.literal("single")),
+		createdAt: v.number(),
+		updatedAt: v.number(),
+		listenCount: v.number(),
+		firstListenedAt: v.optional(v.number()),
+		lastListenedAt: v.optional(v.number()),
+		rating: v.optional(v.number()),
+		filterHasListened: v.boolean(),
+		rymStatus: v.union(v.literal("linked"), v.literal("unlinked")),
+		rymNotOnSite: v.optional(v.boolean()),
+		rymScrapeId: v.optional(v.id("rateYourMusicScrapes")),
+		rymLinkMethod: v.optional(
+			v.union(
+				v.literal("spotify_id"),
+				v.literal("title_artist"),
+				v.literal("manual"),
+			),
+		),
+		rymUrl: v.optional(v.string()),
+		rymLinkedAt: v.optional(v.number()),
+		appearsInRobRankings: v.boolean(),
+		robRankingYears: v.array(v.number()),
+		primaryGenres: v.array(v.object({ key: v.string(), label: v.string() })),
+		secondaryGenres: v.array(v.object({ key: v.string(), label: v.string() })),
+		descriptors: v.array(v.object({ key: v.string(), label: v.string() })),
+		searchText: v.string(),
+	})
+		.index("by_userId_albumId", ["userId", "albumId"])
+		.index("by_albumId", ["albumId"])
+		.index("by_userId_createdAt", ["userId", "createdAt"])
+		.index("by_userId_artistSortKey_albumSortKey", [
+			"userId",
+			"artistSortKey",
+			"albumSortKey",
+		])
+		.index("by_userId_releaseYear_createdAt", [
+			"userId",
+			"releaseYear",
+			"createdAt",
+		])
+		.index("by_userId_filterHasListened_createdAt", [
+			"userId",
+			"filterHasListened",
+			"createdAt",
+		])
+		.index("by_userId_rymStatus_createdAt", [
+			"userId",
+			"rymStatus",
+			"createdAt",
+		])
+		.index("by_userId_albumType_createdAt", [
+			"userId",
+			"albumType",
+			"createdAt",
+		])
+		.index("by_userId_appearsInRobRankings_createdAt", [
+			"userId",
+			"appearsInRobRankings",
+			"createdAt",
+		]),
+
 	forLaterAlbumItems: defineTable({
 		userId: v.string(),
 		albumId: v.id("spotifyAlbums"),

@@ -3,6 +3,7 @@ import { api, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { action, mutation, query } from "./_generated/server";
+import { upsertAlbumLibraryProjection } from "./_utils/albumLibraryProjection";
 import {
 	getAlbumLibraryAlbumType,
 	getAlbumLibraryRymStatus,
@@ -72,7 +73,7 @@ export const clearLegacyRawData = mutation({
 			.order("asc")
 			.paginate({
 				numItems: size,
-				cursor: (progress?.cursorStr as any) ?? null,
+				cursor: (progress?.cursorStr as string | null | undefined) ?? null,
 			});
 
 		if (result.page.length === 0 || result.isDone) {
@@ -126,7 +127,7 @@ export const clearLegacyArtistRawData = mutation({
 			.order("asc")
 			.paginate({
 				numItems: size,
-				cursor: (progress?.cursorStr as any) ?? null,
+				cursor: (progress?.cursorStr as string | null | undefined) ?? null,
 			});
 
 		if (result.page.length === 0 || result.isDone) {
@@ -175,7 +176,7 @@ export const clearLegacyTracksTrackData = mutation({
 			.order("asc")
 			.paginate({
 				numItems: size,
-				cursor: (progress?.cursorStr as any) ?? null,
+				cursor: (progress?.cursorStr as string | null | undefined) ?? null,
 			});
 
 		if (result.page.length === 0 || result.isDone) {
@@ -224,7 +225,7 @@ export const clearLegacyAlbumRawData = mutation({
 			.order("asc")
 			.paginate({
 				numItems: size,
-				cursor: (progress?.cursorStr as any) ?? null,
+				cursor: (progress?.cursorStr as string | null | undefined) ?? null,
 			});
 
 		if (result.page.length === 0 || result.isDone) {
@@ -321,6 +322,47 @@ export const backfillSpotifyAlbumTitleKeys = mutation({
 	},
 });
 
+export const backfillAlbumLibraryItems = mutation({
+	args: {
+		userId: v.string(),
+		cursor: v.optional(v.string()),
+		batchSize: v.optional(v.number()),
+	},
+	returns: v.object({
+		processed: v.number(),
+		done: v.boolean(),
+		cursor: v.optional(v.string()),
+	}),
+	handler: async (
+		ctx,
+		args,
+	): Promise<{
+		processed: number;
+		done: boolean;
+		cursor?: string;
+	}> => {
+		const batchSize = Math.min(args.batchSize ?? 100, 500);
+		const page = await ctx.db
+			.query("spotifyAlbums")
+			.withIndex("by_createdAt")
+			.order("desc")
+			.paginate({ numItems: batchSize, cursor: args.cursor ?? null });
+
+		for (const album of page.page) {
+			await upsertAlbumLibraryProjection(ctx, {
+				userId: args.userId,
+				albumId: album._id,
+			});
+		}
+
+		return {
+			processed: page.page.length,
+			done: page.isDone,
+			cursor: page.isDone ? undefined : page.continueCursor,
+		};
+	},
+});
+
 // Clear trackData from categorizations
 export const clearLegacyCategorizationTrackData = mutation({
 	args: { batchSize: v.optional(v.number()) },
@@ -338,7 +380,7 @@ export const clearLegacyCategorizationTrackData = mutation({
 			.order("asc")
 			.paginate({
 				numItems: size,
-				cursor: (progress?.cursorStr as any) ?? null,
+				cursor: (progress?.cursorStr as string | null | undefined) ?? null,
 			});
 
 		if (result.page.length === 0 || result.isDone) {
@@ -737,7 +779,7 @@ export const saveCategorization = mutation({
 			.withIndex("by_trackId", (q) => q.eq("trackId", args.trackId))
 			.first();
 
-		let categorizationId;
+		let categorizationId: Id<"spotifySongCategorizations">;
 		if (existing) {
 			// Update existing categorization
 			await ctx.db.patch(existing._id, {
@@ -1777,7 +1819,7 @@ export const getCanonicalTracksPage = query({
 			.order("asc")
 			.paginate({
 				numItems: args.numItems ?? 200,
-				cursor: (args.cursor as any) ?? null,
+				cursor: (args.cursor as string | null | undefined) ?? null,
 			});
 
 		return {
