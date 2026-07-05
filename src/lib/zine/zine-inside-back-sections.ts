@@ -11,6 +11,7 @@ export type ZineDiscographyItem = {
 export type ZineRecommendationItem = {
 	albumTitle: string;
 	artistName: string;
+	year?: string;
 	imageUrl?: string;
 	similarityBlurb?: string;
 };

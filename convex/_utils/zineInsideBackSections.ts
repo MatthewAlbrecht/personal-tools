@@ -13,6 +13,7 @@ const zineDiscographyItemValidator = v.object({
 const zineRecommendationItemValidator = v.object({
 	albumTitle: v.string(),
 	artistName: v.string(),
+	year: v.optional(v.string()),
 	imageUrl: v.optional(v.string()),
 	similarityBlurb: v.optional(v.string()),
 });
@@ -54,6 +55,7 @@ type StoredSection =
 			items: Array<{
 				albumTitle: string;
 				artistName: string;
+				year?: string;
 				imageUrl?: string;
 				similarityBlurb?: string;
 			}>;
@@ -102,6 +104,7 @@ export function normalizeZineInsideBackSections(
 			.map((item) => ({
 				albumTitle: item.albumTitle.trim(),
 				artistName: item.artistName.trim(),
+				year: normalizeOptionalString(item.year),
 				imageUrl: normalizeOptionalString(item.imageUrl),
 				similarityBlurb: normalizeOptionalString(item.similarityBlurb),
 			}))

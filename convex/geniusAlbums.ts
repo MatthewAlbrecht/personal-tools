@@ -534,6 +534,41 @@ export const searchSpotifyAlbumsForMapping = query({
 	},
 });
 
+export const lookupSpotifyAlbumForZinePicker = query({
+	args: {
+		spotifyAlbumId: v.string(),
+	},
+	returns: v.union(spotifyAlbumSearchRowValidator, v.null()),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+
+		const spotifyAlbumId = args.spotifyAlbumId.trim();
+		if (!spotifyAlbumId) {
+			return null;
+		}
+
+		const album = await ctx.db
+			.query("spotifyAlbums")
+			.withIndex("by_spotifyAlbumId", (q) =>
+				q.eq("spotifyAlbumId", spotifyAlbumId),
+			)
+			.first();
+
+		if (!album) {
+			return null;
+		}
+
+		return {
+			albumId: album._id,
+			spotifyAlbumId: album.spotifyAlbumId,
+			name: album.name,
+			artistName: album.artistName,
+			...(album.imageUrl ? { imageUrl: album.imageUrl } : {}),
+			...(album.releaseDate ? { releaseDate: album.releaseDate } : {}),
+		};
+	},
+});
+
 export const autoMatchSpotifyAlbum = mutation({
 	args: {
 		albumId: v.id("geniusAlbums"),

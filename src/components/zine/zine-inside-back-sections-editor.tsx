@@ -7,6 +7,7 @@ import {
 	EyeOff,
 	Plus,
 	RefreshCw,
+	Search,
 	Trash2,
 } from "lucide-react";
 import { type ReactNode, useState } from "react";
@@ -35,6 +36,7 @@ import {
 	type ZineRecommendationItem,
 	getVisibleDiscographyItems,
 } from "~/lib/zine/zine-inside-back-sections";
+import { ZineRecommendationAlbumPickerDrawer } from "./zine-recommendation-album-picker-drawer";
 
 type SectionType = ZineInsideBackSection["type"];
 
@@ -577,17 +579,6 @@ function DiscographyItemEditor({
 					/>
 				</div>
 				<div className="space-y-2">
-					<Label htmlFor={`${idPrefix}-artist-name`}>Artist name</Label>
-					<Input
-						id={`${idPrefix}-artist-name`}
-						value={item.artistName ?? ""}
-						disabled={disabled}
-						onChange={(event) =>
-							onChange({ ...item, artistName: event.currentTarget.value })
-						}
-					/>
-				</div>
-				<div className="space-y-2">
 					<Label htmlFor={`${idPrefix}-year`}>Year</Label>
 					<Input
 						id={`${idPrefix}-year`}
@@ -644,6 +635,8 @@ function RecommendationItemEditor({
 	onRemove: () => void;
 }) {
 	const idPrefix = `inside-back-recommendations-${sectionIndex}-${itemIndex}`;
+	const [pickerOpen, setPickerOpen] = useState(false);
+	const initialSearch = item.albumTitle.trim() || item.artistName.trim();
 
 	return (
 		<ItemEditorShell
@@ -653,7 +646,33 @@ function RecommendationItemEditor({
 			disabled={disabled}
 			onMove={onMove}
 			onRemove={onRemove}
+			extraActions={
+				<Button
+					type="button"
+					variant="outline"
+					size="sm"
+					disabled={disabled}
+					onClick={() => setPickerOpen(true)}
+				>
+					<Search className="mr-2 h-4 w-4" />
+					Choose album
+				</Button>
+			}
 		>
+			<ZineRecommendationAlbumPickerDrawer
+				open={pickerOpen}
+				onOpenChange={setPickerOpen}
+				initialSearch={initialSearch}
+				onSelect={(selection) => {
+					onChange({
+						...item,
+						albumTitle: selection.albumTitle,
+						artistName: selection.artistName,
+						year: selection.year,
+						imageUrl: selection.imageUrl,
+					});
+				}}
+			/>
 			<div className="grid gap-3 sm:grid-cols-2">
 				<div className="space-y-2">
 					<Label htmlFor={`${idPrefix}-album-title`}>
@@ -678,6 +697,17 @@ function RecommendationItemEditor({
 						disabled={disabled}
 						onChange={(event) =>
 							onChange({ ...item, artistName: event.currentTarget.value })
+						}
+					/>
+				</div>
+				<div className="space-y-2">
+					<Label htmlFor={`${idPrefix}-year`}>Year</Label>
+					<Input
+						id={`${idPrefix}-year`}
+						value={item.year ?? ""}
+						disabled={disabled}
+						onChange={(event) =>
+							onChange({ ...item, year: event.currentTarget.value })
 						}
 					/>
 				</div>

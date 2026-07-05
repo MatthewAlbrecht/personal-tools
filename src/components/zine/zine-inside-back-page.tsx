@@ -115,9 +115,6 @@ function DiscographyRow({ item }: { item: ZineDiscographyItem }) {
 			)}
 			<div className="zine-inside-back-discography-text">
 				<p className="zine-inside-back-item-title">{titleLine}</p>
-				{item.artistName ? (
-					<p className="zine-inside-back-item-artist">{item.artistName}</p>
-				) : null}
 				{item.blurb.trim() !== "" ? (
 					<p className="zine-inside-back-item-blurb">{item.blurb}</p>
 				) : null}
@@ -127,6 +124,10 @@ function DiscographyRow({ item }: { item: ZineDiscographyItem }) {
 }
 
 function RecommendationRow({ item }: { item: ZineRecommendationItem }) {
+	const titleLine = [item.albumTitle, item.year ? `(${item.year})` : ""]
+		.filter(Boolean)
+		.join(" ");
+
 	return (
 		<li className="zine-inside-back-recommendation-row">
 			{item.imageUrl ? (
@@ -139,7 +140,7 @@ function RecommendationRow({ item }: { item: ZineRecommendationItem }) {
 				<div className="zine-inside-back-recommendation-art zine-inside-back-art-placeholder" />
 			)}
 			<div className="zine-inside-back-recommendation-text">
-				<p className="zine-inside-back-item-title">{item.albumTitle}</p>
+				<p className="zine-inside-back-item-title">{titleLine}</p>
 				<p className="zine-inside-back-item-artist">{item.artistName}</p>
 				{item.similarityBlurb ? (
 					<p className="zine-inside-back-item-similarity">

@@ -37,6 +37,27 @@ test("normalizeZineInsideBackSections trims strings and drops empty items", () =
 	});
 });
 
+test("normalizeZineInsideBackSections trims recommendation year", () => {
+	const result = normalizeZineInsideBackSections([
+		{
+			type: "recommendations",
+			items: [
+				{
+					albumTitle: "OK Computer",
+					artistName: "Radiohead",
+					year: " 1997 ",
+				},
+			],
+		},
+	]);
+
+	assert.equal(result.length, 1);
+	if (result[0]?.type !== "recommendations") {
+		throw new Error("expected recommendations");
+	}
+	assert.equal(result[0].items[0]?.year, "1997");
+});
+
 test("normalizeZineInsideBackSections drops sections with no valid items", () => {
 	const result = normalizeZineInsideBackSections([
 		{
