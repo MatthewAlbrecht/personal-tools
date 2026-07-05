@@ -4,6 +4,7 @@ import {
 	zineCoverTextAlignValidator,
 	zineCoverTextAnchorValidator,
 } from "./_utils/zineCoverTextLayout";
+import { zineInsideBackSectionsValidator } from "./_utils/zineInsideBackSections";
 
 const geniusCreditValidator = v.object({
 	label: v.string(),
@@ -155,6 +156,7 @@ export default defineSchema({
 		),
 		zineIntroFontSizePt: v.optional(v.number()),
 		zineDisplaySettings: v.optional(zineDisplaySettingsValidator),
+		zineInsideBackSections: v.optional(zineInsideBackSectionsValidator),
 		albumTitleOverride: v.optional(v.string()),
 		artistNameOverride: v.optional(v.string()),
 		summaryOverride: v.optional(v.string()),
@@ -220,6 +222,7 @@ export default defineSchema({
 		zineShowSpotifyQr: v.optional(v.boolean()),
 		zineShowAppleMusicQr: v.optional(v.boolean()),
 		zineDisplaySettings: v.optional(zineDisplaySettingsValidator),
+		zineInsideBackSections: v.optional(zineInsideBackSectionsValidator),
 		status: v.union(v.literal("draft"), v.literal("ready")),
 		createdAt: v.number(),
 		updatedAt: v.number(),

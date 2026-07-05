@@ -15,6 +15,10 @@ import {
 } from "./_utils/geniusSpotifyTrackDurations";
 import { zineCoverTextLayoutMutationValidator } from "./_utils/zineCoverTextLayout";
 import {
+	normalizeZineInsideBackSections,
+	zineInsideBackSectionsValidator,
+} from "./_utils/zineInsideBackSections";
+import {
 	applyHideCreditLabel,
 	applyShowCreditLabel,
 	normalizeCreditLabelList,
@@ -261,6 +265,7 @@ export const updateAlbumOverrides = mutation({
 		summaryOverride: v.optional(v.string()),
 		frontPageImageUrlOverride: v.optional(v.string()),
 		introPageContent: v.optional(v.string()),
+		zineInsideBackSections: v.optional(zineInsideBackSectionsValidator),
 	},
 	returns: v.id("geniusAlbums"),
 	handler: async (ctx, args) => {
@@ -268,7 +273,17 @@ export const updateAlbumOverrides = mutation({
 		const album = await ctx.db.get(args.albumId);
 		if (!album) throw new Error("Album not found");
 
-		await ctx.db.patch(args.albumId, {
+		const patch: {
+			albumTitleOverride?: string;
+			artistNameOverride?: string;
+			summaryOverride?: string;
+			frontPageImageUrlOverride?: string;
+			introPageContent?: string;
+			zineInsideBackSections?: ReturnType<
+				typeof normalizeZineInsideBackSections
+			>;
+			updatedAt: number;
+		} = {
 			albumTitleOverride: normalizeOptionalString(args.albumTitleOverride),
 			artistNameOverride: normalizeOptionalString(args.artistNameOverride),
 			summaryOverride: normalizeOptionalString(args.summaryOverride),
@@ -277,7 +292,15 @@ export const updateAlbumOverrides = mutation({
 			),
 			introPageContent: normalizeOptionalString(args.introPageContent),
 			updatedAt: Date.now(),
-		});
+		};
+
+		if (args.zineInsideBackSections !== undefined) {
+			patch.zineInsideBackSections = normalizeZineInsideBackSections(
+				args.zineInsideBackSections,
+			);
+		}
+
+		await ctx.db.patch(args.albumId, patch);
 
 		return args.albumId;
 	},

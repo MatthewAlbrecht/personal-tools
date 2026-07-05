@@ -16,6 +16,10 @@ import {
 	zineCoverTextAnchorValidator,
 	zineCoverTextLayoutMutationValidator,
 } from "./_utils/zineCoverTextLayout";
+import {
+	normalizeZineInsideBackSections,
+	zineInsideBackSectionsValidator,
+} from "./_utils/zineInsideBackSections";
 import { requireAuth } from "./auth";
 import { getSiteWideHiddenCreditLabelKeys, getIgnoredCreditLabelKeys } from "./geniusCreditLabels";
 
@@ -592,6 +596,26 @@ export const updateZineDisplaySettings = mutation({
 		});
 
 		return args.playlistId;
+	},
+});
+
+export const updateZineInsideBackSections = mutation({
+	args: {
+		playlistId: v.id("playlistLyrics"),
+		sections: zineInsideBackSectionsValidator,
+	},
+	returns: v.null(),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+		const playlist = await ctx.db.get(args.playlistId);
+		if (!playlist) throw new Error("Playlist not found");
+
+		await ctx.db.patch(args.playlistId, {
+			zineInsideBackSections: normalizeZineInsideBackSections(args.sections),
+			updatedAt: Date.now(),
+		});
+
+		return null;
 	},
 });
 
