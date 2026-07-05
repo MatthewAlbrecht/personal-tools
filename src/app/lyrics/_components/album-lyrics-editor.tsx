@@ -507,6 +507,7 @@ export function AlbumLyricsEditor({ slug }: { slug: string }) {
 				<CardContent className="space-y-5">
 					<ZineInsideBackSectionsEditor
 						sections={albumForm.zineInsideBackSections}
+						userId={userId ?? undefined}
 						onChange={(sections) =>
 							setAlbumForm((current) => ({
 								...current,

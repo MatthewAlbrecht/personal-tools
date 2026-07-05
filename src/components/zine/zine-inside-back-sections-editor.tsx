@@ -82,11 +82,13 @@ export function ZineInsideBackSectionsEditor({
 	sections,
 	onChange,
 	disabled = false,
+	userId,
 	spotifyDiscographySource,
 }: {
 	sections: ZineInsideBackSection[];
 	onChange: (sections: ZineInsideBackSection[]) => void;
 	disabled?: boolean;
+	userId?: string;
 	spotifyDiscographySource?: {
 		spotifyAlbumId: string;
 		getAccessToken: () => Promise<string | null>;
@@ -162,6 +164,7 @@ export function ZineInsideBackSectionsEditor({
 					sectionIndex={sectionIndex}
 					sectionCount={sections.length}
 					disabled={disabled}
+					userId={userId}
 					spotifyDiscographySource={spotifyDiscographySource}
 					onTitleChange={(title) =>
 						handleSectionTitleChange(sectionIndex, title)
@@ -225,6 +228,7 @@ function InsideBackSectionCard({
 	sectionIndex,
 	sectionCount,
 	disabled,
+	userId,
 	spotifyDiscographySource,
 	onTitleChange,
 	onMove,
@@ -236,6 +240,7 @@ function InsideBackSectionCard({
 	sectionIndex: number;
 	sectionCount: number;
 	disabled: boolean;
+	userId?: string;
 	spotifyDiscographySource?: {
 		spotifyAlbumId: string;
 		getAccessToken: () => Promise<string | null>;
@@ -484,6 +489,7 @@ function InsideBackSectionCard({
 								itemCount={section.items.length}
 								sectionIndex={sectionIndex}
 								disabled={disabled}
+								userId={userId}
 								onChange={(nextItem) => {
 									onItemsChange(
 										section.items.map((current, index) =>
@@ -621,6 +627,7 @@ function RecommendationItemEditor({
 	itemCount,
 	sectionIndex,
 	disabled,
+	userId,
 	onChange,
 	onMove,
 	onRemove,
@@ -630,6 +637,7 @@ function RecommendationItemEditor({
 	itemCount: number;
 	sectionIndex: number;
 	disabled: boolean;
+	userId?: string;
 	onChange: (item: ZineRecommendationItem) => void;
 	onMove: (direction: "up" | "down") => void;
 	onRemove: () => void;
@@ -662,6 +670,7 @@ function RecommendationItemEditor({
 			<ZineRecommendationAlbumPickerDrawer
 				open={pickerOpen}
 				onOpenChange={setPickerOpen}
+				userId={userId}
 				initialSearch={initialSearch}
 				onSelect={(selection) => {
 					onChange({

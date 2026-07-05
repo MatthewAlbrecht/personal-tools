@@ -32,11 +32,13 @@ export type ZineSpotifyAlbumPickerSelection = {
 export function ZineRecommendationAlbumPickerDrawer({
 	open,
 	onOpenChange,
+	userId,
 	initialSearch,
 	onSelect,
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
+	userId?: string;
 	initialSearch?: string;
 	onSelect: (selection: ZineSpotifyAlbumPickerSelection) => void;
 }) {
@@ -71,8 +73,8 @@ export function ZineRecommendationAlbumPickerDrawer({
 	}, [debouncedSearch]);
 
 	const spotifyAlbums = useQuery(
-		api.geniusAlbums.searchSpotifyAlbumsForMapping,
-		open ? { search: searchArg, limit: 50 } : "skip",
+		api.spotify.searchAlbumLibraryForZinePicker,
+		open && userId ? { userId, search: searchArg, limit: 50 } : "skip",
 	);
 
 	function handleSelectAlbum(album: {
@@ -101,14 +103,19 @@ export function ZineRecommendationAlbumPickerDrawer({
 			return;
 		}
 
+		if (!userId) {
+			toast.error("Sign in to look up albums from your library.");
+			return;
+		}
+
 		setIsApplyingPaste(true);
 		try {
 			const album = await convex.query(
-				api.geniusAlbums.lookupSpotifyAlbumForZinePicker,
-				{ spotifyAlbumId },
+				api.spotify.lookupAlbumLibraryForZinePicker,
+				{ userId, spotifyAlbumId },
 			);
 			if (!album) {
-				toast.error("That Spotify album is not in your library yet.");
+				toast.error("That album is not in your library yet.");
 				return;
 			}
 			handleSelectAlbum(album);
@@ -142,11 +149,15 @@ export function ZineRecommendationAlbumPickerDrawer({
 					</div>
 				</DrawerHeader>
 				<div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-					{spotifyAlbums === undefined ? (
+					{!userId ? (
+						<p className="text-muted-foreground text-sm">
+							Sign in to search your album library.
+						</p>
+					) : spotifyAlbums === undefined ? (
 						<p className="text-muted-foreground text-sm">Loading albums...</p>
 					) : spotifyAlbums.length === 0 ? (
 						<p className="text-muted-foreground text-sm">
-							No local Spotify albums match this search.
+							No albums in your library match this search.
 						</p>
 					) : (
 						<ul className="divide-y rounded-lg border">

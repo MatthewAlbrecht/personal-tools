@@ -25,6 +25,7 @@ import {
 } from "~/lib/zine/zine-song-header-content";
 import { IntroContentEditor } from "~/components/zine/intro-content-editor";
 import { ZineInsideBackSectionsEditor } from "~/components/zine/zine-inside-back-sections-editor";
+import { useAuthToken } from "~/lib/hooks/use-auth-token";
 import type { ZineInsideBackSection } from "~/lib/zine/zine-inside-back-sections";
 import { api } from "../../../../convex/_generated/api";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
@@ -840,6 +841,7 @@ function PlaylistInsideBackSectionsCard({
 	playlistId: Id<"playlistLyrics">;
 	initialSections: ZineInsideBackSection[];
 }): ReactElement {
+	const { userId } = useAuthToken();
 	const updateZineInsideBackSections = useMutation(
 		api.playlistLyrics.updateZineInsideBackSections,
 	);
@@ -880,6 +882,7 @@ function PlaylistInsideBackSectionsCard({
 			<CardContent className="space-y-4">
 				<ZineInsideBackSectionsEditor
 					sections={sections}
+					userId={userId ?? undefined}
 					disabled={isSaving}
 					onChange={setSections}
 				/>

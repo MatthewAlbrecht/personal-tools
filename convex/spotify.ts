@@ -3254,6 +3254,92 @@ export const searchSpotifyAlbumsForListenConversion = query({
 	},
 });
 
+export const searchAlbumLibraryForZinePicker = query({
+	args: {
+		userId: v.string(),
+		search: v.optional(v.string()),
+		limit: v.optional(v.number()),
+	},
+	returns: v.array(spotifyAlbumSearchResultValidator),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+
+		const limit = Math.min(Math.max(args.limit ?? 50, 1), 100);
+		const search = args.search?.trim();
+
+		const rows = search
+			? await ctx.db
+					.query("albumLibraryItems")
+					.withSearchIndex("search_albumLibraryItems", (q) =>
+						q.search("searchText", search).eq("userId", args.userId),
+					)
+					.take(limit)
+			: await ctx.db
+					.query("albumLibraryItems")
+					.withIndex("by_userId_createdAt", (q) => q.eq("userId", args.userId))
+					.order("desc")
+					.take(limit);
+
+		return rows.map((row) => ({
+			albumId: row.albumId,
+			spotifyAlbumId: row.spotifyAlbumId,
+			name: row.name,
+			artistName: row.artistName,
+			totalTracks: row.totalTracks,
+			...(row.imageUrl ? { imageUrl: row.imageUrl } : {}),
+			...(row.releaseDate ? { releaseDate: row.releaseDate } : {}),
+		}));
+	},
+});
+
+export const lookupAlbumLibraryForZinePicker = query({
+	args: {
+		userId: v.string(),
+		spotifyAlbumId: v.string(),
+	},
+	returns: v.union(spotifyAlbumSearchResultValidator, v.null()),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+
+		const spotifyAlbumId = args.spotifyAlbumId.trim();
+		if (!spotifyAlbumId) {
+			return null;
+		}
+
+		const album = await ctx.db
+			.query("spotifyAlbums")
+			.withIndex("by_spotifyAlbumId", (q) =>
+				q.eq("spotifyAlbumId", spotifyAlbumId),
+			)
+			.first();
+
+		if (!album) {
+			return null;
+		}
+
+		const row = await ctx.db
+			.query("albumLibraryItems")
+			.withIndex("by_userId_albumId", (q) =>
+				q.eq("userId", args.userId).eq("albumId", album._id),
+			)
+			.first();
+
+		if (!row) {
+			return null;
+		}
+
+		return {
+			albumId: row.albumId,
+			spotifyAlbumId: row.spotifyAlbumId,
+			name: row.name,
+			artistName: row.artistName,
+			totalTracks: row.totalTracks,
+			...(row.imageUrl ? { imageUrl: row.imageUrl } : {}),
+			...(row.releaseDate ? { releaseDate: row.releaseDate } : {}),
+		};
+	},
+});
+
 export const convertAlbumListen = mutation({
 	args: {
 		listenId: v.id("userAlbumListens"),
