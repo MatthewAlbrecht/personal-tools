@@ -225,6 +225,134 @@ export function ZinePrintStyles() {
 						font-style: italic;
 					}
 
+					.zine-page-inside-back {
+						display: flex;
+						flex-direction: column;
+						box-sizing: border-box;
+						min-height: 0;
+					}
+
+					.zine-inside-back-inner {
+						box-sizing: border-box;
+						flex: 1 1 auto;
+						min-height: 0;
+						padding: calc(var(--zine-page-margin-in, 0.35) * 1in);
+						display: flex;
+						flex-direction: column;
+						justify-content: flex-start;
+					}
+
+					.zine-inside-back-section + .zine-inside-back-section {
+						margin-top: 10pt;
+					}
+
+					.zine-inside-back-section-title {
+						margin: 0 0 6pt;
+						font-size: 9pt;
+						font-weight: 600;
+						line-height: 1.2;
+					}
+
+					.zine-inside-back-discography-list,
+					.zine-inside-back-recommendations-list {
+						list-style: none;
+						margin: 0;
+						padding: 0;
+					}
+
+					.zine-inside-back-discography-row {
+						display: flex;
+						gap: 8pt;
+						margin-bottom: 6pt;
+					}
+
+					.zine-inside-back-discography-row:last-child {
+						margin-bottom: 0;
+					}
+
+					.zine-inside-back-discography-art {
+						width: 0.55in;
+						height: 0.55in;
+						flex-shrink: 0;
+						object-fit: cover;
+						border-radius: 2pt;
+					}
+
+					.zine-inside-back-recommendation-row {
+						display: flex;
+						gap: 10pt;
+						margin-bottom: 8pt;
+					}
+
+					.zine-inside-back-recommendation-row:last-child {
+						margin-bottom: 0;
+					}
+
+					.zine-inside-back-recommendation-art {
+						width: 0.65in;
+						height: 0.65in;
+						flex-shrink: 0;
+						object-fit: cover;
+						border-radius: 2pt;
+					}
+
+					.zine-inside-back-discography-text,
+					.zine-inside-back-recommendation-text {
+						min-width: 0;
+						flex: 1;
+					}
+
+					.zine-inside-back-item-title {
+						margin: 0;
+						font-size: 8pt;
+						font-weight: 600;
+						line-height: 1.25;
+					}
+
+					.zine-inside-back-item-artist {
+						margin: 0;
+						font-size: 7.5pt;
+						line-height: 1.25;
+					}
+
+					.zine-inside-back-item-blurb {
+						margin: 0;
+						font-size: 7.5pt;
+						line-height: 1.3;
+						color: #666;
+					}
+
+					.zine-inside-back-item-similarity {
+						margin: 0;
+						font-size: 7.5pt;
+						font-style: italic;
+						line-height: 1.3;
+						color: #666;
+					}
+
+					.zine-page-inside-back-compact .zine-inside-back-discography-art {
+						width: 0.45in;
+						height: 0.45in;
+					}
+
+					.zine-page-inside-back-compact .zine-inside-back-recommendation-art {
+						width: 0.55in;
+						height: 0.55in;
+					}
+
+					.zine-inside-back-art-placeholder {
+						background: #e5e5e5;
+						-webkit-print-color-adjust: exact;
+						print-color-adjust: exact;
+					}
+
+					.zine-inside-back-placeholder {
+						margin: 0;
+						font-size: 9pt;
+						color: #666;
+						font-style: italic;
+					}
+
 					.zine-song-page-header-wrap {
 						flex-shrink: 0;
 					}
