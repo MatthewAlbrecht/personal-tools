@@ -20,7 +20,10 @@ import {
 	normalizeZineInsideBackSections,
 	zineInsideBackSectionsValidator,
 } from "./_utils/zineInsideBackSections";
-import { zineInsideBackLayoutMutationValidator } from "./_utils/zineInsideBackLayout";
+import {
+	zineInsideBackContentAlignStoredValidator,
+	zineInsideBackLayoutMutationValidator,
+} from "./_utils/zineInsideBackLayout";
 import { requireAuth } from "./auth";
 import { getSiteWideHiddenCreditLabelKeys, getIgnoredCreditLabelKeys } from "./geniusCreditLabels";
 
@@ -71,6 +74,7 @@ const playlistValidator = v.object({
 	zineCoverTextAlign: v.optional(zineCoverTextAlignValidator),
 	zineCoverTextOffsetXIn: v.optional(v.number()),
 	zineCoverTextOffsetYIn: v.optional(v.number()),
+	zineCoverReleaseYear: v.optional(v.number()),
 	zineSpotifyQrStorageId: v.optional(v.id("_storage")),
 	zineSpotifyQrImageUrl: v.optional(v.string()),
 	zineAppleMusicQrStorageId: v.optional(v.id("_storage")),
@@ -84,7 +88,7 @@ const playlistValidator = v.object({
 	zineInsideBackMarginBottomPt: v.optional(v.number()),
 	zineInsideBackMarginLeftPt: v.optional(v.number()),
 	zineInsideBackContentAlign: v.optional(
-		v.union(v.literal("center"), v.literal("right")),
+		zineInsideBackContentAlignStoredValidator,
 	),
 	zineInsideBackArtistDisplay: v.optional(
 		v.union(v.literal("newline"), v.literal("inline")),
@@ -108,6 +112,7 @@ const publicPlaylistValidator = v.object({
 	zineCoverTextAlign: v.optional(zineCoverTextAlignValidator),
 	zineCoverTextOffsetXIn: v.optional(v.number()),
 	zineCoverTextOffsetYIn: v.optional(v.number()),
+	zineCoverReleaseYear: v.optional(v.number()),
 	zineSpotifyQrImageUrl: v.optional(v.string()),
 	zineAppleMusicQrImageUrl: v.optional(v.string()),
 	zineShowSpotifyQr: v.optional(v.boolean()),
@@ -119,7 +124,7 @@ const publicPlaylistValidator = v.object({
 	zineInsideBackMarginBottomPt: v.optional(v.number()),
 	zineInsideBackMarginLeftPt: v.optional(v.number()),
 	zineInsideBackContentAlign: v.optional(
-		v.union(v.literal("center"), v.literal("right")),
+		zineInsideBackContentAlignStoredValidator,
 	),
 	zineInsideBackArtistDisplay: v.optional(
 		v.union(v.literal("newline"), v.literal("inline")),
@@ -597,6 +602,25 @@ export const updateZineCoverTextLayout = mutation({
 	},
 });
 
+export const updateZineCoverReleaseYear = mutation({
+	args: {
+		playlistId: v.id("playlistLyrics"),
+		releaseYear: v.optional(v.number()),
+	},
+	returns: v.id("playlistLyrics"),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+		await requirePlaylist(ctx, args.playlistId);
+
+		await ctx.db.patch(args.playlistId, {
+			zineCoverReleaseYear: args.releaseYear,
+			updatedAt: Date.now(),
+		});
+
+		return args.playlistId;
+	},
+});
+
 const zineDisplaySettingsMutationValidator = v.object({
 	showArtist: v.boolean(),
 	showAlbum: v.boolean(),
@@ -663,7 +687,7 @@ export const updateZineInsideBackLayoutSettings = mutation({
 			zineInsideBackMarginRightPt: args.layout.marginRightPt,
 			zineInsideBackMarginBottomPt: args.layout.marginBottomPt,
 			zineInsideBackMarginLeftPt: args.layout.marginLeftPt,
-			zineInsideBackContentAlign: args.layout.contentAlign,
+			zineInsideBackContentAlign: args.layout.contentAreaAlign,
 			zineInsideBackArtistDisplay: args.layout.artistDisplay,
 			zineInsideBackRecommendationRowAlign: args.layout.recommendationRowAlign,
 			updatedAt: Date.now(),
@@ -1421,6 +1445,7 @@ function toPublicPlaylist(ctx: QueryCtx, playlist: Doc<"playlistLyrics">) {
 			zineCoverTextAlign: playlist.zineCoverTextAlign,
 			zineCoverTextOffsetXIn: playlist.zineCoverTextOffsetXIn,
 			zineCoverTextOffsetYIn: playlist.zineCoverTextOffsetYIn,
+			zineCoverReleaseYear: playlist.zineCoverReleaseYear,
 			zineSpotifyQrImageUrl,
 			zineAppleMusicQrImageUrl,
 			zineShowSpotifyQr: playlist.zineShowSpotifyQr,

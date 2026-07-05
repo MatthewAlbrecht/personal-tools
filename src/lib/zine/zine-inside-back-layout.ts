@@ -1,4 +1,4 @@
-export type ZineInsideBackContentAlign = "center" | "right";
+export type ZineInsideBackContentAreaAlign = "top" | "center";
 
 export type ZineInsideBackArtistDisplay = "newline" | "inline";
 
@@ -9,7 +9,7 @@ export type ZineInsideBackLayoutSettings = {
 	marginRightPt: number;
 	marginBottomPt: number;
 	marginLeftPt: number;
-	contentAlign: ZineInsideBackContentAlign;
+	contentAreaAlign: ZineInsideBackContentAreaAlign;
 	artistDisplay: ZineInsideBackArtistDisplay;
 	recommendationRowAlign: ZineInsideBackRecommendationRowAlign;
 };
@@ -19,7 +19,7 @@ export const ZINE_INSIDE_BACK_LAYOUT_DEFAULTS: ZineInsideBackLayoutSettings = {
 	marginRightPt: 25,
 	marginBottomPt: 25,
 	marginLeftPt: 25,
-	contentAlign: "right",
+	contentAreaAlign: "top",
 	artistDisplay: "newline",
 	recommendationRowAlign: "top",
 };
@@ -30,10 +30,29 @@ export const ZINE_INSIDE_BACK_MARGIN_SLIDER = {
 	stepPt: 1,
 } as const;
 
+type StoredContentAreaAlign =
+	| ZineInsideBackContentAreaAlign
+	| "right"
+	| undefined;
+
+export function normalizeZineInsideBackContentAreaAlign(
+	stored: StoredContentAreaAlign,
+): ZineInsideBackContentAreaAlign {
+	if (stored === "center") {
+		return "center";
+	}
+
+	if (stored === "right") {
+		return "top";
+	}
+
+	return stored ?? ZINE_INSIDE_BACK_LAYOUT_DEFAULTS.contentAreaAlign;
+}
+
 export function resolveZineInsideBackLayoutSettings(
 	stored?: Partial<ZineInsideBackLayoutSettings> | null,
 ): ZineInsideBackLayoutSettings {
-	return {
+	const resolved = {
 		marginTopPt:
 			stored?.marginTopPt ?? ZINE_INSIDE_BACK_LAYOUT_DEFAULTS.marginTopPt,
 		marginRightPt:
@@ -42,13 +61,21 @@ export function resolveZineInsideBackLayoutSettings(
 			stored?.marginBottomPt ?? ZINE_INSIDE_BACK_LAYOUT_DEFAULTS.marginBottomPt,
 		marginLeftPt:
 			stored?.marginLeftPt ?? ZINE_INSIDE_BACK_LAYOUT_DEFAULTS.marginLeftPt,
-		contentAlign:
-			stored?.contentAlign ?? ZINE_INSIDE_BACK_LAYOUT_DEFAULTS.contentAlign,
+		contentAreaAlign:
+			stored?.contentAreaAlign ??
+			ZINE_INSIDE_BACK_LAYOUT_DEFAULTS.contentAreaAlign,
 		artistDisplay:
 			stored?.artistDisplay ?? ZINE_INSIDE_BACK_LAYOUT_DEFAULTS.artistDisplay,
 		recommendationRowAlign:
 			stored?.recommendationRowAlign ??
 			ZINE_INSIDE_BACK_LAYOUT_DEFAULTS.recommendationRowAlign,
+	};
+
+	return {
+		...resolved,
+		contentAreaAlign: normalizeZineInsideBackContentAreaAlign(
+			resolved.contentAreaAlign,
+		),
 	};
 }
 
@@ -57,7 +84,7 @@ export function insideBackLayoutFromStoredFields(fields: {
 	zineInsideBackMarginRightPt?: number;
 	zineInsideBackMarginBottomPt?: number;
 	zineInsideBackMarginLeftPt?: number;
-	zineInsideBackContentAlign?: ZineInsideBackContentAlign;
+	zineInsideBackContentAlign?: StoredContentAreaAlign;
 	zineInsideBackArtistDisplay?: ZineInsideBackArtistDisplay;
 	zineInsideBackRecommendationRowAlign?: ZineInsideBackRecommendationRowAlign;
 }): Partial<ZineInsideBackLayoutSettings> {
@@ -66,7 +93,9 @@ export function insideBackLayoutFromStoredFields(fields: {
 		marginRightPt: fields.zineInsideBackMarginRightPt,
 		marginBottomPt: fields.zineInsideBackMarginBottomPt,
 		marginLeftPt: fields.zineInsideBackMarginLeftPt,
-		contentAlign: fields.zineInsideBackContentAlign,
+		contentAreaAlign: normalizeZineInsideBackContentAreaAlign(
+			fields.zineInsideBackContentAlign,
+		),
 		artistDisplay: fields.zineInsideBackArtistDisplay,
 		recommendationRowAlign: fields.zineInsideBackRecommendationRowAlign,
 	};

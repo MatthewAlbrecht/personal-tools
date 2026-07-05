@@ -1,6 +1,13 @@
 import { v } from "convex/values";
 
-export const zineInsideBackContentAlignValidator = v.union(
+export const zineInsideBackContentAreaAlignValidator = v.union(
+	v.literal("top"),
+	v.literal("center"),
+);
+
+/** Accepts legacy horizontal `"right"` values still stored in the database. */
+export const zineInsideBackContentAlignStoredValidator = v.union(
+	v.literal("top"),
 	v.literal("center"),
 	v.literal("right"),
 );
@@ -20,7 +27,7 @@ export const zineInsideBackLayoutMutationValidator = v.object({
 	marginRightPt: v.number(),
 	marginBottomPt: v.number(),
 	marginLeftPt: v.number(),
-	contentAlign: zineInsideBackContentAlignValidator,
+	contentAreaAlign: zineInsideBackContentAreaAlignValidator,
 	artistDisplay: zineInsideBackArtistDisplayValidator,
 	recommendationRowAlign: zineInsideBackRecommendationRowAlignValidator,
 });

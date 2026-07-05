@@ -5,6 +5,7 @@ import {
 	formatInsideBackAlbumTitle,
 	insideBackLayoutFromStoredFields,
 	insideBackLayoutToStyleProperties,
+	normalizeZineInsideBackContentAreaAlign,
 	resolveZineInsideBackLayoutSettings,
 } from "./zine-inside-back-layout";
 
@@ -18,7 +19,7 @@ test("resolveZineInsideBackLayoutSettings merges stored partial settings", () =>
 	assert.deepEqual(
 		resolveZineInsideBackLayoutSettings({
 			marginTopPt: 12,
-			contentAlign: "center",
+			contentAreaAlign: "center",
 			artistDisplay: "inline",
 			recommendationRowAlign: "center",
 		}),
@@ -27,7 +28,7 @@ test("resolveZineInsideBackLayoutSettings merges stored partial settings", () =>
 			marginRightPt: ZINE_INSIDE_BACK_LAYOUT_DEFAULTS.marginRightPt,
 			marginBottomPt: ZINE_INSIDE_BACK_LAYOUT_DEFAULTS.marginBottomPt,
 			marginLeftPt: ZINE_INSIDE_BACK_LAYOUT_DEFAULTS.marginLeftPt,
-			contentAlign: "center",
+			contentAreaAlign: "center",
 			artistDisplay: "inline",
 			recommendationRowAlign: "center",
 		},
@@ -50,11 +51,18 @@ test("insideBackLayoutFromStoredFields maps persisted field names", () => {
 			marginRightPt: 11,
 			marginBottomPt: 12,
 			marginLeftPt: 13,
-			contentAlign: "center",
+			contentAreaAlign: "center",
 			artistDisplay: "inline",
 			recommendationRowAlign: "center",
 		},
 	);
+});
+
+test("normalizeZineInsideBackContentAreaAlign maps legacy right to top", () => {
+	assert.equal(normalizeZineInsideBackContentAreaAlign("right"), "top");
+	assert.equal(normalizeZineInsideBackContentAreaAlign("center"), "center");
+	assert.equal(normalizeZineInsideBackContentAreaAlign("top"), "top");
+	assert.equal(normalizeZineInsideBackContentAreaAlign(undefined), "top");
 });
 
 test("insideBackLayoutToStyleProperties emits CSS custom properties", () => {
@@ -64,7 +72,7 @@ test("insideBackLayoutToStyleProperties emits CSS custom properties", () => {
 			marginRightPt: 9,
 			marginBottomPt: 10,
 			marginLeftPt: 11,
-			contentAlign: "right",
+			contentAreaAlign: "top",
 			artistDisplay: "newline",
 			recommendationRowAlign: "top",
 		}),

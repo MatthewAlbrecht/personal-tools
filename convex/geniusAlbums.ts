@@ -22,7 +22,10 @@ import {
 	normalizeZineInsideBackSections,
 	zineInsideBackSectionsValidator,
 } from "./_utils/zineInsideBackSections";
-import { zineInsideBackLayoutMutationValidator } from "./_utils/zineInsideBackLayout";
+import {
+	zineInsideBackContentAlignStoredValidator,
+	zineInsideBackLayoutMutationValidator,
+} from "./_utils/zineInsideBackLayout";
 import {
 	applyHideCreditLabel,
 	applyShowCreditLabel,
@@ -355,7 +358,7 @@ export const updateZineInsideBackLayoutSettings = mutation({
 			zineInsideBackMarginRightPt: args.layout.marginRightPt,
 			zineInsideBackMarginBottomPt: args.layout.marginBottomPt,
 			zineInsideBackMarginLeftPt: args.layout.marginLeftPt,
-			zineInsideBackContentAlign: args.layout.contentAlign,
+			zineInsideBackContentAlign: args.layout.contentAreaAlign,
 			zineInsideBackArtistDisplay: args.layout.artistDisplay,
 			zineInsideBackRecommendationRowAlign: args.layout.recommendationRowAlign,
 			updatedAt: Date.now(),
@@ -381,6 +384,26 @@ export const updateZineCoverTextLayout = mutation({
 			zineCoverTextAlign: args.layout.textAlign,
 			zineCoverTextOffsetXIn: args.layout.offsetXIn,
 			zineCoverTextOffsetYIn: args.layout.offsetYIn,
+			updatedAt: Date.now(),
+		});
+
+		return args.albumId;
+	},
+});
+
+export const updateZineCoverReleaseYear = mutation({
+	args: {
+		albumId: v.id("geniusAlbums"),
+		releaseYear: v.optional(v.number()),
+	},
+	returns: v.id("geniusAlbums"),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+		const album = await ctx.db.get(args.albumId);
+		if (!album) throw new Error("Album not found");
+
+		await ctx.db.patch(args.albumId, {
+			zineCoverReleaseYear: args.releaseYear,
 			updatedAt: Date.now(),
 		});
 
@@ -1189,6 +1212,7 @@ export const listAlbumsForSync = query({
 				zineCoverTextAlign: v.optional(zineCoverTextAlignValidator),
 				zineCoverTextOffsetXIn: v.optional(v.number()),
 				zineCoverTextOffsetYIn: v.optional(v.number()),
+				zineCoverReleaseYear: v.optional(v.number()),
 				introPageContent: v.optional(v.string()),
 				zineIntroParagraphSpacingPt: v.optional(v.number()),
 				zineIntroMarginPt: v.optional(v.number()),
@@ -1203,7 +1227,7 @@ export const listAlbumsForSync = query({
 				zineInsideBackMarginBottomPt: v.optional(v.number()),
 				zineInsideBackMarginLeftPt: v.optional(v.number()),
 				zineInsideBackContentAlign: v.optional(
-					v.union(v.literal("center"), v.literal("right")),
+					zineInsideBackContentAlignStoredValidator,
 				),
 				zineInsideBackArtistDisplay: v.optional(
 					v.union(v.literal("newline"), v.literal("inline")),
@@ -1246,6 +1270,7 @@ export const listAlbumsForSync = query({
 				zineCoverTextAlign?: Doc<"geniusAlbums">["zineCoverTextAlign"];
 				zineCoverTextOffsetXIn?: number;
 				zineCoverTextOffsetYIn?: number;
+				zineCoverReleaseYear?: number;
 				introPageContent?: string;
 				zineIntroParagraphSpacingPt?: number;
 				zineIntroMarginPt?: number;
@@ -1257,7 +1282,7 @@ export const listAlbumsForSync = query({
 				zineInsideBackMarginRightPt?: number;
 				zineInsideBackMarginBottomPt?: number;
 				zineInsideBackMarginLeftPt?: number;
-				zineInsideBackContentAlign?: "center" | "right";
+				zineInsideBackContentAlign?: "top" | "center" | "right";
 				zineInsideBackArtistDisplay?: "newline" | "inline";
 				zineInsideBackRecommendationRowAlign?: "top" | "center";
 				albumTitleOverride?: string;
@@ -1313,6 +1338,7 @@ export const listAlbumsForSync = query({
 					zineCoverTextAlign: album.zineCoverTextAlign,
 					zineCoverTextOffsetXIn: album.zineCoverTextOffsetXIn,
 					zineCoverTextOffsetYIn: album.zineCoverTextOffsetYIn,
+					zineCoverReleaseYear: album.zineCoverReleaseYear,
 					introPageContent: album.introPageContent,
 					zineIntroParagraphSpacingPt: album.zineIntroParagraphSpacingPt,
 					zineIntroMarginPt: album.zineIntroMarginPt,
@@ -1379,6 +1405,7 @@ export const upsertAlbumForSync = mutation({
 		zineCoverTextAlign: v.optional(zineCoverTextAlignValidator),
 		zineCoverTextOffsetXIn: v.optional(v.number()),
 		zineCoverTextOffsetYIn: v.optional(v.number()),
+		zineCoverReleaseYear: v.optional(v.number()),
 		introPageContent: v.optional(v.string()),
 		zineIntroParagraphSpacingPt: v.optional(v.number()),
 		zineIntroMarginPt: v.optional(v.number()),
@@ -1393,7 +1420,7 @@ export const upsertAlbumForSync = mutation({
 		zineInsideBackMarginBottomPt: v.optional(v.number()),
 		zineInsideBackMarginLeftPt: v.optional(v.number()),
 		zineInsideBackContentAlign: v.optional(
-			v.union(v.literal("center"), v.literal("right")),
+			zineInsideBackContentAlignStoredValidator,
 		),
 		zineInsideBackArtistDisplay: v.optional(
 			v.union(v.literal("newline"), v.literal("inline")),
@@ -1433,6 +1460,7 @@ export const upsertAlbumForSync = mutation({
 			zineCoverTextAlign: args.zineCoverTextAlign,
 			zineCoverTextOffsetXIn: args.zineCoverTextOffsetXIn,
 			zineCoverTextOffsetYIn: args.zineCoverTextOffsetYIn,
+			zineCoverReleaseYear: args.zineCoverReleaseYear,
 			introPageContent: normalizeOptionalString(args.introPageContent),
 			zineIntroParagraphSpacingPt: args.zineIntroParagraphSpacingPt,
 			zineIntroMarginPt: args.zineIntroMarginPt,

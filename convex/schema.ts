@@ -6,6 +6,7 @@ import {
 } from "./_utils/zineCoverTextLayout";
 import {
 	zineInsideBackArtistDisplayValidator,
+	zineInsideBackContentAlignStoredValidator,
 	zineInsideBackRecommendationRowAlignValidator,
 } from "./_utils/zineInsideBackLayout";
 import { zineInsideBackSectionsValidator } from "./_utils/zineInsideBackSections";
@@ -152,6 +153,7 @@ export default defineSchema({
 		zineCoverTextAlign: v.optional(zineCoverTextAlignValidator),
 		zineCoverTextOffsetXIn: v.optional(v.number()),
 		zineCoverTextOffsetYIn: v.optional(v.number()),
+		zineCoverReleaseYear: v.optional(v.number()),
 		introPageContent: v.optional(v.string()),
 		zineIntroParagraphSpacingPt: v.optional(v.number()),
 		zineIntroMarginPt: v.optional(v.number()),
@@ -166,7 +168,7 @@ export default defineSchema({
 		zineInsideBackMarginBottomPt: v.optional(v.number()),
 		zineInsideBackMarginLeftPt: v.optional(v.number()),
 		zineInsideBackContentAlign: v.optional(
-			v.union(v.literal("center"), v.literal("right")),
+			zineInsideBackContentAlignStoredValidator,
 		),
 		zineInsideBackArtistDisplay: v.optional(zineInsideBackArtistDisplayValidator),
 		zineInsideBackRecommendationRowAlign: v.optional(
@@ -230,6 +232,7 @@ export default defineSchema({
 		zineCoverTextAlign: v.optional(zineCoverTextAlignValidator),
 		zineCoverTextOffsetXIn: v.optional(v.number()),
 		zineCoverTextOffsetYIn: v.optional(v.number()),
+		zineCoverReleaseYear: v.optional(v.number()),
 		zineSpotifyQrStorageId: v.optional(v.id("_storage")),
 		zineSpotifyQrImageUrl: v.optional(v.string()),
 		zineAppleMusicQrStorageId: v.optional(v.id("_storage")),
@@ -243,7 +246,7 @@ export default defineSchema({
 		zineInsideBackMarginBottomPt: v.optional(v.number()),
 		zineInsideBackMarginLeftPt: v.optional(v.number()),
 		zineInsideBackContentAlign: v.optional(
-			v.union(v.literal("center"), v.literal("right")),
+			zineInsideBackContentAlignStoredValidator,
 		),
 		zineInsideBackArtistDisplay: v.optional(zineInsideBackArtistDisplayValidator),
 		zineInsideBackRecommendationRowAlign: v.optional(

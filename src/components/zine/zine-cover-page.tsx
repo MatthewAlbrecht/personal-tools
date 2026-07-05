@@ -14,6 +14,7 @@ import { useAutoFitText } from "./use-auto-fit-text";
 export function ZineCoverPage({
 	playlistTitle,
 	artistName,
+	releaseYear,
 	coverTextLayout,
 	coverImageUrl,
 	coverGreyscale = false,
@@ -23,6 +24,7 @@ export function ZineCoverPage({
 }: {
 	playlistTitle: string;
 	artistName?: string;
+	releaseYear?: number;
 	coverTextLayout?: Partial<ZineCoverTextLayout> | null;
 	coverImageUrl?: string;
 	coverGreyscale?: boolean;
@@ -35,6 +37,9 @@ export function ZineCoverPage({
 	const showPerPanelBackground = hasCoverImage && !useSheetSpreadBackground;
 	const displayArtistName = artistName?.trim() ?? "";
 	const showArtistName = !isBack && displayArtistName !== "";
+	const displayReleaseYear =
+		!isBack && releaseYear !== undefined ? String(releaseYear) : "";
+	const showReleaseYear = displayReleaseYear !== "";
 	const resolvedCoverTextLayout = resolveZineCoverTextLayout(coverTextLayout);
 	const coverTextStyle = coverTextLayoutToStyleProperties(resolvedCoverTextLayout);
 	const { containerRef: titleRef, fontSizePt: titleFontSizePt } = useAutoFitText({
@@ -79,6 +84,11 @@ export function ZineCoverPage({
 					style={coverTextStyle as CSSProperties}
 				>
 					<div className="zine-cover-title-stack">
+						{showReleaseYear ? (
+							<div className="zine-cover-year-pill overflow-hidden whitespace-nowrap font-medium leading-none">
+								{displayReleaseYear}
+							</div>
+						) : null}
 						<div
 							ref={titleRef}
 							className="zine-cover-title-pill overflow-hidden whitespace-nowrap font-bold leading-none"

@@ -69,6 +69,28 @@ export function coverTextLayoutFromStoredFields(fields: {
 	};
 }
 
+export function parseZineCoverReleaseYearInput(
+	value: string,
+): number | undefined {
+	const trimmed = value.trim();
+	if (trimmed === "") {
+		return undefined;
+	}
+
+	const parsed = Number.parseInt(trimmed, 10);
+	if (!Number.isFinite(parsed) || parsed < 1000 || parsed > 9999) {
+		return undefined;
+	}
+
+	return parsed;
+}
+
+export function formatZineCoverReleaseYearInput(
+	releaseYear: number | undefined,
+): string {
+	return releaseYear === undefined ? "" : String(releaseYear);
+}
+
 export function coverAnchorToFlex(anchor: ZineCoverTextAnchor): {
 	alignItems: "flex-start" | "center" | "flex-end";
 	justifyContent: "flex-start" | "center" | "flex-end";

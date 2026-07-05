@@ -40,10 +40,8 @@ export function ZineInsideBackPage({
 		<section
 			className={cn(
 				"zine-page zine-page-preview zine-page-inside-back",
-				settings.contentAlign === "center" &&
-					"zine-page-inside-back-content-center",
-				settings.contentAlign === "right" &&
-					"zine-page-inside-back-content-right",
+				settings.contentAreaAlign === "center" &&
+					"zine-page-inside-back-content-area-center",
 				settings.recommendationRowAlign === "center" &&
 					"zine-page-inside-back-recommendation-rows-center",
 				compact && "zine-page-inside-back-compact",

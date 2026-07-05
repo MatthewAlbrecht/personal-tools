@@ -85,7 +85,8 @@ export function ZinePrintStyles() {
 					}
 
 					.zine-cover-title-pill,
-					.zine-cover-artist-pill {
+					.zine-cover-artist-pill,
+					.zine-cover-year-pill {
 						display: inline-block;
 						max-width: 100%;
 						padding: 0.08in 0.12in;
@@ -97,6 +98,11 @@ export function ZinePrintStyles() {
 
 					.zine-cover-artist-pill {
 						padding: 0.06in 0.1in;
+					}
+
+					.zine-cover-year-pill {
+						padding: 0.04in 0.08in;
+						font-size: 9pt;
 					}
 
 					.zine-back-cover-qrs {
@@ -240,18 +246,15 @@ export function ZinePrintStyles() {
 						display: flex;
 						flex-direction: column;
 						align-items: stretch;
+						justify-content: flex-start;
 						padding-top: calc(var(--zine-inside-back-margin-top-pt, 25) * 1pt);
 						padding-right: calc(var(--zine-inside-back-margin-right-pt, 25) * 1pt);
 						padding-bottom: calc(var(--zine-inside-back-margin-bottom-pt, 25) * 1pt);
 						padding-left: calc(var(--zine-inside-back-margin-left-pt, 25) * 1pt);
 					}
 
-					.zine-page-inside-back-content-center .zine-inside-back-outer {
-						align-items: center;
-					}
-
-					.zine-page-inside-back-content-right .zine-inside-back-outer {
-						align-items: flex-end;
+					.zine-page-inside-back-content-area-center .zine-inside-back-outer {
+						justify-content: center;
 					}
 
 					.zine-inside-back-inner {
@@ -261,12 +264,6 @@ export function ZinePrintStyles() {
 						display: flex;
 						flex-direction: column;
 						justify-content: flex-start;
-					}
-
-					.zine-page-inside-back-content-center .zine-inside-back-inner,
-					.zine-page-inside-back-content-right .zine-inside-back-inner {
-						width: fit-content;
-						max-width: 100%;
 					}
 
 					.zine-inside-back-section + .zine-inside-back-section {
@@ -825,7 +822,8 @@ export function ZinePrintStyles() {
 						}
 
 						.zine-cover-title-pill,
-						.zine-cover-artist-pill {
+						.zine-cover-artist-pill,
+						.zine-cover-year-pill {
 							background: #fff !important;
 							-webkit-print-color-adjust: exact !important;
 							print-color-adjust: exact !important;

@@ -3,6 +3,8 @@ import test from "node:test";
 import {
 	coverAnchorToFlex,
 	coverTextLayoutToStyleProperties,
+	formatZineCoverReleaseYearInput,
+	parseZineCoverReleaseYearInput,
 	resolveZineCoverTextLayout,
 } from "./zine-cover-text-layout";
 
@@ -53,4 +55,22 @@ test("coverTextLayoutToStyleProperties exposes CSS variables", () => {
 	assert.equal(styles["--zine-cover-stack-align"], "flex-start");
 	assert.equal(styles["--zine-cover-offset-x-in"], "0.1");
 	assert.equal(styles["--zine-cover-offset-y-in"], "-0.2");
+});
+
+test("parseZineCoverReleaseYearInput accepts four-digit years", () => {
+	assert.equal(parseZineCoverReleaseYearInput("2015"), 2015);
+	assert.equal(parseZineCoverReleaseYearInput(" 1999 "), 1999);
+});
+
+test("parseZineCoverReleaseYearInput rejects invalid values", () => {
+	assert.equal(parseZineCoverReleaseYearInput(""), undefined);
+	assert.equal(parseZineCoverReleaseYearInput("   "), undefined);
+	assert.equal(parseZineCoverReleaseYearInput("20"), undefined);
+	assert.equal(parseZineCoverReleaseYearInput("12345"), undefined);
+	assert.equal(parseZineCoverReleaseYearInput("abcd"), undefined);
+});
+
+test("formatZineCoverReleaseYearInput stringifies stored year", () => {
+	assert.equal(formatZineCoverReleaseYearInput(undefined), "");
+	assert.equal(formatZineCoverReleaseYearInput(2015), "2015");
 });

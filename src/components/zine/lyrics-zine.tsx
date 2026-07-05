@@ -23,6 +23,8 @@ import { cn } from "~/lib/utils";
 import { buildBookletSheets } from "~/lib/zine/zine-booklet";
 import {
 	type ZineCoverTextLayout,
+	formatZineCoverReleaseYearInput,
+	parseZineCoverReleaseYearInput,
 	resolveZineCoverTextLayout,
 } from "~/lib/zine/zine-cover-text-layout";
 import {
@@ -86,6 +88,7 @@ export type LyricsZinePersistence = {
 	saveIntroPageContent?(content: string): void;
 	saveSongIntroContent?(songId: string, content: string): void;
 	saveCoverTextLayout?(layout: ZineCoverTextLayout): void;
+	saveCoverReleaseYear?(releaseYear: number | undefined): void;
 };
 
 type ZineDuplexBinding = "long-edge" | "short-edge";
@@ -105,6 +108,7 @@ export function LyricsZine({
 	introPage,
 	displaySettings: displaySettingsProp,
 	coverTextLayout: coverTextLayoutProp,
+	coverReleaseYear: coverReleaseYearProp,
 	insideBackSections,
 	insideBackLayout: insideBackLayoutProp,
 }: {
@@ -125,6 +129,7 @@ export function LyricsZine({
 	};
 	displaySettings?: Partial<ZineDisplaySettings> | null;
 	coverTextLayout?: Partial<ZineCoverTextLayout> | null;
+	coverReleaseYear?: number;
 	insideBackSections?: ZineInsideBackSection[];
 	insideBackLayout?: Partial<ZineInsideBackLayoutSettings> | null;
 }) {
@@ -194,6 +199,9 @@ export function LyricsZine({
 	const [coverTextLayout, setCoverTextLayout] = useState<ZineCoverTextLayout>(
 		() => resolveZineCoverTextLayout(coverTextLayoutProp),
 	);
+	const [coverReleaseYearInput, setCoverReleaseYearInput] = useState(() =>
+		formatZineCoverReleaseYearInput(coverReleaseYearProp),
+	);
 	const [isUploadingCover, setIsUploadingCover] = useState(false);
 	const [introSettings, setIntroSettings] = useState<ZineIntroSettings>(() =>
 		resolveZineIntroSettings(introPage?.settings),
@@ -218,6 +226,7 @@ export function LyricsZine({
 	);
 	const persistDisplaySettingsTimerRef = useRef<number | undefined>(undefined);
 	const persistCoverTextLayoutTimerRef = useRef<number | undefined>(undefined);
+	const persistCoverReleaseYearTimerRef = useRef<number | undefined>(undefined);
 	const persistCoverImageTimerRef = useRef<number | undefined>(undefined);
 	const coverFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -241,6 +250,9 @@ export function LyricsZine({
 			}
 			if (persistCoverTextLayoutTimerRef.current !== undefined) {
 				clearTimeout(persistCoverTextLayoutTimerRef.current);
+			}
+			if (persistCoverReleaseYearTimerRef.current !== undefined) {
+				clearTimeout(persistCoverReleaseYearTimerRef.current);
 			}
 			if (persistIntroPageContentTimerRef.current !== undefined) {
 				clearTimeout(persistIntroPageContentTimerRef.current);
@@ -274,6 +286,8 @@ export function LyricsZine({
 	const resolvedCoverImageUrl = coverImageUrl.trim() || undefined;
 	const resolvedCoverGreyscale =
 		coverGreyscale && Boolean(resolvedCoverImageUrl);
+	const resolvedCoverReleaseYear =
+		parseZineCoverReleaseYearInput(coverReleaseYearInput);
 
 	const pages = buildZinePages({
 		playlistTitle: collectionTitle,
@@ -389,6 +403,25 @@ export function LyricsZine({
 	function updateCoverTextLayout(nextLayout: ZineCoverTextLayout): void {
 		setCoverTextLayout(nextLayout);
 		queueDebouncedPersistCoverTextLayout(nextLayout);
+	}
+
+	function updateCoverReleaseYearInput(nextValue: string): void {
+		setCoverReleaseYearInput(nextValue);
+		queueDebouncedPersistCoverReleaseYear(nextValue);
+	}
+
+	function queueDebouncedPersistCoverReleaseYear(value: string): void {
+		const persist = persistence?.saveCoverReleaseYear;
+		if (!persist) return;
+
+		if (persistCoverReleaseYearTimerRef.current !== undefined) {
+			clearTimeout(persistCoverReleaseYearTimerRef.current);
+		}
+
+		persistCoverReleaseYearTimerRef.current = window.setTimeout(() => {
+			persistCoverReleaseYearTimerRef.current = undefined;
+			persist(parseZineCoverReleaseYearInput(value));
+		}, 500);
 	}
 
 	function queueDebouncedPersistCoverTextLayout(
@@ -576,6 +609,7 @@ export function LyricsZine({
 					coverSide="front"
 					coverTextLayout={coverTextLayout}
 					playlistTitle={page.playlistTitle}
+					releaseYear={resolvedCoverReleaseYear}
 					useSheetSpreadBackground={options?.useSheetSpreadBackground}
 				/>
 			);
@@ -1044,7 +1078,26 @@ export function LyricsZine({
 												{renderPageByReadingIndex(index, `scr-${index}`)}
 											</div>
 											{persistence?.saveCoverTextLayout ? (
-												<aside className="no-print zine-song-columns-panel rounded-lg border bg-card px-3 py-3 shadow-sm">
+												<aside className="no-print zine-song-columns-panel space-y-4 rounded-lg border bg-card px-3 py-3 shadow-sm">
+													<div className="space-y-2">
+														<Label htmlFor="zine-cover-release-year" className="text-sm">
+															Release year
+														</Label>
+														<Input
+															id="zine-cover-release-year"
+															inputMode="numeric"
+															maxLength={4}
+															onChange={(event) => {
+																updateCoverReleaseYearInput(event.target.value);
+															}}
+															placeholder="e.g. 2015"
+															type="text"
+															value={coverReleaseYearInput}
+														/>
+														<p className="text-muted-foreground text-xs leading-snug">
+															Optional · shown above the title in a small white box
+														</p>
+													</div>
 													<ZineCoverTextLayoutControls
 														layout={coverTextLayout}
 														onLayoutChange={updateCoverTextLayout}
@@ -1865,7 +1918,7 @@ function ZineInsideBackLayoutControls({
 	settings: ZineInsideBackLayoutSettings;
 	onSettingsChange: (settings: ZineInsideBackLayoutSettings) => void;
 }) {
-	const alignGroupName = "zine-inside-back-content-align";
+	const alignGroupName = "zine-inside-back-content-area-align";
 	const artistDisplayGroupName = "zine-inside-back-artist-display";
 	const recommendationRowAlignGroupName =
 		"zine-inside-back-recommendation-row-align";
@@ -1880,7 +1933,7 @@ function ZineInsideBackLayoutControls({
 				Inside back page layout
 			</legend>
 			<p className="text-muted-foreground text-xs leading-snug">
-				Page margins and content block position · screen preview only
+				Page margins and content block vertical position · screen preview only
 			</p>
 			<InsideBackMarginSlider
 				id="zine-inside-back-margin-top"
@@ -1907,18 +1960,18 @@ function ZineInsideBackLayoutControls({
 				onChange={(marginLeftPt) => patchSettings({ marginLeftPt })}
 			/>
 			<ZineLyricsColumnOptionRow
-				checked={settings.contentAlign === "center"}
+				checked={settings.contentAreaAlign === "top"}
 				groupName={alignGroupName}
-				id="zine-inside-back-align-center"
-				label="Center content area"
-				onSelect={() => patchSettings({ contentAlign: "center" })}
+				id="zine-inside-back-content-area-top"
+				label="Top-align content area"
+				onSelect={() => patchSettings({ contentAreaAlign: "top" })}
 			/>
 			<ZineLyricsColumnOptionRow
-				checked={settings.contentAlign === "right"}
+				checked={settings.contentAreaAlign === "center"}
 				groupName={alignGroupName}
-				id="zine-inside-back-align-right"
-				label="Right-align content area"
-				onSelect={() => patchSettings({ contentAlign: "right" })}
+				id="zine-inside-back-content-area-center"
+				label="Vertically center content area"
+				onSelect={() => patchSettings({ contentAreaAlign: "center" })}
 			/>
 			<div className="pt-1">
 				<p className="mb-2 font-medium text-foreground text-xs">Artist name</p>
