@@ -127,7 +127,7 @@ function PublicRobsTop50GenreStatsPageInner() {
 											aria-label="Filter genre counts by top placement range"
 											max={TOP_COUNT_OPTIONS.length - 1}
 											min={0}
-											onValueChange={(values) => {
+											onValueCommit={(values) => {
 												const nextIndex = values[0];
 												if (
 													nextIndex === undefined ||
