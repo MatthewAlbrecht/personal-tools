@@ -113,6 +113,47 @@ test("buildZinePages inserts blanks before back cover when cover + songs fill a 
 	assert.equal(pages[7]?.kind, "back-cover");
 });
 
+test("buildZinePages collapses consecutive instrumental tracks by default", () => {
+	const pages = buildZinePages({
+		playlistTitle: "Instrumentals",
+		songs: [
+			{ id: "a", position: 1, title: "A", artistName: "X", lyrics: "" },
+			{ id: "b", position: 2, title: "B", artistName: "X", lyrics: "" },
+			{ id: "c", position: 3, title: "C", artistName: "X", lyrics: "" },
+			{ id: "d", position: 4, title: "D", artistName: "X", lyrics: "" },
+			{ id: "e", position: 5, title: "E", artistName: "X", lyrics: "" },
+			{ id: "f", position: 6, title: "F", artistName: "X", lyrics: "" },
+		],
+	});
+
+	const contentPages = pages.filter(
+		(page) => page.kind === "song" || page.kind === "instrumental-group",
+	);
+
+	assert.equal(contentPages.length, 1);
+	assert.equal(contentPages[0]?.kind, "instrumental-group");
+	if (contentPages[0]?.kind === "instrumental-group") {
+		assert.equal(contentPages[0].songs.length, 6);
+	}
+});
+
+test("buildZinePages keeps separate instrumental pages when requested", () => {
+	const pages = buildZinePages({
+		playlistTitle: "Instrumentals",
+		collapseInstrumentalTracks: false,
+		songs: [
+			{ id: "a", position: 1, title: "A", artistName: "X", lyrics: "" },
+			{ id: "b", position: 2, title: "B", artistName: "X", lyrics: "" },
+		],
+	});
+
+	assert.equal(pages.filter((page) => page.kind === "song").length, 2);
+	assert.equal(
+		pages.filter((page) => page.kind === "instrumental-group").length,
+		0,
+	);
+});
+
 test("buildZinePages always produces a count divisible by four", () => {
 	for (let songCount = 0; songCount <= 15; songCount += 1) {
 		const songs = Array.from({ length: songCount }, (_, index) => ({

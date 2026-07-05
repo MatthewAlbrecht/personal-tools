@@ -1,3 +1,4 @@
+import { buildCollapsedSongPages } from "./zine-instrumental-pages";
 import type { ZineIntroSettings } from "./zine-intro-layout";
 import type { ZineSongDisplayInput } from "./zine-types";
 
@@ -9,8 +10,7 @@ export type ZineCoverPage = {
 	artistName?: string;
 };
 
-export type ZineSongPage = {
-	kind: "song";
+export type ZineSongPageData = {
 	songId: string;
 	position: number;
 	title: string;
@@ -26,6 +26,15 @@ export type ZineSongPage = {
 	credits?: ZineSongDisplayInput["credits"];
 	hiddenCreditLabels?: string[];
 	shownCreditLabels?: string[];
+};
+
+export type ZineSongPage = {
+	kind: "song";
+} & ZineSongPageData;
+
+export type ZineInstrumentalGroupPage = {
+	kind: "instrumental-group";
+	songs: ZineSongPageData[];
 };
 
 export type ZineIntroPageModel = {
@@ -46,14 +55,37 @@ export type ZinePage =
 	| ZineCoverPage
 	| ZineIntroPageModel
 	| ZineSongPage
+	| ZineInstrumentalGroupPage
 	| ZineBlankPage
 	| ZineBackCoverPage;
+
+function mapSongInputToPageData(song: ZineSongInput): ZineSongPageData {
+	return {
+		songId: song.id,
+		position: song.position,
+		title: song.title,
+		artistName: song.artistName,
+		albumTitle: song.albumTitle,
+		albumYear: song.albumYear,
+		albumArtUrl: song.albumArtUrl,
+		durationSeconds: song.durationSeconds,
+		userNote: song.userNote,
+		introContent: song.introContent,
+		about: song.about,
+		lyrics: song.lyrics,
+		credits: song.credits,
+		hiddenCreditLabels: song.hiddenCreditLabels,
+		shownCreditLabels: song.shownCreditLabels,
+	};
+}
 
 export function buildZinePages({
 	playlistTitle,
 	coverArtistName,
 	songs,
 	intro,
+	collapseInstrumentalTracks = true,
+	showSectionLabels = false,
 }: {
 	playlistTitle: string;
 	coverArtistName?: string;
@@ -63,6 +95,8 @@ export function buildZinePages({
 		settings: ZineIntroSettings;
 		includeWhenEmpty?: boolean;
 	};
+	collapseInstrumentalTracks?: boolean;
+	showSectionLabels?: boolean;
 }): ZinePage[] {
 	const resolvedCoverArtistName = coverArtistName?.trim() || undefined;
 	const sortedSongs = [...songs].sort(
@@ -88,27 +122,27 @@ export function buildZinePages({
 		});
 	}
 
-	pages.push(
-		...sortedSongs.map((song) => ({
-			kind: "song" as const,
-			songId: song.id,
-			position: song.position,
-			title: song.title,
-			artistName: song.artistName,
-			albumTitle: song.albumTitle,
-			albumYear: song.albumYear,
-			albumArtUrl: song.albumArtUrl,
-			durationSeconds: song.durationSeconds,
-			userNote: song.userNote,
-			introContent: song.introContent,
-			about: song.about,
-			lyrics: song.lyrics,
-			credits: song.credits,
-			hiddenCreditLabels: song.hiddenCreditLabels,
-			shownCreditLabels: song.shownCreditLabels,
-		})),
-		{ kind: "back-cover" as const },
+	const collapsedSongPages = buildCollapsedSongPages(
+		sortedSongs.map(mapSongInputToPageData),
+		{
+			collapseInstrumentalTracks,
+			showSectionLabels,
+		},
 	);
+
+	for (const songPage of collapsedSongPages) {
+		if (songPage.kind === "song") {
+			pages.push({ kind: "song", ...songPage.data });
+			continue;
+		}
+
+		pages.push({
+			kind: "instrumental-group",
+			songs: songPage.songs,
+		});
+	}
+
+	pages.push({ kind: "back-cover" });
 
 	while (pages.length % 4 !== 0) {
 		pages.splice(pages.length - 1, 0, { kind: "blank" });

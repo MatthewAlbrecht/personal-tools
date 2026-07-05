@@ -24,6 +24,7 @@ const zineDisplaySettingsValidator = v.object({
 	showGeniusInfo: v.optional(v.boolean()),
 	showSectionLabels: v.optional(v.boolean()),
 	showUserNote: v.optional(v.boolean()),
+	separateInstrumentalPages: v.optional(v.boolean()),
 });
 
 export default defineSchema({

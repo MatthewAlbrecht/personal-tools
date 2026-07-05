@@ -343,6 +343,7 @@ const zineDisplaySettingsMutationValidator = v.object({
 	showGeniusInfo: v.boolean(),
 	showSectionLabels: v.boolean(),
 	showUserNote: v.boolean(),
+	separateInstrumentalPages: v.boolean(),
 });
 
 export const updateZineDisplaySettings = mutation({

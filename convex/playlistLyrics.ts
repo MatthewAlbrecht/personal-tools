@@ -48,6 +48,7 @@ const zineDisplaySettingsValidator = v.object({
 	showGeniusInfo: v.optional(v.boolean()),
 	showSectionLabels: v.optional(v.boolean()),
 	showUserNote: v.optional(v.boolean()),
+	separateInstrumentalPages: v.optional(v.boolean()),
 });
 
 const playlistValidator = v.object({
@@ -572,6 +573,7 @@ const zineDisplaySettingsMutationValidator = v.object({
 	showGeniusInfo: v.boolean(),
 	showSectionLabels: v.boolean(),
 	showUserNote: v.boolean(),
+	separateInstrumentalPages: v.boolean(),
 });
 
 export const updateZineDisplaySettings = mutation({

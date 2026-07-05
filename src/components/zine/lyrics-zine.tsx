@@ -52,6 +52,7 @@ import {
 } from "../../../convex/_utils/geniusCreditVisibility";
 import { ZineCoverPage } from "./zine-cover-page";
 import { ZineCoverTextLayoutControls } from "./zine-cover-text-layout-controls";
+import { ZineInstrumentalGroupPage } from "./zine-instrumental-group-page";
 import { IntroContentEditor } from "./intro-content-editor";
 import { ZineIntroPage } from "./zine-intro-page";
 import { triggerZinePrintRemeasure } from "./zine-print-remeasure";
@@ -265,6 +266,8 @@ export function LyricsZine({
 					includeWhenEmpty: canEdit,
 				}
 			: undefined,
+		collapseInstrumentalTracks: !displaySettings.separateInstrumentalPages,
+		showSectionLabels: displaySettings.showSectionLabels,
 	});
 	const bookletSheets = buildBookletSheets(pages);
 	const songsById = new Map(songsForPages.map((song) => [song.id, song]));
@@ -539,6 +542,28 @@ export function LyricsZine({
 			);
 		}
 
+		if (page.kind === "instrumental-group") {
+			return (
+				<ZineInstrumentalGroupPage
+					key={`${keyPrefix}-instrumental-group-${page.songs.map((song) => song.songId).join("-")}`}
+					canEditCredits={canEdit}
+					creditVisibility={creditVisibility}
+					displayOptions={displayOptions}
+					getShowCredits={(songId) => !(songId in songCreditsHidden)}
+					getTitleCondenseScale={(songId) =>
+						getCondenseScaleForSong(songTextCondenseScales, songId)
+					}
+					onHideCreditLabel={
+						canEdit && persistence?.hideCreditLabel
+							? (songId, label) =>
+									persistence.hideCreditLabel?.(songId, label)
+							: undefined
+					}
+					songs={page.songs}
+				/>
+			);
+		}
+
 		if (page.kind === "song") {
 			const lyricsColumnMode: ZineLyricsColumnMode =
 				page.songId in songLyricsColumnModes ? 1 : 2;
@@ -807,6 +832,14 @@ export function LyricsZine({
 								}
 								label="Show song part labels"
 							/>
+							<ZineToggleControl
+								id="zine-separate-instrumental-pages"
+								checked={displaySettings.separateInstrumentalPages}
+								onCheckedChange={(checked) =>
+									updateDisplaySettings({ separateInstrumentalPages: checked })
+								}
+								label="Separate instrumental pages"
+							/>
 							{canEdit ? (
 								<ZineToggleControl
 									id="zine-show-user-note"
@@ -988,6 +1021,33 @@ export function LyricsZine({
 													settings={introSettings}
 													onSettingsChange={updateIntroSettings}
 												/>
+											</aside>
+										</>
+									) : (
+										renderPageByReadingIndex(index, `scr-${index}`)
+									)}
+								</div>
+							);
+						}
+
+						if (page.kind === "instrumental-group") {
+							const groupKey = page.songs.map((song) => song.songId).join("-");
+							return (
+								<div
+									key={`instrumental-group-${groupKey}`}
+									className={cn(canEdit && "zine-song-preview-shell")}
+								>
+									{canEdit ? (
+										<>
+											<div className="flex shrink-0 justify-start">
+												{renderPageByReadingIndex(index, `scr-${index}`)}
+											</div>
+											<aside className="no-print zine-song-columns-panel rounded-lg border bg-card px-3 py-3 shadow-sm">
+												<p className="text-muted-foreground text-sm">
+													{page.songs.length} instrumental tracks share this
+													page (up to 6 per page). Turn on &ldquo;Separate
+													instrumental pages&rdquo; to give each its own page.
+												</p>
 											</aside>
 										</>
 									) : (

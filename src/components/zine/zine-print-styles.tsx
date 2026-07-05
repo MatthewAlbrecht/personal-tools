@@ -477,6 +477,34 @@ export function ZinePrintStyles() {
 						color: #666666;
 					}
 
+					.zine-page-instrumental-group {
+						display: flex;
+						flex-direction: column;
+						gap: 0.12in;
+						justify-content: flex-start;
+					}
+
+					.zine-instrumental-group-block {
+						display: flex;
+						flex-direction: column;
+						flex-shrink: 0;
+						gap: 0;
+					}
+
+					.zine-instrumental-group-block .zine-song-top {
+						margin-bottom: 0.12in;
+					}
+
+					.zine-instrumental-group-block + .zine-instrumental-group-block {
+						padding-top: 0.1in;
+						border-top: 0.5pt solid #cccccc;
+					}
+
+					.zine-instrumental-group-track-credits
+						.zine-song-footer-credits-label {
+						margin: 0 0 0.03in;
+					}
+
 					.print-only {
 						display: none;
 					}

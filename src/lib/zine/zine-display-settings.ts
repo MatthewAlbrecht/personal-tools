@@ -7,6 +7,7 @@ export type ZineDisplaySettings = {
 	showGeniusInfo: boolean;
 	showSectionLabels: boolean;
 	showUserNote: boolean;
+	separateInstrumentalPages: boolean;
 };
 
 export const ZINE_DISPLAY_DEFAULTS: ZineDisplaySettings = {
@@ -18,6 +19,7 @@ export const ZINE_DISPLAY_DEFAULTS: ZineDisplaySettings = {
 	showGeniusInfo: false,
 	showSectionLabels: false,
 	showUserNote: true,
+	separateInstrumentalPages: false,
 };
 
 export function resolveZineDisplaySettings(
