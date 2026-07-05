@@ -73,7 +73,7 @@ export const clearLegacyRawData = mutation({
 			.order("asc")
 			.paginate({
 				numItems: size,
-				cursor: (progress?.cursorStr as string | null | undefined) ?? null,
+				cursor: (progress?.cursorStr as any) ?? null,
 			});
 
 		if (result.page.length === 0 || result.isDone) {
@@ -127,7 +127,7 @@ export const clearLegacyArtistRawData = mutation({
 			.order("asc")
 			.paginate({
 				numItems: size,
-				cursor: (progress?.cursorStr as string | null | undefined) ?? null,
+				cursor: (progress?.cursorStr as any) ?? null,
 			});
 
 		if (result.page.length === 0 || result.isDone) {
@@ -176,7 +176,7 @@ export const clearLegacyTracksTrackData = mutation({
 			.order("asc")
 			.paginate({
 				numItems: size,
-				cursor: (progress?.cursorStr as string | null | undefined) ?? null,
+				cursor: (progress?.cursorStr as any) ?? null,
 			});
 
 		if (result.page.length === 0 || result.isDone) {
@@ -225,7 +225,7 @@ export const clearLegacyAlbumRawData = mutation({
 			.order("asc")
 			.paginate({
 				numItems: size,
-				cursor: (progress?.cursorStr as string | null | undefined) ?? null,
+				cursor: (progress?.cursorStr as any) ?? null,
 			});
 
 		if (result.page.length === 0 || result.isDone) {
@@ -380,7 +380,7 @@ export const clearLegacyCategorizationTrackData = mutation({
 			.order("asc")
 			.paginate({
 				numItems: size,
-				cursor: (progress?.cursorStr as string | null | undefined) ?? null,
+				cursor: (progress?.cursorStr as any) ?? null,
 			});
 
 		if (result.page.length === 0 || result.isDone) {
@@ -779,7 +779,7 @@ export const saveCategorization = mutation({
 			.withIndex("by_trackId", (q) => q.eq("trackId", args.trackId))
 			.first();
 
-		let categorizationId: Id<"spotifySongCategorizations">;
+		let categorizationId;
 		if (existing) {
 			// Update existing categorization
 			await ctx.db.patch(existing._id, {
@@ -1819,7 +1819,7 @@ export const getCanonicalTracksPage = query({
 			.order("asc")
 			.paginate({
 				numItems: args.numItems ?? 200,
-				cursor: (args.cursor as string | null | undefined) ?? null,
+				cursor: (args.cursor as any) ?? null,
 			});
 
 		return {
