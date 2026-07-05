@@ -895,7 +895,8 @@ export default defineSchema({
 		updatedAt: v.number(),
 	})
 		.index("by_yearId", ["yearId"])
-		.index("by_yearId_position", ["yearId", "position"]),
+		.index("by_yearId_position", ["yearId", "position"])
+		.index("by_userId_albumId", ["userId", "albumId"]),
 
 	// ============================================================================
 	// Rooleases - Festival New Releases Tracker

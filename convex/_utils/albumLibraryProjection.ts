@@ -204,30 +204,26 @@ async function loadRobRankingYearsForAlbum(
 	ctx: AlbumLibraryDbCtx,
 	args: { userId: string; albumId: Id<"spotifyAlbums"> },
 ): Promise<{ years: number[]; updatedAt?: number }> {
-	const robRankingYears = await ctx.db
-		.query("robRankingYears")
-		.withIndex("by_userId_year", (q) => q.eq("userId", args.userId))
+	const robRankingAlbums = await ctx.db
+		.query("robRankingAlbums")
+		.withIndex("by_userId_albumId", (q) =>
+			q.eq("userId", args.userId).eq("albumId", args.albumId),
+		)
 		.collect();
 
 	const years: number[] = [];
 	let updatedAt: number | undefined;
 
-	for (const robRankingYear of robRankingYears) {
-		const robRankingAlbums = await ctx.db
-			.query("robRankingAlbums")
-			.withIndex("by_yearId", (q) => q.eq("yearId", robRankingYear._id))
-			.collect();
+	for (const robRankingAlbum of robRankingAlbums) {
+		const robRankingYear = await ctx.db.get(robRankingAlbum.yearId);
+		if (!robRankingYear || robRankingYear.userId !== args.userId) continue;
 
-		for (const robRankingAlbum of robRankingAlbums) {
-			if (robRankingAlbum.albumId !== args.albumId) continue;
-
-			years.push(robRankingYear.year);
-			updatedAt = Math.max(
-				updatedAt ?? 0,
-				robRankingYear.updatedAt,
-				robRankingAlbum.updatedAt,
-			);
-		}
+		years.push(robRankingYear.year);
+		updatedAt = Math.max(
+			updatedAt ?? 0,
+			robRankingYear.updatedAt,
+			robRankingAlbum.updatedAt,
+		);
 	}
 
 	years.sort((a, b) => b - a);
