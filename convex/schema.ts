@@ -534,7 +534,18 @@ export default defineSchema({
 			"userId",
 			"appearsInRobRankings",
 			"createdAt",
-		]),
+		])
+		.searchIndex("search_albumLibraryItems", {
+			searchField: "searchText",
+			filterFields: [
+				"userId",
+				"releaseYear",
+				"filterHasListened",
+				"rymStatus",
+				"albumType",
+				"appearsInRobRankings",
+			],
+		}),
 
 	forLaterAlbumItems: defineTable({
 		userId: v.string(),

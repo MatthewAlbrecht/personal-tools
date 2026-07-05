@@ -13,6 +13,7 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
+import type * as _utils_albumLibraryIndexedList from "../_utils/albumLibraryIndexedList.js";
 import type * as _utils_albumLibraryProjection from "../_utils/albumLibraryProjection.js";
 import type * as _utils_albumLibraryRows from "../_utils/albumLibraryRows.js";
 import type * as _utils_albumMatching from "../_utils/albumMatching.js";
@@ -56,6 +57,7 @@ import type * as migrations_backfillSpotifyAlbumId from "../migrations/backfillS
 import type * as migrations_backfillUserTracks from "../migrations/backfillUserTracks.js";
 import type * as migrations_initializeRatingHistory from "../migrations/initializeRatingHistory.js";
 import type * as migrations_migrateRatingsToThreeTier from "../migrations/migrateRatingsToThreeTier.js";
+import type * as musicFunnel from "../musicFunnel.js";
 import type * as playlistLyrics from "../playlistLyrics.js";
 import type * as rateYourMusicScrapes from "../rateYourMusicScrapes.js";
 import type * as robRankings from "../robRankings.js";
@@ -73,6 +75,7 @@ import type * as spotify from "../spotify.js";
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  "_utils/albumLibraryIndexedList": typeof _utils_albumLibraryIndexedList;
   "_utils/albumLibraryProjection": typeof _utils_albumLibraryProjection;
   "_utils/albumLibraryRows": typeof _utils_albumLibraryRows;
   "_utils/albumMatching": typeof _utils_albumMatching;
@@ -116,6 +119,7 @@ declare const fullApi: ApiFromModules<{
   "migrations/backfillUserTracks": typeof migrations_backfillUserTracks;
   "migrations/initializeRatingHistory": typeof migrations_initializeRatingHistory;
   "migrations/migrateRatingsToThreeTier": typeof migrations_migrateRatingsToThreeTier;
+  musicFunnel: typeof musicFunnel;
   playlistLyrics: typeof playlistLyrics;
   rateYourMusicScrapes: typeof rateYourMusicScrapes;
   robRankings: typeof robRankings;
