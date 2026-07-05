@@ -141,14 +141,13 @@ export async function matchRymForSpotifyAlbum(
 		.first();
 
 	if (exactScrape) {
-		await upsertRymSpotifyAlbumLink(ctx, {
+		await linkRymScrapeToSpotifyAlbum(ctx, {
 			scrapeId: exactScrape._id,
 			albumId: args.albumId,
 			spotifyAlbumId: args.spotifyAlbumId,
 			method: "spotify_id",
 			now: args.now,
 		});
-		await patchScrapeAlbumConvexId(ctx, exactScrape._id, args.albumId);
 		return { scrapeId: exactScrape._id, method: "spotify_id" };
 	}
 
@@ -169,7 +168,7 @@ export async function matchRymForSpotifyAlbum(
 		return {};
 	}
 
-	await upsertRymSpotifyAlbumLink(ctx, {
+	await linkRymScrapeToSpotifyAlbum(ctx, {
 		scrapeId: titleArtistMatch.candidate._id,
 		albumId: args.albumId,
 		spotifyAlbumId: args.spotifyAlbumId,
@@ -177,11 +176,6 @@ export async function matchRymForSpotifyAlbum(
 		matchedArtistKey: titleArtistMatch.matchedArtistKey,
 		now: args.now,
 	});
-	await patchScrapeAlbumConvexId(
-		ctx,
-		titleArtistMatch.candidate._id,
-		args.albumId,
-	);
 
 	return {
 		scrapeId: titleArtistMatch.candidate._id,
@@ -265,14 +259,13 @@ export async function matchRymScrapeToSpotifyAlbums(
 				return summary;
 			}
 
-			await upsertRymSpotifyAlbumLink(ctx, {
+			await linkRymScrapeToSpotifyAlbum(ctx, {
 				scrapeId: args.scrapeId,
 				albumId: album._id,
 				spotifyAlbumId,
 				method: "spotify_id",
 				now: args.now,
 			});
-			await patchScrapeAlbumConvexId(ctx, args.scrapeId, album._id);
 			summary.linkedAlbums += 1;
 			return summary;
 		}
@@ -313,7 +306,7 @@ export async function matchRymScrapeToSpotifyAlbums(
 			continue;
 		}
 
-		await upsertRymSpotifyAlbumLink(ctx, {
+		await linkRymScrapeToSpotifyAlbum(ctx, {
 			scrapeId: args.scrapeId,
 			albumId: match.album._id,
 			spotifyAlbumId: match.album.spotifyAlbumId,
@@ -321,7 +314,6 @@ export async function matchRymScrapeToSpotifyAlbums(
 			matchedArtistKey: match.matchedArtistKey,
 			now: args.now,
 		});
-		await patchScrapeAlbumConvexId(ctx, args.scrapeId, match.album._id);
 		summary.linkedAlbums += 1;
 	}
 
@@ -349,6 +341,7 @@ export async function linkRymScrapeToSpotifyAlbum(
 		albumId: Id<"spotifyAlbums">;
 		spotifyAlbumId?: string;
 		method: RymMatchMethod;
+		matchedArtistKey?: string;
 		now: number;
 	},
 ): Promise<void> {
@@ -357,6 +350,7 @@ export async function linkRymScrapeToSpotifyAlbum(
 		albumId: args.albumId,
 		spotifyAlbumId: args.spotifyAlbumId,
 		method: args.method,
+		matchedArtistKey: args.matchedArtistKey,
 		now: args.now,
 	});
 	await patchScrapeAlbumConvexId(ctx, args.scrapeId, args.albumId);
