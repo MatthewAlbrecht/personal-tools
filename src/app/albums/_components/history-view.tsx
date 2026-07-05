@@ -1,6 +1,6 @@
 "use client";
 
-import { Disc3, MoreHorizontal, Trash2 } from "lucide-react";
+import { Disc3, MoreHorizontal, RefreshCw, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { extractReleaseYear } from "~/lib/album-tiers";
 import {
@@ -21,6 +21,7 @@ import {
 } from "~/components/ui/dropdown-menu";
 import type { HistoryListen } from "../_utils/types";
 import { AlbumCard } from "./album-card";
+import { ConvertListenDrawer } from "./convert-listen-drawer";
 
 type HistoryViewProps = {
 	listensByMonth: Map<string, HistoryListen[]>;
@@ -45,6 +46,9 @@ export function HistoryView({
 		id: string;
 		name: string;
 	} | null>(null);
+	const [convertTarget, setConvertTarget] = useState<HistoryListen | null>(
+		null,
+	);
 	const [onlyUnranked, setOnlyUnranked] = useState(false);
 	const [onlyFirstListens, setOnlyFirstListens] = useState(false);
 	const [yearFilter, setYearFilter] = useState("all");
@@ -215,7 +219,13 @@ export function HistoryView({
 															<MoreHorizontal className="h-4 w-4" />
 														</button>
 													</DropdownMenuTrigger>
-													<DropdownMenuContent align="end" className="w-32">
+													<DropdownMenuContent align="end" className="w-40">
+														<DropdownMenuItem
+															onSelect={() => setConvertTarget(listen)}
+														>
+															<RefreshCw className="h-4 w-4" />
+															Convert listen
+														</DropdownMenuItem>
 														<DropdownMenuItem
 															variant="destructive"
 															onSelect={() =>
@@ -268,6 +278,16 @@ export function HistoryView({
 					</AlertDialogFooter>
 				</AlertDialogContent>
 			</AlertDialog>
+
+			<ConvertListenDrawer
+				listen={convertTarget}
+				open={convertTarget !== null}
+				onOpenChange={(open) => {
+					if (!open) {
+						setConvertTarget(null);
+					}
+				}}
+			/>
 		</>
 	);
 }

@@ -3046,6 +3046,223 @@ export const getUserAlbumListens = query({
 	},
 });
 
+const spotifyAlbumSearchResultValidator = v.object({
+	albumId: v.id("spotifyAlbums"),
+	spotifyAlbumId: v.string(),
+	name: v.string(),
+	artistName: v.string(),
+	imageUrl: v.optional(v.string()),
+	releaseDate: v.optional(v.string()),
+	totalTracks: v.number(),
+});
+
+function albumMatchesSearchTerm(
+	album: Doc<"spotifyAlbums">,
+	searchTerm: string,
+): boolean {
+	const term = searchTerm.trim().toLowerCase();
+	if (!term) {
+		return true;
+	}
+	return (
+		album.name.toLowerCase().includes(term) ||
+		album.artistName.toLowerCase().includes(term)
+	);
+}
+
+function toSpotifyAlbumSearchResult(album: Doc<"spotifyAlbums">) {
+	return {
+		albumId: album._id,
+		spotifyAlbumId: album.spotifyAlbumId,
+		name: album.name,
+		artistName: album.artistName,
+		totalTracks: album.totalTracks,
+		...(album.imageUrl ? { imageUrl: album.imageUrl } : {}),
+		...(album.releaseDate ? { releaseDate: album.releaseDate } : {}),
+	};
+}
+
+async function recalcUserAlbumListenStats(
+	ctx: MutationCtx,
+	userId: string,
+	albumId: Id<"spotifyAlbums">,
+): Promise<void> {
+	const listens = await ctx.db
+		.query("userAlbumListens")
+		.withIndex("by_userId_albumId", (q) =>
+			q.eq("userId", userId).eq("albumId", albumId),
+		)
+		.collect();
+
+	const userAlbum = await ctx.db
+		.query("userAlbums")
+		.withIndex("by_userId_albumId", (q) =>
+			q.eq("userId", userId).eq("albumId", albumId),
+		)
+		.first();
+
+	if (listens.length === 0) {
+		if (userAlbum) {
+			await ctx.db.delete(userAlbum._id);
+		}
+		return;
+	}
+
+	const timestamps = listens.map((listen) => listen.listenedAt);
+	const stats = {
+		listenCount: listens.length,
+		firstListenedAt: Math.min(...timestamps),
+		lastListenedAt: Math.max(...timestamps),
+	};
+
+	if (userAlbum) {
+		await ctx.db.patch(userAlbum._id, stats);
+		return;
+	}
+
+	await ctx.db.insert("userAlbums", {
+		userId,
+		albumId,
+		...stats,
+	});
+}
+
+export const searchSpotifyAlbumsByTitleKey = query({
+	args: {
+		albumName: v.string(),
+		excludeAlbumId: v.id("spotifyAlbums"),
+		search: v.optional(v.string()),
+		limit: v.optional(v.number()),
+	},
+	returns: v.array(spotifyAlbumSearchResultValidator),
+	handler: async (ctx, args) => {
+		const limit = Math.min(Math.max(args.limit ?? 50, 1), 100);
+		const titleKey = normalizeAlbumTitle(args.albumName);
+
+		const albums = await ctx.db
+			.query("spotifyAlbums")
+			.withIndex("by_albumTitleKey", (q) => q.eq("albumTitleKey", titleKey))
+			.collect();
+
+		const results = [];
+		for (const album of albums) {
+			if (album._id === args.excludeAlbumId) {
+				continue;
+			}
+			if (!albumMatchesSearchTerm(album, args.search ?? "")) {
+				continue;
+			}
+			results.push(toSpotifyAlbumSearchResult(album));
+			if (results.length >= limit) {
+				break;
+			}
+		}
+
+		return results;
+	},
+});
+
+export const searchSpotifyAlbumsForListenConversion = query({
+	args: {
+		search: v.optional(v.string()),
+		excludeAlbumId: v.id("spotifyAlbums"),
+		limit: v.optional(v.number()),
+	},
+	returns: v.array(spotifyAlbumSearchResultValidator),
+	handler: async (ctx, args) => {
+		const limit = Math.min(Math.max(args.limit ?? 50, 1), 100);
+
+		const albums = await ctx.db
+			.query("spotifyAlbums")
+			.withIndex("by_createdAt")
+			.order("desc")
+			.take(500);
+
+		const results = [];
+		for (const album of albums) {
+			if (album._id === args.excludeAlbumId) {
+				continue;
+			}
+			if (!albumMatchesSearchTerm(album, args.search ?? "")) {
+				continue;
+			}
+			results.push(toSpotifyAlbumSearchResult(album));
+			if (results.length >= limit) {
+				break;
+			}
+		}
+
+		return results;
+	},
+});
+
+export const convertAlbumListen = mutation({
+	args: {
+		listenId: v.id("userAlbumListens"),
+		targetAlbumId: v.id("spotifyAlbums"),
+	},
+	returns: v.object({
+		converted: v.boolean(),
+		reason: v.optional(v.string()),
+		targetAlbumName: v.optional(v.string()),
+	}),
+	handler: async (ctx, args) => {
+		const listen = await ctx.db.get(args.listenId);
+		if (!listen) {
+			return { converted: false, reason: "listen_not_found" };
+		}
+
+		if (listen.albumId === args.targetAlbumId) {
+			return { converted: false, reason: "same_album" };
+		}
+
+		const targetAlbum = await ctx.db.get(args.targetAlbumId);
+		if (!targetAlbum) {
+			return { converted: false, reason: "target_not_found" };
+		}
+
+		const existingOnTarget = await ctx.db
+			.query("userAlbumListens")
+			.withIndex("by_userId_albumId", (q) =>
+				q.eq("userId", listen.userId).eq("albumId", args.targetAlbumId),
+			)
+			.collect();
+
+		if (
+			existingOnTarget.some(
+				(existingListen) => existingListen.listenedAt === listen.listenedAt,
+			)
+		) {
+			return { converted: false, reason: "duplicate_listen" };
+		}
+
+		const sourceAlbumId = listen.albumId;
+		await ctx.db.patch(args.listenId, { albumId: args.targetAlbumId });
+
+		await recalcUserAlbumListenStats(ctx, listen.userId, sourceAlbumId);
+		await recalcUserAlbumListenStats(ctx, listen.userId, args.targetAlbumId);
+
+		await refreshForLaterProjectionsForUserAlbum(ctx, {
+			userId: listen.userId,
+			albumId: sourceAlbumId,
+		});
+		await refreshForLaterProjectionsForUserAlbum(ctx, {
+			userId: listen.userId,
+			albumId: args.targetAlbumId,
+		});
+		await upsertAlbumLibraryProjection(ctx, {
+			userId: listen.userId,
+			albumId: sourceAlbumId,
+		});
+		await upsertAlbumLibraryProjection(ctx, {
+			userId: listen.userId,
+			albumId: args.targetAlbumId,
+		});
+
+		return { converted: true, targetAlbumName: targetAlbum.name };
+	},
+});
+
 export const deleteAlbumListen = mutation({
 	args: {
 		listenId: v.id("userAlbumListens"),
