@@ -84,8 +84,7 @@ export function PlaylistLyricsList() {
 	}
 
 	return (
-		<main className="mx-auto max-w-4xl px-4 py-10">
-			<Card>
+		<Card>
 				<CardHeader>
 					<div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
 						<div>
@@ -222,7 +221,6 @@ export function PlaylistLyricsList() {
 					)}
 				</CardContent>
 			</Card>
-		</main>
 	);
 }
 

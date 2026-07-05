@@ -1,5 +1,5 @@
-import { PlaylistLyricsList } from "./_components/playlist-lyrics-list";
+import { redirect } from "next/navigation";
 
 export default function PlaylistLyricsPage() {
-	return <PlaylistLyricsList />;
+	redirect("/lyrics/playlists");
 }

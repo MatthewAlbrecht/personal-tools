@@ -502,7 +502,7 @@ export function PlaylistLyricsEditor({ slug }: { slug: string }): ReactElement {
 					</CardHeader>
 					<CardContent>
 						<Button asChild>
-							<Link href="/playlist-lyrics">Back to playlist lyrics</Link>
+							<Link href="/lyrics/playlists">Back to playlist lyrics</Link>
 						</Button>
 					</CardContent>
 				</Card>
@@ -561,7 +561,7 @@ export function PlaylistLyricsEditor({ slug }: { slug: string }): ReactElement {
 						<Link href={`/playlist-lyrics/${currentSlug}`}>Print view</Link>
 					</Button>
 					<Button asChild variant="ghost">
-						<Link href="/playlist-lyrics">Back</Link>
+						<Link href="/lyrics/playlists">Back</Link>
 					</Button>
 				</div>
 			</div>

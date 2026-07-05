@@ -15,7 +15,8 @@ export function middleware(request: NextRequest) {
 	const isArticles = request.nextUrl.pathname.startsWith("/articles");
 	const isConcerts = request.nextUrl.pathname.startsWith("/concerts");
 	const isPlaylistLyrics =
-		request.nextUrl.pathname.startsWith("/playlist-lyrics");
+		request.nextUrl.pathname.startsWith("/playlist-lyrics") ||
+		request.nextUrl.pathname.startsWith("/lyrics/playlists");
 	const isPlaylistLyricsApi = request.nextUrl.pathname.startsWith(
 		"/api/migrate-playlist-lyrics",
 	);
@@ -49,6 +50,8 @@ export const config = {
 		"/concerts/:path*",
 		"/playlist-lyrics",
 		"/playlist-lyrics/:path*",
+		"/lyrics/playlists",
+		"/lyrics/playlists/:path*",
 		"/api/migrate-playlist-lyrics",
 	],
 };

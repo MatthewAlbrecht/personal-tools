@@ -64,7 +64,7 @@ export function PlaylistLyricsZine({ slug, variant }: PlaylistLyricsZineProps) {
 						href={
 							variant === "public"
 								? "/public/playlist-lyrics"
-								: "/playlist-lyrics"
+								: "/lyrics/playlists"
 						}
 					>
 						<ArrowLeft className="mr-2 h-4 w-4" />

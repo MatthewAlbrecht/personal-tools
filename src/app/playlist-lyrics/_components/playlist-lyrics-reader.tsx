@@ -100,7 +100,7 @@ function PlaylistLyricsReaderContent({
 	const [showAlbumArt, setShowAlbumArt] = useState(false);
 	const [showSectionLabels, setShowSectionLabels] = useState(true);
 	const backHref =
-		variant === "public" ? "/public/playlist-lyrics" : "/playlist-lyrics";
+		variant === "public" ? "/public/playlist-lyrics" : "/lyrics/playlists";
 	const backLabel =
 		variant === "public" ? "Back to Playlists" : "Back to Playlist Lyrics";
 

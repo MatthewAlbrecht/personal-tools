@@ -27,9 +27,6 @@ export function SiteHeader() {
 							<Link href="/lyrics" className="text-sm hover:underline">
 								Lyrics
 							</Link>
-							<Link href="/playlist-lyrics" className="text-sm hover:underline">
-								Playlist Lyrics
-							</Link>
 							<Link href="/albums" className="text-sm hover:underline">
 								Albums
 							</Link>
