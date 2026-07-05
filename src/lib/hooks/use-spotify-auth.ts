@@ -43,15 +43,26 @@ export function useSpotifyAuth(): UseSpotifyAuthReturn {
 
 	// Get a valid access token (refreshes if expired, uses cache otherwise)
 	const getValidAccessToken = useCallback(async (): Promise<string | null> => {
-		if (!userId) return null;
+		if (!userId) {
+			return null;
+		}
 
-		// Check cache - use 5 minute buffer before expiry
 		const now = Date.now();
+		const expiryBufferMs = 5 * 60 * 1000;
+
 		if (
 			tokenCacheRef.current &&
-			tokenCacheRef.current.expiresAt > now + 5 * 60 * 1000
+			tokenCacheRef.current.expiresAt > now + expiryBufferMs
 		) {
 			return tokenCacheRef.current.token;
+		}
+
+		if (connection && connection.expiresAt > now + expiryBufferMs) {
+			tokenCacheRef.current = {
+				token: connection.accessToken,
+				expiresAt: connection.expiresAt,
+			};
+			return connection.accessToken;
 		}
 
 		try {
@@ -62,13 +73,21 @@ export function useSpotifyAuth(): UseSpotifyAuthReturn {
 			});
 
 			if (!res.ok) {
-				console.error("Failed to get valid token");
+				const errorBody = (await res.json().catch(() => null)) as {
+					error?: string;
+				} | null;
+				console.error(
+					"Failed to get valid Spotify token:",
+					errorBody?.error ?? res.status,
+				);
 				return null;
 			}
 
-			const data = await res.json();
+			const data = (await res.json()) as {
+				accessToken: string;
+				expiresIn?: number;
+			};
 
-			// Cache the token (assume 1 hour expiry if not provided)
 			const expiresIn = data.expiresIn ?? 3600;
 			tokenCacheRef.current = {
 				token: data.accessToken,
@@ -80,7 +99,7 @@ export function useSpotifyAuth(): UseSpotifyAuthReturn {
 			console.error("Token refresh error:", error);
 			return null;
 		}
-	}, [userId]);
+	}, [userId, connection]);
 
 	return {
 		userId,

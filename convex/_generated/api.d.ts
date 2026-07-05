@@ -55,6 +55,7 @@ import type * as geniusCreditLabels from "../geniusCreditLabels.js";
 import type * as migrations_backfillCategorizedAt from "../migrations/backfillCategorizedAt.js";
 import type * as migrations_backfillSpotifyAlbumId from "../migrations/backfillSpotifyAlbumId.js";
 import type * as migrations_backfillUserTracks from "../migrations/backfillUserTracks.js";
+import type * as migrations_importMusicFunnelFromProd from "../migrations/importMusicFunnelFromProd.js";
 import type * as migrations_initializeRatingHistory from "../migrations/initializeRatingHistory.js";
 import type * as migrations_migrateRatingsToThreeTier from "../migrations/migrateRatingsToThreeTier.js";
 import type * as musicFunnel from "../musicFunnel.js";
@@ -117,6 +118,7 @@ declare const fullApi: ApiFromModules<{
   "migrations/backfillCategorizedAt": typeof migrations_backfillCategorizedAt;
   "migrations/backfillSpotifyAlbumId": typeof migrations_backfillSpotifyAlbumId;
   "migrations/backfillUserTracks": typeof migrations_backfillUserTracks;
+  "migrations/importMusicFunnelFromProd": typeof migrations_importMusicFunnelFromProd;
   "migrations/initializeRatingHistory": typeof migrations_initializeRatingHistory;
   "migrations/migrateRatingsToThreeTier": typeof migrations_migrateRatingsToThreeTier;
   musicFunnel: typeof musicFunnel;

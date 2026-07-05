@@ -792,6 +792,142 @@ export default defineSchema({
 			"startedAt",
 		]),
 
+	// ============================================================================
+	// Music Funnel - Curated playlist discovery pipeline
+	// ============================================================================
+
+	musicFunnelSettings: defineTable({
+		userId: v.string(),
+		mainPlaylistId: v.optional(v.string()),
+		repeatsPlaylistId: v.optional(v.string()),
+		createdAt: v.number(),
+		updatedAt: v.number(),
+	}).index("by_userId", ["userId"]),
+
+	musicFunnelSources: defineTable({
+		userId: v.string(),
+		spotifyPlaylistId: v.string(),
+		displayName: v.string(),
+		curatorName: v.string(),
+		notes: v.optional(v.string()),
+		scheduleHint: v.optional(v.string()),
+		isActive: v.boolean(),
+		spotifyPlaylistName: v.optional(v.string()),
+		spotifyOwnerId: v.optional(v.string()),
+		spotifyOwnerName: v.optional(v.string()),
+		imageUrl: v.optional(v.string()),
+		lastSnapshotId: v.optional(v.string()),
+		lastTrackCount: v.optional(v.number()),
+		lastScannedAt: v.optional(v.number()),
+		createdAt: v.number(),
+		updatedAt: v.number(),
+	})
+		.index("by_userId", ["userId"])
+		.index("by_userId_active", ["userId", "isActive"])
+		.index("by_userId_spotifyPlaylistId", ["userId", "spotifyPlaylistId"]),
+
+	musicFunnelRuns: defineTable({
+		userId: v.string(),
+		source: v.union(v.literal("manual"), v.literal("cron")),
+		status: v.union(
+			v.literal("success"),
+			v.literal("partial"),
+			v.literal("failed"),
+		),
+		startedAt: v.number(),
+		completedAt: v.optional(v.number()),
+		durationMs: v.optional(v.number()),
+		sourcesScanned: v.number(),
+		tracksSeen: v.number(),
+		newEncounters: v.number(),
+		newTracksAddedToMain: v.number(),
+		repeatTracksAdded: v.number(),
+		trackRepeatsFound: v.number(),
+		albumRepeatsFound: v.number(),
+		artistRepeatsFound: v.number(),
+		errors: v.array(v.string()),
+	})
+		.index("by_userId_startedAt", ["userId", "startedAt"])
+		.index("by_userId_status_startedAt", ["userId", "status", "startedAt"]),
+
+	musicFunnelSourceRuns: defineTable({
+		userId: v.string(),
+		runId: v.id("musicFunnelRuns"),
+		sourceId: v.id("musicFunnelSources"),
+		spotifyPlaylistId: v.string(),
+		sourceDisplayName: v.string(),
+		status: v.union(v.literal("success"), v.literal("failed")),
+		startedAt: v.number(),
+		completedAt: v.optional(v.number()),
+		durationMs: v.optional(v.number()),
+		spotifySnapshotId: v.optional(v.string()),
+		tracksFetched: v.number(),
+		newEncounters: v.number(),
+		alreadySeenFromSource: v.number(),
+		newTracksAddedToMain: v.number(),
+		repeatTracksAdded: v.number(),
+		trackRepeatsFound: v.number(),
+		albumRepeatsFound: v.number(),
+		artistRepeatsFound: v.number(),
+		error: v.optional(v.string()),
+	})
+		.index("by_userId_startedAt", ["userId", "startedAt"])
+		.index("by_runId", ["runId"])
+		.index("by_sourceId_startedAt", ["sourceId", "startedAt"]),
+
+	musicFunnelTrackEncounters: defineTable({
+		userId: v.string(),
+		sourceId: v.id("musicFunnelSources"),
+		spotifyPlaylistId: v.string(),
+		runId: v.id("musicFunnelRuns"),
+		sourceRunId: v.id("musicFunnelSourceRuns"),
+		spotifyTrackId: v.string(),
+		trackName: v.string(),
+		trackUri: v.string(),
+		primaryArtistName: v.string(),
+		artists: v.array(
+			v.object({
+				spotifyArtistId: v.string(),
+				name: v.string(),
+			}),
+		),
+		spotifyAlbumId: v.string(),
+		albumName: v.string(),
+		albumImageUrl: v.optional(v.string()),
+		playlistAddedAt: v.optional(v.number()),
+		firstSeenAt: v.number(),
+		createdAt: v.number(),
+	})
+		.index("by_userId_createdAt", ["userId", "createdAt"])
+		.index("by_userId_spotifyTrackId", ["userId", "spotifyTrackId"])
+		.index("by_userId_spotifyAlbumId", ["userId", "spotifyAlbumId"])
+		.index("by_userId_sourceId_spotifyTrackId", [
+			"userId",
+			"sourceId",
+			"spotifyTrackId",
+		])
+		.index("by_sourceId_createdAt", ["sourceId", "createdAt"]),
+
+	musicFunnelPlaylistWrites: defineTable({
+		userId: v.string(),
+		kind: v.union(v.literal("main"), v.literal("repeat")),
+		spotifyPlaylistId: v.string(),
+		spotifyTrackId: v.string(),
+		trackUri: v.string(),
+		reason: v.union(v.literal("first_seen"), v.literal("second_source_repeat")),
+		runId: v.id("musicFunnelRuns"),
+		sourceRunId: v.optional(v.id("musicFunnelSourceRuns")),
+		writtenAt: v.number(),
+		spotifySnapshotId: v.optional(v.string()),
+	})
+		.index("by_userId_kind_spotifyTrackId", [
+			"userId",
+			"kind",
+			"spotifyTrackId",
+		])
+		.index("by_userId_writtenAt", ["userId", "writtenAt"])
+		.index("by_runId", ["runId"]),
+
 	userAlbums: defineTable({
 		userId: v.string(),
 		albumId: v.id("spotifyAlbums"), // Reference to spotifyAlbums
