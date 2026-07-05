@@ -13,7 +13,11 @@ import {
 	syncGeniusAlbumTrackDurationsFromSpotify,
 	type SyncTrackDurationsResult,
 } from "./_utils/geniusSpotifyTrackDurations";
-import { zineCoverTextLayoutMutationValidator } from "./_utils/zineCoverTextLayout";
+import {
+	zineCoverTextAlignValidator,
+	zineCoverTextAnchorValidator,
+	zineCoverTextLayoutMutationValidator,
+} from "./_utils/zineCoverTextLayout";
 import {
 	normalizeZineInsideBackSections,
 	zineInsideBackSectionsValidator,
@@ -1105,6 +1109,356 @@ export const updateZineSongSettings = mutation({
 
 		await ctx.db.patch(args.songId, patch);
 		return args.songId;
+	},
+});
+
+const zineDisplaySettingsSyncValidator = v.object({
+	showArtist: v.optional(v.boolean()),
+	showAlbum: v.optional(v.boolean()),
+	showYear: v.optional(v.boolean()),
+	showAlbumArt: v.optional(v.boolean()),
+	showIntro: v.optional(v.boolean()),
+	showGeniusInfo: v.optional(v.boolean()),
+	showSectionLabels: v.optional(v.boolean()),
+	showUserNote: v.optional(v.boolean()),
+	separateInstrumentalPages: v.optional(v.boolean()),
+});
+
+const syncAlbumSongInputValidator = v.object({
+	trackNumber: v.number(),
+	songTitle: v.string(),
+	geniusSongUrl: v.string(),
+	lyrics: v.string(),
+	about: v.optional(v.string()),
+	credits: v.optional(v.array(geniusCreditValidator)),
+	scrapeState: v.optional(v.union(v.literal("ready"), v.literal("failed"))),
+	scrapeError: v.optional(v.string()),
+	songTitleOverride: v.optional(v.string()),
+	lyricsOverride: v.optional(v.string()),
+	aboutOverride: v.optional(v.string()),
+	durationSecondsOverride: v.optional(v.number()),
+	hiddenCreditLabels: v.optional(v.array(v.string())),
+	shownCreditLabels: v.optional(v.array(v.string())),
+	zineLyricsColumnCount: v.optional(v.union(v.literal(1), v.literal(2))),
+	zineLyricsFontSizePt: v.optional(v.number()),
+	zineTitleCondenseScale: v.optional(v.number()),
+	zineShowCredits: v.optional(v.boolean()),
+	createdAt: v.optional(v.number()),
+});
+
+export const listAlbumsForSync = query({
+	args: {},
+	returns: v.array(
+		v.object({
+			album: v.object({
+				albumTitle: v.string(),
+				artistName: v.string(),
+				albumSlug: v.string(),
+				geniusAlbumUrl: v.string(),
+				totalSongs: v.number(),
+				zineCoverImageUrl: v.optional(v.string()),
+				zineCoverGreyscale: v.optional(v.boolean()),
+				zineCoverTextAnchor: v.optional(zineCoverTextAnchorValidator),
+				zineCoverTextAlign: v.optional(zineCoverTextAlignValidator),
+				zineCoverTextOffsetXIn: v.optional(v.number()),
+				zineCoverTextOffsetYIn: v.optional(v.number()),
+				introPageContent: v.optional(v.string()),
+				zineIntroParagraphSpacingPt: v.optional(v.number()),
+				zineIntroMarginPt: v.optional(v.number()),
+				zineIntroVerticalAlign: v.optional(
+					v.union(v.literal("top"), v.literal("center")),
+				),
+				zineIntroFontSizePt: v.optional(v.number()),
+				zineDisplaySettings: v.optional(zineDisplaySettingsSyncValidator),
+				zineInsideBackSections: v.optional(zineInsideBackSectionsValidator),
+				albumTitleOverride: v.optional(v.string()),
+				artistNameOverride: v.optional(v.string()),
+				summaryOverride: v.optional(v.string()),
+				frontPageImageUrlOverride: v.optional(v.string()),
+				spotifyAlbumId: v.optional(v.string()),
+				spotifyAlbumMatchMethod: v.optional(spotifyAlbumMatchMethodValidator),
+				spotifyAlbumMatchedAt: v.optional(v.number()),
+				createdAt: v.number(),
+				updatedAt: v.number(),
+			}),
+			songs: v.array(syncAlbumSongInputValidator),
+		}),
+	),
+	handler: async (ctx) => {
+		requireAuth(ctx);
+
+		const albums = await ctx.db
+			.query("geniusAlbums")
+			.withIndex("by_updatedAt")
+			.order("desc")
+			.collect();
+
+		const result: Array<{
+			album: {
+				albumTitle: string;
+				artistName: string;
+				albumSlug: string;
+				geniusAlbumUrl: string;
+				totalSongs: number;
+				zineCoverImageUrl?: string;
+				zineCoverGreyscale?: boolean;
+				zineCoverTextAnchor?: Doc<"geniusAlbums">["zineCoverTextAnchor"];
+				zineCoverTextAlign?: Doc<"geniusAlbums">["zineCoverTextAlign"];
+				zineCoverTextOffsetXIn?: number;
+				zineCoverTextOffsetYIn?: number;
+				introPageContent?: string;
+				zineIntroParagraphSpacingPt?: number;
+				zineIntroMarginPt?: number;
+				zineIntroVerticalAlign?: "top" | "center";
+				zineIntroFontSizePt?: number;
+				zineDisplaySettings?: Doc<"geniusAlbums">["zineDisplaySettings"];
+				zineInsideBackSections?: Doc<"geniusAlbums">["zineInsideBackSections"];
+				albumTitleOverride?: string;
+				artistNameOverride?: string;
+				summaryOverride?: string;
+				frontPageImageUrlOverride?: string;
+				spotifyAlbumId?: string;
+				spotifyAlbumMatchMethod?: SpotifyAlbumMatchMethod;
+				spotifyAlbumMatchedAt?: number;
+				createdAt: number;
+				updatedAt: number;
+			};
+			songs: Array<{
+				trackNumber: number;
+				songTitle: string;
+				geniusSongUrl: string;
+				lyrics: string;
+				about?: string;
+				credits?: Doc<"geniusSongs">["credits"];
+				scrapeState?: "ready" | "failed";
+				scrapeError?: string;
+				songTitleOverride?: string;
+				lyricsOverride?: string;
+				aboutOverride?: string;
+				durationSecondsOverride?: number;
+				hiddenCreditLabels?: string[];
+				shownCreditLabels?: string[];
+				zineLyricsColumnCount?: 1 | 2;
+				zineLyricsFontSizePt?: number;
+				zineTitleCondenseScale?: number;
+				zineShowCredits?: boolean;
+				createdAt?: number;
+			}>;
+		}> = [];
+
+		for (const album of albums) {
+			const songs = await ctx.db
+				.query("geniusSongs")
+				.withIndex("by_albumId", (q) => q.eq("albumId", album._id))
+				.collect();
+			songs.sort((a, b) => a.trackNumber - b.trackNumber);
+
+			result.push({
+				album: {
+					albumTitle: album.albumTitle,
+					artistName: album.artistName,
+					albumSlug: album.albumSlug,
+					geniusAlbumUrl: album.geniusAlbumUrl,
+					totalSongs: album.totalSongs,
+					zineCoverImageUrl: await resolveAlbumCoverImageUrl(ctx, album),
+					zineCoverGreyscale: album.zineCoverGreyscale,
+					zineCoverTextAnchor: album.zineCoverTextAnchor,
+					zineCoverTextAlign: album.zineCoverTextAlign,
+					zineCoverTextOffsetXIn: album.zineCoverTextOffsetXIn,
+					zineCoverTextOffsetYIn: album.zineCoverTextOffsetYIn,
+					introPageContent: album.introPageContent,
+					zineIntroParagraphSpacingPt: album.zineIntroParagraphSpacingPt,
+					zineIntroMarginPt: album.zineIntroMarginPt,
+					zineIntroVerticalAlign: album.zineIntroVerticalAlign,
+					zineIntroFontSizePt: album.zineIntroFontSizePt,
+					zineDisplaySettings: album.zineDisplaySettings,
+					zineInsideBackSections: album.zineInsideBackSections,
+					albumTitleOverride: album.albumTitleOverride,
+					artistNameOverride: album.artistNameOverride,
+					summaryOverride: album.summaryOverride,
+					frontPageImageUrlOverride: album.frontPageImageUrlOverride,
+					spotifyAlbumId: album.spotifyAlbumId,
+					spotifyAlbumMatchMethod: album.spotifyAlbumMatchMethod,
+					spotifyAlbumMatchedAt: album.spotifyAlbumMatchedAt,
+					createdAt: album.createdAt,
+					updatedAt: album.updatedAt,
+				},
+				songs: songs.map((song) => ({
+					trackNumber: song.trackNumber,
+					songTitle: song.songTitle,
+					geniusSongUrl: song.geniusSongUrl,
+					lyrics: song.lyrics,
+					about: song.about,
+					credits: song.credits,
+					scrapeState: song.scrapeState,
+					scrapeError: song.scrapeError,
+					songTitleOverride: song.songTitleOverride,
+					lyricsOverride: song.lyricsOverride,
+					aboutOverride: song.aboutOverride,
+					durationSecondsOverride: song.durationSecondsOverride,
+					hiddenCreditLabels: song.hiddenCreditLabels,
+					shownCreditLabels: song.shownCreditLabels,
+					zineLyricsColumnCount: song.zineLyricsColumnCount,
+					zineLyricsFontSizePt: song.zineLyricsFontSizePt,
+					zineTitleCondenseScale: song.zineTitleCondenseScale,
+					zineShowCredits: song.zineShowCredits,
+					createdAt: song.createdAt,
+				})),
+			});
+		}
+
+		return result;
+	},
+});
+
+export const upsertAlbumForSync = mutation({
+	args: {
+		albumTitle: v.string(),
+		artistName: v.string(),
+		albumSlug: v.string(),
+		geniusAlbumUrl: v.string(),
+		totalSongs: v.number(),
+		zineCoverImageUrl: v.optional(v.string()),
+		zineCoverGreyscale: v.optional(v.boolean()),
+		zineCoverTextAnchor: v.optional(zineCoverTextAnchorValidator),
+		zineCoverTextAlign: v.optional(zineCoverTextAlignValidator),
+		zineCoverTextOffsetXIn: v.optional(v.number()),
+		zineCoverTextOffsetYIn: v.optional(v.number()),
+		introPageContent: v.optional(v.string()),
+		zineIntroParagraphSpacingPt: v.optional(v.number()),
+		zineIntroMarginPt: v.optional(v.number()),
+		zineIntroVerticalAlign: v.optional(
+			v.union(v.literal("top"), v.literal("center")),
+		),
+		zineIntroFontSizePt: v.optional(v.number()),
+		zineDisplaySettings: v.optional(zineDisplaySettingsSyncValidator),
+		zineInsideBackSections: v.optional(zineInsideBackSectionsValidator),
+		albumTitleOverride: v.optional(v.string()),
+		artistNameOverride: v.optional(v.string()),
+		summaryOverride: v.optional(v.string()),
+		frontPageImageUrlOverride: v.optional(v.string()),
+		spotifyAlbumId: v.optional(v.string()),
+		spotifyAlbumMatchMethod: v.optional(spotifyAlbumMatchMethodValidator),
+		spotifyAlbumMatchedAt: v.optional(v.number()),
+		createdAt: v.optional(v.number()),
+		updatedAt: v.optional(v.number()),
+	},
+	returns: v.id("geniusAlbums"),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+
+		const now = Date.now();
+		const existing = await ctx.db
+			.query("geniusAlbums")
+			.withIndex("by_albumSlug", (q) => q.eq("albumSlug", args.albumSlug))
+			.first();
+
+		const albumRecord = {
+			albumTitle: args.albumTitle,
+			artistName: args.artistName,
+			geniusAlbumUrl: args.geniusAlbumUrl,
+			totalSongs: args.totalSongs,
+			zineCoverImageUrl: normalizeOptionalString(args.zineCoverImageUrl),
+			zineCoverImageStorageId: undefined,
+			zineCoverGreyscale: args.zineCoverGreyscale ? true : undefined,
+			zineCoverTextAnchor: args.zineCoverTextAnchor,
+			zineCoverTextAlign: args.zineCoverTextAlign,
+			zineCoverTextOffsetXIn: args.zineCoverTextOffsetXIn,
+			zineCoverTextOffsetYIn: args.zineCoverTextOffsetYIn,
+			introPageContent: normalizeOptionalString(args.introPageContent),
+			zineIntroParagraphSpacingPt: args.zineIntroParagraphSpacingPt,
+			zineIntroMarginPt: args.zineIntroMarginPt,
+			zineIntroVerticalAlign: args.zineIntroVerticalAlign,
+			zineIntroFontSizePt: args.zineIntroFontSizePt,
+			zineDisplaySettings: args.zineDisplaySettings,
+			zineInsideBackSections:
+				args.zineInsideBackSections === undefined
+					? undefined
+					: normalizeZineInsideBackSections(args.zineInsideBackSections),
+			albumTitleOverride: normalizeOptionalString(args.albumTitleOverride),
+			artistNameOverride: normalizeOptionalString(args.artistNameOverride),
+			summaryOverride: normalizeOptionalString(args.summaryOverride),
+			frontPageImageUrlOverride: normalizeOptionalString(
+				args.frontPageImageUrlOverride,
+			),
+			spotifyAlbumId: normalizeOptionalString(args.spotifyAlbumId),
+			spotifyAlbumConvexId: undefined,
+			spotifyAlbumMatchMethod: args.spotifyAlbumMatchMethod,
+			spotifyAlbumMatchedAt: args.spotifyAlbumMatchedAt,
+			updatedAt: args.updatedAt ?? now,
+		};
+
+		if (existing) {
+			if (
+				existing.zineCoverImageStorageId &&
+				albumRecord.zineCoverImageUrl !== undefined
+			) {
+				await ctx.storage.delete(existing.zineCoverImageStorageId);
+			}
+			await ctx.db.patch(existing._id, albumRecord);
+			return existing._id;
+		}
+
+		return await ctx.db.insert("geniusAlbums", {
+			...albumRecord,
+			albumSlug: args.albumSlug,
+			createdAt: args.createdAt ?? now,
+		});
+	},
+});
+
+export const replaceSongsForSync = mutation({
+	args: {
+		albumId: v.id("geniusAlbums"),
+		songs: v.array(syncAlbumSongInputValidator),
+	},
+	returns: v.object({ success: v.boolean() }),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+
+		const album = await ctx.db.get(args.albumId);
+		if (!album) {
+			throw new Error("Album not found");
+		}
+
+		const existingSongs = await ctx.db
+			.query("geniusSongs")
+			.withIndex("by_albumId", (q) => q.eq("albumId", args.albumId))
+			.collect();
+
+		for (const song of existingSongs) {
+			await ctx.db.delete(song._id);
+		}
+
+		for (const song of [...args.songs].sort(
+			(a, b) => a.trackNumber - b.trackNumber,
+		)) {
+			const now = Date.now();
+			await ctx.db.insert("geniusSongs", {
+				albumId: args.albumId,
+				trackNumber: song.trackNumber,
+				songTitle: song.songTitle,
+				geniusSongUrl: song.geniusSongUrl,
+				lyrics: song.lyrics,
+				about: song.about,
+				credits: song.credits,
+				scrapeState: song.scrapeState,
+				scrapeError: song.scrapeError,
+				songTitleOverride: normalizeOptionalString(song.songTitleOverride),
+				lyricsOverride: normalizeOptionalString(song.lyricsOverride),
+				aboutOverride: normalizeOptionalString(song.aboutOverride),
+				durationSecondsOverride: song.durationSecondsOverride,
+				hiddenCreditLabels: normalizeCreditLabelList(song.hiddenCreditLabels),
+				shownCreditLabels: normalizeCreditLabelList(song.shownCreditLabels),
+				zineLyricsColumnCount: song.zineLyricsColumnCount,
+				zineLyricsFontSizePt: song.zineLyricsFontSizePt,
+				zineTitleCondenseScale: song.zineTitleCondenseScale,
+				zineShowCredits: song.zineShowCredits,
+				createdAt: song.createdAt ?? now,
+			});
+		}
+
+		return { success: true };
 	},
 });
 

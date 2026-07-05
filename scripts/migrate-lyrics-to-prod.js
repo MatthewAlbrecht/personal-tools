@@ -40,78 +40,42 @@ const devClient = new ConvexHttpClient(devUrl);
 const prodClient = new ConvexHttpClient(prodUrl);
 
 async function migrate() {
-	console.log("Fetching existing albums from prod...");
-	const prodAlbums = await prodClient.query(api.geniusAlbums.listRecent, {
-		limit: 1000,
-	});
-	const prodSlugs = new Set(prodAlbums.map((a) => a.albumSlug));
-	console.log(`Found ${prodAlbums.length} albums already in prod\n`);
+	console.log("Fetching album lyrics from dev...");
+	const albums = await devClient.query(api.geniusAlbums.listAlbumsForSync);
 
-	console.log("Fetching albums from dev...");
-	const devAlbums = await devClient.query(api.geniusAlbums.listRecent, {
-		limit: 1000,
-	});
+	let albumsSynced = 0;
+	let failed = 0;
 
-	console.log(`Found ${devAlbums.length} albums in dev\n`);
+	for (const { album, songs } of albums) {
+		try {
+			console.log(`\n📝 Migrating: ${album.artistName} - ${album.albumTitle}`);
 
-	let skipped = 0;
-	let created = 0;
-
-	for (const album of devAlbums) {
-		// Check if album already exists in prod
-		if (prodSlugs.has(album.albumSlug)) {
-			console.log(
-				`⏭️  Skipping: ${album.artistName} - ${album.albumTitle} (already exists)`,
+			const prodAlbumId = await prodClient.mutation(
+				api.geniusAlbums.upsertAlbumForSync,
+				album,
 			);
-			skipped++;
-			continue;
-		}
 
-		console.log(`\n📝 Migrating: ${album.artistName} - ${album.albumTitle}`);
-
-		// Fetch songs for this album from dev
-		const devSongs = await devClient.query(api.geniusAlbums.getAlbumBySlug, {
-			slug: album.albumSlug,
-		});
-
-		if (!devSongs?.songs) {
-			console.log(`  No songs found for ${album.albumSlug}, skipping`);
-			continue;
-		}
-
-		// Create album in prod
-		const prodAlbumId = await prodClient.mutation(
-			api.geniusAlbums.createAlbum,
-			{
-				albumTitle: album.albumTitle,
-				artistName: album.artistName,
-				albumSlug: album.albumSlug,
-				geniusAlbumUrl: album.geniusAlbumUrl,
-				totalSongs: album.totalSongs,
-			},
-		);
-
-		console.log(`  Created album in prod: ${prodAlbumId}`);
-
-		// Create songs in prod
-		for (const song of devSongs.songs) {
-			await prodClient.mutation(api.geniusAlbums.createSong, {
+			await prodClient.mutation(api.geniusAlbums.replaceSongsForSync, {
 				albumId: prodAlbumId,
-				songTitle: song.songTitle,
-				geniusSongUrl: song.geniusSongUrl,
-				trackNumber: song.trackNumber,
-				lyrics: song.lyrics,
-				about: song.about,
+				songs,
 			});
-		}
 
-		console.log(`  Created ${devSongs.songs.length} songs`);
-		created++;
+			console.log(`  Synced ${songs.length} songs`);
+			albumsSynced++;
+		} catch (error) {
+			failed++;
+			console.error(
+				`  Failed to migrate ${album.artistName} - ${album.albumTitle}:`,
+				error,
+			);
+		}
 	}
 
 	console.log("\n✅ Migration complete!");
-	console.log(`   Created: ${created} albums`);
-	console.log("\n   Skipped: ${skipped} albums (already existed)");
+	console.log(`   Synced: ${albumsSynced} albums`);
+	if (failed > 0) {
+		console.log(`   Failed: ${failed} albums`);
+	}
 }
 
 migrate().catch((error) => {

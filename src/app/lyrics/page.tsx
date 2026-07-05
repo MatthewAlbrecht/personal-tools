@@ -170,7 +170,7 @@ export default function LyricsSearchPage() {
 
 			const result = await response.json();
 			toast.success(
-				`Synced to production! Created: ${result.created}, Skipped: ${result.skipped}`,
+				`Synced ${result.albumsSynced ?? 0} album${result.albumsSynced === 1 ? "" : "s"} to production${result.failed ? ` (${result.failed} failed)` : ""}.`,
 			);
 		} catch (error) {
 			console.error("Sync error:", error);

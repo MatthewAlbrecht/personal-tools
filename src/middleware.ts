@@ -20,6 +20,9 @@ export function middleware(request: NextRequest) {
 	const isPlaylistLyricsApi = request.nextUrl.pathname.startsWith(
 		"/api/migrate-playlist-lyrics",
 	);
+	const isLyricsMigrateApi = request.nextUrl.pathname.startsWith(
+		"/api/migrate-lyrics",
+	);
 
 	if (
 		(isBooks ||
@@ -27,7 +30,8 @@ export function middleware(request: NextRequest) {
 			isArticles ||
 			isConcerts ||
 			isPlaylistLyrics ||
-			isPlaylistLyricsApi) &&
+			isPlaylistLyricsApi ||
+			isLyricsMigrateApi) &&
 		!session
 	) {
 		const url = request.nextUrl.clone();
@@ -53,5 +57,6 @@ export const config = {
 		"/lyrics/playlists",
 		"/lyrics/playlists/:path*",
 		"/api/migrate-playlist-lyrics",
+		"/api/migrate-lyrics",
 	],
 };
