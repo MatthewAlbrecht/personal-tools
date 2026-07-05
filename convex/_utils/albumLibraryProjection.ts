@@ -1,6 +1,7 @@
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import {
+	buildAlbumLibraryReleaseYearSortKey,
 	buildAlbumLibrarySearchText,
 	buildAlbumLibrarySortKey,
 	getAlbumLibraryAlbumType,
@@ -66,6 +67,7 @@ export async function buildAlbumLibraryProjectionForAlbum(
 		name: album.name,
 		artistName: album.artistName,
 		artistSortKey: buildAlbumLibrarySortKey(album.artistName),
+		releaseYearSortKey: buildAlbumLibraryReleaseYearSortKey(releaseYear),
 		albumSortKey: buildAlbumLibrarySortKey(album.name),
 		imageUrl: album.imageUrl,
 		releaseDate: album.releaseDate,

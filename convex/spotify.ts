@@ -17,6 +17,8 @@ import {
 	type AlbumLibrarySort,
 } from "./_utils/albumLibraryIndexedList";
 import {
+	buildAlbumLibraryReleaseYearSortKey,
+	compareAlbumLibraryRowsByArtist,
 	getAlbumLibraryAlbumType,
 	getAlbumLibraryRymStatus,
 } from "./_utils/albumLibraryRows";
@@ -26,6 +28,7 @@ import {
 	matchRymForSpotifyAlbum,
 	normalizeAlbumTitle,
 } from "./_utils/albumMatching";
+import { upsertSpotifyAlbumRecord } from "./_utils/upsertSpotifyAlbumRecord";
 import { buildSpotifyAlbumListItems } from "./_utils/spotify_album_list";
 import { requireAuth } from "./auth";
 
@@ -369,6 +372,50 @@ export const backfillAlbumLibraryItems = mutation({
 
 		return {
 			processed: page.page.length,
+			done: page.isDone,
+			cursor: page.isDone ? undefined : page.continueCursor,
+		};
+	},
+});
+
+export const backfillAlbumLibraryReleaseYearSortKey = mutation({
+	args: {
+		cursor: v.optional(v.string()),
+		batchSize: v.optional(v.number()),
+	},
+	returns: v.object({
+		patched: v.number(),
+		done: v.boolean(),
+		cursor: v.optional(v.string()),
+	}),
+	handler: async (
+		ctx,
+		args,
+	): Promise<{
+		patched: number;
+		done: boolean;
+		cursor?: string;
+	}> => {
+		const batchSize = Math.min(args.batchSize ?? 200, 500);
+		const page = await ctx.db
+			.query("albumLibraryItems")
+			.paginate({ numItems: batchSize, cursor: args.cursor ?? null });
+
+		let patched = 0;
+		for (const row of page.page) {
+			const releaseYearSortKey = buildAlbumLibraryReleaseYearSortKey(
+				row.releaseYear,
+			);
+			if (row.releaseYearSortKey === releaseYearSortKey) {
+				continue;
+			}
+
+			await ctx.db.patch(row._id, { releaseYearSortKey });
+			patched += 1;
+		}
+
+		return {
+			patched,
 			done: page.isDone,
 			cursor: page.isDone ? undefined : page.continueCursor,
 		};
@@ -1553,47 +1600,50 @@ export const upsertAlbum = mutation({
 		rawData: v.optional(v.string()),
 	},
 	handler: async (ctx, args) => {
-		const now = Date.now();
-		const albumTitleKey = normalizeAlbumTitle(args.name);
+		return await upsertSpotifyAlbumRecord(ctx, args);
+	},
+});
 
-		const existing = await ctx.db
-			.query("spotifyAlbums")
-			.withIndex("by_spotifyAlbumId", (q) =>
-				q.eq("spotifyAlbumId", args.spotifyAlbumId),
-			)
-			.first();
+const discographyAlbumUpsertItemValidator = v.object({
+	spotifyAlbumId: v.string(),
+	name: v.string(),
+	artistName: v.string(),
+	imageUrl: v.optional(v.string()),
+	releaseDate: v.optional(v.string()),
+	totalTracks: v.number(),
+});
 
-		if (existing) {
-			await ctx.db.patch(existing._id, {
-				name: args.name,
-				albumTitleKey,
-				artistName: args.artistName,
-				imageUrl: args.imageUrl,
-				releaseDate: args.releaseDate,
-				totalTracks: args.totalTracks,
-				genres: args.genres,
-				...(args.rawData !== undefined ? { rawData: args.rawData } : {}),
-				updatedAt: now,
+export const bulkUpsertDiscographyAlbums = mutation({
+	args: {
+		userId: v.string(),
+		albums: v.array(discographyAlbumUpsertItemValidator),
+	},
+	returns: v.object({
+		upsertedCount: v.number(),
+	}),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+
+		const albums = args.albums.slice(0, 50);
+		let upsertedCount = 0;
+
+		for (const album of albums) {
+			const albumId = await upsertSpotifyAlbumRecord(ctx, {
+				spotifyAlbumId: album.spotifyAlbumId,
+				name: album.name,
+				artistName: album.artistName,
+				imageUrl: album.imageUrl,
+				releaseDate: album.releaseDate,
+				totalTracks: album.totalTracks,
 			});
-			await refreshAlbumLibraryProjectionsForAlbum(ctx, existing._id);
-			return existing._id;
+			await upsertAlbumLibraryProjection(ctx, {
+				userId: args.userId,
+				albumId,
+			});
+			upsertedCount += 1;
 		}
 
-		const albumId = await ctx.db.insert("spotifyAlbums", {
-			spotifyAlbumId: args.spotifyAlbumId,
-			name: args.name,
-			albumTitleKey,
-			artistName: args.artistName,
-			imageUrl: args.imageUrl,
-			releaseDate: args.releaseDate,
-			totalTracks: args.totalTracks,
-			genres: args.genres,
-			...(args.rawData !== undefined ? { rawData: args.rawData } : {}),
-			createdAt: now,
-			updatedAt: now,
-		});
-		await refreshAlbumLibraryProjectionsForAlbum(ctx, albumId);
-		return albumId;
+		return { upsertedCount };
 	},
 });
 
@@ -2580,15 +2630,7 @@ export const listAlbumLibraryRows = query({
 });
 
 function sortAlbumLibraryRowsByArtist(rows: AlbumLibraryRow[]): AlbumLibraryRow[] {
-	return [...rows].sort((a, b) => {
-		const artistCompare = a.artistName.localeCompare(b.artistName, undefined, {
-			sensitivity: "base",
-		});
-		if (artistCompare !== 0) {
-			return artistCompare;
-		}
-		return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
-	});
+	return [...rows].sort(compareAlbumLibraryRowsByArtist);
 }
 
 async function paginateAlbumLibraryItemsIndexed(
@@ -2619,8 +2661,9 @@ async function paginateAlbumLibraryItemsIndexed(
 	if (choice.kind === "artist") {
 		base = ctx.db
 			.query("albumLibraryItems")
-			.withIndex("by_userId_artistSortKey_albumSortKey", (q) =>
-				q.eq("userId", args.userId),
+			.withIndex(
+				"by_userId_artistSortKey_releaseYearSortKey_albumSortKey",
+				(q) => q.eq("userId", args.userId),
 			);
 		base = appendAlbumLibraryProjectionFilters(args.filters, {}, base);
 		return await base.order("asc").paginate(args.paginationOpts);

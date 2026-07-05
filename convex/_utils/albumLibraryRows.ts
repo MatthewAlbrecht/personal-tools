@@ -23,8 +23,43 @@ export type AlbumLibraryFilterInput = {
 	appearsInRobRankings: boolean;
 };
 
+export const ALBUM_LIBRARY_UNKNOWN_RELEASE_YEAR_SORT = 999_999;
+
 export function buildAlbumLibrarySortKey(value: string): string {
 	return value.trim().toLowerCase();
+}
+
+export function buildAlbumLibraryReleaseYearSortKey(
+	releaseYear: number | undefined,
+): number {
+	return releaseYear ?? ALBUM_LIBRARY_UNKNOWN_RELEASE_YEAR_SORT;
+}
+
+export type AlbumLibraryArtistSortRow = {
+	artistName: string;
+	name: string;
+	releaseYear?: number;
+};
+
+export function compareAlbumLibraryRowsByArtist(
+	a: AlbumLibraryArtistSortRow,
+	b: AlbumLibraryArtistSortRow,
+): number {
+	const artistCompare = a.artistName.localeCompare(b.artistName, undefined, {
+		sensitivity: "base",
+	});
+	if (artistCompare !== 0) {
+		return artistCompare;
+	}
+
+	const yearCompare =
+		buildAlbumLibraryReleaseYearSortKey(a.releaseYear) -
+		buildAlbumLibraryReleaseYearSortKey(b.releaseYear);
+	if (yearCompare !== 0) {
+		return yearCompare;
+	}
+
+	return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
 }
 
 export function buildAlbumLibrarySearchText({

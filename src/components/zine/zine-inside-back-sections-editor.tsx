@@ -1,7 +1,16 @@
 "use client";
 
-import { ChevronDown, ChevronUp, Plus, Trash2 } from "lucide-react";
+import {
+	ChevronDown,
+	ChevronUp,
+	Eye,
+	EyeOff,
+	Plus,
+	RefreshCw,
+	Trash2,
+} from "lucide-react";
 import { type ReactNode, useState } from "react";
+import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -13,12 +22,18 @@ import {
 	SelectValue,
 } from "~/components/ui/select";
 import { Textarea } from "~/components/ui/textarea";
+import { cn } from "~/lib/utils";
+import {
+	type SpotifyDiscographyRelease,
+	mergeSpotifyDiscographyImport,
+} from "~/lib/zine/spotify-discography-import";
 import {
 	ZINE_INSIDE_BACK_DEFAULT_TITLES,
 	ZINE_INSIDE_BACK_LIMITS,
 	type ZineDiscographyItem,
 	type ZineInsideBackSection,
 	type ZineRecommendationItem,
+	getVisibleDiscographyItems,
 } from "~/lib/zine/zine-inside-back-sections";
 
 type SectionType = ZineInsideBackSection["type"];
@@ -65,10 +80,19 @@ export function ZineInsideBackSectionsEditor({
 	sections,
 	onChange,
 	disabled = false,
+	spotifyDiscographySource,
 }: {
 	sections: ZineInsideBackSection[];
 	onChange: (sections: ZineInsideBackSection[]) => void;
 	disabled?: boolean;
+	spotifyDiscographySource?: {
+		spotifyAlbumId: string;
+		getAccessToken: () => Promise<string | null>;
+		persistReleases: (
+			releases: SpotifyDiscographyRelease[],
+			sourceSpotifyAlbumId: string,
+		) => Promise<{ upsertedCount: number }>;
+	};
 }) {
 	const [sectionTypeToAdd, setSectionTypeToAdd] =
 		useState<SectionType>("discography");
@@ -136,6 +160,7 @@ export function ZineInsideBackSectionsEditor({
 					sectionIndex={sectionIndex}
 					sectionCount={sections.length}
 					disabled={disabled}
+					spotifyDiscographySource={spotifyDiscographySource}
 					onTitleChange={(title) =>
 						handleSectionTitleChange(sectionIndex, title)
 					}
@@ -144,6 +169,15 @@ export function ZineInsideBackSectionsEditor({
 					onItemsChange={(items) =>
 						handleSectionItemsChange(sectionIndex, items)
 					}
+					onImportDiscography={(items) => {
+						onChange(
+							sections.map((currentSection, index) =>
+								index === sectionIndex && currentSection.type === "discography"
+									? { ...currentSection, items }
+									: currentSection,
+							),
+						);
+					}}
 				/>
 			))}
 
@@ -189,28 +223,109 @@ function InsideBackSectionCard({
 	sectionIndex,
 	sectionCount,
 	disabled,
+	spotifyDiscographySource,
 	onTitleChange,
 	onMove,
 	onRemove,
 	onItemsChange,
+	onImportDiscography,
 }: {
 	section: ZineInsideBackSection;
 	sectionIndex: number;
 	sectionCount: number;
 	disabled: boolean;
+	spotifyDiscographySource?: {
+		spotifyAlbumId: string;
+		getAccessToken: () => Promise<string | null>;
+		persistReleases: (
+			releases: SpotifyDiscographyRelease[],
+			sourceSpotifyAlbumId: string,
+		) => Promise<{ upsertedCount: number }>;
+	};
 	onTitleChange: (title: string) => void;
 	onMove: (direction: "up" | "down") => void;
 	onRemove: () => void;
 	onItemsChange: (
 		items: ZineDiscographyItem[] | ZineRecommendationItem[],
 	) => void;
+	onImportDiscography: (items: ZineDiscographyItem[]) => void;
 }) {
+	const [isImporting, setIsImporting] = useState(false);
 	const defaultTitle =
 		section.type === "discography"
 			? ZINE_INSIDE_BACK_DEFAULT_TITLES.discography
 			: ZINE_INSIDE_BACK_DEFAULT_TITLES.recommendations;
 	const maxItems = getMaxItemsForSection(section);
 	const atMaxItems = section.items.length >= maxItems;
+	const visibleDiscographyCount =
+		section.type === "discography"
+			? getVisibleDiscographyItems(section.items).length
+			: 0;
+
+	async function handleImportFromSpotify(): Promise<void> {
+		if (
+			section.type !== "discography" ||
+			!spotifyDiscographySource ||
+			disabled ||
+			isImporting
+		) {
+			return;
+		}
+
+		setIsImporting(true);
+
+		try {
+			const accessToken = await spotifyDiscographySource.getAccessToken();
+			if (!accessToken) {
+				toast.error("Connect Spotify to import discography.");
+				return;
+			}
+
+			const response = await fetch(
+				`/api/spotify/discography-from-album/${spotifyDiscographySource.spotifyAlbumId}`,
+				{
+					headers: {
+						"X-Access-Token": accessToken,
+					},
+				},
+			);
+
+			if (!response.ok) {
+				const payload = (await response.json().catch(() => null)) as {
+					error?: string;
+				} | null;
+				throw new Error(payload?.error ?? "Failed to import discography");
+			}
+
+			const payload = (await response.json()) as {
+				sourceSpotifyAlbumId: string;
+				releases: SpotifyDiscographyRelease[];
+			};
+
+			const persistResult = await spotifyDiscographySource.persistReleases(
+				payload.releases,
+				payload.sourceSpotifyAlbumId,
+			);
+
+			const mergedItems = mergeSpotifyDiscographyImport(
+				section.items,
+				payload.releases,
+				payload.sourceSpotifyAlbumId,
+			);
+
+			onImportDiscography(mergedItems);
+			toast.success(
+				`Imported ${mergedItems.length} releases (${persistResult.upsertedCount} saved to album library). Hide extras and add blurbs before printing.`,
+			);
+		} catch (error) {
+			console.error("Spotify discography import failed:", error);
+			toast.error(
+				error instanceof Error ? error.message : "Failed to import discography",
+			);
+		} finally {
+			setIsImporting(false);
+		}
+	}
 
 	function handleAddItem(): void {
 		if (disabled || atMaxItems) {
@@ -308,6 +423,37 @@ function InsideBackSectionCard({
 			</div>
 
 			<div className="space-y-3">
+				{section.type === "discography" ? (
+					<div className="flex flex-wrap items-center gap-2">
+						<Button
+							type="button"
+							variant="secondary"
+							size="sm"
+							disabled={
+								disabled ||
+								isImporting ||
+								!spotifyDiscographySource?.spotifyAlbumId
+							}
+							onClick={() => void handleImportFromSpotify()}
+						>
+							<RefreshCw
+								className={`mr-2 h-4 w-4 ${isImporting ? "animate-spin" : ""}`}
+							/>
+							{isImporting ? "Importing..." : "Import from Spotify"}
+						</Button>
+						{!spotifyDiscographySource?.spotifyAlbumId ? (
+							<p className="text-muted-foreground text-xs">
+								Map a Spotify album below to enable import.
+							</p>
+						) : (
+							<p className="text-muted-foreground text-xs">
+								{visibleDiscographyCount} visible in zine ·{" "}
+								{section.items.length} total stored
+							</p>
+						)}
+					</div>
+				) : null}
+
 				{section.type === "discography"
 					? section.items.map((item, itemIndex) => (
 							<DiscographyItemEditor
@@ -388,15 +534,33 @@ function DiscographyItemEditor({
 	onRemove: () => void;
 }) {
 	const idPrefix = `inside-back-discography-${sectionIndex}-${itemIndex}`;
+	const isHidden = item.hidden === true;
 
 	return (
 		<ItemEditorShell
-			label={`Discography item ${itemIndex + 1}`}
+			label={`Discography item ${itemIndex + 1}${isHidden ? " (hidden)" : ""}`}
 			itemIndex={itemIndex}
 			itemCount={itemCount}
 			disabled={disabled}
 			onMove={onMove}
 			onRemove={onRemove}
+			className={isHidden ? "opacity-60" : undefined}
+			extraActions={
+				<Button
+					type="button"
+					variant="outline"
+					size="sm"
+					disabled={disabled}
+					onClick={() => onChange({ ...item, hidden: !isHidden })}
+					aria-label={isHidden ? "Show in zine" : "Hide from zine"}
+				>
+					{isHidden ? (
+						<EyeOff className="h-4 w-4" />
+					) : (
+						<Eye className="h-4 w-4" />
+					)}
+				</Button>
+			}
 		>
 			<div className="grid gap-3 sm:grid-cols-2">
 				<div className="space-y-2">
@@ -443,15 +607,13 @@ function DiscographyItemEditor({
 					onChange={(imageUrl) => onChange({ ...item, imageUrl })}
 				/>
 				<div className="space-y-2 sm:col-span-2">
-					<Label htmlFor={`${idPrefix}-blurb`}>
-						Blurb <span className="text-destructive">*</span>
-					</Label>
+					<Label htmlFor={`${idPrefix}-blurb`}>Blurb</Label>
 					<Textarea
 						id={`${idPrefix}-blurb`}
 						className="min-h-20"
 						value={item.blurb}
 						disabled={disabled}
-						placeholder="One sentence about this album."
+						placeholder="Optional one-sentence note for the zine."
 						onChange={(event) =>
 							onChange({ ...item, blurb: event.currentTarget.value })
 						}
@@ -557,6 +719,8 @@ function ItemEditorShell({
 	onMove,
 	onRemove,
 	children,
+	className,
+	extraActions,
 }: {
 	label: string;
 	itemIndex: number;
@@ -565,12 +729,17 @@ function ItemEditorShell({
 	onMove: (direction: "up" | "down") => void;
 	onRemove: () => void;
 	children: ReactNode;
+	className?: string;
+	extraActions?: ReactNode;
 }) {
 	return (
-		<div className="space-y-3 rounded-md border bg-background p-3">
+		<div
+			className={cn("space-y-3 rounded-md border bg-background p-3", className)}
+		>
 			<div className="flex flex-wrap items-center justify-between gap-2">
 				<p className="font-medium text-sm">{label}</p>
 				<div className="flex gap-1">
+					{extraActions}
 					<Button
 						type="button"
 						variant="outline"

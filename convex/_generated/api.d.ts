@@ -39,6 +39,7 @@ import type * as _utils_rymGenreHierarchy from "../_utils/rymGenreHierarchy.js";
 import type * as _utils_spotify_album_list from "../_utils/spotify_album_list.js";
 import type * as _utils_ticketmasterConcerts from "../_utils/ticketmasterConcerts.js";
 import type * as _utils_unmappedRymScrapes from "../_utils/unmappedRymScrapes.js";
+import type * as _utils_upsertSpotifyAlbumRecord from "../_utils/upsertSpotifyAlbumRecord.js";
 import type * as _utils_zineCoverTextLayout from "../_utils/zineCoverTextLayout.js";
 import type * as _utils_zineInsideBackSections from "../_utils/zineInsideBackSections.js";
 import type * as articles from "../articles.js";
@@ -103,6 +104,7 @@ declare const fullApi: ApiFromModules<{
   "_utils/spotify_album_list": typeof _utils_spotify_album_list;
   "_utils/ticketmasterConcerts": typeof _utils_ticketmasterConcerts;
   "_utils/unmappedRymScrapes": typeof _utils_unmappedRymScrapes;
+  "_utils/upsertSpotifyAlbumRecord": typeof _utils_upsertSpotifyAlbumRecord;
   "_utils/zineCoverTextLayout": typeof _utils_zineCoverTextLayout;
   "_utils/zineInsideBackSections": typeof _utils_zineInsideBackSections;
   articles: typeof articles;

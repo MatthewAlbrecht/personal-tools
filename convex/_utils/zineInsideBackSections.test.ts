@@ -22,7 +22,8 @@ test("normalizeZineInsideBackSections trims strings and drops empty items", () =
 
 	assert.equal(result.length, 1);
 	assert.equal(result[0]?.type, "discography");
-	if (result[0]?.type !== "discography") throw new Error("expected discography");
+	if (result[0]?.type !== "discography")
+		throw new Error("expected discography");
 	assert.equal(result[0].title, "My discography");
 	assert.equal(result[0].items.length, 1);
 	assert.deepEqual(result[0].items[0], {
@@ -31,6 +32,8 @@ test("normalizeZineInsideBackSections trims strings and drops empty items", () =
 		year: "2000",
 		imageUrl: "https://example.com/kid-a.jpg",
 		blurb: "Experimental pivot.",
+		spotifyAlbumId: undefined,
+		hidden: undefined,
 	});
 });
 
@@ -44,14 +47,29 @@ test("normalizeZineInsideBackSections drops sections with no valid items", () =>
 	assert.deepEqual(result, []);
 });
 
+test("normalizeZineInsideBackSections keeps discography items without blurbs", () => {
+	const result = normalizeZineInsideBackSections([
+		{
+			type: "discography",
+			items: [{ albumTitle: "Kid A", blurb: "" }],
+		},
+	]);
+
+	assert.equal(result.length, 1);
+	if (result[0]?.type !== "discography")
+		throw new Error("expected discography");
+	assert.equal(result[0].items[0]?.blurb, "");
+});
+
 test("normalizeZineInsideBackSections enforces item caps", () => {
-	const items = Array.from({ length: 8 }, (_, index) => ({
+	const items = Array.from({ length: 55 }, (_, index) => ({
 		albumTitle: `Album ${index + 1}`,
 		blurb: "note",
 	}));
 	const result = normalizeZineInsideBackSections([
 		{ type: "discography", items },
 	]);
-	if (result[0]?.type !== "discography") throw new Error("expected discography");
-	assert.equal(result[0].items.length, 6);
+	if (result[0]?.type !== "discography")
+		throw new Error("expected discography");
+	assert.equal(result[0].items.length, 50);
 });

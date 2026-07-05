@@ -6,6 +6,8 @@ const zineDiscographyItemValidator = v.object({
 	year: v.optional(v.string()),
 	imageUrl: v.optional(v.string()),
 	blurb: v.string(),
+	spotifyAlbumId: v.optional(v.string()),
+	hidden: v.optional(v.boolean()),
 });
 
 const zineRecommendationItemValidator = v.object({
@@ -42,6 +44,8 @@ type StoredSection =
 				year?: string;
 				imageUrl?: string;
 				blurb: string;
+				spotifyAlbumId?: string;
+				hidden?: boolean;
 			}>;
 	  }
 	| {
@@ -78,9 +82,11 @@ export function normalizeZineInsideBackSections(
 					year: normalizeOptionalString(item.year),
 					imageUrl: normalizeOptionalString(item.imageUrl),
 					blurb: item.blurb.trim(),
+					spotifyAlbumId: normalizeOptionalString(item.spotifyAlbumId),
+					hidden: item.hidden === true ? true : undefined,
 				}))
-				.filter((item) => item.albumTitle !== "" && item.blurb !== "")
-				.slice(0, 6);
+				.filter((item) => item.albumTitle !== "")
+				.slice(0, 50);
 
 			if (items.length === 0) continue;
 

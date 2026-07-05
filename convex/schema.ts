@@ -473,6 +473,7 @@ export default defineSchema({
 		name: v.string(),
 		artistName: v.string(),
 		artistSortKey: v.string(),
+		releaseYearSortKey: v.optional(v.number()),
 		albumSortKey: v.string(),
 		imageUrl: v.optional(v.string()),
 		releaseDate: v.optional(v.string()),
@@ -508,9 +509,10 @@ export default defineSchema({
 		.index("by_userId_albumId", ["userId", "albumId"])
 		.index("by_albumId", ["albumId"])
 		.index("by_userId_createdAt", ["userId", "createdAt"])
-		.index("by_userId_artistSortKey_albumSortKey", [
+		.index("by_userId_artistSortKey_releaseYearSortKey_albumSortKey", [
 			"userId",
 			"artistSortKey",
+			"releaseYearSortKey",
 			"albumSortKey",
 		])
 		.index("by_userId_releaseYear_createdAt", [

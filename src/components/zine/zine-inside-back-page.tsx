@@ -8,6 +8,7 @@ import type {
 } from "~/lib/zine/zine-inside-back-sections";
 import {
 	ZINE_INSIDE_BACK_DEFAULT_TITLES,
+	getVisibleDiscographyItems,
 	hasInsideBackContent,
 } from "~/lib/zine/zine-inside-back-sections";
 
@@ -18,10 +19,13 @@ export function ZineInsideBackPage({
 	sections: ZineInsideBackSection[];
 	canEdit?: boolean;
 }) {
-	const totalItems = sections.reduce(
-		(count, section) => count + section.items.length,
-		0,
-	);
+	const totalItems = sections.reduce((count, section) => {
+		if (section.type === "discography") {
+			return count + getVisibleDiscographyItems(section.items).length;
+		}
+
+		return count + section.items.length;
+	}, 0);
 	const compact = totalItems > 5;
 
 	return (
@@ -55,14 +59,23 @@ function InsideBackSectionBlock({
 	section: ZineInsideBackSection;
 }) {
 	if (section.type === "discography") {
+		const visibleItems = getVisibleDiscographyItems(section.items);
+
+		if (visibleItems.length === 0) {
+			return null;
+		}
+
 		return (
 			<div className="zine-inside-back-section zine-inside-back-discography">
 				<h2 className="zine-inside-back-section-title">
 					{section.title?.trim() || ZINE_INSIDE_BACK_DEFAULT_TITLES.discography}
 				</h2>
 				<ul className="zine-inside-back-discography-list">
-					{section.items.map((item, index) => (
-						<DiscographyRow key={`${item.albumTitle}-${index}`} item={item} />
+					{visibleItems.map((item, index) => (
+						<DiscographyRow
+							key={`${item.spotifyAlbumId ?? item.albumTitle}-${index}`}
+							item={item}
+						/>
 					))}
 				</ul>
 			</div>
@@ -105,7 +118,9 @@ function DiscographyRow({ item }: { item: ZineDiscographyItem }) {
 				{item.artistName ? (
 					<p className="zine-inside-back-item-artist">{item.artistName}</p>
 				) : null}
-				<p className="zine-inside-back-item-blurb">{item.blurb}</p>
+				{item.blurb.trim() !== "" ? (
+					<p className="zine-inside-back-item-blurb">{item.blurb}</p>
+				) : null}
 			</div>
 		</li>
 	);

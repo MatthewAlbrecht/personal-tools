@@ -33,8 +33,26 @@ test("hasInsideBackContent ignores items with blank album title", () => {
 	);
 });
 
+test("hasInsideBackContent ignores hidden discography items", () => {
+	assert.equal(
+		hasInsideBackContent([
+			{
+				type: "discography",
+				items: [
+					{
+						albumTitle: "OK Computer",
+						blurb: "Their best.",
+						hidden: true,
+					},
+				],
+			},
+		]),
+		false,
+	);
+});
+
 test("limits match spec caps", () => {
 	assert.equal(ZINE_INSIDE_BACK_LIMITS.maxSections, 4);
-	assert.equal(ZINE_INSIDE_BACK_LIMITS.maxDiscographyItems, 6);
+	assert.equal(ZINE_INSIDE_BACK_LIMITS.maxDiscographyItems, 50);
 	assert.equal(ZINE_INSIDE_BACK_LIMITS.maxRecommendationItems, 4);
 });

@@ -5,6 +5,7 @@ import { Check, Copy, DatabaseBackup, Disc3, Download, MoreHorizontal } from "lu
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useDebouncedState } from "~/lib/hooks/use-debounced-state";
 import { AlbumRatingBadge } from "~/components/album-rating-badge";
 import {
 	AlertDialog,
@@ -59,6 +60,8 @@ const DEFAULT_ALBUM_LIBRARY_FILTERS: AlbumLibraryFilterState = {
 	sortBy: "recent",
 };
 
+const ALBUM_LIBRARY_SEARCH_DEBOUNCE_MS = 300;
+
 const ALBUM_LIBRARY_QUERY_PARAMS = [
 	"search",
 	"rym",
@@ -102,7 +105,6 @@ export function AllAlbumsView({
 		[searchParamsString],
 	);
 	const {
-		searchQuery,
 		rymFilter,
 		robRankingFilter,
 		listenFilter,
@@ -110,7 +112,48 @@ export function AllAlbumsView({
 		yearFilter,
 		sortBy,
 	} = filterState;
-	const hasNonDefaultFilters = !albumLibraryFiltersAreDefault(filterState);
+	const filterStateRef = useRef(filterState);
+	filterStateRef.current = filterState;
+	const routerRef = useRef(router);
+	routerRef.current = router;
+	const searchParamsStringRef = useRef(searchParamsString);
+	searchParamsStringRef.current = searchParamsString;
+	const albumLibraryPathnameRef = useRef(albumLibraryPathname);
+	albumLibraryPathnameRef.current = albumLibraryPathname;
+	const [searchInput, debouncedSearch, setSearchInput] = useDebouncedState(
+		filterState.searchQuery,
+		ALBUM_LIBRARY_SEARCH_DEBOUNCE_MS,
+	);
+
+	useEffect(() => {
+		setSearchInput(filterState.searchQuery);
+	}, [filterState.searchQuery, setSearchInput]);
+
+	useEffect(() => {
+		const nextSearch = debouncedSearch.trim();
+		if (nextSearch === filterStateRef.current.searchQuery) {
+			return;
+		}
+		const nextFilters = {
+			...filterStateRef.current,
+			searchQuery: nextSearch,
+		};
+		const nextParams = serializeAlbumLibraryFilterState(
+			nextFilters,
+			new URLSearchParams(searchParamsStringRef.current),
+		);
+		const query = nextParams.toString();
+		routerRef.current.replace(
+			query
+				? `${albumLibraryPathnameRef.current}?${query}`
+				: albumLibraryPathnameRef.current,
+			{ scroll: false },
+		);
+	}, [debouncedSearch]);
+
+	const hasNonDefaultFilters =
+		searchInput.trim() !== DEFAULT_ALBUM_LIBRARY_FILTERS.searchQuery ||
+		!albumLibraryFiltersAreDefault(filterState);
 	const [rymAssociateAlbum, setRymAssociateAlbum] =
 		useState<AlbumLibraryRowData | null>(null);
 	const [backfillDialogOpen, setBackfillDialogOpen] = useState(false);
@@ -118,10 +161,13 @@ export function AllAlbumsView({
 		useState(false);
 	const [isBackfillingTitleKeys, setIsBackfillingTitleKeys] = useState(false);
 	const [isBackfillingRymLinks, setIsBackfillingRymLinks] = useState(false);
+	const [isBackfillingReleaseYearSortKey, setIsBackfillingReleaseYearSortKey] =
+		useState(false);
 	const isRunningLibraryAction =
 		isBackfillingLibraryIndex ||
 		isBackfillingTitleKeys ||
-		isBackfillingRymLinks;
+		isBackfillingRymLinks ||
+		isBackfillingReleaseYearSortKey;
 	const setRymNotOnSite = useMutation(api.spotify.setSpotifyAlbumRymNotOnSite);
 	const associateRymScrape = useMutation(
 		api.spotify.associateSpotifyAlbumWithRymScrape,
@@ -132,6 +178,9 @@ export function AllAlbumsView({
 	const backfillAlbumLibraryItems = useMutation(
 		api.spotify.backfillAlbumLibraryItems,
 	);
+	const backfillAlbumLibraryReleaseYearSortKey = useMutation(
+		api.spotify.backfillAlbumLibraryReleaseYearSortKey,
+	);
 	const backfillRymLinks = useMutation(
 		api.rateYourMusicScrapes.backfillRymScrapeSpotifyAlbumMatches,
 	);
@@ -141,14 +190,6 @@ export function AllAlbumsView({
 		if (selectedYear !== undefined) years.add(selectedYear);
 		return Array.from(years).sort((a, b) => b - a);
 	}, [availableYears, yearFilter]);
-
-	if (isLoading) {
-		return (
-			<div className="flex h-64 items-center justify-center">
-				<p className="text-muted-foreground">Loading albums...</p>
-			</div>
-		);
-	}
 
 	async function handleSetRymNotOnSite(
 		album: AlbumLibraryRowData,
@@ -253,6 +294,39 @@ export function AllAlbumsView({
 		}
 	}
 
+	async function handleBackfillReleaseYearSortKeys(): Promise<void> {
+		setIsBackfillingReleaseYearSortKey(true);
+		const toastId = "album-library-release-year-sort-backfill";
+		try {
+			toast.loading("Updating artist sort keys...", { id: toastId });
+			let patched = 0;
+			let cursor: string | undefined;
+			for (;;) {
+				const batch = await backfillAlbumLibraryReleaseYearSortKey({
+					batchSize: 500,
+					...(cursor === undefined ? {} : { cursor }),
+				});
+				patched += batch.patched;
+				if (batch.done) {
+					break;
+				}
+				cursor = batch.cursor;
+				toast.loading(`Updating artist sort keys... ${patched} updated`, {
+					id: toastId,
+				});
+			}
+			toast.success(
+				`Artist sort keys updated for ${patched} album${patched === 1 ? "" : "s"}`,
+				{ id: toastId },
+			);
+		} catch (error) {
+			console.error("Release year sort key backfill failed:", error);
+			toast.error("Could not update artist sort keys", { id: toastId });
+		} finally {
+			setIsBackfillingReleaseYearSortKey(false);
+		}
+	}
+
 	async function handleBackfillRymLinks(): Promise<void> {
 		setBackfillDialogOpen(false);
 		setIsBackfillingRymLinks(true);
@@ -306,6 +380,23 @@ export function AllAlbumsView({
 
 	return (
 		<div className="space-y-4">
+			<div className="flex justify-end">
+				<AlbumLibraryAdminMenu
+					userId={userId}
+					isRunningLibraryAction={isRunningLibraryAction}
+					isBackfillingLibraryIndex={isBackfillingLibraryIndex}
+					isBackfillingTitleKeys={isBackfillingTitleKeys}
+					isBackfillingRymLinks={isBackfillingRymLinks}
+					isBackfillingReleaseYearSortKey={isBackfillingReleaseYearSortKey}
+					onBuildLibraryIndex={() => void handleBackfillLibraryIndex()}
+					onBackfillTitleKeys={() => void handleBackfillTitleKeys()}
+					onBackfillReleaseYearSortKeys={() =>
+						void handleBackfillReleaseYearSortKeys()
+					}
+					onBackfillRymLinks={() => setBackfillDialogOpen(true)}
+				/>
+			</div>
+
 			{/* Filters */}
 			<div className="space-y-3">
 				{/* Search Input */}
@@ -313,8 +404,8 @@ export function AllAlbumsView({
 					<input
 						type="text"
 						placeholder="Search albums by name or artist..."
-						value={searchQuery}
-						onChange={(e) => updateFilterQuery({ searchQuery: e.target.value })}
+						value={searchInput}
+						onChange={(e) => setSearchInput(e.target.value)}
 						className="w-full rounded-md border bg-background px-3 py-2 text-sm"
 					/>
 				</div>
@@ -461,50 +552,13 @@ export function AllAlbumsView({
 						Clear filters
 					</Button>
 				</div>
-
-				<div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/30 p-3">
-					<p className="w-full font-medium text-sm">Library setup</p>
-					<Button
-						type="button"
-						size="sm"
-						disabled={isRunningLibraryAction || !userId}
-						onClick={() => void handleBackfillLibraryIndex()}
-					>
-						<DatabaseBackup className="size-4" />
-						{isBackfillingLibraryIndex
-							? "Building index..."
-							: "Build library index"}
-					</Button>
-					<Button
-						type="button"
-						variant="outline"
-						size="sm"
-						disabled={isRunningLibraryAction}
-						onClick={() => void handleBackfillTitleKeys()}
-					>
-						<DatabaseBackup className="size-4" />
-						{isBackfillingTitleKeys
-							? "Backfilling title keys..."
-							: "Backfill title keys"}
-					</Button>
-					<Button
-						type="button"
-						variant="outline"
-						size="sm"
-						disabled={isRunningLibraryAction}
-						onClick={() => setBackfillDialogOpen(true)}
-					>
-						<DatabaseBackup className="size-4" />
-						{isBackfillingRymLinks
-							? "Backfilling RYM links..."
-							: "Backfill RYM links"}
-					</Button>
-				</div>
 			</div>
 
 			{/* Albums List */}
 			<div className="space-y-1">
-				{albums.length === 0 ? (
+				{isLoading && albums.length === 0 ? (
+					<AlbumLibraryListLoadingState />
+				) : albums.length === 0 ? (
 					<AllAlbumsEmptyState
 						hasFilters={hasNonDefaultFilters}
 						canLoadMore={canLoadMore}
@@ -567,6 +621,94 @@ export function AllAlbumsView({
 				</AlertDialogContent>
 			</AlertDialog>
 		</div>
+	);
+}
+
+function AlbumLibraryListLoadingState() {
+	return (
+		<div className="flex h-64 items-center justify-center rounded-lg border border-dashed">
+			<p className="text-muted-foreground text-sm">Loading albums...</p>
+		</div>
+	);
+}
+
+function AlbumLibraryAdminMenu({
+	userId,
+	isRunningLibraryAction,
+	isBackfillingLibraryIndex,
+	isBackfillingTitleKeys,
+	isBackfillingRymLinks,
+	isBackfillingReleaseYearSortKey,
+	onBuildLibraryIndex,
+	onBackfillTitleKeys,
+	onBackfillReleaseYearSortKeys,
+	onBackfillRymLinks,
+}: {
+	userId: string | null;
+	isRunningLibraryAction: boolean;
+	isBackfillingLibraryIndex: boolean;
+	isBackfillingTitleKeys: boolean;
+	isBackfillingRymLinks: boolean;
+	isBackfillingReleaseYearSortKey: boolean;
+	onBuildLibraryIndex: () => void;
+	onBackfillTitleKeys: () => void;
+	onBackfillReleaseYearSortKeys: () => void;
+	onBackfillRymLinks: () => void;
+}) {
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<Button
+					type="button"
+					variant="outline"
+					size="icon"
+					className="size-8 shrink-0"
+					disabled={isRunningLibraryAction}
+					aria-label="Library setup actions"
+				>
+					<MoreHorizontal className="size-4" />
+				</Button>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="end" className="w-56">
+				<DropdownMenuLabel>Library setup</DropdownMenuLabel>
+				<DropdownMenuItem
+					disabled={isRunningLibraryAction || !userId}
+					onSelect={onBuildLibraryIndex}
+				>
+					<DatabaseBackup className="size-4" />
+					{isBackfillingLibraryIndex
+						? "Building index..."
+						: "Build library index"}
+				</DropdownMenuItem>
+				<DropdownMenuItem
+					disabled={isRunningLibraryAction}
+					onSelect={onBackfillReleaseYearSortKeys}
+				>
+					<DatabaseBackup className="size-4" />
+					{isBackfillingReleaseYearSortKey
+						? "Updating artist sort..."
+						: "Update artist sort keys"}
+				</DropdownMenuItem>
+				<DropdownMenuItem
+					disabled={isRunningLibraryAction}
+					onSelect={onBackfillTitleKeys}
+				>
+					<DatabaseBackup className="size-4" />
+					{isBackfillingTitleKeys
+						? "Backfilling title keys..."
+						: "Backfill title keys"}
+				</DropdownMenuItem>
+				<DropdownMenuItem
+					disabled={isRunningLibraryAction}
+					onSelect={onBackfillRymLinks}
+				>
+					<DatabaseBackup className="size-4" />
+					{isBackfillingRymLinks
+						? "Backfilling RYM links..."
+						: "Backfill RYM links"}
+				</DropdownMenuItem>
+			</DropdownMenuContent>
+		</DropdownMenu>
 	);
 }
 

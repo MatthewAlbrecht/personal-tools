@@ -2,7 +2,14 @@
 
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { ArrowLeft, Clock3, Link2, RefreshCw, Save, Unlink } from "lucide-react";
+import {
+	ArrowLeft,
+	Clock3,
+	Link2,
+	RefreshCw,
+	Save,
+	Unlink,
+} from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -19,14 +26,16 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Textarea } from "~/components/ui/textarea";
-import { api } from "../../../../convex/_generated/api";
-import type { Id } from "../../../../convex/_generated/dataModel";
-import { useSpotifyAuth } from "~/lib/hooks/use-spotify-auth";
-import { SpotifyAlbumMapDrawer } from "./spotify-album-map-drawer";
 import { IntroContentEditor } from "~/components/zine/intro-content-editor";
 import { ZineInsideBackSectionsEditor } from "~/components/zine/zine-inside-back-sections-editor";
+import { useAuthToken } from "~/lib/hooks/use-auth-token";
+import { useSpotifyAuth } from "~/lib/hooks/use-spotify-auth";
 import type { ZineInsideBackSection } from "~/lib/zine/zine-inside-back-sections";
 import { resolveAlbumIntroContent } from "~/lib/zine/zine-intro-content";
+import { mapDiscographyReleasesToAlbumUpserts } from "~/lib/zine/spotify-discography-import";
+import { api } from "../../../../convex/_generated/api";
+import type { Id } from "../../../../convex/_generated/dataModel";
+import { SpotifyAlbumMapDrawer } from "./spotify-album-map-drawer";
 
 type AlbumLyricsData = NonNullable<
 	FunctionReturnType<typeof api.geniusAlbums.getAlbumBySlug>
@@ -65,6 +74,7 @@ const emptyAlbumForm: AlbumFormState = {
 };
 
 export function AlbumLyricsEditor({ slug }: { slug: string }) {
+	const { userId } = useAuthToken();
 	const { getValidAccessToken } = useSpotifyAuth();
 	const albumData = useQuery(api.geniusAlbums.getAlbumBySlug, { slug });
 	const updateAlbumOverrides = useMutation(
@@ -85,6 +95,9 @@ export function AlbumLyricsEditor({ slug }: { slug: string }) {
 	);
 	const ingestSpotifyAlbumTracksForLyrics = useMutation(
 		api.spotify.ingestSpotifyAlbumTracksForLyrics,
+	);
+	const bulkUpsertDiscographyAlbums = useMutation(
+		api.spotify.bulkUpsertDiscographyAlbums,
 	);
 
 	const [albumForm, setAlbumForm] = useState<AlbumFormState>(emptyAlbumForm);
@@ -501,6 +514,23 @@ export function AlbumLyricsEditor({ slug }: { slug: string }) {
 							}))
 						}
 						disabled={isSavingAlbum}
+						spotifyDiscographySource={
+							album.spotifyAlbumId && userId
+								? {
+										spotifyAlbumId: album.spotifyAlbumId,
+										getAccessToken: getValidAccessToken,
+										persistReleases: async (releases, sourceSpotifyAlbumId) => {
+											return await bulkUpsertDiscographyAlbums({
+												userId,
+												albums: mapDiscographyReleasesToAlbumUpserts(
+													releases,
+													sourceSpotifyAlbumId,
+												),
+											});
+										},
+									}
+								: undefined
+						}
 					/>
 
 					<div className="space-y-2">
@@ -532,8 +562,8 @@ export function AlbumLyricsEditor({ slug }: { slug: string }) {
 				<CardHeader>
 					<CardTitle>Spotify mapping</CardTitle>
 					<CardDescription>
-						Map this Genius album to an existing local Spotify album. Track times
-						are pulled from Spotify when you map or sync.
+						Map this Genius album to an existing local Spotify album. Track
+						times are pulled from Spotify when you map or sync.
 					</CardDescription>
 				</CardHeader>
 				<CardContent className="space-y-5">
@@ -561,7 +591,9 @@ export function AlbumLyricsEditor({ slug }: { slug: string }) {
 							disabled={isMappingSpotifyAlbum}
 						>
 							<Link2 className="mr-2 h-4 w-4" />
-							{album.spotifyAlbumId ? "Change Spotify album" : "Map Spotify album"}
+							{album.spotifyAlbumId
+								? "Change Spotify album"
+								: "Map Spotify album"}
 						</Button>
 						<Button
 							onClick={handleAutoMatchSpotifyAlbum}
@@ -599,10 +631,8 @@ export function AlbumLyricsEditor({ slug }: { slug: string }) {
 
 			<SpotifyAlbumMapDrawer
 				album={{
-					albumTitle:
-						albumForm.albumTitleOverride.trim() || album.albumTitle,
-					artistName:
-						albumForm.artistNameOverride.trim() || album.artistName,
+					albumTitle: albumForm.albumTitleOverride.trim() || album.albumTitle,
+					artistName: albumForm.artistNameOverride.trim() || album.artistName,
 				}}
 				open={spotifyMapDrawerOpen}
 				onOpenChange={setSpotifyMapDrawerOpen}

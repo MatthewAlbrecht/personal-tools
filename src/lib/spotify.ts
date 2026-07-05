@@ -532,6 +532,49 @@ export async function getArtistAlbums(
 	return data.items;
 }
 
+type SpotifyArtistAlbumsPage = {
+	items: SpotifyArtistAlbum[];
+	next: string | null;
+	total: number;
+};
+
+/** Full artist discography: albums + compilations, excluding singles. Deduped by album id. */
+export async function getArtistDiscographyAlbums(
+	accessToken: string,
+	artistId: string,
+): Promise<SpotifyArtistAlbum[]> {
+	const includeGroups = ["album", "compilation"];
+	const limit = 50;
+	const albumsById = new Map<string, SpotifyArtistAlbum>();
+	let offset = 0;
+
+	while (true) {
+		const data = await spotifyFetch<SpotifyArtistAlbumsPage>(
+			`/artists/${artistId}/albums?include_groups=${includeGroups.join(",")}&limit=${limit}&offset=${offset}`,
+			accessToken,
+		);
+
+		for (const album of data.items) {
+			if (album.album_type === "single") {
+				continue;
+			}
+
+			if (!albumsById.has(album.id)) {
+				albumsById.set(album.id, album);
+			}
+		}
+
+		offset += limit;
+		if (data.next === null || offset >= data.total) {
+			break;
+		}
+	}
+
+	return Array.from(albumsById.values()).sort((left, right) =>
+		left.release_date.localeCompare(right.release_date),
+	);
+}
+
 // ============================================================================
 // Album Info
 // ============================================================================
