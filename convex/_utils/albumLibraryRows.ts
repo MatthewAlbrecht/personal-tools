@@ -15,12 +15,27 @@ export type AlbumLibraryFilters = {
 export type AlbumLibraryFilterInput = {
 	name: string;
 	artistName: string;
+	searchText?: string;
 	releaseYear?: number;
 	albumType: Exclude<AlbumLibraryAlbumType, "all">;
 	listenCount: number;
 	rymStatus: Exclude<AlbumLibraryRymStatus, "all">;
 	appearsInRobRankings: boolean;
 };
+
+export function buildAlbumLibrarySortKey(value: string): string {
+	return value.trim().toLowerCase();
+}
+
+export function buildAlbumLibrarySearchText({
+	name,
+	artistName,
+}: {
+	name: string;
+	artistName: string;
+}): string {
+	return `${name.trim()}\n${artistName.trim()}`.toLowerCase();
+}
 
 export function getAlbumLibraryAlbumType(
 	totalTracks: number | undefined,
@@ -79,7 +94,8 @@ export function rowMatchesAlbumLibraryFilters(
 
 	const search = filters.search?.trim().toLowerCase();
 	if (search) {
-		const searchableText = `${row.name}\n${row.artistName}`.toLowerCase();
+		const searchableText =
+			row.searchText ?? `${row.name}\n${row.artistName}`.toLowerCase();
 		if (!searchableText.includes(search)) {
 			return false;
 		}
