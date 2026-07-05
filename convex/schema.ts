@@ -4,7 +4,10 @@ import {
 	zineCoverTextAlignValidator,
 	zineCoverTextAnchorValidator,
 } from "./_utils/zineCoverTextLayout";
-import { zineInsideBackArtistDisplayValidator } from "./_utils/zineInsideBackLayout";
+import {
+	zineInsideBackArtistDisplayValidator,
+	zineInsideBackRecommendationRowAlignValidator,
+} from "./_utils/zineInsideBackLayout";
 import { zineInsideBackSectionsValidator } from "./_utils/zineInsideBackSections";
 
 const geniusCreditValidator = v.object({
@@ -166,6 +169,9 @@ export default defineSchema({
 			v.union(v.literal("center"), v.literal("right")),
 		),
 		zineInsideBackArtistDisplay: v.optional(zineInsideBackArtistDisplayValidator),
+		zineInsideBackRecommendationRowAlign: v.optional(
+			zineInsideBackRecommendationRowAlignValidator,
+		),
 		albumTitleOverride: v.optional(v.string()),
 		artistNameOverride: v.optional(v.string()),
 		summaryOverride: v.optional(v.string()),
@@ -240,6 +246,9 @@ export default defineSchema({
 			v.union(v.literal("center"), v.literal("right")),
 		),
 		zineInsideBackArtistDisplay: v.optional(zineInsideBackArtistDisplayValidator),
+		zineInsideBackRecommendationRowAlign: v.optional(
+			zineInsideBackRecommendationRowAlignValidator,
+		),
 		status: v.union(v.literal("draft"), v.literal("ready")),
 		createdAt: v.number(),
 		updatedAt: v.number(),

@@ -2,6 +2,8 @@ export type ZineInsideBackContentAlign = "center" | "right";
 
 export type ZineInsideBackArtistDisplay = "newline" | "inline";
 
+export type ZineInsideBackRecommendationRowAlign = "top" | "center";
+
 export type ZineInsideBackLayoutSettings = {
 	marginTopPt: number;
 	marginRightPt: number;
@@ -9,6 +11,7 @@ export type ZineInsideBackLayoutSettings = {
 	marginLeftPt: number;
 	contentAlign: ZineInsideBackContentAlign;
 	artistDisplay: ZineInsideBackArtistDisplay;
+	recommendationRowAlign: ZineInsideBackRecommendationRowAlign;
 };
 
 export const ZINE_INSIDE_BACK_LAYOUT_DEFAULTS: ZineInsideBackLayoutSettings = {
@@ -18,6 +21,7 @@ export const ZINE_INSIDE_BACK_LAYOUT_DEFAULTS: ZineInsideBackLayoutSettings = {
 	marginLeftPt: 25,
 	contentAlign: "right",
 	artistDisplay: "newline",
+	recommendationRowAlign: "top",
 };
 
 export const ZINE_INSIDE_BACK_MARGIN_SLIDER = {
@@ -42,6 +46,9 @@ export function resolveZineInsideBackLayoutSettings(
 			stored?.contentAlign ?? ZINE_INSIDE_BACK_LAYOUT_DEFAULTS.contentAlign,
 		artistDisplay:
 			stored?.artistDisplay ?? ZINE_INSIDE_BACK_LAYOUT_DEFAULTS.artistDisplay,
+		recommendationRowAlign:
+			stored?.recommendationRowAlign ??
+			ZINE_INSIDE_BACK_LAYOUT_DEFAULTS.recommendationRowAlign,
 	};
 }
 
@@ -52,6 +59,7 @@ export function insideBackLayoutFromStoredFields(fields: {
 	zineInsideBackMarginLeftPt?: number;
 	zineInsideBackContentAlign?: ZineInsideBackContentAlign;
 	zineInsideBackArtistDisplay?: ZineInsideBackArtistDisplay;
+	zineInsideBackRecommendationRowAlign?: ZineInsideBackRecommendationRowAlign;
 }): Partial<ZineInsideBackLayoutSettings> {
 	return {
 		marginTopPt: fields.zineInsideBackMarginTopPt,
@@ -60,6 +68,7 @@ export function insideBackLayoutFromStoredFields(fields: {
 		marginLeftPt: fields.zineInsideBackMarginLeftPt,
 		contentAlign: fields.zineInsideBackContentAlign,
 		artistDisplay: fields.zineInsideBackArtistDisplay,
+		recommendationRowAlign: fields.zineInsideBackRecommendationRowAlign,
 	};
 }
 
@@ -67,21 +76,15 @@ export function formatInsideBackAlbumTitle({
 	albumTitle,
 	year,
 	artistName,
-	artistDisplay,
 }: {
 	albumTitle: string;
 	year?: string;
 	artistName?: string;
-	artistDisplay: ZineInsideBackArtistDisplay;
 }): { titleLine: string; artistLine?: string } {
 	const titleWithYear = [albumTitle, year ? `(${year})` : ""]
 		.filter(Boolean)
 		.join(" ");
 	const trimmedArtist = artistName?.trim();
-
-	if (artistDisplay === "inline" && trimmedArtist) {
-		return { titleLine: `${titleWithYear} — ${trimmedArtist}` };
-	}
 
 	return {
 		titleLine: titleWithYear,

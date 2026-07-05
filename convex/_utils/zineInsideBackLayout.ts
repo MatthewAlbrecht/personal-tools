@@ -10,6 +10,11 @@ export const zineInsideBackArtistDisplayValidator = v.union(
 	v.literal("inline"),
 );
 
+export const zineInsideBackRecommendationRowAlignValidator = v.union(
+	v.literal("top"),
+	v.literal("center"),
+);
+
 export const zineInsideBackLayoutMutationValidator = v.object({
 	marginTopPt: v.number(),
 	marginRightPt: v.number(),
@@ -17,4 +22,5 @@ export const zineInsideBackLayoutMutationValidator = v.object({
 	marginLeftPt: v.number(),
 	contentAlign: zineInsideBackContentAlignValidator,
 	artistDisplay: zineInsideBackArtistDisplayValidator,
+	recommendationRowAlign: zineInsideBackRecommendationRowAlignValidator,
 });

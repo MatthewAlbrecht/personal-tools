@@ -1867,6 +1867,8 @@ function ZineInsideBackLayoutControls({
 }) {
 	const alignGroupName = "zine-inside-back-content-align";
 	const artistDisplayGroupName = "zine-inside-back-artist-display";
+	const recommendationRowAlignGroupName =
+		"zine-inside-back-recommendation-row-align";
 
 	function patchSettings(partial: Partial<ZineInsideBackLayoutSettings>) {
 		onSettingsChange({ ...settings, ...partial });
@@ -1933,6 +1935,25 @@ function ZineInsideBackLayoutControls({
 					id="zine-inside-back-artist-inline"
 					label="Inline after title"
 					onSelect={() => patchSettings({ artistDisplay: "inline" })}
+				/>
+			</div>
+			<div className="pt-1">
+				<p className="mb-2 font-medium text-foreground text-xs">
+					Suggestion row alignment
+				</p>
+				<ZineLyricsColumnOptionRow
+					checked={settings.recommendationRowAlign === "top"}
+					groupName={recommendationRowAlignGroupName}
+					id="zine-inside-back-recommendation-row-top"
+					label="Top aligned with album art"
+					onSelect={() => patchSettings({ recommendationRowAlign: "top" })}
+				/>
+				<ZineLyricsColumnOptionRow
+					checked={settings.recommendationRowAlign === "center"}
+					groupName={recommendationRowAlignGroupName}
+					id="zine-inside-back-recommendation-row-center"
+					label="Vertically centered with album art"
+					onSelect={() => patchSettings({ recommendationRowAlign: "center" })}
 				/>
 			</div>
 		</fieldset>

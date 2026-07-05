@@ -357,6 +357,7 @@ export const updateZineInsideBackLayoutSettings = mutation({
 			zineInsideBackMarginLeftPt: args.layout.marginLeftPt,
 			zineInsideBackContentAlign: args.layout.contentAlign,
 			zineInsideBackArtistDisplay: args.layout.artistDisplay,
+			zineInsideBackRecommendationRowAlign: args.layout.recommendationRowAlign,
 			updatedAt: Date.now(),
 		});
 
@@ -1207,6 +1208,9 @@ export const listAlbumsForSync = query({
 				zineInsideBackArtistDisplay: v.optional(
 					v.union(v.literal("newline"), v.literal("inline")),
 				),
+				zineInsideBackRecommendationRowAlign: v.optional(
+					v.union(v.literal("top"), v.literal("center")),
+				),
 				albumTitleOverride: v.optional(v.string()),
 				artistNameOverride: v.optional(v.string()),
 				summaryOverride: v.optional(v.string()),
@@ -1255,6 +1259,7 @@ export const listAlbumsForSync = query({
 				zineInsideBackMarginLeftPt?: number;
 				zineInsideBackContentAlign?: "center" | "right";
 				zineInsideBackArtistDisplay?: "newline" | "inline";
+				zineInsideBackRecommendationRowAlign?: "top" | "center";
 				albumTitleOverride?: string;
 				artistNameOverride?: string;
 				summaryOverride?: string;
@@ -1321,6 +1326,8 @@ export const listAlbumsForSync = query({
 					zineInsideBackMarginLeftPt: album.zineInsideBackMarginLeftPt,
 					zineInsideBackContentAlign: album.zineInsideBackContentAlign,
 					zineInsideBackArtistDisplay: album.zineInsideBackArtistDisplay,
+					zineInsideBackRecommendationRowAlign:
+						album.zineInsideBackRecommendationRowAlign,
 					albumTitleOverride: album.albumTitleOverride,
 					artistNameOverride: album.artistNameOverride,
 					summaryOverride: album.summaryOverride,
@@ -1391,6 +1398,9 @@ export const upsertAlbumForSync = mutation({
 		zineInsideBackArtistDisplay: v.optional(
 			v.union(v.literal("newline"), v.literal("inline")),
 		),
+		zineInsideBackRecommendationRowAlign: v.optional(
+			v.union(v.literal("top"), v.literal("center")),
+		),
 		albumTitleOverride: v.optional(v.string()),
 		artistNameOverride: v.optional(v.string()),
 		summaryOverride: v.optional(v.string()),
@@ -1439,6 +1449,8 @@ export const upsertAlbumForSync = mutation({
 			zineInsideBackMarginLeftPt: args.zineInsideBackMarginLeftPt,
 			zineInsideBackContentAlign: args.zineInsideBackContentAlign,
 			zineInsideBackArtistDisplay: args.zineInsideBackArtistDisplay,
+			zineInsideBackRecommendationRowAlign:
+				args.zineInsideBackRecommendationRowAlign,
 			albumTitleOverride: normalizeOptionalString(args.albumTitleOverride),
 			artistNameOverride: normalizeOptionalString(args.artistNameOverride),
 			summaryOverride: normalizeOptionalString(args.summaryOverride),

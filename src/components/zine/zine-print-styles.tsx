@@ -309,6 +309,12 @@ export function ZinePrintStyles() {
 						display: flex;
 						gap: 10pt;
 						margin-bottom: 8pt;
+						align-items: flex-start;
+					}
+
+					.zine-page-inside-back-recommendation-rows-center
+						.zine-inside-back-recommendation-row {
+						align-items: center;
 					}
 
 					.zine-inside-back-recommendation-row:last-child {
@@ -339,6 +345,7 @@ export function ZinePrintStyles() {
 					.zine-inside-back-item-artist {
 						margin: 0;
 						font-size: 7.5pt;
+						font-weight: 400;
 						line-height: 1.25;
 					}
 

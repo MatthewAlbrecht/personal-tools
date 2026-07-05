@@ -89,6 +89,9 @@ const playlistValidator = v.object({
 	zineInsideBackArtistDisplay: v.optional(
 		v.union(v.literal("newline"), v.literal("inline")),
 	),
+	zineInsideBackRecommendationRowAlign: v.optional(
+		v.union(v.literal("top"), v.literal("center")),
+	),
 	status: playlistStatusValidator,
 	createdAt: v.number(),
 	updatedAt: v.number(),
@@ -120,6 +123,9 @@ const publicPlaylistValidator = v.object({
 	),
 	zineInsideBackArtistDisplay: v.optional(
 		v.union(v.literal("newline"), v.literal("inline")),
+	),
+	zineInsideBackRecommendationRowAlign: v.optional(
+		v.union(v.literal("top"), v.literal("center")),
 	),
 });
 
@@ -659,6 +665,7 @@ export const updateZineInsideBackLayoutSettings = mutation({
 			zineInsideBackMarginLeftPt: args.layout.marginLeftPt,
 			zineInsideBackContentAlign: args.layout.contentAlign,
 			zineInsideBackArtistDisplay: args.layout.artistDisplay,
+			zineInsideBackRecommendationRowAlign: args.layout.recommendationRowAlign,
 			updatedAt: Date.now(),
 		});
 
@@ -1426,6 +1433,8 @@ function toPublicPlaylist(ctx: QueryCtx, playlist: Doc<"playlistLyrics">) {
 			zineInsideBackMarginLeftPt: playlist.zineInsideBackMarginLeftPt,
 			zineInsideBackContentAlign: playlist.zineInsideBackContentAlign,
 			zineInsideBackArtistDisplay: playlist.zineInsideBackArtistDisplay,
+			zineInsideBackRecommendationRowAlign:
+				playlist.zineInsideBackRecommendationRowAlign,
 		}),
 	);
 }

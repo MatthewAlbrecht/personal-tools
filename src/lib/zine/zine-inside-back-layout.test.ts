@@ -20,6 +20,7 @@ test("resolveZineInsideBackLayoutSettings merges stored partial settings", () =>
 			marginTopPt: 12,
 			contentAlign: "center",
 			artistDisplay: "inline",
+			recommendationRowAlign: "center",
 		}),
 		{
 			marginTopPt: 12,
@@ -28,6 +29,7 @@ test("resolveZineInsideBackLayoutSettings merges stored partial settings", () =>
 			marginLeftPt: ZINE_INSIDE_BACK_LAYOUT_DEFAULTS.marginLeftPt,
 			contentAlign: "center",
 			artistDisplay: "inline",
+			recommendationRowAlign: "center",
 		},
 	);
 });
@@ -41,6 +43,7 @@ test("insideBackLayoutFromStoredFields maps persisted field names", () => {
 			zineInsideBackMarginLeftPt: 13,
 			zineInsideBackContentAlign: "center",
 			zineInsideBackArtistDisplay: "inline",
+			zineInsideBackRecommendationRowAlign: "center",
 		}),
 		{
 			marginTopPt: 10,
@@ -49,6 +52,7 @@ test("insideBackLayoutFromStoredFields maps persisted field names", () => {
 			marginLeftPt: 13,
 			contentAlign: "center",
 			artistDisplay: "inline",
+			recommendationRowAlign: "center",
 		},
 	);
 });
@@ -62,6 +66,7 @@ test("insideBackLayoutToStyleProperties emits CSS custom properties", () => {
 			marginLeftPt: 11,
 			contentAlign: "right",
 			artistDisplay: "newline",
+			recommendationRowAlign: "top",
 		}),
 		{
 			"--zine-inside-back-margin-top-pt": "8",
@@ -72,31 +77,16 @@ test("insideBackLayoutToStyleProperties emits CSS custom properties", () => {
 	);
 });
 
-test("formatInsideBackAlbumTitle puts artist on new line by default", () => {
+test("formatInsideBackAlbumTitle returns title and artist lines", () => {
 	assert.deepEqual(
 		formatInsideBackAlbumTitle({
 			albumTitle: "OK Computer",
 			year: "1997",
 			artistName: "Radiohead",
-			artistDisplay: "newline",
 		}),
 		{
 			titleLine: "OK Computer (1997)",
 			artistLine: "Radiohead",
-		},
-	);
-});
-
-test("formatInsideBackAlbumTitle joins artist inline when requested", () => {
-	assert.deepEqual(
-		formatInsideBackAlbumTitle({
-			albumTitle: "OK Computer",
-			year: "1997",
-			artistName: "Radiohead",
-			artistDisplay: "inline",
-		}),
-		{
-			titleLine: "OK Computer (1997) — Radiohead",
 		},
 	);
 });
@@ -106,7 +96,6 @@ test("formatInsideBackAlbumTitle omits artist line when name missing", () => {
 		formatInsideBackAlbumTitle({
 			albumTitle: "Kid A",
 			year: "2000",
-			artistDisplay: "newline",
 		}),
 		{
 			titleLine: "Kid A (2000)",

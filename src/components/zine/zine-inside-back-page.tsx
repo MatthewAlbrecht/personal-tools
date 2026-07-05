@@ -44,6 +44,8 @@ export function ZineInsideBackPage({
 					"zine-page-inside-back-content-center",
 				settings.contentAlign === "right" &&
 					"zine-page-inside-back-content-right",
+				settings.recommendationRowAlign === "center" &&
+					"zine-page-inside-back-recommendation-rows-center",
 				compact && "zine-page-inside-back-compact",
 			)}
 			style={insideBackLayoutToStyleProperties(settings) as CSSProperties}
@@ -123,7 +125,6 @@ function DiscographyRow({ item }: { item: ZineDiscographyItem }) {
 	const { titleLine } = formatInsideBackAlbumTitle({
 		albumTitle: item.albumTitle,
 		year: item.year,
-		artistDisplay: "newline",
 	});
 
 	return (
@@ -158,7 +159,6 @@ function RecommendationRow({
 		albumTitle: item.albumTitle,
 		year: item.year,
 		artistName: item.artistName,
-		artistDisplay,
 	});
 
 	return (
@@ -173,8 +173,18 @@ function RecommendationRow({
 				<div className="zine-inside-back-recommendation-art zine-inside-back-art-placeholder" />
 			)}
 			<div className="zine-inside-back-recommendation-text">
-				<p className="zine-inside-back-item-title">{titleLine}</p>
-				{artistLine ? (
+				<p className="zine-inside-back-item-title">
+					{titleLine}
+					{artistDisplay === "inline" && artistLine ? (
+						<>
+							{" — "}
+							<span className="zine-inside-back-item-artist">
+								{artistLine}
+							</span>
+						</>
+					) : null}
+				</p>
+				{artistDisplay === "newline" && artistLine ? (
 					<p className="zine-inside-back-item-artist">{artistLine}</p>
 				) : null}
 				{item.similarityBlurb ? (
