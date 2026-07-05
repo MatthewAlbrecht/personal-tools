@@ -20,6 +20,7 @@ import {
 	normalizeZineInsideBackSections,
 	zineInsideBackSectionsValidator,
 } from "./_utils/zineInsideBackSections";
+import { zineInsideBackLayoutMutationValidator } from "./_utils/zineInsideBackLayout";
 import { requireAuth } from "./auth";
 import { getSiteWideHiddenCreditLabelKeys, getIgnoredCreditLabelKeys } from "./geniusCreditLabels";
 
@@ -78,6 +79,16 @@ const playlistValidator = v.object({
 	zineShowAppleMusicQr: v.optional(v.boolean()),
 	zineDisplaySettings: v.optional(zineDisplaySettingsValidator),
 	zineInsideBackSections: v.optional(zineInsideBackSectionsValidator),
+	zineInsideBackMarginTopPt: v.optional(v.number()),
+	zineInsideBackMarginRightPt: v.optional(v.number()),
+	zineInsideBackMarginBottomPt: v.optional(v.number()),
+	zineInsideBackMarginLeftPt: v.optional(v.number()),
+	zineInsideBackContentAlign: v.optional(
+		v.union(v.literal("center"), v.literal("right")),
+	),
+	zineInsideBackArtistDisplay: v.optional(
+		v.union(v.literal("newline"), v.literal("inline")),
+	),
 	status: playlistStatusValidator,
 	createdAt: v.number(),
 	updatedAt: v.number(),
@@ -100,6 +111,16 @@ const publicPlaylistValidator = v.object({
 	zineShowAppleMusicQr: v.optional(v.boolean()),
 	zineDisplaySettings: v.optional(zineDisplaySettingsValidator),
 	zineInsideBackSections: v.optional(zineInsideBackSectionsValidator),
+	zineInsideBackMarginTopPt: v.optional(v.number()),
+	zineInsideBackMarginRightPt: v.optional(v.number()),
+	zineInsideBackMarginBottomPt: v.optional(v.number()),
+	zineInsideBackMarginLeftPt: v.optional(v.number()),
+	zineInsideBackContentAlign: v.optional(
+		v.union(v.literal("center"), v.literal("right")),
+	),
+	zineInsideBackArtistDisplay: v.optional(
+		v.union(v.literal("newline"), v.literal("inline")),
+	),
 });
 
 const scrapeValidator = v.object({
@@ -618,6 +639,30 @@ export const updateZineInsideBackSections = mutation({
 		});
 
 		return null;
+	},
+});
+
+export const updateZineInsideBackLayoutSettings = mutation({
+	args: {
+		playlistId: v.id("playlistLyrics"),
+		layout: zineInsideBackLayoutMutationValidator,
+	},
+	returns: v.id("playlistLyrics"),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+		await requirePlaylist(ctx, args.playlistId);
+
+		await ctx.db.patch(args.playlistId, {
+			zineInsideBackMarginTopPt: args.layout.marginTopPt,
+			zineInsideBackMarginRightPt: args.layout.marginRightPt,
+			zineInsideBackMarginBottomPt: args.layout.marginBottomPt,
+			zineInsideBackMarginLeftPt: args.layout.marginLeftPt,
+			zineInsideBackContentAlign: args.layout.contentAlign,
+			zineInsideBackArtistDisplay: args.layout.artistDisplay,
+			updatedAt: Date.now(),
+		});
+
+		return args.playlistId;
 	},
 });
 
@@ -1375,6 +1420,12 @@ function toPublicPlaylist(ctx: QueryCtx, playlist: Doc<"playlistLyrics">) {
 			zineShowAppleMusicQr: playlist.zineShowAppleMusicQr,
 			zineDisplaySettings: playlist.zineDisplaySettings,
 			zineInsideBackSections: playlist.zineInsideBackSections,
+			zineInsideBackMarginTopPt: playlist.zineInsideBackMarginTopPt,
+			zineInsideBackMarginRightPt: playlist.zineInsideBackMarginRightPt,
+			zineInsideBackMarginBottomPt: playlist.zineInsideBackMarginBottomPt,
+			zineInsideBackMarginLeftPt: playlist.zineInsideBackMarginLeftPt,
+			zineInsideBackContentAlign: playlist.zineInsideBackContentAlign,
+			zineInsideBackArtistDisplay: playlist.zineInsideBackArtistDisplay,
 		}),
 	);
 }

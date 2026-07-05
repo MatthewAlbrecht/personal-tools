@@ -7,6 +7,7 @@ import { Button } from "~/components/ui/button";
 import { LyricsZine, LyricsZineSkeleton } from "~/components/zine/lyrics-zine";
 import { coverTextLayoutFromStoredFields } from "~/lib/zine/zine-cover-text-layout";
 import { hasInsideBackContent } from "~/lib/zine/zine-inside-back-sections";
+import { insideBackLayoutFromStoredFields } from "~/lib/zine/zine-inside-back-layout";
 import type { ZineItemSettings } from "~/lib/zine/zine-types";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
@@ -39,6 +40,9 @@ export function PlaylistLyricsZine({ slug, variant }: PlaylistLyricsZineProps) {
 	);
 	const updateZineCoverTextLayout = useMutation(
 		api.playlistLyrics.updateZineCoverTextLayout,
+	);
+	const updateZineInsideBackLayoutSettings = useMutation(
+		api.playlistLyrics.updateZineInsideBackLayoutSettings,
 	);
 	const updateItem = useMutation(api.playlistLyrics.updateItem);
 	const generateUploadUrl = useMutation(
@@ -125,6 +129,7 @@ export function PlaylistLyricsZine({ slug, variant }: PlaylistLyricsZineProps) {
 			canEdit={canEdit}
 			collectionTitle={playlist.title}
 			insideBackSections={insideBackSections}
+			insideBackLayout={insideBackLayoutFromStoredFields(playlist)}
 			backCoverQrCodes={{
 				spotify: {
 					imageUrl: playlist.zineSpotifyQrImageUrl,
@@ -185,6 +190,9 @@ export function PlaylistLyricsZine({ slug, variant }: PlaylistLyricsZineProps) {
 							},
 							saveCoverTextLayout: (layout) => {
 								void updateZineCoverTextLayout({ playlistId, layout });
+							},
+							saveInsideBackLayoutSettings: (layout) => {
+								void updateZineInsideBackLayoutSettings({ playlistId, layout });
 							},
 							saveSongIntroContent: (songId, content) => {
 								void updateItem({

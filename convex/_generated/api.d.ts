@@ -41,6 +41,7 @@ import type * as _utils_ticketmasterConcerts from "../_utils/ticketmasterConcert
 import type * as _utils_unmappedRymScrapes from "../_utils/unmappedRymScrapes.js";
 import type * as _utils_upsertSpotifyAlbumRecord from "../_utils/upsertSpotifyAlbumRecord.js";
 import type * as _utils_zineCoverTextLayout from "../_utils/zineCoverTextLayout.js";
+import type * as _utils_zineInsideBackLayout from "../_utils/zineInsideBackLayout.js";
 import type * as _utils_zineInsideBackSections from "../_utils/zineInsideBackSections.js";
 import type * as articles from "../articles.js";
 import type * as auth from "../auth.js";
@@ -106,6 +107,7 @@ declare const fullApi: ApiFromModules<{
   "_utils/unmappedRymScrapes": typeof _utils_unmappedRymScrapes;
   "_utils/upsertSpotifyAlbumRecord": typeof _utils_upsertSpotifyAlbumRecord;
   "_utils/zineCoverTextLayout": typeof _utils_zineCoverTextLayout;
+  "_utils/zineInsideBackLayout": typeof _utils_zineInsideBackLayout;
   "_utils/zineInsideBackSections": typeof _utils_zineInsideBackSections;
   articles: typeof articles;
   auth: typeof auth;

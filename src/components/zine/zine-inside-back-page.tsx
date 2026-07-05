@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import { cn } from "~/lib/utils";
 import type {
 	ZineDiscographyItem,
@@ -11,12 +12,19 @@ import {
 	getVisibleDiscographyItems,
 	hasInsideBackContent,
 } from "~/lib/zine/zine-inside-back-sections";
+import {
+	type ZineInsideBackLayoutSettings,
+	formatInsideBackAlbumTitle,
+	insideBackLayoutToStyleProperties,
+} from "~/lib/zine/zine-inside-back-layout";
 
 export function ZineInsideBackPage({
 	sections,
+	settings,
 	canEdit,
 }: {
 	sections: ZineInsideBackSection[];
+	settings: ZineInsideBackLayoutSettings;
 	canEdit?: boolean;
 }) {
 	const totalItems = sections.reduce((count, section) => {
@@ -32,22 +40,30 @@ export function ZineInsideBackPage({
 		<section
 			className={cn(
 				"zine-page zine-page-preview zine-page-inside-back",
+				settings.contentAlign === "center" &&
+					"zine-page-inside-back-content-center",
+				settings.contentAlign === "right" &&
+					"zine-page-inside-back-content-right",
 				compact && "zine-page-inside-back-compact",
 			)}
+			style={insideBackLayoutToStyleProperties(settings) as CSSProperties}
 		>
-			<div className="zine-inside-back-inner">
-				{hasInsideBackContent(sections) ? (
-					sections.map((section, index) => (
-						<InsideBackSectionBlock
-							key={`${section.type}-${index}`}
-							section={section}
-						/>
-					))
-				) : canEdit ? (
-					<p className="zine-inside-back-placeholder">
-						Inside back cover — add sections on the edit page.
-					</p>
-				) : null}
+			<div className="zine-inside-back-outer">
+				<div className="zine-inside-back-inner">
+					{hasInsideBackContent(sections) ? (
+						sections.map((section, index) => (
+							<InsideBackSectionBlock
+								key={`${section.type}-${index}`}
+								section={section}
+								artistDisplay={settings.artistDisplay}
+							/>
+						))
+					) : canEdit ? (
+						<p className="zine-inside-back-placeholder">
+							Inside back cover — add sections on the edit page.
+						</p>
+					) : null}
+				</div>
 			</div>
 		</section>
 	);
@@ -55,8 +71,10 @@ export function ZineInsideBackPage({
 
 function InsideBackSectionBlock({
 	section,
+	artistDisplay,
 }: {
 	section: ZineInsideBackSection;
+	artistDisplay: ZineInsideBackLayoutSettings["artistDisplay"];
 }) {
 	if (section.type === "discography") {
 		const visibleItems = getVisibleDiscographyItems(section.items);
@@ -75,6 +93,7 @@ function InsideBackSectionBlock({
 						<DiscographyRow
 							key={`${item.spotifyAlbumId ?? item.albumTitle}-${index}`}
 							item={item}
+							artistDisplay={artistDisplay}
 						/>
 					))}
 				</ul>
@@ -90,17 +109,30 @@ function InsideBackSectionBlock({
 			</h2>
 			<ul className="zine-inside-back-recommendations-list">
 				{section.items.map((item, index) => (
-					<RecommendationRow key={`${item.albumTitle}-${index}`} item={item} />
+					<RecommendationRow
+						key={`${item.albumTitle}-${index}`}
+						item={item}
+						artistDisplay={artistDisplay}
+					/>
 				))}
 			</ul>
 		</div>
 	);
 }
 
-function DiscographyRow({ item }: { item: ZineDiscographyItem }) {
-	const titleLine = [item.albumTitle, item.year ? `(${item.year})` : ""]
-		.filter(Boolean)
-		.join(" ");
+function DiscographyRow({
+	item,
+	artistDisplay,
+}: {
+	item: ZineDiscographyItem;
+	artistDisplay: ZineInsideBackLayoutSettings["artistDisplay"];
+}) {
+	const { titleLine, artistLine } = formatInsideBackAlbumTitle({
+		albumTitle: item.albumTitle,
+		year: item.year,
+		artistName: item.artistName,
+		artistDisplay,
+	});
 
 	return (
 		<li className="zine-inside-back-discography-row">
@@ -115,6 +147,9 @@ function DiscographyRow({ item }: { item: ZineDiscographyItem }) {
 			)}
 			<div className="zine-inside-back-discography-text">
 				<p className="zine-inside-back-item-title">{titleLine}</p>
+				{artistLine ? (
+					<p className="zine-inside-back-item-artist">{artistLine}</p>
+				) : null}
 				{item.blurb.trim() !== "" ? (
 					<p className="zine-inside-back-item-blurb">{item.blurb}</p>
 				) : null}
@@ -123,10 +158,19 @@ function DiscographyRow({ item }: { item: ZineDiscographyItem }) {
 	);
 }
 
-function RecommendationRow({ item }: { item: ZineRecommendationItem }) {
-	const titleLine = [item.albumTitle, item.year ? `(${item.year})` : ""]
-		.filter(Boolean)
-		.join(" ");
+function RecommendationRow({
+	item,
+	artistDisplay,
+}: {
+	item: ZineRecommendationItem;
+	artistDisplay: ZineInsideBackLayoutSettings["artistDisplay"];
+}) {
+	const { titleLine, artistLine } = formatInsideBackAlbumTitle({
+		albumTitle: item.albumTitle,
+		year: item.year,
+		artistName: item.artistName,
+		artistDisplay,
+	});
 
 	return (
 		<li className="zine-inside-back-recommendation-row">
@@ -141,7 +185,9 @@ function RecommendationRow({ item }: { item: ZineRecommendationItem }) {
 			)}
 			<div className="zine-inside-back-recommendation-text">
 				<p className="zine-inside-back-item-title">{titleLine}</p>
-				<p className="zine-inside-back-item-artist">{item.artistName}</p>
+				{artistLine ? (
+					<p className="zine-inside-back-item-artist">{artistLine}</p>
+				) : null}
 				{item.similarityBlurb ? (
 					<p className="zine-inside-back-item-similarity">
 						{item.similarityBlurb}

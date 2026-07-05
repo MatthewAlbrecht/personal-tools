@@ -654,18 +654,6 @@ function RecommendationItemEditor({
 			disabled={disabled}
 			onMove={onMove}
 			onRemove={onRemove}
-			extraActions={
-				<Button
-					type="button"
-					variant="outline"
-					size="sm"
-					disabled={disabled}
-					onClick={() => setPickerOpen(true)}
-				>
-					<Search className="mr-2 h-4 w-4" />
-					Choose album
-				</Button>
-			}
 		>
 			<ZineRecommendationAlbumPickerDrawer
 				open={pickerOpen}
@@ -720,16 +708,26 @@ function RecommendationItemEditor({
 						}
 					/>
 				</div>
-				<div className="space-y-2 sm:col-span-2">
-					<ImageUrlField
-						id={`${idPrefix}-image-url`}
-						label="Image URL"
-						value={item.imageUrl ?? ""}
-						disabled={disabled}
-						previewAlt={`${item.albumTitle || "Album"} cover preview`}
-						onChange={(imageUrl) => onChange({ ...item, imageUrl })}
-					/>
-				</div>
+				<ImageUrlField
+					id={`${idPrefix}-image-url`}
+					label="Image URL"
+					value={item.imageUrl ?? ""}
+					disabled={disabled}
+					previewAlt={`${item.albumTitle || "Album"} cover preview`}
+					onChange={(imageUrl) => onChange({ ...item, imageUrl })}
+					trailingAction={
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							disabled={disabled}
+							onClick={() => setPickerOpen(true)}
+						>
+							<Search className="mr-2 h-4 w-4" />
+							Choose album
+						</Button>
+					}
+				/>
 				<div className="space-y-2 sm:col-span-2">
 					<Label htmlFor={`${idPrefix}-similarity-blurb`}>
 						Similarity blurb
@@ -823,6 +821,7 @@ function ImageUrlField({
 	disabled,
 	previewAlt,
 	onChange,
+	trailingAction,
 }: {
 	id: string;
 	label: string;
@@ -830,20 +829,25 @@ function ImageUrlField({
 	disabled: boolean;
 	previewAlt: string;
 	onChange: (value: string) => void;
+	trailingAction?: ReactNode;
 }) {
 	const previewUrl = value.trim() || undefined;
 
 	return (
 		<div className="space-y-2 sm:col-span-2">
 			<Label htmlFor={id}>{label}</Label>
-			<Input
-				id={id}
-				type="url"
-				value={value}
-				disabled={disabled}
-				placeholder="https://…"
-				onChange={(event) => onChange(event.currentTarget.value)}
-			/>
+			<div className="flex items-end gap-2">
+				<Input
+					id={id}
+					type="url"
+					value={value}
+					disabled={disabled}
+					placeholder="https://…"
+					className="min-w-0 flex-1"
+					onChange={(event) => onChange(event.currentTarget.value)}
+				/>
+				{trailingAction}
+			</div>
 			{previewUrl ? (
 				<div className="flex items-center gap-3 rounded-md border bg-muted/30 p-3">
 					<img

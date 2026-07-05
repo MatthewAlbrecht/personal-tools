@@ -4,6 +4,8 @@ import {
 } from "./zine-inside-back-sections";
 import { buildCollapsedSongPages } from "./zine-instrumental-pages";
 import type { ZineIntroSettings } from "./zine-intro-layout";
+import type { ZineInsideBackLayoutSettings } from "./zine-inside-back-layout";
+import { resolveZineInsideBackLayoutSettings } from "./zine-inside-back-layout";
 import type { ZineSongDisplayInput } from "./zine-types";
 
 export type ZineSongInput = ZineSongDisplayInput;
@@ -58,6 +60,7 @@ export type ZineBackCoverPage = {
 export type ZineInsideBackPage = {
 	kind: "inside-back";
 	sections: ZineInsideBackSection[];
+	settings: ZineInsideBackLayoutSettings;
 };
 
 export type ZinePage =
@@ -108,6 +111,7 @@ export function buildZinePages({
 	};
 	insideBack?: {
 		sections: ZineInsideBackSection[];
+		settings?: Partial<ZineInsideBackLayoutSettings>;
 		includeWhenEmpty?: boolean;
 	};
 	collapseInstrumentalTracks?: boolean;
@@ -162,18 +166,22 @@ export function buildZinePages({
 		(hasInsideBackContent(insideBack.sections) ||
 			insideBack.includeWhenEmpty === true);
 
+	const endPageCount = (shouldIncludeInsideBack ? 1 : 0) + 1;
+	const blanksNeeded = (4 - ((pages.length + endPageCount) % 4)) % 4;
+
+	for (let index = 0; index < blanksNeeded; index += 1) {
+		pages.push({ kind: "blank" });
+	}
+
 	if (shouldIncludeInsideBack) {
 		pages.push({
 			kind: "inside-back",
 			sections: insideBack.sections,
+			settings: resolveZineInsideBackLayoutSettings(insideBack.settings),
 		});
 	}
 
 	pages.push({ kind: "back-cover" });
-
-	while (pages.length % 4 !== 0) {
-		pages.splice(pages.length - 1, 0, { kind: "blank" });
-	}
 
 	return pages;
 }

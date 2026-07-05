@@ -230,16 +230,43 @@ export function ZinePrintStyles() {
 						flex-direction: column;
 						box-sizing: border-box;
 						min-height: 0;
+						padding: 0;
+					}
+
+					.zine-inside-back-outer {
+						box-sizing: border-box;
+						flex: 1 1 auto;
+						min-height: 0;
+						display: flex;
+						flex-direction: column;
+						align-items: stretch;
+						padding-top: calc(var(--zine-inside-back-margin-top-pt, 25) * 1pt);
+						padding-right: calc(var(--zine-inside-back-margin-right-pt, 25) * 1pt);
+						padding-bottom: calc(var(--zine-inside-back-margin-bottom-pt, 25) * 1pt);
+						padding-left: calc(var(--zine-inside-back-margin-left-pt, 25) * 1pt);
+					}
+
+					.zine-page-inside-back-content-center .zine-inside-back-outer {
+						align-items: center;
+					}
+
+					.zine-page-inside-back-content-right .zine-inside-back-outer {
+						align-items: flex-end;
 					}
 
 					.zine-inside-back-inner {
 						box-sizing: border-box;
-						flex: 1 1 auto;
-						min-height: 0;
-						padding: calc(var(--zine-page-margin-in, 0.35) * 1in);
+						width: 100%;
+						max-width: 100%;
 						display: flex;
 						flex-direction: column;
 						justify-content: flex-start;
+					}
+
+					.zine-page-inside-back-content-center .zine-inside-back-inner,
+					.zine-page-inside-back-content-right .zine-inside-back-inner {
+						width: fit-content;
+						max-width: 100%;
 					}
 
 					.zine-inside-back-section + .zine-inside-back-section {

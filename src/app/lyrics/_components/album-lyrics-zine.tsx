@@ -8,6 +8,7 @@ import { LyricsZine, LyricsZineSkeleton } from "~/components/zine/lyrics-zine";
 import { buildAlbumZineSongInput } from "~/lib/zine/album-song-input";
 import { coverTextLayoutFromStoredFields } from "~/lib/zine/zine-cover-text-layout";
 import { hasInsideBackContent } from "~/lib/zine/zine-inside-back-sections";
+import { insideBackLayoutFromStoredFields } from "~/lib/zine/zine-inside-back-layout";
 import { resolveAlbumIntroContent } from "~/lib/zine/zine-intro-content";
 import type { ZineItemSettings } from "~/lib/zine/zine-types";
 import { api } from "../../../../convex/_generated/api";
@@ -30,6 +31,9 @@ export function AlbumLyricsZine({ slug, variant }: AlbumLyricsZineProps) {
 	);
 	const updateZineIntroSettings = useMutation(
 		api.geniusAlbums.updateZineIntroSettings,
+	);
+	const updateZineInsideBackLayoutSettings = useMutation(
+		api.geniusAlbums.updateZineInsideBackLayoutSettings,
 	);
 	const updateZineDisplaySettings = useMutation(
 		api.geniusAlbums.updateZineDisplaySettings,
@@ -143,6 +147,7 @@ export function AlbumLyricsZine({ slug, variant }: AlbumLyricsZineProps) {
 						: undefined
 					: (albumData.album.zineInsideBackSections ?? [])
 			}
+			insideBackLayout={insideBackLayoutFromStoredFields(albumData.album)}
 			siteWideHiddenCreditLabelKeys={albumData.siteWideHiddenCreditLabelKeys}
 			ignoredCreditLabelKeys={albumData.ignoredCreditLabelKeys}
 			songs={songs}
@@ -186,6 +191,12 @@ export function AlbumLyricsZine({ slug, variant }: AlbumLyricsZineProps) {
 									zineIntroMarginPt: settings.marginPt,
 									zineIntroVerticalAlign: settings.verticalAlign,
 									zineIntroFontSizePt: settings.fontSizePt,
+								});
+							},
+							saveInsideBackLayoutSettings: (layout) => {
+								void updateZineInsideBackLayoutSettings({
+									albumId,
+									layout,
 								});
 							},
 							saveDisplaySettings: (settings) => {

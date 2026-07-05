@@ -31,6 +31,11 @@ import {
 } from "~/lib/zine/zine-display-settings";
 import type { ZineInsideBackSection } from "~/lib/zine/zine-inside-back-sections";
 import {
+	ZINE_INSIDE_BACK_MARGIN_SLIDER,
+	type ZineInsideBackLayoutSettings,
+	resolveZineInsideBackLayoutSettings,
+} from "~/lib/zine/zine-inside-back-layout";
+import {
 	ZINE_INTRO_FONT_SIZE_SLIDER,
 	ZINE_INTRO_MARGIN_SLIDER,
 	ZINE_INTRO_SPACING_SLIDER,
@@ -76,6 +81,7 @@ export type LyricsZinePersistence = {
 	saveGreyscale(on: boolean): void;
 	generateUploadUrl(): Promise<string>;
 	saveIntroSettings?(settings: ZineIntroSettings): void;
+	saveInsideBackLayoutSettings?(settings: ZineInsideBackLayoutSettings): void;
 	saveDisplaySettings?(settings: ZineDisplaySettings): void;
 	saveIntroPageContent?(content: string): void;
 	saveSongIntroContent?(songId: string, content: string): void;
@@ -100,6 +106,7 @@ export function LyricsZine({
 	displaySettings: displaySettingsProp,
 	coverTextLayout: coverTextLayoutProp,
 	insideBackSections,
+	insideBackLayout: insideBackLayoutProp,
 }: {
 	collectionTitle: string;
 	coverArtistName?: string;
@@ -119,6 +126,7 @@ export function LyricsZine({
 	displaySettings?: Partial<ZineDisplaySettings> | null;
 	coverTextLayout?: Partial<ZineCoverTextLayout> | null;
 	insideBackSections?: ZineInsideBackSection[];
+	insideBackLayout?: Partial<ZineInsideBackLayoutSettings> | null;
 }) {
 	const [duplexBinding, setDuplexBinding] =
 		useState<ZineDuplexBinding>("short-edge");
@@ -193,12 +201,17 @@ export function LyricsZine({
 	const [introPageContent, setIntroPageContent] = useState(
 		introPage?.content ?? "",
 	);
+	const [insideBackLayoutSettings, setInsideBackLayoutSettings] =
+		useState<ZineInsideBackLayoutSettings>(() =>
+			resolveZineInsideBackLayoutSettings(insideBackLayoutProp),
+		);
 	const [songIntroContentById, setSongIntroContentById] = useState<
 		Record<string, string>
 	>({});
 
 	const persistZineTimersRef = useRef<Map<string, number>>(new Map());
 	const persistIntroSettingsTimerRef = useRef<number | undefined>(undefined);
+	const persistInsideBackLayoutTimerRef = useRef<number | undefined>(undefined);
 	const persistIntroPageContentTimerRef = useRef<number | undefined>(undefined);
 	const persistSongIntroContentTimersRef = useRef<Map<string, number>>(
 		new Map(),
@@ -219,6 +232,9 @@ export function LyricsZine({
 			}
 			if (persistIntroSettingsTimerRef.current !== undefined) {
 				clearTimeout(persistIntroSettingsTimerRef.current);
+			}
+			if (persistInsideBackLayoutTimerRef.current !== undefined) {
+				clearTimeout(persistInsideBackLayoutTimerRef.current);
 			}
 			if (persistDisplaySettingsTimerRef.current !== undefined) {
 				clearTimeout(persistDisplaySettingsTimerRef.current);
@@ -274,6 +290,7 @@ export function LyricsZine({
 		showSectionLabels: displaySettings.showSectionLabels,
 		insideBack: {
 			sections: insideBackSections ?? [],
+			settings: insideBackLayoutSettings,
 			includeWhenEmpty: canEdit,
 		},
 	});
@@ -344,6 +361,29 @@ export function LyricsZine({
 	function updateIntroSettings(nextSettings: ZineIntroSettings): void {
 		setIntroSettings(nextSettings);
 		queueDebouncedPersistIntroSettings(nextSettings);
+	}
+
+	function queueDebouncedPersistInsideBackLayoutSettings(
+		settings: ZineInsideBackLayoutSettings,
+	): void {
+		const persist = persistence?.saveInsideBackLayoutSettings;
+		if (!persist) return;
+
+		if (persistInsideBackLayoutTimerRef.current !== undefined) {
+			clearTimeout(persistInsideBackLayoutTimerRef.current);
+		}
+
+		persistInsideBackLayoutTimerRef.current = window.setTimeout(() => {
+			persistInsideBackLayoutTimerRef.current = undefined;
+			persist(settings);
+		}, 500);
+	}
+
+	function updateInsideBackLayoutSettings(
+		nextSettings: ZineInsideBackLayoutSettings,
+	): void {
+		setInsideBackLayoutSettings(nextSettings);
+		queueDebouncedPersistInsideBackLayoutSettings(nextSettings);
 	}
 
 	function updateCoverTextLayout(nextLayout: ZineCoverTextLayout): void {
@@ -626,6 +666,7 @@ export function LyricsZine({
 				<ZineInsideBackPage
 					key={`${keyPrefix}-inside-back`}
 					sections={page.sections}
+					settings={page.settings}
 					canEdit={canEdit}
 				/>
 			);
@@ -1039,6 +1080,31 @@ export function LyricsZine({
 												<ZineIntroLayoutControls
 													settings={introSettings}
 													onSettingsChange={updateIntroSettings}
+												/>
+											</aside>
+										</>
+									) : (
+										renderPageByReadingIndex(index, `scr-${index}`)
+									)}
+								</div>
+							);
+						}
+
+						if (page.kind === "inside-back") {
+							return (
+								<div
+									key="zine-inside-back-page"
+									className={cn(canEdit && "zine-song-preview-shell")}
+								>
+									{canEdit ? (
+										<>
+											<div className="flex shrink-0 justify-start">
+												{renderPageByReadingIndex(index, `scr-${index}`)}
+											</div>
+											<aside className="no-print zine-song-columns-panel rounded-lg border bg-card px-3 py-3 shadow-sm">
+												<ZineInsideBackLayoutControls
+													settings={insideBackLayoutSettings}
+													onSettingsChange={updateInsideBackLayoutSettings}
 												/>
 											</aside>
 										</>
@@ -1789,5 +1855,126 @@ function ZineIntroLayoutControls({
 				/>
 			</div>
 		</fieldset>
+	);
+}
+
+function ZineInsideBackLayoutControls({
+	settings,
+	onSettingsChange,
+}: {
+	settings: ZineInsideBackLayoutSettings;
+	onSettingsChange: (settings: ZineInsideBackLayoutSettings) => void;
+}) {
+	const alignGroupName = "zine-inside-back-content-align";
+	const artistDisplayGroupName = "zine-inside-back-artist-display";
+
+	function patchSettings(partial: Partial<ZineInsideBackLayoutSettings>) {
+		onSettingsChange({ ...settings, ...partial });
+	}
+
+	return (
+		<fieldset className="m-0 space-y-3 border-0 p-0">
+			<legend className="mb-2 font-medium text-foreground text-sm leading-snug">
+				Inside back page layout
+			</legend>
+			<p className="text-muted-foreground text-xs leading-snug">
+				Page margins and content block position · screen preview only
+			</p>
+			<InsideBackMarginSlider
+				id="zine-inside-back-margin-top"
+				label="Top margin"
+				value={settings.marginTopPt}
+				onChange={(marginTopPt) => patchSettings({ marginTopPt })}
+			/>
+			<InsideBackMarginSlider
+				id="zine-inside-back-margin-right"
+				label="Right margin"
+				value={settings.marginRightPt}
+				onChange={(marginRightPt) => patchSettings({ marginRightPt })}
+			/>
+			<InsideBackMarginSlider
+				id="zine-inside-back-margin-bottom"
+				label="Bottom margin"
+				value={settings.marginBottomPt}
+				onChange={(marginBottomPt) => patchSettings({ marginBottomPt })}
+			/>
+			<InsideBackMarginSlider
+				id="zine-inside-back-margin-left"
+				label="Left margin"
+				value={settings.marginLeftPt}
+				onChange={(marginLeftPt) => patchSettings({ marginLeftPt })}
+			/>
+			<ZineLyricsColumnOptionRow
+				checked={settings.contentAlign === "center"}
+				groupName={alignGroupName}
+				id="zine-inside-back-align-center"
+				label="Center content area"
+				onSelect={() => patchSettings({ contentAlign: "center" })}
+			/>
+			<ZineLyricsColumnOptionRow
+				checked={settings.contentAlign === "right"}
+				groupName={alignGroupName}
+				id="zine-inside-back-align-right"
+				label="Right-align content area"
+				onSelect={() => patchSettings({ contentAlign: "right" })}
+			/>
+			<div className="pt-1">
+				<p className="mb-2 font-medium text-foreground text-xs">Artist name</p>
+				<ZineLyricsColumnOptionRow
+					checked={settings.artistDisplay === "newline"}
+					groupName={artistDisplayGroupName}
+					id="zine-inside-back-artist-newline"
+					label="New line below title"
+					onSelect={() => patchSettings({ artistDisplay: "newline" })}
+				/>
+				<ZineLyricsColumnOptionRow
+					checked={settings.artistDisplay === "inline"}
+					groupName={artistDisplayGroupName}
+					id="zine-inside-back-artist-inline"
+					label="Inline after title"
+					onSelect={() => patchSettings({ artistDisplay: "inline" })}
+				/>
+			</div>
+		</fieldset>
+	);
+}
+
+function InsideBackMarginSlider({
+	id,
+	label,
+	value,
+	onChange,
+}: {
+	id: string;
+	label: string;
+	value: number;
+	onChange: (value: number) => void;
+}) {
+	return (
+		<div className="space-y-1">
+			<div className="flex items-baseline justify-between gap-3">
+				<Label htmlFor={id} className="text-sm">
+					{label}
+				</Label>
+				<span aria-live="polite" className="text-muted-foreground text-xs">
+					{value} pt
+				</span>
+			</div>
+			<div className="px-1 pt-0.5 pb-1">
+				<Slider
+					id={id}
+					max={ZINE_INSIDE_BACK_MARGIN_SLIDER.maxPt}
+					min={ZINE_INSIDE_BACK_MARGIN_SLIDER.minPt}
+					onValueChange={(values) => {
+						const next = values[0];
+						if (next !== undefined) {
+							onChange(next);
+						}
+					}}
+					step={ZINE_INSIDE_BACK_MARGIN_SLIDER.stepPt}
+					value={[value]}
+				/>
+			</div>
+		</div>
 	);
 }

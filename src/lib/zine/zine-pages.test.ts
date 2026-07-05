@@ -154,6 +154,35 @@ test("buildZinePages keeps separate instrumental pages when requested", () => {
 	);
 });
 
+test("buildZinePages inserts padding blanks before inside-back, not between inside-back and back cover", () => {
+	const pages = buildZinePages({
+		playlistTitle: "Full Album",
+		songs: [
+			{ id: "1", position: 1, title: "A", artistName: "X", lyrics: "a" },
+			{ id: "2", position: 2, title: "B", artistName: "X", lyrics: "b" },
+			{ id: "3", position: 3, title: "C", artistName: "X", lyrics: "c" },
+		],
+		insideBack: {
+			sections: [
+				{
+					type: "discography",
+					items: [{ albumTitle: "Kid A", blurb: "Great." }],
+				},
+			],
+		},
+	});
+
+	assert.equal(pages.length, 8);
+	assert.equal(pages[0]?.kind, "cover");
+	assert.equal(pages[1]?.kind, "song");
+	assert.equal(pages[2]?.kind, "song");
+	assert.equal(pages[3]?.kind, "song");
+	assert.equal(pages[4]?.kind, "blank");
+	assert.equal(pages[5]?.kind, "blank");
+	assert.equal(pages[6]?.kind, "inside-back");
+	assert.equal(pages[7]?.kind, "back-cover");
+});
+
 test("buildZinePages inserts inside-back page before back cover when content exists", () => {
 	const pages = buildZinePages({
 		playlistTitle: "Test",

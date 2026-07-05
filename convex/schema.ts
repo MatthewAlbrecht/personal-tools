@@ -4,6 +4,7 @@ import {
 	zineCoverTextAlignValidator,
 	zineCoverTextAnchorValidator,
 } from "./_utils/zineCoverTextLayout";
+import { zineInsideBackArtistDisplayValidator } from "./_utils/zineInsideBackLayout";
 import { zineInsideBackSectionsValidator } from "./_utils/zineInsideBackSections";
 
 const geniusCreditValidator = v.object({
@@ -157,6 +158,14 @@ export default defineSchema({
 		zineIntroFontSizePt: v.optional(v.number()),
 		zineDisplaySettings: v.optional(zineDisplaySettingsValidator),
 		zineInsideBackSections: v.optional(zineInsideBackSectionsValidator),
+		zineInsideBackMarginTopPt: v.optional(v.number()),
+		zineInsideBackMarginRightPt: v.optional(v.number()),
+		zineInsideBackMarginBottomPt: v.optional(v.number()),
+		zineInsideBackMarginLeftPt: v.optional(v.number()),
+		zineInsideBackContentAlign: v.optional(
+			v.union(v.literal("center"), v.literal("right")),
+		),
+		zineInsideBackArtistDisplay: v.optional(zineInsideBackArtistDisplayValidator),
 		albumTitleOverride: v.optional(v.string()),
 		artistNameOverride: v.optional(v.string()),
 		summaryOverride: v.optional(v.string()),
@@ -223,6 +232,14 @@ export default defineSchema({
 		zineShowAppleMusicQr: v.optional(v.boolean()),
 		zineDisplaySettings: v.optional(zineDisplaySettingsValidator),
 		zineInsideBackSections: v.optional(zineInsideBackSectionsValidator),
+		zineInsideBackMarginTopPt: v.optional(v.number()),
+		zineInsideBackMarginRightPt: v.optional(v.number()),
+		zineInsideBackMarginBottomPt: v.optional(v.number()),
+		zineInsideBackMarginLeftPt: v.optional(v.number()),
+		zineInsideBackContentAlign: v.optional(
+			v.union(v.literal("center"), v.literal("right")),
+		),
+		zineInsideBackArtistDisplay: v.optional(zineInsideBackArtistDisplayValidator),
 		status: v.union(v.literal("draft"), v.literal("ready")),
 		createdAt: v.number(),
 		updatedAt: v.number(),
