@@ -40,6 +40,7 @@ import {
 	ZINE_LYRICS_SIZE_SLIDER,
 	ZINE_TEXT_CONDENSE,
 } from "~/lib/zine/zine-layout";
+import type { ZineInsideBackSection } from "~/lib/zine/zine-inside-back-sections";
 import { buildZinePages } from "~/lib/zine/zine-pages";
 import type {
 	ZineBackCoverQrCodes,
@@ -54,6 +55,7 @@ import { ZineCoverPage } from "./zine-cover-page";
 import { ZineCoverTextLayoutControls } from "./zine-cover-text-layout-controls";
 import { ZineInstrumentalGroupPage } from "./zine-instrumental-group-page";
 import { IntroContentEditor } from "./intro-content-editor";
+import { ZineInsideBackPage } from "./zine-inside-back-page";
 import { ZineIntroPage } from "./zine-intro-page";
 import { triggerZinePrintRemeasure } from "./zine-print-remeasure";
 import { ZinePrintStyles } from "./zine-print-styles";
@@ -97,6 +99,7 @@ export function LyricsZine({
 	introPage,
 	displaySettings: displaySettingsProp,
 	coverTextLayout: coverTextLayoutProp,
+	insideBackSections,
 }: {
 	collectionTitle: string;
 	coverArtistName?: string;
@@ -115,6 +118,7 @@ export function LyricsZine({
 	};
 	displaySettings?: Partial<ZineDisplaySettings> | null;
 	coverTextLayout?: Partial<ZineCoverTextLayout> | null;
+	insideBackSections?: ZineInsideBackSection[];
 }) {
 	const [duplexBinding, setDuplexBinding] =
 		useState<ZineDuplexBinding>("short-edge");
@@ -268,6 +272,10 @@ export function LyricsZine({
 			: undefined,
 		collapseInstrumentalTracks: !displaySettings.separateInstrumentalPages,
 		showSectionLabels: displaySettings.showSectionLabels,
+		insideBack: {
+			sections: insideBackSections ?? [],
+			includeWhenEmpty: canEdit,
+		},
 	});
 	const bookletSheets = buildBookletSheets(pages);
 	const songsById = new Map(songsForPages.map((song) => [song.id, song]));
@@ -608,6 +616,16 @@ export function LyricsZine({
 						shownCreditLabels: page.shownCreditLabels,
 					}}
 					titleCondenseScale={titleCondenseScale}
+				/>
+			);
+		}
+
+		if (page.kind === "inside-back") {
+			return (
+				<ZineInsideBackPage
+					key={`${keyPrefix}-inside-back`}
+					sections={page.sections}
+					canEdit={canEdit}
 				/>
 			);
 		}
