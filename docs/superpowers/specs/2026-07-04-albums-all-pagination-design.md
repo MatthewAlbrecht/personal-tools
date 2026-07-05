@@ -134,12 +134,27 @@ Create helper functions in `convex/_utils/albumLibraryProjection.ts`:
 
 The helper should assemble the row once and write it to `albumLibraryItems`.
 
-Update projection rows from these paths:
+Update projection rows from the source-of-truth write paths that affect fields shown or filtered by `/albums/all`:
 
-- after Spotify album creation/update;
-- after `userAlbums` listen/rating changes;
-- after RYM link association or not-on-site changes;
-- after Rob ranking import/add/remove/replace changes.
+| Source change | Existing write path | Projection action |
+|---|---|---|
+| Spotify album display/sort fields change | `spotify.upsertAlbum` | Refresh all projection rows for that `albumId`, because `name`, `artistName`, image, release year, total tracks, album type, and sort/search keys may change. |
+| RYM not-on-site flag changes | `spotify.setSpotifyAlbumRymNotOnSite` | Refresh all projection rows for that `albumId`. |
+| RYM link is inserted or updated | `linkRymScrapeToSpotifyAlbum` in `convex/_utils/albumMatching.ts` | Refresh all projection rows for that `albumId`. Put the hook here rather than only in UI mutations, because manual association, automatic matching, For Later matching, and scrape-to-album matching all funnel through this helper. |
+| User records an album listen | `spotify.recordAlbumListen`, `spotify.addManualAlbumListen` | Refresh the projection row for that `(userId, albumId)` after the `userAlbums` upsert. |
+| User deletes an album listen | `spotify.deleteAlbumListen` | Refresh the projection row for that `(userId, albumId)` after the `userAlbums` update/delete. |
+| User updates rating | `spotify.updateAlbumRating` | Refresh the projection row for that `(userId, albumId)` after patching `userAlbums`. |
+| Spotify album is added to Rob's rankings | `robRankings.addAlbumToYear`, `robRankings.replaceYearFromAlbums` | Refresh affected `(userId, albumId)` rows so `appearsInRobRankings` and `robRankingYears` update. |
+| Spotify album is removed from Rob's rankings | `robRankings.removeAlbumFromYear`, `robRankings.replaceYearFromAlbums` deleting old entries | Refresh affected `(userId, albumId)` rows so `appearsInRobRankings` and `robRankingYears` update. |
+| Ranking entry is converted from Spotify-linked to manual | `robRankings.updateRankingAlbumManual` | Refresh the old `(userId, albumId)` row before/after clearing `albumId`, because that album may no longer appear in rankings. |
+
+These ranking changes do **not** need projection refreshes because the current album library only stores whether an album appears and the list of ranking years, not positions or publish state:
+
+- `robRankings.setYearPublished`
+- `robRankings.updateAlbumPosition`
+- `robRankings.batchUpdatePositions`
+- `robRankings.setRankingArtistNames`
+- `robRankings.addManualAlbumToYear` unless a future version links manual entries to `spotifyAlbums`.
 
 Add a backfill mutation/action that scans existing albums for a user and creates projection rows in batches.
 
