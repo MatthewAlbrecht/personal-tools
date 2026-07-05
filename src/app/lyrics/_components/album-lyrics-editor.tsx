@@ -24,6 +24,8 @@ import type { Id } from "../../../../convex/_generated/dataModel";
 import { useSpotifyAuth } from "~/lib/hooks/use-spotify-auth";
 import { SpotifyAlbumMapDrawer } from "./spotify-album-map-drawer";
 import { IntroContentEditor } from "~/components/zine/intro-content-editor";
+import { ZineInsideBackSectionsEditor } from "~/components/zine/zine-inside-back-sections-editor";
+import type { ZineInsideBackSection } from "~/lib/zine/zine-inside-back-sections";
 import { resolveAlbumIntroContent } from "~/lib/zine/zine-intro-content";
 
 type AlbumLyricsData = NonNullable<
@@ -37,6 +39,7 @@ type AlbumFormState = {
 	artistNameOverride: string;
 	frontPageImageUrlOverride: string;
 	introPageContent: string;
+	zineInsideBackSections: ZineInsideBackSection[];
 };
 
 type Song = AlbumLyricsData["songs"][number];
@@ -58,6 +61,7 @@ const emptyAlbumForm: AlbumFormState = {
 	artistNameOverride: "",
 	frontPageImageUrlOverride: "",
 	introPageContent: "",
+	zineInsideBackSections: [],
 };
 
 export function AlbumLyricsEditor({ slug }: { slug: string }) {
@@ -148,6 +152,7 @@ export function AlbumLyricsEditor({ slug }: { slug: string }) {
 				summaryOverride: albumForm.introPageContent,
 				frontPageImageUrlOverride: albumForm.frontPageImageUrlOverride,
 				introPageContent: albumForm.introPageContent,
+				zineInsideBackSections: albumForm.zineInsideBackSections,
 			});
 			toast.success("Album overrides saved");
 		} catch (error) {
@@ -475,6 +480,28 @@ export function AlbumLyricsEditor({ slug }: { slug: string }) {
 							updateAlbumFormField("introPageContent", value)
 						}
 					/>
+				</CardContent>
+			</Card>
+
+			<Card>
+				<CardHeader>
+					<CardTitle>Zine inside back cover</CardTitle>
+					<CardDescription>
+						Discography and recommendation sections on the page before the back
+						cover.
+					</CardDescription>
+				</CardHeader>
+				<CardContent className="space-y-5">
+					<ZineInsideBackSectionsEditor
+						sections={albumForm.zineInsideBackSections}
+						onChange={(sections) =>
+							setAlbumForm((current) => ({
+								...current,
+								zineInsideBackSections: sections,
+							}))
+						}
+						disabled={isSavingAlbum}
+					/>
 
 					<div className="space-y-2">
 						<Label htmlFor="front-page-image-url-override">
@@ -762,6 +789,7 @@ function buildAlbumForm(album: Album): AlbumFormState {
 			album.introPageContent,
 			album.summaryOverride,
 		),
+		zineInsideBackSections: album.zineInsideBackSections ?? [],
 	};
 }
 

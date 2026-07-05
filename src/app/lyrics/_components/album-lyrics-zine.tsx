@@ -7,6 +7,7 @@ import { Button } from "~/components/ui/button";
 import { LyricsZine, LyricsZineSkeleton } from "~/components/zine/lyrics-zine";
 import { buildAlbumZineSongInput } from "~/lib/zine/album-song-input";
 import { coverTextLayoutFromStoredFields } from "~/lib/zine/zine-cover-text-layout";
+import { hasInsideBackContent } from "~/lib/zine/zine-inside-back-sections";
 import { resolveAlbumIntroContent } from "~/lib/zine/zine-intro-content";
 import type { ZineItemSettings } from "~/lib/zine/zine-types";
 import { api } from "../../../../convex/_generated/api";
@@ -135,6 +136,13 @@ export function AlbumLyricsZine({ slug, variant }: AlbumLyricsZineProps) {
 				},
 			}}
 			displaySettings={albumData.album.zineDisplaySettings ?? undefined}
+			insideBackSections={
+				variant === "public"
+					? hasInsideBackContent(albumData.album.zineInsideBackSections)
+						? albumData.album.zineInsideBackSections
+						: undefined
+					: (albumData.album.zineInsideBackSections ?? [])
+			}
 			siteWideHiddenCreditLabelKeys={albumData.siteWideHiddenCreditLabelKeys}
 			ignoredCreditLabelKeys={albumData.ignoredCreditLabelKeys}
 			songs={songs}
