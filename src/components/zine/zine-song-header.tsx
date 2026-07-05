@@ -1,11 +1,11 @@
 "use client";
 
 import {
-	ZINE_INTRO_PLACEHOLDER,
 	buildTrackPrimaryLineParts,
 	buildZineCreditParts,
 	getPlaceholderTrackDurationSeconds,
 } from "~/lib/zine/zine-song-header-content";
+import { FormattedIntroContent } from "./formatted-intro-content";
 
 export type ZineDisplayOptions = {
 	showArtist: boolean;
@@ -54,8 +54,8 @@ export function ZineSongHeader({
 		durationSeconds,
 	});
 
-	const introBody =
-		song.introContent?.trim() || ZINE_INTRO_PLACEHOLDER;
+	const introContent = song.introContent?.trim();
+	const hasCustomIntro = Boolean(introContent);
 	const showUserNote =
 		displayOptions.showUserNote && Boolean(song.userNote?.trim());
 	const showAbout =
@@ -111,12 +111,14 @@ export function ZineSongHeader({
 							))}
 						</p>
 					) : null}
-					{displayOptions.showIntro ? (
+					{displayOptions.showIntro && hasCustomIntro ? (
 						<div className="zine-song-intro">
 							<p className="zine-section-label zine-song-intro-label">INTRO</p>
-							<p className="zine-song-intro-body whitespace-pre-line">
-								{introBody}
-							</p>
+							<FormattedIntroContent
+								className="zine-song-intro-body"
+								content={introContent ?? ""}
+								paragraphClassName="zine-song-intro-paragraph"
+							/>
 						</div>
 					) : null}
 				</div>

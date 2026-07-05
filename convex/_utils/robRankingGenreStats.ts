@@ -27,7 +27,7 @@ export type RobRankingGenreCountRow = {
 };
 
 export type RobRankingGenreCountSummary = {
-	year: number;
+	year: number | null;
 	totalAlbums: number;
 	albumsWithGenreData: number;
 	albumsMissingGenreData: number;
@@ -39,7 +39,7 @@ export function buildRobRankingGenreCountSummary({
 	totalAlbums,
 	albumTopLevelGenres,
 }: {
-	year: number;
+	year: number | null;
 	totalAlbums: number;
 	albumTopLevelGenres: RobRankingAlbumGenreInput[];
 }): RobRankingGenreCountSummary {

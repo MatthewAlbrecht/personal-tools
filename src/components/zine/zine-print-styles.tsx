@@ -41,9 +41,31 @@ export function ZinePrintStyles() {
 					}
 
 					.zine-page-cover {
+						position: relative;
+					}
+
+					.zine-cover-title-wrap {
+						position: absolute;
+						inset: 0;
+						z-index: 1;
+						box-sizing: border-box;
 						display: flex;
-						align-items: center;
-						justify-content: center;
+						padding: 0.35in;
+						align-items: var(--zine-cover-anchor-align, center);
+						justify-content: var(--zine-cover-anchor-justify, center);
+					}
+
+					.zine-cover-title-stack {
+						display: flex;
+						flex-direction: column;
+						align-items: var(--zine-cover-stack-align, center);
+						gap: 0.08in;
+						width: max-content;
+						max-width: 100%;
+						transform: translate(
+							calc(var(--zine-cover-offset-x-in, 0) * 1in),
+							calc(var(--zine-cover-offset-y-in, 0) * 1in)
+						);
 					}
 
 					.zine-cover-has-image.zine-cover-spread-half {
@@ -62,19 +84,8 @@ export function ZinePrintStyles() {
 						background-position: 0% center;
 					}
 
-					.zine-cover-title-wrap {
-						position: relative;
-						z-index: 1;
-						box-sizing: border-box;
-						display: flex;
-						align-items: center;
-						justify-content: center;
-						width: 100%;
-						height: 100%;
-						padding: 0.35in;
-					}
-
-					.zine-cover-title-pill {
+					.zine-cover-title-pill,
+					.zine-cover-artist-pill {
 						display: inline-block;
 						max-width: 100%;
 						padding: 0.08in 0.12in;
@@ -82,6 +93,10 @@ export function ZinePrintStyles() {
 						color: #000;
 						-webkit-print-color-adjust: exact;
 						print-color-adjust: exact;
+					}
+
+					.zine-cover-artist-pill {
+						padding: 0.06in 0.1in;
 					}
 
 					.zine-back-cover-qrs {
@@ -168,6 +183,46 @@ export function ZinePrintStyles() {
 						display: flex;
 						flex-direction: column;
 						min-height: 0;
+					}
+
+					.zine-page-intro {
+						display: flex;
+						flex-direction: column;
+						box-sizing: border-box;
+						min-height: 0;
+						font-size: calc(var(--zine-intro-font-size-pt, 10) * 1pt);
+						font-weight: 500;
+						line-height: 1.45;
+					}
+
+					.zine-intro-page-inner {
+						box-sizing: border-box;
+						flex: 1 1 auto;
+						min-height: 0;
+						padding: calc(var(--zine-intro-margin-pt, 12) * 1pt);
+						display: flex;
+						flex-direction: column;
+						justify-content: flex-start;
+					}
+
+					.zine-intro-page-inner .zine-formatted-intro {
+						display: flex;
+						flex-direction: column;
+						gap: calc(var(--zine-intro-paragraph-spacing-pt, 8) * 1pt);
+					}
+
+					.zine-page-intro-centered .zine-intro-page-inner {
+						justify-content: center;
+					}
+
+					.zine-intro-paragraph {
+						margin: 0;
+					}
+
+					.zine-intro-placeholder {
+						margin: 0;
+						color: #666;
+						font-style: italic;
 					}
 
 					.zine-song-page-header-wrap {
@@ -360,10 +415,94 @@ export function ZinePrintStyles() {
 						overflow: hidden;
 					}
 
+					.zine-footer-credits {
+						display: flex;
+						flex-wrap: wrap;
+						align-items: baseline;
+						column-gap: 0.18in;
+						row-gap: 0.04in;
+						overflow: hidden;
+					}
+
+					.zine-footer-credit-item {
+						display: inline-flex;
+						max-width: 100%;
+						white-space: nowrap;
+					}
+
+					.zine-footer-credit-text,
+					.zine-footer-credit-button {
+						margin: 0;
+						font-size: 6.5pt;
+						line-height: 1.25;
+						text-align: left;
+					}
+
+					.zine-footer-credit-text {
+						display: inline;
+					}
+
+					.zine-footer-credit-button {
+						display: inline;
+						width: auto;
+						border: 0;
+						background: transparent;
+						padding: 0;
+						cursor: pointer;
+						color: inherit;
+					}
+
+					.zine-footer-credit-button:hover .zine-footer-credit-label,
+					.zine-footer-credit-button:focus-visible .zine-footer-credit-label {
+						text-decoration: line-through;
+					}
+
+					.zine-footer-credit-label {
+						font-size: 5.5pt;
+						font-weight: 400;
+						color: #666666;
+					}
+
+					.zine-footer-credit-value {
+						font-size: 6.5pt;
+						font-weight: 400;
+						color: inherit;
+					}
+
+					.zine-instrumental-empty {
+						margin: 0;
+						text-align: center;
+						font-size: 9pt;
+						line-height: 1.35;
+						color: #666666;
+					}
+
+					.print-only {
+						display: none;
+					}
+
+					@media print {
+						.print-only {
+							display: block;
+						}
+
+						.zine-footer-credit-item .print-only {
+							display: inline;
+						}
+					}
+
 					.zine-song-intro-body {
 						margin: 0;
 						font-size: 7pt;
 						line-height: 1.35;
+					}
+
+					.zine-song-intro-paragraph {
+						margin: 0;
+					}
+
+					.zine-song-intro-paragraph + .zine-song-intro-paragraph {
+						margin-top: 0.35em;
 					}
 
 					.zine-song-primary-line-clip {
@@ -495,7 +634,8 @@ export function ZinePrintStyles() {
 							print-color-adjust: exact;
 						}
 
-						.zine-cover-title-pill {
+						.zine-cover-title-pill,
+						.zine-cover-artist-pill {
 							background: #fff !important;
 							-webkit-print-color-adjust: exact !important;
 							print-color-adjust: exact !important;

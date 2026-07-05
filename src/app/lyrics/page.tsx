@@ -6,6 +6,7 @@ import {
 	Link as LinkIcon,
 	Loader2,
 	Music,
+	Settings2,
 	Trash2,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -18,7 +19,8 @@ import { Label } from "~/components/ui/label";
 import { Separator } from "~/components/ui/separator";
 import { Skeleton } from "~/components/ui/skeleton";
 import { api } from "../../../convex/_generated/api";
-import type { Doc } from "../../../convex/_generated/dataModel";
+import type { Doc, Id } from "../../../convex/_generated/dataModel";
+import { CreditDefaultsDrawer } from "./_components/credit-defaults-drawer";
 
 type GeniusAlbum = Doc<"geniusAlbums">;
 
@@ -55,6 +57,7 @@ export default function LyricsSearchPage() {
 	const [geniusUrl, setGeniusUrl] = useState("");
 	const [isFetching, setIsFetching] = useState(false);
 	const [isSyncing, setIsSyncing] = useState(false);
+	const [creditDefaultsOpen, setCreditDefaultsOpen] = useState(false);
 
 	// Convex hooks
 	const recentAlbums = useQuery(api.geniusAlbums.listRecent, { limit: 50 });
@@ -117,6 +120,9 @@ export default function LyricsSearchPage() {
 					trackNumber: song.trackNumber,
 					lyrics: song.lyrics,
 					about: song.about,
+					credits: song.credits,
+					scrapeState: song.scrapeState,
+					scrapeError: song.scrapeError,
 				});
 			}
 
@@ -134,10 +140,9 @@ export default function LyricsSearchPage() {
 		}
 	}
 
-	async function handleDelete(albumId: string) {
+	async function handleDelete(albumId: Id<"geniusAlbums">) {
 		try {
-			// biome-ignore lint/suspicious/noExplicitAny: Type assertion needed for Convex ID conversion
-			await deleteAlbumMutation({ id: albumId as any });
+			await deleteAlbumMutation({ id: albumId });
 			toast.success("Album deleted successfully");
 		} catch (error) {
 			console.error("Error deleting album:", error);
@@ -179,12 +184,27 @@ export default function LyricsSearchPage() {
 
 	return (
 		<main className="mx-auto max-w-2xl px-4 py-10">
+			<CreditDefaultsDrawer
+				open={creditDefaultsOpen}
+				onOpenChange={setCreditDefaultsOpen}
+			/>
 			<Card>
 				<CardHeader>
-					<CardTitle className="flex items-center gap-2 text-2xl">
-						<Music className="h-6 w-6" />
-						Album Lyrics Aggregator
-					</CardTitle>
+					<div className="flex items-start justify-between gap-3">
+						<CardTitle className="flex items-center gap-2 text-2xl">
+							<Music className="h-6 w-6" />
+							Album Lyrics Aggregator
+						</CardTitle>
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							onClick={() => setCreditDefaultsOpen(true)}
+						>
+							<Settings2 className="mr-2 h-4 w-4" />
+							Credit defaults
+						</Button>
+					</div>
 				</CardHeader>
 				<CardContent>
 					<form onSubmit={handleSubmit} className="space-y-4">

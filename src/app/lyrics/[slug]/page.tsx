@@ -6,6 +6,7 @@ import {
 	BookOpen,
 	Columns2,
 	Link as LinkIcon,
+	Pencil,
 	Printer,
 } from "lucide-react";
 import Link from "next/link";
@@ -16,7 +17,9 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { Label } from "~/components/ui/label";
 import { Skeleton } from "~/components/ui/skeleton";
 import { LyricsRenderer } from "~/components/zine/lyrics-renderer";
+import { resolveAlbumIntroContent } from "~/lib/zine/zine-intro-content";
 import { api } from "../../../../convex/_generated/api";
+import { filterVisibleCredits } from "../../../../convex/_utils/geniusAlbumLyrics";
 
 export default function AlbumLyricsPage({
 	params,
@@ -67,7 +70,18 @@ export default function AlbumLyricsPage({
 		);
 	}
 
-	const { album, songs } = albumData;
+	const { album, songs, siteWideHiddenCreditLabelKeys, ignoredCreditLabelKeys } =
+		albumData;
+	const displayAlbumTitle =
+		album.albumTitleOverride?.trim() || album.albumTitle;
+	const displayArtistName =
+		album.artistNameOverride?.trim() || album.artistName;
+	const displaySummary = resolveAlbumIntroContent(
+		album.introPageContent,
+		album.summaryOverride,
+	);
+	const frontPageImageUrl =
+		album.frontPageImageUrlOverride?.trim() || album.zineCoverImageUrl;
 
 	return (
 		<div
@@ -109,6 +123,12 @@ export default function AlbumLyricsPage({
 					</div>
 					<div className="flex gap-2">
 						<Button asChild variant="outline">
+							<Link href={`/lyrics/${slug}/edit`}>
+								<Pencil className="mr-2 h-4 w-4" />
+								Edit data
+							</Link>
+						</Button>
+						<Button asChild variant="outline">
 							<Link href={`/lyrics/${slug}/zine`}>
 								<BookOpen className="mr-2 h-4 w-4" />
 								Zine
@@ -132,12 +152,24 @@ export default function AlbumLyricsPage({
 
 			{/* Album Header */}
 			<header className="mb-8 text-center print:mb-12">
+				{frontPageImageUrl ? (
+					<img
+						src={frontPageImageUrl}
+						alt={`${displayAlbumTitle} cover`}
+						className="mx-auto mb-6 h-48 w-48 rounded-lg object-cover print:h-40 print:w-40"
+					/>
+				) : null}
 				<h1 className="mb-2 font-bold text-4xl print:text-5xl">
-					{album.albumTitle}
+					{displayAlbumTitle}
 				</h1>
 				<h2 className="text-2xl text-muted-foreground print:text-3xl">
-					{album.artistName}
+					{displayArtistName}
 				</h2>
+				{displaySummary ? (
+					<p className="mx-auto mt-4 max-w-2xl whitespace-pre-line text-muted-foreground text-sm leading-relaxed print:text-base">
+						{displaySummary}
+					</p>
+				) : null}
 				<p className="mt-2 text-muted-foreground text-sm print:hidden">
 					{songs.length} {songs.length === 1 ? "song" : "songs"}
 				</p>
@@ -150,40 +182,64 @@ export default function AlbumLyricsPage({
 						No songs found for this album.
 					</p>
 				) : (
-					songs.map((song) => (
-						<article
-							key={song._id}
-							className="page-break-inside-avoid print:mb-16"
-						>
-							{/* Track Number */}
-							<span className="text-muted-foreground text-sm print:text-xs">
-								Track {song.trackNumber}
-							</span>
-							{/* Song Title */}
-							<h3 className="mb-4 font-semibold text-2xl print:text-3xl">
-								{song.songTitle}
-							</h3>
+					songs.map((song) => {
+						const displayTitle =
+							song.songTitleOverride?.trim() || song.songTitle;
+						const displayLyrics = song.lyricsOverride?.trim() || song.lyrics;
+						const displayAbout = song.aboutOverride?.trim() || song.about;
+						const visibleCredits = filterVisibleCredits(song.credits, {
+							hiddenCreditLabels: song.hiddenCreditLabels,
+							shownCreditLabels: song.shownCreditLabels,
+							siteWideHiddenLabelKeys: siteWideHiddenCreditLabelKeys,
+							ignoredLabelKeys: ignoredCreditLabelKeys,
+						});
+						const hasLyrics = displayLyrics.trim().length > 0;
 
-							{/* About Section (if exists) */}
-							{song.about && showGeniusInfo && (
-								<div className="mb-6 rounded-lg bg-muted p-4 text-sm leading-relaxed print:mb-8 print:border print:border-gray-300 print:bg-gray-50 print:text-base">
-									{song.about.split("\n\n").map((paragraph, idx) => (
-										<p key={idx} className="mb-2 last:mb-0">
-											{paragraph}
+						return (
+							<article
+								key={song._id}
+								className="page-break-inside-avoid print:mb-16"
+							>
+								{/* Track Number */}
+								<span className="text-muted-foreground text-sm print:text-xs">
+									Track {song.trackNumber}
+								</span>
+								{/* Song Title */}
+								<h3 className="mb-4 font-semibold text-2xl print:text-3xl">
+									{displayTitle}
+								</h3>
+
+								{/* About Section (if exists) */}
+								{displayAbout && showGeniusInfo && (
+									<div className="mb-6 rounded-lg bg-muted p-4 text-sm leading-relaxed print:mb-8 print:border print:border-gray-300 print:bg-gray-50 print:text-base">
+										{displayAbout.split("\n\n").map((paragraph, idx) => (
+											<p key={idx} className="mb-2 last:mb-0">
+												{paragraph}
+											</p>
+										))}
+									</div>
+								)}
+
+								{visibleCredits && showGeniusInfo ? (
+									<CreditRows credits={visibleCredits} />
+								) : null}
+
+								{/* Lyrics */}
+								<div className="font-sans leading-relaxed print:text-base">
+									{hasLyrics ? (
+										<LyricsRenderer
+											lyrics={displayLyrics}
+											showSectionLabels={showSectionLabels}
+										/>
+									) : (
+										<p className="rounded-lg border bg-muted/30 p-4 text-muted-foreground text-sm">
+											No lyrics available for this track.
 										</p>
-									))}
+									)}
 								</div>
-							)}
-
-							{/* Lyrics */}
-							<div className="font-sans leading-relaxed print:text-base">
-								<LyricsRenderer
-									lyrics={song.lyrics}
-									showSectionLabels={showSectionLabels}
-								/>
-							</div>
-						</article>
-					))
+							</article>
+						);
+					})
 				)}
 			</div>
 
@@ -201,6 +257,41 @@ export default function AlbumLyricsPage({
 					</a>
 				</p>
 			</div>
+		</div>
+	);
+}
+
+function CreditRows({
+	credits,
+}: {
+	credits: NonNullable<ReturnType<typeof filterVisibleCredits>>;
+}) {
+	return (
+		<div className="mb-6 rounded-lg border bg-muted/30 p-4 text-sm print:mb-8">
+			{credits.map((credit) => (
+				<div key={credit.label} className="mb-2 last:mb-0">
+					<span className="font-medium">{credit.label}: </span>
+					{credit.contributors.map((contributor, index) => (
+						<React.Fragment
+							key={`${credit.label}-${contributor.name}-${index}`}
+						>
+							{index > 0 ? ", " : null}
+							{contributor.url ? (
+								<a
+									href={contributor.url}
+									target="_blank"
+									rel="noopener noreferrer"
+									className="underline hover:text-foreground"
+								>
+									{contributor.name}
+								</a>
+							) : (
+								<span>{contributor.name}</span>
+							)}
+						</React.Fragment>
+					))}
+				</div>
+			))}
 		</div>
 	);
 }

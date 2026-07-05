@@ -196,6 +196,15 @@ const artistUniqueTierValidator = v.union(
 	v.literal("top50"),
 );
 
+const robRankingTopCountValidator = v.union(
+	v.literal(3),
+	v.literal(5),
+	v.literal(10),
+	v.literal(15),
+	v.literal(25),
+	v.literal(50),
+);
+
 const publishedArtistUniqueTierRowValidator = v.object({
 	artistKey: v.string(),
 	displayName: v.string(),
@@ -218,7 +227,7 @@ const publishedTopLevelGenreCountRowValidator = v.object({
 });
 
 const publishedTopLevelGenreCountSummaryValidator = v.object({
-	year: v.number(),
+	year: v.union(v.number(), v.null()),
 	totalAlbums: v.number(),
 	albumsWithGenreData: v.number(),
 	albumsMissingGenreData: v.number(),
@@ -302,9 +311,11 @@ export const getPublishedArtistUniqueTierPlacements = query({
 export const getPublishedTopLevelGenreCountsForYear = query({
 	args: {
 		year: v.number(),
+		topCount: v.optional(robRankingTopCountValidator),
 	},
 	returns: publishedTopLevelGenreCountSummaryValidator,
 	handler: async (ctx, args) => {
+		const topCount = args.topCount ?? 50;
 		const yearRow = await ctx.db
 			.query("robRankingYears")
 			.filter((q) =>
@@ -315,34 +326,76 @@ export const getPublishedTopLevelGenreCountsForYear = query({
 			)
 			.first();
 
-		if (!yearRow) {
-			return buildRobRankingGenreCountSummary({
-				year: args.year,
-				totalAlbums: 0,
-				albumTopLevelGenres: [],
-			});
-		}
+		return await buildPublishedTopLevelGenreCountsSummary(ctx, {
+			year: yearRow?.year ?? args.year,
+			yearRows: yearRow ? [yearRow] : [],
+			includeAlbumDetails: true,
+			topCount,
+		});
+	},
+});
 
+export const getPublishedTopLevelGenreCountsForAllYears = query({
+	args: {
+		topCount: v.optional(robRankingTopCountValidator),
+	},
+	returns: publishedTopLevelGenreCountSummaryValidator,
+	handler: async (ctx, args) => {
+		const topCount = args.topCount ?? 50;
+		const yearRows = await ctx.db
+			.query("robRankingYears")
+			.withIndex("by_published", (q) => q.eq("published", true))
+			.collect();
+
+		return await buildPublishedTopLevelGenreCountsSummary(ctx, {
+			year: null,
+			yearRows,
+			includeAlbumDetails: false,
+			topCount,
+		});
+	},
+});
+
+async function buildPublishedTopLevelGenreCountsSummary(
+	ctx: QueryCtx,
+	{
+		year,
+		yearRows,
+		includeAlbumDetails,
+		topCount,
+	}: {
+		year: number | null;
+		yearRows: Doc<"robRankingYears">[];
+		includeAlbumDetails: boolean;
+		topCount: 3 | 5 | 10 | 15 | 25 | 50;
+	},
+) {
+	const [parentKeysByChild, topLevelGenres] = await Promise.all([
+		loadRymGenreParentKeysByChild(ctx),
+		ctx.db
+			.query("rateYourMusicGenres")
+			.withIndex("by_isTopLevel", (q) => q.eq("isTopLevel", true))
+			.collect(),
+	]);
+
+	const topLevelGenreKeys = new Set(topLevelGenres.map((genre) => genre.key));
+	const labelsByKey = new Map(
+		topLevelGenres.map((genre) => [genre.key, genre.label]),
+	);
+	const albumTopLevelGenres: RobRankingAlbumGenreInput[] = [];
+	let totalAlbums = 0;
+
+	for (const yearRow of yearRows) {
 		const rankings = await ctx.db
 			.query("robRankingAlbums")
 			.withIndex("by_yearId", (q) => q.eq("yearId", yearRow._id))
 			.collect();
-
-		const [parentKeysByChild, topLevelGenres] = await Promise.all([
-			loadRymGenreParentKeysByChild(ctx),
-			ctx.db
-				.query("rateYourMusicGenres")
-				.withIndex("by_isTopLevel", (q) => q.eq("isTopLevel", true))
-				.collect(),
-		]);
-
-		const topLevelGenreKeys = new Set(topLevelGenres.map((genre) => genre.key));
-		const labelsByKey = new Map(
-			topLevelGenres.map((genre) => [genre.key, genre.label]),
+		const rankingsInRange = rankings.filter(
+			(ranking) => ranking.position <= topCount,
 		);
-		const albumTopLevelGenres: RobRankingAlbumGenreInput[] = [];
+		totalAlbums += rankingsInRange.length;
 
-		for (const ranking of rankings) {
+		for (const ranking of rankingsInRange) {
 			if (!ranking.albumId) {
 				albumTopLevelGenres.push({ genres: [] });
 				continue;
@@ -350,13 +403,14 @@ export const getPublishedTopLevelGenreCountsForYear = query({
 
 			const album = await ctx.db.get(ranking.albumId);
 			const display = resolveRankingAlbumDisplay(ranking, album);
-			const genreAlbum = display
-				? {
-						position: ranking.position,
-						albumName: display.name,
-						artistName: display.artistName,
-					}
-				: undefined;
+			const genreAlbum =
+				includeAlbumDetails && display
+					? {
+							position: ranking.position,
+							albumName: display.name,
+							artistName: display.artistName,
+						}
+					: undefined;
 
 			const link = await loadLatestRymLinkForAlbum(ctx, ranking.albumId);
 			if (!link) {
@@ -375,14 +429,14 @@ export const getPublishedTopLevelGenreCountsForYear = query({
 				),
 			});
 		}
+	}
 
-		return buildRobRankingGenreCountSummary({
-			year: yearRow.year,
-			totalAlbums: rankings.length,
-			albumTopLevelGenres,
-		});
-	},
-});
+	return buildRobRankingGenreCountSummary({
+		year,
+		totalAlbums,
+		albumTopLevelGenres,
+	});
+}
 
 async function loadLatestRymLinkForAlbum(
 	ctx: QueryCtx,

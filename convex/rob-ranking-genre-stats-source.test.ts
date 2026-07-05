@@ -24,8 +24,14 @@ test("rob rankings exposes published top-level genre counts query", () => {
 	);
 
 	assert.match(body, /year: v\.number\(\)/);
+	assert.match(body, /topCount: v\.optional\(robRankingTopCountValidator\)/);
+	assert.match(body, /const topCount = args\.topCount \?\? 50/);
+	assert.match(body, /getPublishedTopLevelGenreCountsForAllYears/);
+	assert.match(body, /withIndex\("by_published"/);
+	assert.match(body, /includeAlbumDetails: false/);
 	assert.match(body, /robRankingAlbums/);
 	assert.match(body, /withIndex\("by_yearId"/);
+	assert.match(body, /ranking\.position <= topCount/);
 	assert.match(body, /rateYourMusicSpotifyAlbumLinks/);
 	assert.match(body, /withIndex\("by_albumId"/);
 	assert.match(body, /rateYourMusicReleaseGenres/);

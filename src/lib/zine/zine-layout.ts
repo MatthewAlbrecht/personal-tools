@@ -153,6 +153,7 @@ export type ZineSongLayoutOptions = {
 	showAbout: boolean;
 	about?: string;
 	showIntro: boolean;
+	introContent?: string;
 };
 
 function estimateExtraHeaderHeightPt(options: ZineSongLayoutOptions): number {
@@ -166,7 +167,7 @@ function estimateExtraHeaderHeightPt(options: ZineSongLayoutOptions): number {
 
 	heightPt += 16;
 
-	if (options.showIntro) {
+	if (options.showIntro && options.introContent?.trim()) {
 		heightPt += 52;
 	}
 

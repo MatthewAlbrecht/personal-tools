@@ -6,6 +6,8 @@ import Link from "next/link";
 import { Button } from "~/components/ui/button";
 import { LyricsZine, LyricsZineSkeleton } from "~/components/zine/lyrics-zine";
 import { buildAlbumZineSongInput } from "~/lib/zine/album-song-input";
+import { coverTextLayoutFromStoredFields } from "~/lib/zine/zine-cover-text-layout";
+import { resolveAlbumIntroContent } from "~/lib/zine/zine-intro-content";
 import type { ZineItemSettings } from "~/lib/zine/zine-types";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
@@ -19,15 +21,34 @@ export function AlbumLyricsZine({ slug, variant }: AlbumLyricsZineProps) {
 	const updateSongSettings = useMutation(
 		api.geniusAlbums.updateZineSongSettings,
 	);
+	const hideSongCreditLabel = useMutation(api.geniusAlbums.hideSongCreditLabel);
+	const showSongCreditLabel = useMutation(api.geniusAlbums.showSongCreditLabel);
 	const updateCoverImage = useMutation(api.geniusAlbums.updateZineCoverImage);
 	const updateCoverGreyscale = useMutation(
 		api.geniusAlbums.updateZineCoverGreyscale,
+	);
+	const updateZineIntroSettings = useMutation(
+		api.geniusAlbums.updateZineIntroSettings,
+	);
+	const updateZineDisplaySettings = useMutation(
+		api.geniusAlbums.updateZineDisplaySettings,
+	);
+	const updateZineCoverTextLayout = useMutation(
+		api.geniusAlbums.updateZineCoverTextLayout,
+	);
+	const updateAlbumOverrides = useMutation(
+		api.geniusAlbums.updateAlbumOverrides,
 	);
 	const generateUploadUrl = useMutation(
 		api.geniusAlbums.generateZineCoverUploadUrl,
 	);
 
-	const albumData = useQuery(api.geniusAlbums.getAlbumBySlug, { slug });
+	const albumData = useQuery(
+		variant === "public"
+			? api.geniusAlbums.getPublicAlbumBySlug
+			: api.geniusAlbums.getAlbumBySlug,
+		{ slug },
+	);
 
 	if (albumData === undefined) {
 		return <LyricsZineSkeleton />;
@@ -51,12 +72,16 @@ export function AlbumLyricsZine({ slug, variant }: AlbumLyricsZineProps) {
 	const albumId = albumData.album._id;
 	const backHref =
 		variant === "public" ? `/public/lyrics/${slug}` : `/lyrics/${slug}`;
+	const displayAlbumTitle =
+		albumData.album.albumTitleOverride?.trim() || albumData.album.albumTitle;
+	const displayArtistName =
+		albumData.album.artistNameOverride?.trim() || albumData.album.artistName;
 
 	const songs = albumData.songs.map((song) =>
 		buildAlbumZineSongInput({
 			album: {
-				albumTitle: albumData.album.albumTitle,
-				artistName: albumData.album.artistName,
+				albumTitle: displayAlbumTitle,
+				artistName: displayArtistName,
 			},
 			song: {
 				id: song._id,
@@ -64,6 +89,13 @@ export function AlbumLyricsZine({ slug, variant }: AlbumLyricsZineProps) {
 				songTitle: song.songTitle,
 				lyrics: song.lyrics,
 				about: song.about,
+				credits: song.credits,
+				songTitleOverride: song.songTitleOverride,
+				lyricsOverride: song.lyricsOverride,
+				aboutOverride: song.aboutOverride,
+				durationSecondsOverride: song.durationSecondsOverride,
+				hiddenCreditLabels: song.hiddenCreditLabels,
+				shownCreditLabels: song.shownCreditLabels,
 			},
 		}),
 	);
@@ -74,7 +106,7 @@ export function AlbumLyricsZine({ slug, variant }: AlbumLyricsZineProps) {
 			columnCount: song.zineLyricsColumnCount,
 			fontSizePt: song.zineLyricsFontSizePt,
 			condenseScale: song.zineTitleCondenseScale,
-			showCredits: song.zineShowCredits === false ? false : true,
+			showCredits: song.zineShowCredits !== false,
 		};
 	}
 
@@ -82,12 +114,29 @@ export function AlbumLyricsZine({ slug, variant }: AlbumLyricsZineProps) {
 		<LyricsZine
 			backHref={backHref}
 			canEdit={canEdit}
-			collectionTitle={albumData.album.albumTitle}
+			collectionTitle={displayAlbumTitle}
+			coverArtistName={displayArtistName}
 			cover={{
 				imageUrl: albumData.album.zineCoverImageUrl,
 				greyscale: albumData.album.zineCoverGreyscale === true,
 			}}
+			coverTextLayout={coverTextLayoutFromStoredFields(albumData.album)}
 			itemSettingsById={itemSettingsById}
+			introPage={{
+				content: resolveAlbumIntroContent(
+					albumData.album.introPageContent,
+					albumData.album.summaryOverride,
+				),
+				settings: {
+					paragraphSpacingPt: albumData.album.zineIntroParagraphSpacingPt,
+					marginPt: albumData.album.zineIntroMarginPt,
+					verticalAlign: albumData.album.zineIntroVerticalAlign,
+					fontSizePt: albumData.album.zineIntroFontSizePt,
+				},
+			}}
+			displaySettings={albumData.album.zineDisplaySettings ?? undefined}
+			siteWideHiddenCreditLabelKeys={albumData.siteWideHiddenCreditLabelKeys}
+			ignoredCreditLabelKeys={albumData.ignoredCreditLabelKeys}
 			songs={songs}
 			persistence={
 				canEdit
@@ -101,6 +150,18 @@ export function AlbumLyricsZine({ slug, variant }: AlbumLyricsZineProps) {
 									zineShowCredits: s.showCredits,
 								});
 							},
+							hideCreditLabel: (songId, label) => {
+								void hideSongCreditLabel({
+									songId: songId as Id<"geniusSongs">,
+									label,
+								});
+							},
+							showCreditLabel: (songId, label) => {
+								void showSongCreditLabel({
+									songId: songId as Id<"geniusSongs">,
+									label,
+								});
+							},
 							saveCover: (url, storageId) =>
 								updateCoverImage({
 									albumId,
@@ -109,6 +170,28 @@ export function AlbumLyricsZine({ slug, variant }: AlbumLyricsZineProps) {
 								}),
 							saveGreyscale: (on) => {
 								void updateCoverGreyscale({ albumId, greyscale: on });
+							},
+							saveIntroSettings: (settings) => {
+								void updateZineIntroSettings({
+									albumId,
+									zineIntroParagraphSpacingPt: settings.paragraphSpacingPt,
+									zineIntroMarginPt: settings.marginPt,
+									zineIntroVerticalAlign: settings.verticalAlign,
+									zineIntroFontSizePt: settings.fontSizePt,
+								});
+							},
+							saveDisplaySettings: (settings) => {
+								void updateZineDisplaySettings({ albumId, settings });
+							},
+							saveCoverTextLayout: (layout) => {
+								void updateZineCoverTextLayout({ albumId, layout });
+							},
+							saveIntroPageContent: (content) => {
+								void updateAlbumOverrides({
+									albumId,
+									introPageContent: content,
+									summaryOverride: content,
+								});
 							},
 							generateUploadUrl: () => generateUploadUrl({}),
 						}

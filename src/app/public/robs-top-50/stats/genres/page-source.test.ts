@@ -17,7 +17,19 @@ test("genres stats page uses published years and genre count query", () => {
 		pageSource,
 		/api\.robRankings\.getPublishedTopLevelGenreCountsForYear/,
 	);
-	assert.match(pageSource, /\?year=/);
+	assert.match(
+		pageSource,
+		/api\.robRankings\.getPublishedTopLevelGenreCountsForAllYears/,
+	);
+	assert.match(pageSource, /yearParam === "all"/);
+	assert.match(pageSource, />\s*All\s*<\/button>/);
+	assert.match(pageSource, /new URLSearchParams/);
+	assert.match(pageSource, /year: String\(view\)/);
+	assert.match(pageSource, /top: String\(topCount\)/);
+	assert.match(pageSource, /Slider/);
+	assert.match(pageSource, /TOP_COUNT_OPTIONS = \[3, 5, 10, 15, 25, 50\]/);
+	assert.match(pageSource, /topCount: activeTopCount/);
+	assert.match(pageSource, /showAlbumDetails=\{!isAllYears\}/);
 	assert.match(pageSource, /TopLevelGenreCountsTable/);
 });
 

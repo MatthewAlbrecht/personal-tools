@@ -3,10 +3,21 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import {
+	applyHideCreditLabel,
+	applyShowCreditLabel,
+	normalizeCreditLabelList,
+} from "./_utils/geniusCreditVisibility";
+import {
 	isPublicPlaylistStatus,
 	sortPlaylistItems,
 } from "./_utils/playlistLyrics";
+import {
+	zineCoverTextAlignValidator,
+	zineCoverTextAnchorValidator,
+	zineCoverTextLayoutMutationValidator,
+} from "./_utils/zineCoverTextLayout";
 import { requireAuth } from "./auth";
+import { getSiteWideHiddenCreditLabelKeys, getIgnoredCreditLabelKeys } from "./geniusCreditLabels";
 
 const playlistStatusValidator = v.union(v.literal("draft"), v.literal("ready"));
 const scrapeStatusValidator = v.union(v.literal("ready"), v.literal("failed"));
@@ -17,6 +28,27 @@ const itemScrapeStateValidator = v.union(
 	v.literal("reused"),
 	v.literal("manual"),
 );
+
+const geniusCreditValidator = v.object({
+	label: v.string(),
+	contributors: v.array(
+		v.object({
+			name: v.string(),
+			url: v.optional(v.string()),
+		}),
+	),
+});
+
+const zineDisplaySettingsValidator = v.object({
+	showArtist: v.optional(v.boolean()),
+	showAlbum: v.optional(v.boolean()),
+	showYear: v.optional(v.boolean()),
+	showAlbumArt: v.optional(v.boolean()),
+	showIntro: v.optional(v.boolean()),
+	showGeniusInfo: v.optional(v.boolean()),
+	showSectionLabels: v.optional(v.boolean()),
+	showUserNote: v.optional(v.boolean()),
+});
 
 const playlistValidator = v.object({
 	_id: v.id("playlistLyrics"),
@@ -29,12 +61,17 @@ const playlistValidator = v.object({
 	zineCoverImageUrl: v.optional(v.string()),
 	zineCoverImageStorageId: v.optional(v.id("_storage")),
 	zineCoverGreyscale: v.optional(v.boolean()),
+	zineCoverTextAnchor: v.optional(zineCoverTextAnchorValidator),
+	zineCoverTextAlign: v.optional(zineCoverTextAlignValidator),
+	zineCoverTextOffsetXIn: v.optional(v.number()),
+	zineCoverTextOffsetYIn: v.optional(v.number()),
 	zineSpotifyQrStorageId: v.optional(v.id("_storage")),
 	zineSpotifyQrImageUrl: v.optional(v.string()),
 	zineAppleMusicQrStorageId: v.optional(v.id("_storage")),
 	zineAppleMusicQrImageUrl: v.optional(v.string()),
 	zineShowSpotifyQr: v.optional(v.boolean()),
 	zineShowAppleMusicQr: v.optional(v.boolean()),
+	zineDisplaySettings: v.optional(zineDisplaySettingsValidator),
 	status: playlistStatusValidator,
 	createdAt: v.number(),
 	updatedAt: v.number(),
@@ -47,10 +84,15 @@ const publicPlaylistValidator = v.object({
 	description: v.optional(v.string()),
 	zineCoverImageUrl: v.optional(v.string()),
 	zineCoverGreyscale: v.optional(v.boolean()),
+	zineCoverTextAnchor: v.optional(zineCoverTextAnchorValidator),
+	zineCoverTextAlign: v.optional(zineCoverTextAlignValidator),
+	zineCoverTextOffsetXIn: v.optional(v.number()),
+	zineCoverTextOffsetYIn: v.optional(v.number()),
 	zineSpotifyQrImageUrl: v.optional(v.string()),
 	zineAppleMusicQrImageUrl: v.optional(v.string()),
 	zineShowSpotifyQr: v.optional(v.boolean()),
 	zineShowAppleMusicQr: v.optional(v.boolean()),
+	zineDisplaySettings: v.optional(zineDisplaySettingsValidator),
 });
 
 const scrapeValidator = v.object({
@@ -64,6 +106,7 @@ const scrapeValidator = v.object({
 	albumArtUrl: v.optional(v.string()),
 	lyrics: v.string(),
 	about: v.optional(v.string()),
+	credits: v.optional(v.array(geniusCreditValidator)),
 	scrapeStatus: scrapeStatusValidator,
 	lastScrapedAt: v.number(),
 	createdAt: v.number(),
@@ -78,6 +121,7 @@ const publicScrapeValidator = v.object({
 	albumArtUrl: v.optional(v.string()),
 	lyrics: v.string(),
 	about: v.optional(v.string()),
+	credits: v.optional(v.array(geniusCreditValidator)),
 });
 
 const itemWithScrapeValidator = v.object({
@@ -97,6 +141,8 @@ const itemWithScrapeValidator = v.object({
 	zineTitleCondenseScale: v.optional(v.number()),
 	zineShowCredits: v.optional(v.boolean()),
 	durationSecondsOverride: v.optional(v.number()),
+	hiddenCreditLabels: v.optional(v.array(v.string())),
+	shownCreditLabels: v.optional(v.array(v.string())),
 	pendingUrl: v.optional(v.string()),
 	scrapeState: itemScrapeStateValidator,
 	createdAt: v.number(),
@@ -118,6 +164,8 @@ const publicItemWithScrapeValidator = v.object({
 	zineTitleCondenseScale: v.optional(v.number()),
 	zineShowCredits: v.optional(v.boolean()),
 	durationSecondsOverride: v.optional(v.number()),
+	hiddenCreditLabels: v.optional(v.array(v.string())),
+	shownCreditLabels: v.optional(v.array(v.string())),
 	scrape: v.optional(publicScrapeValidator),
 });
 
@@ -130,6 +178,7 @@ const syncScrapeInputValidator = v.object({
 	albumArtUrl: v.optional(v.string()),
 	lyrics: v.string(),
 	about: v.optional(v.string()),
+	credits: v.optional(v.array(geniusCreditValidator)),
 	lastScrapedAt: v.optional(v.number()),
 	createdAt: v.optional(v.number()),
 	updatedAt: v.optional(v.number()),
@@ -149,6 +198,14 @@ type PlaylistPatch = {
 	updatedAt: number;
 };
 
+type GeniusCreditInput = {
+	label: string;
+	contributors: Array<{
+		name: string;
+		url?: string;
+	}>;
+};
+
 type ScrapeUpsertInput = {
 	canonicalUrl: string;
 	songTitle: string;
@@ -158,6 +215,7 @@ type ScrapeUpsertInput = {
 	albumArtUrl?: string;
 	lyrics: string;
 	about?: string;
+	credits?: GeniusCreditInput[];
 	lastScrapedAt?: number;
 	createdAt?: number;
 	updatedAt?: number;
@@ -207,6 +265,8 @@ export const getBySlug = query({
 		v.object({
 			playlist: playlistValidator,
 			songs: v.array(itemWithScrapeValidator),
+			siteWideHiddenCreditLabelKeys: v.array(v.string()),
+			ignoredCreditLabelKeys: v.array(v.string()),
 		}),
 		v.null(),
 	),
@@ -227,18 +287,26 @@ export const getBySlug = query({
 			)
 			.collect();
 		const songs = await attachScrapes(ctx, sortPlaylistItems(items));
+		const siteWideHiddenCreditLabelKeys =
+			await getSiteWideHiddenCreditLabelKeys(ctx);
+		const ignoredCreditLabelKeys = await getIgnoredCreditLabelKeys(ctx);
 
 		return {
 			playlist: {
 				...playlist,
 				zineCoverImageUrl: await resolveZineCoverImageUrl(ctx, playlist),
-				zineSpotifyQrImageUrl: await resolveZineSpotifyQrImageUrl(ctx, playlist),
+				zineSpotifyQrImageUrl: await resolveZineSpotifyQrImageUrl(
+					ctx,
+					playlist,
+				),
 				zineAppleMusicQrImageUrl: await resolveZineAppleMusicQrImageUrl(
 					ctx,
 					playlist,
 				),
 			},
 			songs,
+			siteWideHiddenCreditLabelKeys,
+			ignoredCreditLabelKeys,
 		};
 	},
 });
@@ -251,6 +319,8 @@ export const getPublicBySlug = query({
 		v.object({
 			playlist: publicPlaylistValidator,
 			songs: v.array(publicItemWithScrapeValidator),
+			siteWideHiddenCreditLabelKeys: v.array(v.string()),
+			ignoredCreditLabelKeys: v.array(v.string()),
 		}),
 		v.null(),
 	),
@@ -269,12 +339,17 @@ export const getPublicBySlug = query({
 			)
 			.collect();
 		const songs = await attachScrapes(ctx, sortPlaylistItems(items));
+		const siteWideHiddenCreditLabelKeys =
+			await getSiteWideHiddenCreditLabelKeys(ctx);
+		const ignoredCreditLabelKeys = await getIgnoredCreditLabelKeys(ctx);
 
 		return {
 			playlist: {
 				...(await toPublicPlaylist(ctx, playlist)),
 			},
 			songs: songs.map(toPublicItemWithScrape),
+			siteWideHiddenCreditLabelKeys,
+			ignoredCreditLabelKeys,
 		};
 	},
 });
@@ -466,6 +541,58 @@ export const updateZineCoverGreyscale = mutation({
 	},
 });
 
+export const updateZineCoverTextLayout = mutation({
+	args: {
+		playlistId: v.id("playlistLyrics"),
+		layout: zineCoverTextLayoutMutationValidator,
+	},
+	returns: v.id("playlistLyrics"),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+		await requirePlaylist(ctx, args.playlistId);
+
+		await ctx.db.patch(args.playlistId, {
+			zineCoverTextAnchor: args.layout.anchor,
+			zineCoverTextAlign: args.layout.textAlign,
+			zineCoverTextOffsetXIn: args.layout.offsetXIn,
+			zineCoverTextOffsetYIn: args.layout.offsetYIn,
+			updatedAt: Date.now(),
+		});
+
+		return args.playlistId;
+	},
+});
+
+const zineDisplaySettingsMutationValidator = v.object({
+	showArtist: v.boolean(),
+	showAlbum: v.boolean(),
+	showYear: v.boolean(),
+	showAlbumArt: v.boolean(),
+	showIntro: v.boolean(),
+	showGeniusInfo: v.boolean(),
+	showSectionLabels: v.boolean(),
+	showUserNote: v.boolean(),
+});
+
+export const updateZineDisplaySettings = mutation({
+	args: {
+		playlistId: v.id("playlistLyrics"),
+		settings: zineDisplaySettingsMutationValidator,
+	},
+	returns: v.id("playlistLyrics"),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+		await requirePlaylist(ctx, args.playlistId);
+
+		await ctx.db.patch(args.playlistId, {
+			zineDisplaySettings: args.settings,
+			updatedAt: Date.now(),
+		});
+
+		return args.playlistId;
+	},
+});
+
 export const updateZineSpotifyQr = mutation({
 	args: {
 		playlistId: v.id("playlistLyrics"),
@@ -594,6 +721,7 @@ export const upsertScrape = mutation({
 		albumArtUrl: v.optional(v.string()),
 		lyrics: v.string(),
 		about: v.optional(v.string()),
+		credits: v.optional(v.array(geniusCreditValidator)),
 	},
 	returns: v.id("geniusLyricScrapes"),
 	handler: async (ctx, args) => {
@@ -658,6 +786,8 @@ export const updateItem = mutation({
 		albumTitleOverride: v.optional(v.string()),
 		albumArtUrlOverride: v.optional(v.string()),
 		durationSecondsOverride: v.optional(v.union(v.number(), v.null())),
+		hiddenCreditLabels: v.optional(v.array(v.string())),
+		shownCreditLabels: v.optional(v.array(v.string())),
 	},
 	returns: v.id("playlistLyricsItems"),
 	handler: async (ctx, args) => {
@@ -676,6 +806,8 @@ export const updateItem = mutation({
 			albumTitleOverride?: string;
 			albumArtUrlOverride?: string;
 			durationSecondsOverride?: number;
+			hiddenCreditLabels?: string[];
+			shownCreditLabels?: string[];
 			updatedAt: number;
 		} = {
 			updatedAt: Date.now(),
@@ -721,9 +853,73 @@ export const updateItem = mutation({
 				);
 			}
 		}
+		if (args.hiddenCreditLabels !== undefined) {
+			updates.hiddenCreditLabels = normalizeCreditLabelList(
+				args.hiddenCreditLabels,
+			);
+		}
+		if (args.shownCreditLabels !== undefined) {
+			updates.shownCreditLabels = normalizeCreditLabelList(
+				args.shownCreditLabels,
+			);
+		}
 
 		await ctx.db.patch(args.itemId, updates);
 
+		return args.itemId;
+	},
+});
+
+export const hideItemCreditLabel = mutation({
+	args: {
+		itemId: v.id("playlistLyricsItems"),
+		label: v.string(),
+	},
+	returns: v.id("playlistLyricsItems"),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+
+		const item = await ctx.db.get(args.itemId);
+		if (!item) throw new Error("Playlist item not found");
+
+		const siteWideHiddenLabelKeys = await getSiteWideHiddenCreditLabelKeys(ctx);
+		const next = applyHideCreditLabel(
+			{
+				hiddenCreditLabels: item.hiddenCreditLabels,
+				shownCreditLabels: item.shownCreditLabels,
+				siteWideHiddenLabelKeys,
+			},
+			args.label,
+		);
+
+		await ctx.db.patch(args.itemId, next);
+		return args.itemId;
+	},
+});
+
+export const showItemCreditLabel = mutation({
+	args: {
+		itemId: v.id("playlistLyricsItems"),
+		label: v.string(),
+	},
+	returns: v.id("playlistLyricsItems"),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+
+		const item = await ctx.db.get(args.itemId);
+		if (!item) throw new Error("Playlist item not found");
+
+		const siteWideHiddenLabelKeys = await getSiteWideHiddenCreditLabelKeys(ctx);
+		const next = applyShowCreditLabel(
+			{
+				hiddenCreditLabels: item.hiddenCreditLabels,
+				shownCreditLabels: item.shownCreditLabels,
+				siteWideHiddenLabelKeys,
+			},
+			args.label,
+		);
+
+		await ctx.db.patch(args.itemId, next);
 		return args.itemId;
 	},
 });
@@ -1023,7 +1219,9 @@ export const upsertPlaylistForSync = mutation({
 			theme: normalizeOptionalString(args.theme),
 			description: normalizeOptionalString(args.description),
 			notes: normalizeOptionalString(args.notes),
-			zineSpotifyQrImageUrl: normalizeOptionalString(args.zineSpotifyQrImageUrl),
+			zineSpotifyQrImageUrl: normalizeOptionalString(
+				args.zineSpotifyQrImageUrl,
+			),
 			zineAppleMusicQrImageUrl: normalizeOptionalString(
 				args.zineAppleMusicQrImageUrl,
 			),
@@ -1139,10 +1337,15 @@ function toPublicPlaylist(ctx: QueryCtx, playlist: Doc<"playlistLyrics">) {
 			description: playlist.description,
 			zineCoverImageUrl,
 			zineCoverGreyscale: playlist.zineCoverGreyscale,
+			zineCoverTextAnchor: playlist.zineCoverTextAnchor,
+			zineCoverTextAlign: playlist.zineCoverTextAlign,
+			zineCoverTextOffsetXIn: playlist.zineCoverTextOffsetXIn,
+			zineCoverTextOffsetYIn: playlist.zineCoverTextOffsetYIn,
 			zineSpotifyQrImageUrl,
 			zineAppleMusicQrImageUrl,
 			zineShowSpotifyQr: playlist.zineShowSpotifyQr,
 			zineShowAppleMusicQr: playlist.zineShowAppleMusicQr,
+			zineDisplaySettings: playlist.zineDisplaySettings,
 		}),
 	);
 }
@@ -1202,7 +1405,9 @@ async function updateZineQrImage(
 			? "zineSpotifyQrStorageId"
 			: "zineAppleMusicQrStorageId";
 	const urlField =
-		service === "spotify" ? "zineSpotifyQrImageUrl" : "zineAppleMusicQrImageUrl";
+		service === "spotify"
+			? "zineSpotifyQrImageUrl"
+			: "zineAppleMusicQrImageUrl";
 
 	if (args.storageId !== undefined) {
 		const existingStorageId = playlist[storageField];
@@ -1256,6 +1461,8 @@ function toPublicItemWithScrape(item: ItemWithScrape) {
 		zineTitleCondenseScale: item.zineTitleCondenseScale,
 		zineShowCredits: item.zineShowCredits,
 		durationSecondsOverride: item.durationSecondsOverride,
+		hiddenCreditLabels: item.hiddenCreditLabels,
+		shownCreditLabels: item.shownCreditLabels,
 		scrape: item.scrape
 			? {
 					songTitle: item.scrape.songTitle,
@@ -1265,6 +1472,7 @@ function toPublicItemWithScrape(item: ItemWithScrape) {
 					albumArtUrl: item.scrape.albumArtUrl,
 					lyrics: item.scrape.lyrics,
 					about: item.scrape.about,
+					credits: item.scrape.credits,
 				}
 			: undefined,
 	};
@@ -1341,6 +1549,7 @@ async function upsertScrapeRow(
 		albumArtUrl: normalizeOptionalString(input.albumArtUrl),
 		lyrics: input.lyrics,
 		about: normalizeOptionalString(input.about),
+		credits: normalizeCredits(input.credits),
 		scrapeStatus: "ready" as const,
 		lastScrapedAt: input.lastScrapedAt ?? now,
 		updatedAt: input.updatedAt ?? now,
@@ -1362,4 +1571,32 @@ function normalizeOptionalString(
 ): string | undefined {
 	const trimmed = value?.trim();
 	return trimmed || undefined;
+}
+
+function normalizeCredits(
+	credits: ScrapeUpsertInput["credits"],
+): GeniusCreditInput[] | undefined {
+	if (!credits || credits.length === 0) return undefined;
+
+	const normalized: GeniusCreditInput[] = [];
+
+	for (const credit of credits) {
+		const label = normalizeOptionalString(credit.label);
+		if (!label) continue;
+
+		const contributors: GeniusCreditInput["contributors"] = [];
+		for (const contributor of credit.contributors) {
+			const name = normalizeOptionalString(contributor.name);
+			if (!name) continue;
+
+			const url = normalizeOptionalString(contributor.url);
+			contributors.push(url ? { name, url } : { name });
+		}
+
+		if (contributors.length > 0) {
+			normalized.push({ label, contributors });
+		}
+	}
+
+	return normalized.length > 0 ? normalized : undefined;
 }

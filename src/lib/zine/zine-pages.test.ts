@@ -2,6 +2,36 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { buildZinePages } from "./zine-pages";
 
+test("buildZinePages inserts intro page after cover when provided", () => {
+	const pages = buildZinePages({
+		playlistTitle: "Intro Album",
+		songs: [
+			{
+				id: "song-a",
+				position: 1,
+				title: "Song A",
+				artistName: "Artist A",
+				lyrics: "Line one",
+			},
+		],
+		intro: {
+			content: "Welcome to the album.",
+			settings: {
+				paragraphSpacingPt: 8,
+				marginPt: 12,
+				verticalAlign: "top",
+				fontSizePt: 10,
+			},
+		},
+	});
+
+	assert.equal(pages.length, 4);
+	assert.equal(pages[0]?.kind, "cover");
+	assert.equal(pages[1]?.kind, "intro");
+	assert.equal(pages[2]?.kind, "song");
+	assert.equal(pages[3]?.kind, "back-cover");
+});
+
 test("buildZinePages starts with a cover and ends with a back cover", () => {
 	const pages = buildZinePages({
 		playlistTitle: "Music Tour 2026",
@@ -27,6 +57,7 @@ test("buildZinePages starts with a cover and ends with a back cover", () => {
 	assert.deepEqual(pages[0], {
 		kind: "cover",
 		playlistTitle: "Music Tour 2026",
+		artistName: undefined,
 	});
 	assert.equal(pages[1]?.kind, "song");
 	assert.equal(pages[1]?.songId, "song-a");

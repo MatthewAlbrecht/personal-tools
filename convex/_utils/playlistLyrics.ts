@@ -1,6 +1,11 @@
 import { NodeType, parse as parseHTML } from "node-html-parser";
 import type { HTMLElement, Node } from "node-html-parser";
-import { extractAlbumMetadata, extractSongTitle } from "./geniusParser";
+import {
+	type GeniusCredit,
+	extractAlbumMetadata,
+	extractCredits,
+	extractSongTitle,
+} from "./geniusParser";
 
 export type ScrapeDisplayFields = {
 	songTitle: string;
@@ -33,6 +38,7 @@ export type GeniusSongScrapeInput = {
 	albumArtUrl?: string;
 	lyrics: string;
 	about?: string;
+	credits?: GeniusCredit[];
 };
 
 export type GeniusAlbumArtDebugInfo = {
@@ -80,6 +86,7 @@ export function buildGeniusSongScrape({
 	const lyrics = extractLyricsFromHTML(html);
 	const about = extractAboutFromHTML(html);
 	const albumArtUrl = getGeniusAlbumArtDebugInfo(html).normalizedAlbumArtUrl;
+	const credits = extractCredits(html);
 
 	if (!songTitle || !metadata?.artistName || !lyrics) {
 		throw new Error("Could not extract song metadata and lyrics from Genius");
@@ -96,6 +103,7 @@ export function buildGeniusSongScrape({
 		...(albumArtUrl ? { albumArtUrl } : {}),
 		lyrics,
 		about,
+		...(credits ? { credits } : {}),
 	};
 }
 

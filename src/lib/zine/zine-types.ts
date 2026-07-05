@@ -1,3 +1,13 @@
+export type ZineCreditContributor = {
+	name: string;
+	url?: string;
+};
+
+export type ZineCredit = {
+	label: string;
+	contributors: ZineCreditContributor[];
+};
+
 export type ZineSongDisplayInput = {
 	id: string;
 	position: number;
@@ -11,6 +21,9 @@ export type ZineSongDisplayInput = {
 	introContent?: string;
 	about?: string;
 	lyrics: string;
+	credits?: ZineCredit[];
+	hiddenCreditLabels?: string[];
+	shownCreditLabels?: string[];
 };
 
 export type ZineItemSettings = {

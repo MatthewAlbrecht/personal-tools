@@ -1,6 +1,15 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { parse as parseHTML } from "node-html-parser";
+import {
+	type GeniusAlbumTrackInfo,
+	buildAlbumSongRecordInput,
+} from "../../../../convex/_utils/geniusAlbumLyrics";
+import {
+	type GeniusCredit,
+	extractAlbumTracklistItems,
+	extractCredits,
+} from "../../../../convex/_utils/geniusParser";
 
 type SongData = {
 	songTitle: string;
@@ -8,6 +17,9 @@ type SongData = {
 	trackNumber: number;
 	lyrics: string;
 	about?: string;
+	credits?: GeniusCredit[];
+	scrapeState?: "ready" | "failed";
+	scrapeError?: string;
 };
 
 type AlbumData = {
@@ -15,6 +27,14 @@ type AlbumData = {
 	artistName: string;
 	geniusAlbumUrl: string;
 	songs: SongData[];
+};
+
+type HtmlParserNode = {
+	nodeType?: unknown;
+	textContent?: unknown;
+	tagName?: unknown;
+	childNodes?: unknown;
+	getAttribute?: unknown;
 };
 
 function extractLyricsFromHTML(html: string): string {
@@ -28,19 +48,28 @@ function extractLyricsFromHTML(html: string): string {
 		const lines: string[] = [];
 
 		// Recursively process nodes to preserve formatting
-		// biome-ignore lint/suspicious/noExplicitAny: node-html-parser doesn't export proper types for DOM nodes
-		function processNode(node: any, depth = 0): void {
-			if (node.nodeType === 3) {
+		function processNode(node: unknown, depth = 0): void {
+			const parserNode = getHtmlParserNode(node);
+			if (!parserNode) return;
+
+			if (parserNode.nodeType === 3) {
 				// Text node
-				const text = node.textContent.trim();
+				const text =
+					typeof parserNode.textContent === "string"
+						? parserNode.textContent.trim()
+						: "";
 				if (text) {
 					lines.push(text);
 				}
-			} else if (node.nodeType === 1) {
+			} else if (parserNode.nodeType === 1) {
 				// Element node
-				const tagName = node.tagName?.toLowerCase();
-				const className = node.getAttribute?.("class") || "";
-				const excludeFromSelection = node.getAttribute?.(
+				const tagName =
+					typeof parserNode.tagName === "string"
+						? parserNode.tagName.toLowerCase()
+						: undefined;
+				const className = getNodeAttribute(parserNode, "class") ?? "";
+				const excludeFromSelection = getNodeAttribute(
+					parserNode,
 					"data-exclude-from-selection",
 				);
 
@@ -63,19 +92,25 @@ function extractLyricsFromHTML(html: string): string {
 					lines.push("\n");
 				} else if (tagName === "i") {
 					// Wrap italic content with asterisks
-					const italicText = node.textContent.trim();
+					const italicText =
+						typeof parserNode.textContent === "string"
+							? parserNode.textContent.trim()
+							: "";
 					if (italicText) {
 						lines.push(`*${italicText}*`);
 					}
 				} else if (tagName === "b") {
 					// Wrap bold content with double asterisks
-					const boldText = node.textContent.trim();
+					const boldText =
+						typeof parserNode.textContent === "string"
+							? parserNode.textContent.trim()
+							: "";
 					if (boldText) {
 						lines.push(`**${boldText}**`);
 					}
 				} else {
 					// For other elements, recursively process children
-					for (const child of node.childNodes || []) {
+					for (const child of getNodeChildren(parserNode)) {
 						processNode(child, depth + 1);
 					}
 				}
@@ -100,6 +135,26 @@ function extractLyricsFromHTML(html: string): string {
 	}
 
 	return lyrics.join("\n\n").trim();
+}
+
+function getHtmlParserNode(node: unknown): HtmlParserNode | undefined {
+	if (!node || typeof node !== "object") return undefined;
+
+	return node;
+}
+
+function getNodeAttribute(
+	node: HtmlParserNode,
+	attribute: string,
+): string | undefined {
+	if (typeof node.getAttribute !== "function") return undefined;
+
+	const value = node.getAttribute(attribute);
+	return typeof value === "string" ? value : undefined;
+}
+
+function getNodeChildren(node: HtmlParserNode): unknown[] {
+	return Array.isArray(node.childNodes) ? node.childNodes : [];
 }
 
 function extractAboutFromHTML(html: string): string | undefined {
@@ -184,69 +239,9 @@ export async function POST(request: NextRequest) {
 
 		console.log("Found album:", albumTitle, "by", artistName);
 
-		// Extract tracklist - look for chart_row or album-tracklist-row elements
-		type TrackInfo = { url: string; trackNumber: number };
-		const tracklistInfo: TrackInfo[] = [];
-
-		// Try old Angular version first (chart_row)
-		const chartRows = albumRoot.querySelectorAll(".chart_row");
-
-		if (chartRows.length > 0) {
-			console.log(`Found ${chartRows.length} chart rows (old Genius format)`);
-			for (const row of chartRows) {
-				// Get track number from chart_row-number_container
-				const numberElem = row.querySelector(
-					".chart_row-number_container span",
-				);
-				const trackNumber = numberElem
-					? Number.parseInt(numberElem.textContent.trim()) || 0
-					: 0;
-
-				// Get song URL
-				const link = row.querySelector('a[href*="-lyrics"]');
-				if (link && trackNumber > 0) {
-					const href = link.getAttribute("href");
-					if (href) {
-						const url = href.startsWith("http")
-							? href
-							: `https://genius.com${href}`;
-						tracklistInfo.push({ url, trackNumber });
-					}
-				}
-			}
-		} else {
-			// Try new React version (AlbumTracklist__Container)
-			console.log("Trying new Genius format (AlbumTracklist)");
-			const tracklistContainer = albumRoot.querySelector(
-				'[class*="AlbumTracklist__Container"]',
-			);
-
-			if (tracklistContainer) {
-				const trackItems = tracklistContainer.querySelectorAll(
-					'li[class*="AlbumTracklist__Track"]',
-				);
-
-				for (const trackItem of trackItems) {
-					const trackNumberElem = trackItem.querySelector(
-						'[class*="AlbumTracklist__TrackNumber"]',
-					);
-					const trackNumberText = trackNumberElem?.textContent.trim() || "";
-					const trackNumber =
-						Number.parseInt(trackNumberText.replace(".", "")) || 0;
-
-					const link = trackItem.querySelector('a[href*="-lyrics"]');
-					if (link && trackNumber > 0) {
-						const href = link.getAttribute("href");
-						if (href) {
-							const url = href.startsWith("http")
-								? href
-								: `https://genius.com${href}`;
-							tracklistInfo.push({ url, trackNumber });
-						}
-					}
-				}
-			}
-		}
+		// Extract tracklist - supports old chart_row and new AlbumTracklist markup
+		type TrackInfo = GeniusAlbumTrackInfo;
+		const tracklistInfo: TrackInfo[] = extractAlbumTracklistItems(albumHtml);
 
 		if (tracklistInfo.length === 0) {
 			return NextResponse.json(
@@ -255,17 +250,12 @@ export async function POST(request: NextRequest) {
 			);
 		}
 
-		// Sort by track number
-		tracklistInfo.sort((a, b) => a.trackNumber - b.trackNumber);
-
 		console.log(
 			"Track order:",
 			tracklistInfo.map((t) => `Track ${t.trackNumber}`).join(", "),
 		);
 
-		// Extract URLs in correct order
-		const tracklistUrls = tracklistInfo.map((t) => t.url);
-		console.log(`Final tracklist: ${tracklistUrls.length} songs`);
+		console.log(`Final tracklist: ${tracklistInfo.length} songs`);
 
 		// Fetch each song
 		const songs: SongData[] = [];
@@ -275,9 +265,8 @@ export async function POST(request: NextRequest) {
 			if (!trackInfo) continue;
 
 			const songUrl = trackInfo.url;
-			if (!songUrl) continue;
-
 			const trackNumber = trackInfo.trackNumber;
+			let songData = buildAlbumSongRecordInput({ track: trackInfo });
 
 			console.log(`Fetching song ${trackNumber}/${tracklistInfo.length}`);
 
@@ -289,10 +278,9 @@ export async function POST(request: NextRequest) {
 
 				const songResponse = await fetch(songUrl, { headers });
 				if (!songResponse.ok) {
-					console.warn(
-						`Failed to fetch song ${trackNumber}: ${songResponse.status}`,
+					throw new Error(
+						`Failed to fetch song page: ${songResponse.status} ${songResponse.statusText}`,
 					);
-					continue;
 				}
 
 				const songHtml = await songResponse.text();
@@ -309,20 +297,35 @@ export async function POST(request: NextRequest) {
 
 				// Extract about
 				const about = extractAboutFromHTML(songHtml);
+				const credits = extractCredits(songHtml);
 
-				if (songTitle && lyrics) {
-					songs.push({
+				if (!songTitle) {
+					throw new Error("Could not extract song title");
+				}
+
+				songData = buildAlbumSongRecordInput({
+					track: trackInfo,
+					scrape: {
 						songTitle,
-						geniusSongUrl: songUrl || "",
-						trackNumber,
 						lyrics,
 						about,
-					});
-					console.log(`Stored song ${trackNumber}: ${songTitle}`);
-				}
+						credits,
+					},
+				});
+				console.log(`Prepared song ${trackNumber}: ${songTitle}`);
 			} catch (error) {
 				console.error(`Error processing song ${trackNumber}:`, error);
+				songData = buildAlbumSongRecordInput({
+					track: trackInfo,
+					errorMessage:
+						error instanceof Error
+							? error.message
+							: "Failed to scrape song page",
+				});
 			}
+
+			songs.push(songData);
+			console.log(`Stored song ${trackNumber}: ${songData.songTitle}`);
 		}
 
 		const albumData: AlbumData = {

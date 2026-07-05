@@ -1,6 +1,3 @@
-export const ZINE_INTRO_PLACEHOLDER =
-	"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.";
-
 export type ZineCreditPart =
 	| { kind: "text"; value: string }
 	| { kind: "album"; value: string };

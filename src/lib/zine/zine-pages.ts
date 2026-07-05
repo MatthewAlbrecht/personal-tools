@@ -1,3 +1,4 @@
+import type { ZineIntroSettings } from "./zine-intro-layout";
 import type { ZineSongDisplayInput } from "./zine-types";
 
 export type ZineSongInput = ZineSongDisplayInput;
@@ -5,6 +6,7 @@ export type ZineSongInput = ZineSongDisplayInput;
 export type ZineCoverPage = {
 	kind: "cover";
 	playlistTitle: string;
+	artistName?: string;
 };
 
 export type ZineSongPage = {
@@ -21,6 +23,15 @@ export type ZineSongPage = {
 	introContent?: string;
 	about?: string;
 	lyrics: string;
+	credits?: ZineSongDisplayInput["credits"];
+	hiddenCreditLabels?: string[];
+	shownCreditLabels?: string[];
+};
+
+export type ZineIntroPageModel = {
+	kind: "intro";
+	content: string;
+	settings: ZineIntroSettings;
 };
 
 export type ZineBlankPage = {
@@ -33,17 +44,27 @@ export type ZineBackCoverPage = {
 
 export type ZinePage =
 	| ZineCoverPage
+	| ZineIntroPageModel
 	| ZineSongPage
 	| ZineBlankPage
 	| ZineBackCoverPage;
 
 export function buildZinePages({
 	playlistTitle,
+	coverArtistName,
 	songs,
+	intro,
 }: {
 	playlistTitle: string;
+	coverArtistName?: string;
 	songs: ZineSongInput[];
+	intro?: {
+		content: string;
+		settings: ZineIntroSettings;
+		includeWhenEmpty?: boolean;
+	};
 }): ZinePage[] {
+	const resolvedCoverArtistName = coverArtistName?.trim() || undefined;
 	const sortedSongs = [...songs].sort(
 		(left, right) => left.position - right.position,
 	);
@@ -52,7 +73,22 @@ export function buildZinePages({
 		{
 			kind: "cover",
 			playlistTitle,
+			artistName: resolvedCoverArtistName,
 		},
+	];
+
+	if (
+		intro &&
+		(intro.content.trim() !== "" || intro.includeWhenEmpty === true)
+	) {
+		pages.push({
+			kind: "intro",
+			content: intro.content,
+			settings: intro.settings,
+		});
+	}
+
+	pages.push(
 		...sortedSongs.map((song) => ({
 			kind: "song" as const,
 			songId: song.id,
@@ -67,9 +103,12 @@ export function buildZinePages({
 			introContent: song.introContent,
 			about: song.about,
 			lyrics: song.lyrics,
+			credits: song.credits,
+			hiddenCreditLabels: song.hiddenCreditLabels,
+			shownCreditLabels: song.shownCreditLabels,
 		})),
-		{ kind: "back-cover" },
-	];
+		{ kind: "back-cover" as const },
+	);
 
 	while (pages.length % 4 !== 0) {
 		pages.splice(pages.length - 1, 0, { kind: "blank" });

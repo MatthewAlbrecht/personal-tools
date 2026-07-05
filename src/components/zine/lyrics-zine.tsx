@@ -1,18 +1,41 @@
 "use client";
 
-import { ArrowLeft, Printer } from "lucide-react";
+import { ArrowLeft, Pencil, Printer } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogHeader,
+	DialogTitle,
+	DialogTrigger,
+} from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Slider } from "~/components/ui/slider";
 import { cn } from "~/lib/utils";
+import {
+	ZINE_INTRO_FONT_SIZE_SLIDER,
+	ZINE_INTRO_MARGIN_SLIDER,
+	ZINE_INTRO_SPACING_SLIDER,
+	resolveZineIntroSettings,
+	type ZineIntroSettings,
+} from "~/lib/zine/zine-intro-layout";
 import { buildBookletSheets } from "~/lib/zine/zine-booklet";
+import {
+	resolveZineDisplaySettings,
+	type ZineDisplaySettings,
+} from "~/lib/zine/zine-display-settings";
+import {
+	resolveZineCoverTextLayout,
+	type ZineCoverTextLayout,
+} from "~/lib/zine/zine-cover-text-layout";
 import {
 	ZINE_LYRICS_SIZE_SLIDER,
 	ZINE_TEXT_CONDENSE,
@@ -23,7 +46,14 @@ import type {
 	ZineItemSettings,
 	ZineSongDisplayInput,
 } from "~/lib/zine/zine-types";
+import {
+	getHiddenCreditLabelsForRestore,
+	type CreditVisibilityState,
+} from "../../../convex/_utils/geniusCreditVisibility";
 import { ZineCoverPage } from "./zine-cover-page";
+import { ZineCoverTextLayoutControls } from "./zine-cover-text-layout-controls";
+import { IntroContentEditor } from "./intro-content-editor";
+import { ZineIntroPage } from "./zine-intro-page";
 import { triggerZinePrintRemeasure } from "./zine-print-remeasure";
 import { ZinePrintStyles } from "./zine-print-styles";
 import {
@@ -34,45 +64,62 @@ import {
 
 export type LyricsZinePersistence = {
 	saveItemSettings(songId: string, settings: ZineItemSettings): void;
+	hideCreditLabel?(songId: string, label: string): void;
+	showCreditLabel?(songId: string, label: string): void;
 	saveCover(
 		url: string | undefined,
 		storageId?: string,
 	): Promise<{ coverImageUrl?: string }>;
 	saveGreyscale(on: boolean): void;
 	generateUploadUrl(): Promise<string>;
+	saveIntroSettings?(settings: ZineIntroSettings): void;
+	saveDisplaySettings?(settings: ZineDisplaySettings): void;
+	saveIntroPageContent?(content: string): void;
+	saveSongIntroContent?(songId: string, content: string): void;
+	saveCoverTextLayout?(layout: ZineCoverTextLayout): void;
 };
 
 type ZineDuplexBinding = "long-edge" | "short-edge";
 
 export function LyricsZine({
 	collectionTitle,
+	coverArtistName,
 	backHref,
 	songs,
 	cover,
 	backCoverQrCodes,
 	itemSettingsById,
+	siteWideHiddenCreditLabelKeys = [],
+	ignoredCreditLabelKeys = [],
 	canEdit,
 	persistence,
+	introPage,
+	displaySettings: displaySettingsProp,
+	coverTextLayout: coverTextLayoutProp,
 }: {
 	collectionTitle: string;
+	coverArtistName?: string;
 	backHref: string;
 	songs: ZineSongDisplayInput[];
 	cover: { imageUrl?: string; greyscale: boolean };
 	backCoverQrCodes?: ZineBackCoverQrCodes;
 	itemSettingsById: Record<string, ZineItemSettings>;
+	siteWideHiddenCreditLabelKeys?: string[];
+	ignoredCreditLabelKeys?: string[];
 	canEdit: boolean;
 	persistence?: LyricsZinePersistence;
+	introPage?: {
+		content: string;
+		settings?: Partial<ZineIntroSettings>;
+	};
+	displaySettings?: Partial<ZineDisplaySettings> | null;
+	coverTextLayout?: Partial<ZineCoverTextLayout> | null;
 }) {
 	const [duplexBinding, setDuplexBinding] =
 		useState<ZineDuplexBinding>("short-edge");
-	const [showGeniusInfo, setShowGeniusInfo] = useState(false);
-	const [showArtist, setShowArtist] = useState(true);
-	const [showAlbum, setShowAlbum] = useState(true);
-	const [showYear, setShowYear] = useState(true);
-	const [showAlbumArt, setShowAlbumArt] = useState(true);
-	const [showSectionLabels, setShowSectionLabels] = useState(false);
-	const [showIntro, setShowIntro] = useState(true);
-	const [showUserNote, setShowUserNote] = useState(true);
+	const [displaySettings, setDisplaySettings] = useState<ZineDisplaySettings>(
+		() => resolveZineDisplaySettings(displaySettingsProp),
+	);
 	const [songLyricsColumnModes, setSongLyricsColumnModes] = useState<
 		Record<string, 1>
 	>(() => {
@@ -131,9 +178,28 @@ export function LyricsZine({
 	});
 	const [coverImageUrl, setCoverImageUrl] = useState(cover.imageUrl ?? "");
 	const [coverGreyscale, setCoverGreyscale] = useState(cover.greyscale);
+	const [coverTextLayout, setCoverTextLayout] = useState<ZineCoverTextLayout>(
+		() => resolveZineCoverTextLayout(coverTextLayoutProp),
+	);
 	const [isUploadingCover, setIsUploadingCover] = useState(false);
+	const [introSettings, setIntroSettings] = useState<ZineIntroSettings>(() =>
+		resolveZineIntroSettings(introPage?.settings),
+	);
+	const [introPageContent, setIntroPageContent] = useState(
+		introPage?.content ?? "",
+	);
+	const [songIntroContentById, setSongIntroContentById] = useState<
+		Record<string, string>
+	>({});
 
 	const persistZineTimersRef = useRef<Map<string, number>>(new Map());
+	const persistIntroSettingsTimerRef = useRef<number | undefined>(undefined);
+	const persistIntroPageContentTimerRef = useRef<number | undefined>(undefined);
+	const persistSongIntroContentTimersRef = useRef<Map<string, number>>(
+		new Map(),
+	);
+	const persistDisplaySettingsTimerRef = useRef<number | undefined>(undefined);
+	const persistCoverTextLayoutTimerRef = useRef<number | undefined>(undefined);
 	const persistCoverImageTimerRef = useRef<number | undefined>(undefined);
 	const coverFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -146,18 +212,42 @@ export function LyricsZine({
 			if (persistCoverImageTimerRef.current !== undefined) {
 				clearTimeout(persistCoverImageTimerRef.current);
 			}
+			if (persistIntroSettingsTimerRef.current !== undefined) {
+				clearTimeout(persistIntroSettingsTimerRef.current);
+			}
+			if (persistDisplaySettingsTimerRef.current !== undefined) {
+				clearTimeout(persistDisplaySettingsTimerRef.current);
+			}
+			if (persistCoverTextLayoutTimerRef.current !== undefined) {
+				clearTimeout(persistCoverTextLayoutTimerRef.current);
+			}
+			if (persistIntroPageContentTimerRef.current !== undefined) {
+				clearTimeout(persistIntroPageContentTimerRef.current);
+			}
+			for (const timer of persistSongIntroContentTimersRef.current.values()) {
+				clearTimeout(timer);
+			}
+			persistSongIntroContentTimersRef.current.clear();
 		};
 	}, []);
 
+	const songsForPages = songs.map((song) => ({
+		...song,
+		introContent:
+			song.id in songIntroContentById
+				? songIntroContentById[song.id]
+				: song.introContent,
+	}));
+
 	const displayOptions: ZineDisplayOptions = {
-		showArtist,
-		showAlbum,
-		showYear,
-		showAlbumArt,
-		showIntro,
-		showGeniusInfo,
-		showSectionLabels,
-		showUserNote: canEdit && showUserNote,
+		showArtist: displaySettings.showArtist,
+		showAlbum: displaySettings.showAlbum,
+		showYear: displaySettings.showYear,
+		showAlbumArt: displaySettings.showAlbumArt,
+		showIntro: displaySettings.showIntro,
+		showGeniusInfo: displaySettings.showGeniusInfo,
+		showSectionLabels: displaySettings.showSectionLabels,
+		showUserNote: canEdit && displaySettings.showUserNote,
 	};
 
 	const resolvedCoverImageUrl = coverImageUrl.trim() || undefined;
@@ -166,9 +256,22 @@ export function LyricsZine({
 
 	const pages = buildZinePages({
 		playlistTitle: collectionTitle,
-		songs,
+		coverArtistName,
+		songs: songsForPages,
+		intro: introPage
+			? {
+					content: introPageContent,
+					settings: introSettings,
+					includeWhenEmpty: canEdit,
+				}
+			: undefined,
 	});
 	const bookletSheets = buildBookletSheets(pages);
+	const songsById = new Map(songsForPages.map((song) => [song.id, song]));
+	const creditVisibility: CreditVisibilityState = {
+		siteWideHiddenLabelKeys: siteWideHiddenCreditLabelKeys,
+		ignoredLabelKeys: ignoredCreditLabelKeys,
+	};
 
 	function getZineSettingsSnapshot(songId: string): ZineItemSettings {
 		return {
@@ -209,6 +312,125 @@ export function LyricsZine({
 		}, 500);
 
 		persistZineTimersRef.current.set(songId, timeoutId);
+	}
+
+	function queueDebouncedPersistIntroSettings(settings: ZineIntroSettings): void {
+		const persist = persistence?.saveIntroSettings;
+		if (!persist) return;
+
+		if (persistIntroSettingsTimerRef.current !== undefined) {
+			clearTimeout(persistIntroSettingsTimerRef.current);
+		}
+
+		persistIntroSettingsTimerRef.current = window.setTimeout(() => {
+			persistIntroSettingsTimerRef.current = undefined;
+			persist(settings);
+		}, 500);
+	}
+
+	function updateIntroSettings(nextSettings: ZineIntroSettings): void {
+		setIntroSettings(nextSettings);
+		queueDebouncedPersistIntroSettings(nextSettings);
+	}
+
+	function updateCoverTextLayout(nextLayout: ZineCoverTextLayout): void {
+		setCoverTextLayout(nextLayout);
+		queueDebouncedPersistCoverTextLayout(nextLayout);
+	}
+
+	function queueDebouncedPersistCoverTextLayout(
+		layout: ZineCoverTextLayout,
+	): void {
+		const persist = persistence?.saveCoverTextLayout;
+		if (!persist) return;
+
+		if (persistCoverTextLayoutTimerRef.current !== undefined) {
+			clearTimeout(persistCoverTextLayoutTimerRef.current);
+		}
+
+		persistCoverTextLayoutTimerRef.current = window.setTimeout(() => {
+			persistCoverTextLayoutTimerRef.current = undefined;
+			persist(layout);
+		}, 500);
+	}
+
+	function updateIntroPageContent(nextContent: string): void {
+		setIntroPageContent(nextContent);
+		queueDebouncedPersistIntroPageContent(nextContent);
+	}
+
+	function queueDebouncedPersistIntroPageContent(content: string): void {
+		const persist = persistence?.saveIntroPageContent;
+		if (!persist) return;
+
+		if (persistIntroPageContentTimerRef.current !== undefined) {
+			clearTimeout(persistIntroPageContentTimerRef.current);
+		}
+
+		persistIntroPageContentTimerRef.current = window.setTimeout(() => {
+			persistIntroPageContentTimerRef.current = undefined;
+			persist(content);
+		}, 500);
+	}
+
+	function updateSongIntroContent(songId: string, nextContent: string): void {
+		setSongIntroContentById((previous) => ({
+			...previous,
+			[songId]: nextContent,
+		}));
+		queueDebouncedPersistSongIntroContent(songId, nextContent);
+	}
+
+	function queueDebouncedPersistSongIntroContent(
+		songId: string,
+		content: string,
+	): void {
+		const persist = persistence?.saveSongIntroContent;
+		if (!persist) return;
+
+		const existing = persistSongIntroContentTimersRef.current.get(songId);
+		if (existing !== undefined) {
+			clearTimeout(existing);
+		}
+
+		const timeoutId = window.setTimeout(() => {
+			persistSongIntroContentTimersRef.current.delete(songId);
+			persist(songId, content);
+		}, 500);
+
+		persistSongIntroContentTimersRef.current.set(songId, timeoutId);
+	}
+
+	function getSongIntroContent(songId: string): string {
+		if (songId in songIntroContentById) {
+			return songIntroContentById[songId] ?? "";
+		}
+
+		return songsById.get(songId)?.introContent ?? "";
+	}
+
+	function updateDisplaySettings(partial: Partial<ZineDisplaySettings>) {
+		setDisplaySettings((previous) => {
+			const next = { ...previous, ...partial };
+			queueDebouncedPersistDisplaySettings(next);
+			return next;
+		});
+	}
+
+	function queueDebouncedPersistDisplaySettings(
+		settings: ZineDisplaySettings,
+	): void {
+		const persist = persistence?.saveDisplaySettings;
+		if (!persist) return;
+
+		if (persistDisplaySettingsTimerRef.current !== undefined) {
+			clearTimeout(persistDisplaySettingsTimerRef.current);
+		}
+
+		persistDisplaySettingsTimerRef.current = window.setTimeout(() => {
+			persistDisplaySettingsTimerRef.current = undefined;
+			persist(settings);
+		}, 500);
 	}
 
 	function queueDebouncedPersistCoverImage(nextUrl: string): void {
@@ -295,11 +517,24 @@ export function LyricsZine({
 			return (
 				<ZineCoverPage
 					key={`${keyPrefix}-cover`}
+					artistName={page.artistName}
 					coverGreyscale={resolvedCoverGreyscale}
 					coverImageUrl={resolvedCoverImageUrl}
 					coverSide="front"
+					coverTextLayout={coverTextLayout}
 					playlistTitle={page.playlistTitle}
 					useSheetSpreadBackground={options?.useSheetSpreadBackground}
+				/>
+			);
+		}
+
+		if (page.kind === "intro") {
+			return (
+				<ZineIntroPage
+					key={`${keyPrefix}-intro`}
+					canEdit={canEdit}
+					content={page.content}
+					settings={page.settings}
 				/>
 			);
 		}
@@ -319,9 +554,16 @@ export function LyricsZine({
 			return (
 				<ZineSongPage
 					key={`${keyPrefix}-song-${page.songId}`}
+					canEditCredits={canEdit}
+					creditVisibility={creditVisibility}
 					displayOptions={displayOptions}
 					lyricsColumnMode={lyricsColumnMode}
 					lyricsTargetFontSizePt={lyricsTargetFontSizePt}
+					onHideCreditLabel={
+						canEdit && persistence?.hideCreditLabel
+							? (label) => persistence.hideCreditLabel?.(page.songId, label)
+							: undefined
+					}
 					showCredits={showCredits}
 					song={{
 						songId: page.songId,
@@ -336,6 +578,9 @@ export function LyricsZine({
 						introContent: page.introContent,
 						about: page.about,
 						lyrics: page.lyrics,
+						credits: page.credits,
+						hiddenCreditLabels: page.hiddenCreditLabels,
+						shownCreditLabels: page.shownCreditLabels,
 					}}
 					titleCondenseScale={titleCondenseScale}
 				/>
@@ -508,51 +753,67 @@ export function LyricsZine({
 						<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
 							<ZineToggleControl
 								id="zine-show-artist"
-								checked={showArtist}
-								onCheckedChange={setShowArtist}
+								checked={displaySettings.showArtist}
+								onCheckedChange={(checked) =>
+									updateDisplaySettings({ showArtist: checked })
+								}
 								label="Show artist"
 							/>
 							<ZineToggleControl
 								id="zine-show-album"
-								checked={showAlbum}
-								onCheckedChange={setShowAlbum}
+								checked={displaySettings.showAlbum}
+								onCheckedChange={(checked) =>
+									updateDisplaySettings({ showAlbum: checked })
+								}
 								label="Show album"
 							/>
 							<ZineToggleControl
 								id="zine-show-year"
-								checked={showYear}
-								onCheckedChange={setShowYear}
+								checked={displaySettings.showYear}
+								onCheckedChange={(checked) =>
+									updateDisplaySettings({ showYear: checked })
+								}
 								label="Show year"
 							/>
 							<ZineToggleControl
 								id="zine-show-album-art"
-								checked={showAlbumArt}
-								onCheckedChange={setShowAlbumArt}
+								checked={displaySettings.showAlbumArt}
+								onCheckedChange={(checked) =>
+									updateDisplaySettings({ showAlbumArt: checked })
+								}
 								label="Show album art"
 							/>
 							<ZineToggleControl
 								id="zine-show-intro"
-								checked={showIntro}
-								onCheckedChange={setShowIntro}
+								checked={displaySettings.showIntro}
+								onCheckedChange={(checked) =>
+									updateDisplaySettings({ showIntro: checked })
+								}
 								label="Show intro"
 							/>
 							<ZineToggleControl
 								id="zine-genius-info"
-								checked={showGeniusInfo}
-								onCheckedChange={setShowGeniusInfo}
+								checked={displaySettings.showGeniusInfo}
+								onCheckedChange={(checked) =>
+									updateDisplaySettings({ showGeniusInfo: checked })
+								}
 								label="Show Genius info"
 							/>
 							<ZineToggleControl
 								id="zine-show-section-labels"
-								checked={showSectionLabels}
-								onCheckedChange={setShowSectionLabels}
+								checked={displaySettings.showSectionLabels}
+								onCheckedChange={(checked) =>
+									updateDisplaySettings({ showSectionLabels: checked })
+								}
 								label="Show song part labels"
 							/>
 							{canEdit ? (
 								<ZineToggleControl
 									id="zine-show-user-note"
-									checked={showUserNote}
-									onCheckedChange={setShowUserNote}
+									checked={displaySettings.showUserNote}
+									onCheckedChange={(checked) =>
+										updateDisplaySettings({ showUserNote: checked })
+									}
 									label="Show notes"
 								/>
 							) : null}
@@ -678,6 +939,64 @@ export function LyricsZine({
 
 				<div className="zine-screen-document zine-document">
 					{pages.map((page, index) => {
+						if (page.kind === "cover") {
+							return (
+								<div
+									key="zine-cover-page"
+									className={cn(canEdit && "zine-song-preview-shell")}
+								>
+									{canEdit ? (
+										<>
+											<div className="flex shrink-0 justify-start">
+												{renderPageByReadingIndex(index, `scr-${index}`)}
+											</div>
+											{persistence?.saveCoverTextLayout ? (
+												<aside className="no-print zine-song-columns-panel rounded-lg border bg-card px-3 py-3 shadow-sm">
+													<ZineCoverTextLayoutControls
+														layout={coverTextLayout}
+														onLayoutChange={updateCoverTextLayout}
+													/>
+												</aside>
+											) : null}
+										</>
+									) : (
+										renderPageByReadingIndex(index, `scr-${index}`)
+									)}
+								</div>
+							);
+						}
+
+						if (page.kind === "intro") {
+							return (
+								<div
+									key="zine-intro-page"
+									className={cn(canEdit && "zine-song-preview-shell")}
+								>
+									{canEdit ? (
+										<>
+											<div className="flex shrink-0 justify-start">
+												{renderPageByReadingIndex(index, `scr-${index}`)}
+											</div>
+											<aside className="no-print zine-song-columns-panel space-y-4 rounded-lg border bg-card px-3 py-3 shadow-sm">
+												{persistence?.saveIntroPageContent ? (
+													<ZineIntroPageContentDialog
+														content={introPageContent}
+														onContentChange={updateIntroPageContent}
+													/>
+												) : null}
+												<ZineIntroLayoutControls
+													settings={introSettings}
+													onSettingsChange={updateIntroSettings}
+												/>
+											</aside>
+										</>
+									) : (
+										renderPageByReadingIndex(index, `scr-${index}`)
+									)}
+								</div>
+							);
+						}
+
 						if (page.kind === "song") {
 							const lyricsColumnMode: ZineLyricsColumnMode =
 								page.songId in songLyricsColumnModes ? 1 : 2;
@@ -690,6 +1009,15 @@ export function LyricsZine({
 								page.songId,
 							);
 							const showCredits = !(page.songId in songCreditsHidden);
+							const songInput = songsById.get(page.songId);
+							const hiddenCreditLabelsForRestore = songInput
+								? getHiddenCreditLabelsForRestore(songInput.credits, {
+										hiddenCreditLabels: songInput.hiddenCreditLabels,
+										shownCreditLabels: songInput.shownCreditLabels,
+										siteWideHiddenLabelKeys: siteWideHiddenCreditLabelKeys,
+										ignoredLabelKeys: ignoredCreditLabelKeys,
+									})
+								: [];
 							return (
 								<div
 									key={page.songId}
@@ -703,9 +1031,19 @@ export function LyricsZine({
 											<aside className="no-print zine-song-columns-panel rounded-lg border bg-card px-3 py-3 shadow-sm">
 												<ZineTrackLyricsColumnControls
 													condenseScale={titleCondenseScale}
+													hiddenCreditLabels={hiddenCreditLabelsForRestore}
 													lyricsSizePt={lyricsTargetFontSizePt}
 													mode={lyricsColumnMode}
 													showCredits={showCredits}
+													onRestoreCreditLabel={
+														persistence?.showCreditLabel
+															? (label) =>
+																	persistence.showCreditLabel?.(
+																		page.songId,
+																		label,
+																	)
+															: undefined
+													}
 													onShowCreditsChange={(nextShowCredits) => {
 														setSongCreditsHidden((previous) =>
 															setSongCreditsVisible(
@@ -780,6 +1118,21 @@ export function LyricsZine({
 													songTitle={page.title}
 													trackNumber={page.position}
 												/>
+												{persistence?.saveSongIntroContent ? (
+													<div className="border-t pt-3">
+														<IntroContentEditor
+															id={`${page.songId}-zine-track-intro`}
+															value={getSongIntroContent(page.songId)}
+															label="Track intro"
+															placeholder="Optional intro for the INTRO section"
+															helperText="Use **bold**, *italic*, and blank lines for paragraphs."
+															textareaClassName="min-h-28 font-mono text-sm"
+															onChange={(value) =>
+																updateSongIntroContent(page.songId, value)
+															}
+														/>
+													</div>
+												) : null}
 											</aside>
 										</>
 									) : (
@@ -794,6 +1147,47 @@ export function LyricsZine({
 				</div>
 			</div>
 		</>
+	);
+}
+
+function ZineIntroPageContentDialog({
+	content,
+	onContentChange,
+}: {
+	content: string;
+	onContentChange: (content: string) => void;
+}) {
+	const hasContent = content.trim() !== "";
+
+	return (
+		<Dialog>
+			<DialogTrigger asChild>
+				<Button type="button" variant="outline" className="w-full justify-start">
+					<Pencil className="mr-2 h-4 w-4 shrink-0" />
+					<span className="truncate">
+						{hasContent ? "Edit album intro" : "Add album intro"}
+					</span>
+				</Button>
+			</DialogTrigger>
+			<DialogContent className="sm:max-w-2xl">
+				<DialogHeader>
+					<DialogTitle>Album intro</DialogTitle>
+					<DialogDescription>
+						Appears on the page after the cover. Use **bold**, *italic*, and blank
+						lines for paragraphs.
+					</DialogDescription>
+				</DialogHeader>
+				<IntroContentEditor
+					id="zine-intro-page-content"
+					value={content}
+					label="Intro copy"
+					placeholder="Album intro page copy"
+					helperText="Changes save automatically."
+					textareaClassName="min-h-64 font-mono text-sm"
+					onChange={onContentChange}
+				/>
+			</DialogContent>
+		</Dialog>
 	);
 }
 
@@ -941,18 +1335,22 @@ function ZineTrackLyricsColumnControls({
 	onCondenseScaleChange,
 	showCredits,
 	onShowCreditsChange,
+	hiddenCreditLabels,
+	onRestoreCreditLabel,
 }: {
 	mode: ZineLyricsColumnMode;
 	onModeChange: (mode: ZineLyricsColumnMode) => void;
 	onLyricsSizePtChange: (fontSizePt: number) => void;
 	onCondenseScaleChange: (scale: number) => void;
 	onShowCreditsChange: (showCredits: boolean) => void;
+	onRestoreCreditLabel?: (label: string) => void;
 	songTitle: string;
 	songId: string;
 	trackNumber: number;
 	lyricsSizePt: number;
 	condenseScale: number;
 	showCredits: boolean;
+	hiddenCreditLabels: string[];
 }) {
 	const groupName = `zine-lyrics-cols-${songId}`;
 	const fieldIdPrefix = `${songId}-zine-lyrics-cols`;
@@ -1001,6 +1399,27 @@ function ZineTrackLyricsColumnControls({
 					label="Show credits"
 					onCheckedChange={onShowCreditsChange}
 				/>
+				{hiddenCreditLabels.length > 0 && onRestoreCreditLabel ? (
+					<div className="space-y-2 border-t pt-3">
+						<p className="font-medium text-foreground text-xs">
+							Hidden credits
+						</p>
+						<div className="flex flex-wrap gap-2">
+							{hiddenCreditLabels.map((label) => (
+								<Button
+									key={`${songId}-restore-${label}`}
+									type="button"
+									variant="outline"
+									size="sm"
+									className="h-7 px-2 text-xs"
+									onClick={() => onRestoreCreditLabel(label)}
+								>
+									Show {label}
+								</Button>
+							))}
+						</div>
+					</div>
+				) : null}
 			</div>
 		</fieldset>
 	);
@@ -1181,5 +1600,133 @@ function ZineToggleControl({
 				{label}
 			</Label>
 		</div>
+	);
+}
+
+function ZineIntroLayoutControls({
+	settings,
+	onSettingsChange,
+}: {
+	settings: ZineIntroSettings;
+	onSettingsChange: (settings: ZineIntroSettings) => void;
+}) {
+	const spacingSliderId = "zine-intro-paragraph-spacing";
+	const marginSliderId = "zine-intro-margin";
+	const fontSizeSliderId = "zine-intro-font-size";
+	const alignGroupName = "zine-intro-vertical-align";
+
+	function patchSettings(partial: Partial<ZineIntroSettings>) {
+		onSettingsChange({ ...settings, ...partial });
+	}
+
+	return (
+		<fieldset className="m-0 space-y-3 border-0 p-0">
+			<legend className="mb-2 font-medium text-foreground text-sm leading-snug">
+				Intro page layout
+			</legend>
+			<p className="text-muted-foreground text-xs leading-snug">
+				Spacing, margins, alignment · screen preview only
+			</p>
+			<div className="space-y-2">
+				<div className="space-y-1">
+					<div className="flex items-baseline justify-between gap-3">
+						<Label htmlFor={fontSizeSliderId} className="text-sm">
+							Font size
+						</Label>
+						<span
+							aria-live="polite"
+							className="text-muted-foreground text-xs"
+						>
+							{settings.fontSizePt.toFixed(1)} pt
+						</span>
+					</div>
+					<div className="px-1 pt-0.5 pb-1">
+						<Slider
+							id={fontSizeSliderId}
+							max={ZINE_INTRO_FONT_SIZE_SLIDER.maxPt}
+							min={ZINE_INTRO_FONT_SIZE_SLIDER.minPt}
+							onValueChange={(values) => {
+								const next = values[0];
+								if (next !== undefined) {
+									patchSettings({ fontSizePt: next });
+								}
+							}}
+							step={ZINE_INTRO_FONT_SIZE_SLIDER.stepPt}
+							value={[settings.fontSizePt]}
+						/>
+					</div>
+				</div>
+				<div className="space-y-1">
+					<div className="flex items-baseline justify-between gap-3">
+						<Label htmlFor={spacingSliderId} className="text-sm">
+							Paragraph spacing
+						</Label>
+						<span
+							aria-live="polite"
+							className="text-muted-foreground text-xs"
+						>
+							{settings.paragraphSpacingPt} pt
+						</span>
+					</div>
+					<div className="px-1 pt-0.5 pb-1">
+						<Slider
+							id={spacingSliderId}
+							max={ZINE_INTRO_SPACING_SLIDER.maxPt}
+							min={ZINE_INTRO_SPACING_SLIDER.minPt}
+							onValueChange={(values) => {
+								const next = values[0];
+								if (next !== undefined) {
+									patchSettings({ paragraphSpacingPt: next });
+								}
+							}}
+							step={ZINE_INTRO_SPACING_SLIDER.stepPt}
+							value={[settings.paragraphSpacingPt]}
+						/>
+					</div>
+				</div>
+				<div className="space-y-1">
+					<div className="flex items-baseline justify-between gap-3">
+						<Label htmlFor={marginSliderId} className="text-sm">
+							Margins
+						</Label>
+						<span
+							aria-live="polite"
+							className="text-muted-foreground text-xs"
+						>
+							{settings.marginPt} pt
+						</span>
+					</div>
+					<div className="px-1 pt-0.5 pb-1">
+						<Slider
+							id={marginSliderId}
+							max={ZINE_INTRO_MARGIN_SLIDER.maxPt}
+							min={ZINE_INTRO_MARGIN_SLIDER.minPt}
+							onValueChange={(values) => {
+								const next = values[0];
+								if (next !== undefined) {
+									patchSettings({ marginPt: next });
+								}
+							}}
+							step={ZINE_INTRO_MARGIN_SLIDER.stepPt}
+							value={[settings.marginPt]}
+						/>
+					</div>
+				</div>
+				<ZineLyricsColumnOptionRow
+					checked={settings.verticalAlign === "top"}
+					groupName={alignGroupName}
+					id="zine-intro-align-top"
+					label="Align top"
+					onSelect={() => patchSettings({ verticalAlign: "top" })}
+				/>
+				<ZineLyricsColumnOptionRow
+					checked={settings.verticalAlign === "center"}
+					groupName={alignGroupName}
+					id="zine-intro-align-center"
+					label="Align center"
+					onSelect={() => patchSettings({ verticalAlign: "center" })}
+				/>
+			</div>
+		</fieldset>
 	);
 }

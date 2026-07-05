@@ -5,6 +5,12 @@ import {
 	ZINE_LYRICS_SIZE_SLIDER,
 	ZINE_TEXT_CONDENSE,
 } from "~/lib/zine/zine-layout";
+import type { ZineCredit } from "~/lib/zine/zine-types";
+import type { CreditVisibilityState } from "../../../convex/_utils/geniusCreditVisibility";
+import {
+	filterVisibleCredits,
+	hasRenderableLyrics,
+} from "../../../convex/_utils/geniusAlbumLyrics";
 import { LyricsRenderer } from "./lyrics-renderer";
 import {
 	type ZineLyricsColumnMode,
@@ -29,6 +35,9 @@ type ZineSongPageSong = {
 	introContent?: string;
 	about?: string;
 	lyrics: string;
+	credits?: ZineCredit[];
+	hiddenCreditLabels?: string[];
+	shownCreditLabels?: string[];
 };
 
 export function ZineSongPage({
@@ -38,6 +47,9 @@ export function ZineSongPage({
 	lyricsTargetFontSizePt,
 	titleCondenseScale = ZINE_TEXT_CONDENSE.default,
 	showCredits = true,
+	creditVisibility,
+	canEditCredits = false,
+	onHideCreditLabel,
 }: {
 	song: ZineSongPageSong;
 	displayOptions: ZineDisplayOptions;
@@ -45,6 +57,9 @@ export function ZineSongPage({
 	lyricsTargetFontSizePt?: number;
 	titleCondenseScale?: number;
 	showCredits?: boolean;
+	creditVisibility?: CreditVisibilityState;
+	canEditCredits?: boolean;
+	onHideCreditLabel?: (label: string) => void;
 }) {
 	const displayKey = [
 		song.songId,
@@ -58,15 +73,21 @@ export function ZineSongPage({
 		displayOptions.showSectionLabels,
 		displayOptions.showUserNote,
 		showCredits,
+		song.hiddenCreditLabels?.join("|") ?? "",
+		song.shownCreditLabels?.join("|") ?? "",
+		creditVisibility?.siteWideHiddenLabelKeys?.join("|") ?? "",
 	].join(":");
 
 	return (
 		<ZineSongPageContent
 			key={displayKey}
+			canEditCredits={canEditCredits}
+			creditVisibility={creditVisibility}
 			displayKey={displayKey}
 			displayOptions={displayOptions}
 			lyricsColumnMode={lyricsColumnMode}
 			lyricsTargetFontSizePt={lyricsTargetFontSizePt}
+			onHideCreditLabel={onHideCreditLabel}
 			showCredits={showCredits}
 			song={song}
 			titleCondenseScale={titleCondenseScale}
@@ -82,6 +103,9 @@ function ZineSongPageContent({
 	lyricsTargetFontSizePt,
 	titleCondenseScale,
 	showCredits,
+	creditVisibility,
+	canEditCredits,
+	onHideCreditLabel,
 }: {
 	song: ZineSongPageSong;
 	displayOptions: ZineDisplayOptions;
@@ -90,6 +114,9 @@ function ZineSongPageContent({
 	lyricsTargetFontSizePt?: number;
 	titleCondenseScale: number;
 	showCredits: boolean;
+	creditVisibility?: CreditVisibilityState;
+	canEditCredits: boolean;
+	onHideCreditLabel?: (label: string) => void;
 }) {
 	const resolvedLyricsTargetPt =
 		lyricsTargetFontSizePt ?? ZINE_LYRICS_SIZE_SLIDER.defaultPt;
@@ -102,7 +129,15 @@ function ZineSongPageContent({
 		targetFontSizePt: resolvedLyricsTargetPt,
 	});
 
-	const hasLyrics = song.lyrics.trim().length > 0;
+	const hasLyrics = hasRenderableLyrics(song.lyrics, {
+		showSectionLabels: displayOptions.showSectionLabels,
+	});
+	const visibleCredits = filterVisibleCredits(song.credits, {
+		hiddenCreditLabels: song.hiddenCreditLabels,
+		shownCreditLabels: song.shownCreditLabels,
+		siteWideHiddenLabelKeys: creditVisibility?.siteWideHiddenLabelKeys,
+		ignoredLabelKeys: creditVisibility?.ignoredLabelKeys,
+	});
 
 	return (
 		<section
@@ -152,9 +187,7 @@ function ZineSongPageContent({
 							showSectionLabels={displayOptions.showSectionLabels}
 						/>
 					) : (
-						<p className="text-center text-muted-foreground text-sm print:text-neutral-500">
-							Instrumental track
-						</p>
+						<p className="zine-instrumental-empty">Instrumental track</p>
 					)}
 				</div>
 			</div>
@@ -164,9 +197,72 @@ function ZineSongPageContent({
 					<p className="zine-section-label zine-song-footer-credits-label">
 						CREDITS
 					</p>
-					<div className="zine-song-footer" />
+					<div className="zine-song-footer">
+						{visibleCredits ? (
+							<ZineFooterCredits
+								canEditCredits={canEditCredits}
+								credits={visibleCredits}
+								onHideCreditLabel={onHideCreditLabel}
+							/>
+						) : null}
+					</div>
 				</div>
 			) : null}
 		</section>
 	);
+}
+
+function ZineFooterCredits({
+	credits,
+	canEditCredits,
+	onHideCreditLabel,
+}: {
+	credits: ZineCredit[];
+	canEditCredits: boolean;
+	onHideCreditLabel?: (label: string) => void;
+}) {
+	return (
+		<div className="zine-footer-credits">
+			{credits.map((credit) => (
+				<span key={credit.label} className="zine-footer-credit-item">
+					{canEditCredits && onHideCreditLabel ? (
+						<>
+							<button
+								type="button"
+								className="zine-footer-credit-button no-print"
+								onClick={() => onHideCreditLabel(credit.label)}
+								title={`Hide ${credit.label}`}
+							>
+								<ZineFooterCreditContent credit={credit} />
+							</button>
+							<span className="zine-footer-credit-text print-only">
+								<ZineFooterCreditContent credit={credit} />
+							</span>
+						</>
+					) : (
+						<span className="zine-footer-credit-text">
+							<ZineFooterCreditContent credit={credit} />
+						</span>
+					)}
+				</span>
+			))}
+		</div>
+	);
+}
+
+function ZineFooterCreditContent({ credit }: { credit: ZineCredit }) {
+	return (
+		<>
+			<span className="zine-footer-credit-label">{credit.label}</span>{" "}
+			<span className="zine-footer-credit-value">
+				{formatContributorNames(credit.contributors)}
+			</span>
+		</>
+	);
+}
+
+function formatContributorNames(
+	contributors: ZineCredit["contributors"],
+): string {
+	return contributors.map((contributor) => contributor.name).join(", ");
 }

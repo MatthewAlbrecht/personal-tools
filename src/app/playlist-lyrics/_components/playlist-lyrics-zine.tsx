@@ -5,6 +5,7 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { Button } from "~/components/ui/button";
 import { LyricsZine, LyricsZineSkeleton } from "~/components/zine/lyrics-zine";
+import { coverTextLayoutFromStoredFields } from "~/lib/zine/zine-cover-text-layout";
 import type { ZineItemSettings } from "~/lib/zine/zine-types";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
@@ -22,10 +23,23 @@ export function PlaylistLyricsZine({ slug, variant }: PlaylistLyricsZineProps) {
 	const updateItemSettings = useMutation(
 		api.playlistLyrics.updateZineItemSettings,
 	);
+	const hideItemCreditLabel = useMutation(
+		api.playlistLyrics.hideItemCreditLabel,
+	);
+	const showItemCreditLabel = useMutation(
+		api.playlistLyrics.showItemCreditLabel,
+	);
 	const updateCoverImage = useMutation(api.playlistLyrics.updateZineCoverImage);
 	const updateCoverGreyscale = useMutation(
 		api.playlistLyrics.updateZineCoverGreyscale,
 	);
+	const updateZineDisplaySettings = useMutation(
+		api.playlistLyrics.updateZineDisplaySettings,
+	);
+	const updateZineCoverTextLayout = useMutation(
+		api.playlistLyrics.updateZineCoverTextLayout,
+	);
+	const updateItem = useMutation(api.playlistLyrics.updateItem);
 	const generateUploadUrl = useMutation(
 		api.playlistLyrics.generateZineCoverUploadUrl,
 	);
@@ -80,6 +94,8 @@ export function PlaylistLyricsZine({ slug, variant }: PlaylistLyricsZineProps) {
 			userNote: song.userNote,
 			introContent: song.introContent,
 			durationSecondsOverride: song.durationSecondsOverride,
+			hiddenCreditLabels: song.hiddenCreditLabels,
+			shownCreditLabels: song.shownCreditLabels,
 			scrape: song.scrape,
 		}),
 	);
@@ -115,7 +131,13 @@ export function PlaylistLyricsZine({ slug, variant }: PlaylistLyricsZineProps) {
 				imageUrl: playlist.zineCoverImageUrl,
 				greyscale: playlist.zineCoverGreyscale === true,
 			}}
+			coverTextLayout={coverTextLayoutFromStoredFields(playlist)}
 			itemSettingsById={itemSettingsById}
+			displaySettings={playlist.zineDisplaySettings ?? undefined}
+			siteWideHiddenCreditLabelKeys={
+				playlistData.siteWideHiddenCreditLabelKeys
+			}
+			ignoredCreditLabelKeys={playlistData.ignoredCreditLabelKeys}
 			songs={songs}
 			persistence={
 				canEdit && playlistId !== undefined
@@ -129,6 +151,18 @@ export function PlaylistLyricsZine({ slug, variant }: PlaylistLyricsZineProps) {
 									zineShowCredits: s.showCredits,
 								});
 							},
+							hideCreditLabel: (songId, label) => {
+								void hideItemCreditLabel({
+									itemId: songId as Id<"playlistLyricsItems">,
+									label,
+								});
+							},
+							showCreditLabel: (songId, label) => {
+								void showItemCreditLabel({
+									itemId: songId as Id<"playlistLyricsItems">,
+									label,
+								});
+							},
 							saveCover: (url, storageId) =>
 								updateCoverImage({
 									playlistId,
@@ -137,6 +171,18 @@ export function PlaylistLyricsZine({ slug, variant }: PlaylistLyricsZineProps) {
 								}),
 							saveGreyscale: (on) => {
 								void updateCoverGreyscale({ playlistId, greyscale: on });
+							},
+							saveDisplaySettings: (settings) => {
+								void updateZineDisplaySettings({ playlistId, settings });
+							},
+							saveCoverTextLayout: (layout) => {
+								void updateZineCoverTextLayout({ playlistId, layout });
+							},
+							saveSongIntroContent: (songId, content) => {
+								void updateItem({
+									itemId: songId as Id<"playlistLyricsItems">,
+									introContent: content,
+								});
 							},
 							generateUploadUrl: () => generateUploadUrl({}),
 						}

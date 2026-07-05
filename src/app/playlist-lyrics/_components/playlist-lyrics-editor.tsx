@@ -7,7 +7,6 @@ import type { ClipboardEvent, FormEvent, ReactElement } from "react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
-import { Checkbox } from "~/components/ui/checkbox";
 import {
 	Card,
 	CardContent,
@@ -15,6 +14,7 @@ import {
 	CardHeader,
 	CardTitle,
 } from "~/components/ui/card";
+import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Skeleton } from "~/components/ui/skeleton";
@@ -23,9 +23,13 @@ import {
 	formatTrackDurationInput,
 	parseTrackDurationInput,
 } from "~/lib/zine/zine-song-header-content";
+import { IntroContentEditor } from "~/components/zine/intro-content-editor";
 import { api } from "../../../../convex/_generated/api";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import { getPlaylistDisplayTrackNumber } from "../_utils/song-display";
+
+const TRACK_INTRO_HELPER_TEXT =
+	"Use **bold**, *italic*, and blank lines for paragraphs.";
 
 type PlaylistFields = {
 	title: string;
@@ -322,16 +326,10 @@ export function PlaylistLyricsEditor({ slug }: { slug: string }): ReactElement {
 			return;
 		}
 
-		if (
-			parsed === null &&
-			item.durationSecondsOverride === undefined
-		) {
+		if (parsed === null && item.durationSecondsOverride === undefined) {
 			return;
 		}
-		if (
-			parsed !== null &&
-			parsed === item.durationSecondsOverride
-		) {
+		if (parsed !== null && parsed === item.durationSecondsOverride) {
 			return;
 		}
 
@@ -346,6 +344,35 @@ export function PlaylistLyricsEditor({ slug }: { slug: string }): ReactElement {
 			console.error("Failed to save duration:", error);
 			toast.error(
 				error instanceof Error ? error.message : "Failed to save duration",
+			);
+		} finally {
+			clearItemBusy(item._id);
+		}
+	}
+
+	async function handleCreditVisibilityChange(
+		item: PlaylistLyricsItem,
+		label: string,
+		visible: boolean,
+	): Promise<void> {
+		const hiddenLabels = new Set(item.hiddenCreditLabels ?? []);
+		if (visible) {
+			hiddenLabels.delete(label);
+		} else {
+			hiddenLabels.add(label);
+		}
+
+		setItemBusy(item._id, "save");
+		try {
+			await updateItem({
+				itemId: item._id,
+				hiddenCreditLabels: Array.from(hiddenLabels),
+			});
+			toast.success("Credits saved");
+		} catch (error) {
+			console.error("Failed to save credit visibility:", error);
+			toast.error(
+				error instanceof Error ? error.message : "Failed to save credits",
 			);
 		} finally {
 			clearItemBusy(item._id);
@@ -698,22 +725,19 @@ export function PlaylistLyricsEditor({ slug }: { slug: string }): ReactElement {
 								/>
 							</div>
 							<div className="space-y-2 sm:col-span-2">
-								<Label htmlFor="manual-intro-content">Intro</Label>
-								<Textarea
+								<IntroContentEditor
 									id="manual-intro-content"
 									value={manualIntroContent}
-									onChange={(event) =>
-										setManualIntroContent(event.currentTarget.value)
-									}
-									placeholder="Optional intro text for the zine"
 									disabled={isAddingManualSong}
+									label="Intro"
+									placeholder="Optional intro text for the zine"
+									helperText={TRACK_INTRO_HELPER_TEXT}
+									onChange={setManualIntroContent}
 								/>
 							</div>
 							<div className="sm:col-span-2">
 								<Button type="submit" disabled={isAddingManualSong}>
-									{isAddingManualSong
-										? "Adding..."
-										: "Add instrumental track"}
+									{isAddingManualSong ? "Adding..." : "Add instrumental track"}
 								</Button>
 							</div>
 						</form>
@@ -762,6 +786,7 @@ export function PlaylistLyricsEditor({ slug }: { slug: string }): ReactElement {
 								busyAction={busyItems[item._id]}
 								onItemFieldBlur={handleItemFieldBlur}
 								onDurationBlur={handleDurationBlur}
+								onCreditVisibilityChange={handleCreditVisibilityChange}
 								onDeleteItem={handleDeleteItem}
 								onRescrapeItem={handleRescrapeItem}
 							/>
@@ -881,9 +906,7 @@ function PlaylistQrSlotEditor({
 	const resolvedImageUrl = imageUrl.trim() || undefined;
 	const inputIdPrefix = `playlist-qr-${service}`;
 
-	async function persistImageUrl(
-		nextUrl: string,
-	): Promise<string | undefined> {
+	async function persistImageUrl(nextUrl: string): Promise<string | undefined> {
 		const trimmed = nextUrl.trim();
 		const updateQr =
 			service === "spotify" ? updateSpotifyQr : updateAppleMusicQr;
@@ -977,7 +1000,7 @@ function PlaylistQrSlotEditor({
 			{resolvedImageUrl ? (
 				<img
 					alt={`${label} QR preview`}
-					className="h-24 w-24 rounded-md border object-contain bg-white"
+					className="h-24 w-24 rounded-md border bg-white object-contain"
 					src={resolvedImageUrl}
 				/>
 			) : null}
@@ -1027,7 +1050,10 @@ function PlaylistQrSlotEditor({
 						void handleShowToggle(checked === true);
 					}}
 				/>
-				<Label htmlFor={`${inputIdPrefix}-show`} className="font-normal text-sm">
+				<Label
+					htmlFor={`${inputIdPrefix}-show`}
+					className="font-normal text-sm"
+				>
 					Show on back cover
 				</Label>
 			</div>
@@ -1041,6 +1067,7 @@ function PlaylistSongCard({
 	busyAction,
 	onItemFieldBlur,
 	onDurationBlur,
+	onCreditVisibilityChange,
 	onDeleteItem,
 	onRescrapeItem,
 }: {
@@ -1052,9 +1079,11 @@ function PlaylistSongCard({
 		field: PlaylistItemFieldName,
 		value: string,
 	) => Promise<void>;
-	onDurationBlur: (
+	onDurationBlur: (item: PlaylistLyricsItem, rawInput: string) => Promise<void>;
+	onCreditVisibilityChange: (
 		item: PlaylistLyricsItem,
-		rawInput: string,
+		label: string,
+		visible: boolean,
 	) => Promise<void>;
 	onDeleteItem: (itemId: Id<"playlistLyricsItems">) => Promise<void>;
 	onRescrapeItem: (itemId: Id<"playlistLyricsItems">) => Promise<void>;
@@ -1156,7 +1185,10 @@ function PlaylistSongCard({
 							label="Scraped year"
 							value={getScrapedAlbumYear(item) ?? "Unavailable"}
 						/>
-						<MetadataRow label="Pending URL" value={item.pendingUrl ?? "None"} />
+						<MetadataRow
+							label="Pending URL"
+							value={item.pendingUrl ?? "None"}
+						/>
 						{sourceUrl ? (
 							<div className="sm:col-span-2">
 								<div className="text-muted-foreground">Source</div>
@@ -1173,6 +1205,56 @@ function PlaylistSongCard({
 					</div>
 				)}
 
+				{item.scrape?.credits && item.scrape.credits.length > 0 ? (
+					<div className="space-y-3 rounded-lg border bg-muted/30 p-4">
+						<div>
+							<p className="font-medium text-sm">Credits</p>
+							<p className="text-muted-foreground text-xs">
+								Choose which scraped Genius credit rows appear in the print
+								view.
+							</p>
+						</div>
+						<div className="grid gap-2 sm:grid-cols-2">
+							{item.scrape.credits.map((credit, index) => {
+								const inputId = `playlist-credit-${item._id}-${index}`;
+								const isVisible = !item.hiddenCreditLabels?.includes(
+									credit.label,
+								);
+
+								return (
+									<div key={credit.label} className="flex items-start gap-2">
+										<Checkbox
+											id={inputId}
+											checked={isVisible}
+											disabled={isBusy}
+											onCheckedChange={(checked) => {
+												void onCreditVisibilityChange(
+													item,
+													credit.label,
+													checked === true,
+												);
+											}}
+										/>
+										<div className="space-y-1">
+											<Label
+												htmlFor={inputId}
+												className="cursor-pointer font-normal text-sm"
+											>
+												{credit.label}
+											</Label>
+											<p className="text-muted-foreground text-xs">
+												{credit.contributors
+													.map((contributor) => contributor.name)
+													.join(", ")}
+											</p>
+										</div>
+									</div>
+								);
+							})}
+						</div>
+					</div>
+				) : null}
+
 				<div className="grid gap-4 sm:grid-cols-2">
 					<div className="space-y-2">
 						<Label htmlFor={`song-title-${item._id}`}>Title override</Label>
@@ -1180,9 +1262,7 @@ function PlaylistSongCard({
 							id={`song-title-${item._id}`}
 							defaultValue={item.songTitleOverride ?? ""}
 							placeholder={
-								item.scrape?.songTitle ??
-								item.songTitleOverride ??
-								"Song title"
+								item.scrape?.songTitle ?? item.songTitleOverride ?? "Song title"
 							}
 							disabled={isBusy}
 							onBlur={(event) => {
@@ -1227,15 +1307,15 @@ function PlaylistSongCard({
 						/>
 					</div>
 					<div className="space-y-2">
-						<Label htmlFor={`song-duration-${item._id}`}>Duration override</Label>
+						<Label htmlFor={`song-duration-${item._id}`}>
+							Duration override
+						</Label>
 						<Input
 							id={`song-duration-${item._id}`}
 							value={durationInput}
 							placeholder="3:15"
 							disabled={isBusy}
-							onChange={(event) =>
-								setDurationInput(event.currentTarget.value)
-							}
+							onChange={(event) => setDurationInput(event.currentTarget.value)}
 							onBlur={(event) => {
 								void onDurationBlur(item, event.currentTarget.value);
 							}}
@@ -1289,22 +1369,13 @@ function PlaylistSongCard({
 					</div>
 				</div>
 
-				<div className="space-y-2">
-					<Label htmlFor={`song-intro-${item._id}`}>Intro</Label>
-					<Textarea
-						id={`song-intro-${item._id}`}
-						defaultValue={item.introContent ?? ""}
-						placeholder="Optional intro for the zine INTRO section"
-						disabled={isBusy}
-						onBlur={(event) => {
-							void onItemFieldBlur(
-								item,
-								"introContent",
-								event.currentTarget.value,
-							);
-						}}
-					/>
-				</div>
+				<SongIntroField
+					item={item}
+					isBusy={isBusy}
+					onSave={(value) => {
+						void onItemFieldBlur(item, "introContent", value);
+					}}
+				/>
 
 				<div className="space-y-2">
 					<Label htmlFor={`song-note-${item._id}`}>Song note</Label>
@@ -1320,6 +1391,35 @@ function PlaylistSongCard({
 				</div>
 			</CardContent>
 		</Card>
+	);
+}
+
+function SongIntroField({
+	item,
+	isBusy,
+	onSave,
+}: {
+	item: PlaylistLyricsItem;
+	isBusy: boolean;
+	onSave: (value: string) => void;
+}) {
+	const [value, setValue] = useState(item.introContent ?? "");
+
+	useEffect(() => {
+		setValue(item.introContent ?? "");
+	}, [item._id, item.introContent]);
+
+	return (
+		<IntroContentEditor
+			id={`song-intro-${item._id}`}
+			value={value}
+			disabled={isBusy}
+			label="Intro"
+			placeholder="Optional intro for the zine INTRO section"
+			helperText={TRACK_INTRO_HELPER_TEXT}
+			onChange={setValue}
+			onBlur={() => onSave(value)}
+		/>
 	);
 }
 

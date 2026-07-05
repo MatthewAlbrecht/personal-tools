@@ -1,12 +1,20 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import { siApplemusic, siSpotify } from "simple-icons";
 import type { ZineBackCoverQrCodes } from "~/lib/zine/zine-types";
+import {
+	coverTextLayoutToStyleProperties,
+	resolveZineCoverTextLayout,
+	type ZineCoverTextLayout,
+} from "~/lib/zine/zine-cover-text-layout";
 import { cn } from "~/lib/utils";
 import { useAutoFitText } from "./use-auto-fit-text";
 
 export function ZineCoverPage({
 	playlistTitle,
+	artistName,
+	coverTextLayout,
 	coverImageUrl,
 	coverGreyscale = false,
 	coverSide = "front",
@@ -14,6 +22,8 @@ export function ZineCoverPage({
 	backCoverQrCodes,
 }: {
 	playlistTitle: string;
+	artistName?: string;
+	coverTextLayout?: Partial<ZineCoverTextLayout> | null;
 	coverImageUrl?: string;
 	coverGreyscale?: boolean;
 	coverSide?: "front" | "back";
@@ -23,12 +33,23 @@ export function ZineCoverPage({
 	const isBack = coverSide === "back";
 	const hasCoverImage = Boolean(coverImageUrl?.trim());
 	const showPerPanelBackground = hasCoverImage && !useSheetSpreadBackground;
-	const { containerRef, fontSizePt } = useAutoFitText({
+	const displayArtistName = artistName?.trim() ?? "";
+	const showArtistName = !isBack && displayArtistName !== "";
+	const resolvedCoverTextLayout = resolveZineCoverTextLayout(coverTextLayout);
+	const coverTextStyle = coverTextLayoutToStyleProperties(resolvedCoverTextLayout);
+	const { containerRef: titleRef, fontSizePt: titleFontSizePt } = useAutoFitText({
 		initialFontSizePt: 26,
 		minFontSizePt: 12,
 		mode: "single-line",
-		contentKey: `${coverSide}:${playlistTitle}:${coverImageUrl ?? ""}`,
+		contentKey: `${coverSide}:${playlistTitle}:${coverImageUrl ?? ""}:${resolvedCoverTextLayout.anchor}:${resolvedCoverTextLayout.textAlign}`,
 	});
+	const { containerRef: artistRef, fontSizePt: artistFontSizePt } =
+		useAutoFitText({
+			initialFontSizePt: 14,
+			minFontSizePt: 8,
+			mode: "single-line",
+			contentKey: `${coverSide}:${displayArtistName}:${coverImageUrl ?? ""}`,
+		});
 
 	const spotifyQr = backCoverQrCodes?.spotify;
 	const appleMusicQr = backCoverQrCodes?.appleMusic;
@@ -53,13 +74,27 @@ export function ZineCoverPage({
 			}
 		>
 			{!isBack ? (
-				<div className="zine-cover-title-wrap">
-					<div
-						ref={containerRef}
-						className="zine-cover-title-pill overflow-hidden whitespace-nowrap text-center font-bold leading-none"
-						style={{ fontSize: `${fontSizePt}pt` }}
-					>
-						{playlistTitle}
+				<div
+					className="zine-cover-title-wrap"
+					style={coverTextStyle as CSSProperties}
+				>
+					<div className="zine-cover-title-stack">
+						<div
+							ref={titleRef}
+							className="zine-cover-title-pill overflow-hidden whitespace-nowrap font-bold leading-none"
+							style={{ fontSize: `${titleFontSizePt}pt` }}
+						>
+							{playlistTitle}
+						</div>
+						{showArtistName ? (
+							<div
+								ref={artistRef}
+								className="zine-cover-artist-pill overflow-hidden whitespace-nowrap font-medium leading-none"
+								style={{ fontSize: `${artistFontSizePt}pt` }}
+							>
+								{displayArtistName}
+							</div>
+						) : null}
 					</div>
 				</div>
 			) : null}

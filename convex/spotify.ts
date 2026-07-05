@@ -14,6 +14,7 @@ import {
 	normalizeAlbumTitle,
 } from "./_utils/albumMatching";
 import { buildSpotifyAlbumListItems } from "./_utils/spotify_album_list";
+import { requireAuth } from "./auth";
 
 async function refreshForLaterProjectionsForUserAlbum(
 	ctx: MutationCtx,
@@ -1536,6 +1537,71 @@ export const upsertAlbum = mutation({
 			createdAt: now,
 			updatedAt: now,
 		});
+	},
+});
+
+export const ingestSpotifyAlbumTracksForLyrics = mutation({
+	args: {
+		spotifyAlbumId: v.string(),
+		albumName: v.string(),
+		albumImageUrl: v.optional(v.string()),
+		rawData: v.optional(v.string()),
+		tracks: v.array(
+			v.object({
+				spotifyTrackId: v.string(),
+				trackName: v.string(),
+				artistName: v.string(),
+				artistIds: v.optional(v.array(v.string())),
+				trackNumber: v.number(),
+				durationMs: v.number(),
+			}),
+		),
+	},
+	returns: v.object({
+		ingestedCount: v.number(),
+	}),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+
+		const spotifyAlbum = await ctx.db
+			.query("spotifyAlbums")
+			.withIndex("by_spotifyAlbumId", (q) =>
+				q.eq("spotifyAlbumId", args.spotifyAlbumId),
+			)
+			.first();
+
+		if (!spotifyAlbum) {
+			throw new Error("Spotify album not found in local library");
+		}
+
+		const now = Date.now();
+		let ingestedCount = 0;
+
+		for (const track of args.tracks) {
+			if (track.durationMs <= 0) {
+				continue;
+			}
+
+			await upsertCanonicalTrackInternal(ctx, {
+				spotifyTrackId: track.spotifyTrackId,
+				trackName: track.trackName,
+				artistName: track.artistName,
+				artistIds: track.artistIds,
+				albumName: args.albumName,
+				albumImageUrl: args.albumImageUrl,
+				spotifyAlbumId: args.spotifyAlbumId,
+				durationMs: track.durationMs,
+				trackNumber: track.trackNumber,
+			});
+			ingestedCount += 1;
+		}
+
+		await ctx.db.patch(spotifyAlbum._id, {
+			...(args.rawData !== undefined ? { rawData: args.rawData } : {}),
+			updatedAt: now,
+		});
+
+		return { ingestedCount };
 	},
 });
 

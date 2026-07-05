@@ -16,8 +16,10 @@ export type TopLevelGenreCountRow = {
 
 export function TopLevelGenreCountsTable({
 	rows,
+	showAlbumDetails = true,
 }: {
 	rows: TopLevelGenreCountRow[];
+	showAlbumDetails?: boolean;
 }) {
 	if (rows.length === 0) {
 		return (
@@ -45,7 +47,7 @@ export function TopLevelGenreCountsTable({
 							{row.count}
 						</span>
 					</div>
-					{row.albums.length > 0 ? (
+					{showAlbumDetails && row.albums.length > 0 ? (
 						<ol className="mt-2 ml-11 space-y-1">
 							{row.albums.map((album) => (
 								<li

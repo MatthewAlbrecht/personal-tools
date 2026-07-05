@@ -3,14 +3,15 @@
 import { useQuery } from "convex/react";
 import { ArrowLeft, BookOpen, Columns2, Edit, Printer } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Label } from "~/components/ui/label";
 import { Skeleton } from "~/components/ui/skeleton";
+import { LyricsRenderer } from "~/components/zine/lyrics-renderer";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
-import { LyricsRenderer } from "~/components/zine/lyrics-renderer";
+import { filterVisibleCredits } from "../../../../convex/_utils/geniusCreditVisibility";
 import { getPlaylistDisplayTrackNumber } from "../_utils/song-display";
 
 type PlaylistLyricsItemForReader = {
@@ -21,6 +22,8 @@ type PlaylistLyricsItemForReader = {
 	artistNameOverride?: string;
 	albumTitleOverride?: string;
 	albumArtUrlOverride?: string;
+	hiddenCreditLabels?: string[];
+	shownCreditLabels?: string[];
 	scrape?: {
 		songTitle: string;
 		artistName: string;
@@ -29,7 +32,15 @@ type PlaylistLyricsItemForReader = {
 		albumArtUrl?: string;
 		lyrics: string;
 		about?: string;
+		credits?: PlaylistCredit[];
 	};
+};
+type PlaylistCredit = {
+	label: string;
+	contributors: Array<{
+		name: string;
+		url?: string;
+	}>;
 };
 type PlaylistForReader = {
 	title: string;
@@ -42,6 +53,8 @@ type PlaylistLyricsData =
 	| {
 			playlist: PlaylistForReader;
 			songs: PlaylistLyricsItemForReader[];
+			siteWideHiddenCreditLabelKeys: string[];
+			ignoredCreditLabelKeys: string[];
 	  }
 	| null
 	| undefined;
@@ -122,7 +135,8 @@ function PlaylistLyricsReaderContent({
 		);
 	}
 
-	const { playlist, songs } = playlistData;
+	const { playlist, songs, siteWideHiddenCreditLabelKeys, ignoredCreditLabelKeys } =
+		playlistData;
 
 	return (
 		<div
@@ -248,6 +262,15 @@ function PlaylistLyricsReaderContent({
 							showYear,
 						});
 						const albumArtUrl = getAlbumArtUrl(song);
+						const visibleCredits = filterVisibleCredits(
+							song.scrape?.credits,
+							{
+								hiddenCreditLabels: song.hiddenCreditLabels,
+								shownCreditLabels: song.shownCreditLabels,
+								siteWideHiddenLabelKeys: siteWideHiddenCreditLabelKeys,
+								ignoredLabelKeys: ignoredCreditLabelKeys,
+							},
+						);
 
 						return (
 							<article
@@ -272,6 +295,9 @@ function PlaylistLyricsReaderContent({
 										{metadataParts.join(" - ")}
 									</p>
 								)}
+								{visibleCredits ? (
+									<CreditRows credits={visibleCredits} />
+								) : null}
 
 								{song.userNote && (
 									<div className="mb-6 rounded-lg bg-muted p-4 text-sm leading-relaxed print:mb-8 print:border print:border-gray-300 print:bg-gray-50 print:text-base">
@@ -327,6 +353,35 @@ function ToggleControl({
 			<Label htmlFor={id} className="cursor-pointer text-sm">
 				{label}
 			</Label>
+		</div>
+	);
+}
+
+function CreditRows({ credits }: { credits: PlaylistCredit[] }) {
+	return (
+		<div className="mb-6 rounded-lg border bg-muted/30 p-4 text-sm print:mb-8">
+			{credits.map((credit) => (
+				<div key={credit.label} className="mb-2 last:mb-0">
+					<span className="font-medium">{credit.label}: </span>
+					{credit.contributors.map((contributor, index) => (
+						<Fragment key={`${credit.label}-${contributor.name}-${index}`}>
+							{index > 0 ? ", " : null}
+							{contributor.url ? (
+								<a
+									href={contributor.url}
+									target="_blank"
+									rel="noopener noreferrer"
+									className="underline hover:text-foreground"
+								>
+									{contributor.name}
+								</a>
+							) : (
+								<span>{contributor.name}</span>
+							)}
+						</Fragment>
+					))}
+				</div>
+			))}
 		</div>
 	);
 }

@@ -2,6 +2,65 @@
  * Utilities for parsing Genius.com HTML pages
  */
 
+import { HTMLElement, parse } from "node-html-parser";
+import type { GeniusAlbumTrackInfo } from "./geniusAlbumLyrics";
+
+export type GeniusCreditContributor = {
+	name: string;
+	url?: string;
+};
+
+export type GeniusCredit = {
+	label: string;
+	contributors: GeniusCreditContributor[];
+};
+
+/**
+ * Extract credits from the Genius song info Credits section
+ */
+export function extractCredits(html: string): GeniusCredit[] | undefined {
+	try {
+		const root = parse(html);
+		const songInfo =
+			root.querySelector('[data-testid="song-info"]') ??
+			root.querySelector('[data-testid="song-info-outer"]');
+
+		if (!songInfo) return undefined;
+
+		const creditsTitle = findElementWithText(songInfo, "Credits");
+		if (!creditsTitle) return undefined;
+
+		const credits: GeniusCredit[] = [];
+		let isInCreditsSection = false;
+		for (const row of getElements(songInfo)) {
+			if (row === creditsTitle) {
+				isInCreditsSection = true;
+				continue;
+			}
+			if (!isInCreditsSection) continue;
+			if (getCleanText(row).startsWith("Tags")) continue;
+
+			const directChildren = getDirectElementChildren(row);
+			const labelElement = directChildren[0];
+			const contributorElement = directChildren[1];
+			if (!labelElement || !contributorElement) continue;
+			if (!isLabelElement(labelElement)) continue;
+
+			const label = getCleanText(labelElement);
+			if (!label || label === "Credits" || label.startsWith("Tags")) continue;
+
+			const contributors = extractCreditContributors(contributorElement);
+			if (contributors.length === 0) continue;
+
+			credits.push({ label, contributors });
+		}
+
+		return credits.length > 0 ? credits : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
 /**
  * Extract lyrics from Genius song HTML
  * Handles multiple Lyrics__Container elements with proper formatting
@@ -76,6 +135,77 @@ function processLyricsHtml(html: string): string {
 	return cleanedLines.join("\n").trim();
 }
 
+function findElementWithText(
+	parent: HTMLElement,
+	expectedText: string,
+): HTMLElement | undefined {
+	return getElements(parent).find(
+		(element) => getCleanText(element) === expectedText,
+	);
+}
+
+function extractCreditContributors(
+	contributorElement: HTMLElement | undefined,
+): GeniusCreditContributor[] {
+	if (!contributorElement) return [];
+
+	const linkedContributors = contributorElement
+		.querySelectorAll("a")
+		.map((link) => {
+			const name = getCleanText(link);
+			const href = link.getAttribute("href");
+			const url = normalizeGeniusUrl(href);
+
+			return name ? { name, ...(url ? { url } : {}) } : undefined;
+		})
+		.filter((contributor) => contributor !== undefined);
+
+	if (linkedContributors.length > 0) {
+		return linkedContributors;
+	}
+
+	const plainText = getCleanText(contributorElement);
+	return plainText ? [{ name: plainText }] : [];
+}
+
+function normalizeGeniusUrl(href: string | undefined): string | undefined {
+	if (!href) return undefined;
+	if (href.startsWith("https://genius.com")) return href;
+	if (href.startsWith("/")) return `https://genius.com${href}`;
+
+	return undefined;
+}
+
+function getElements(parent: HTMLElement): HTMLElement[] {
+	const elements: HTMLElement[] = [];
+
+	for (const child of parent.childNodes) {
+		if (!(child instanceof HTMLElement)) continue;
+
+		elements.push(child);
+		elements.push(...getElements(child));
+	}
+
+	return elements;
+}
+
+function getDirectElementChildren(element: HTMLElement): HTMLElement[] {
+	return element.childNodes.filter((child) => child instanceof HTMLElement);
+}
+
+function isLabelElement(element: HTMLElement): boolean {
+	if (element.rawTagName.toLowerCase() === "a") return false;
+	if (element.querySelector("a")) return false;
+
+	return getDirectElementChildren(element).length === 0;
+}
+
+function getCleanText(element: HTMLElement | undefined): string {
+	if (!element) return "";
+
+	return decodeHtmlEntities(element.textContent).replace(/\s+/g, " ").trim();
+}
+
 /**
  * Decode common HTML entities
  */
@@ -143,31 +273,80 @@ export function extractAbout(html: string): string | undefined {
  * Extract album tracklist URLs from Genius album page
  */
 export function extractAlbumTracklist(html: string): string[] {
-	const urls: string[] = [];
+	return extractAlbumTracklistItems(html).map((item) => item.url);
+}
 
-	// Look for AlbumTracklist__Container section
-	const tracklistRegex =
-		/<ol[^>]*class="[^"]*AlbumTracklist__Container[^"]*"[^>]*>(.*?)<\/ol>/s;
-	const tracklistMatch = html.match(tracklistRegex);
+export function extractAlbumTracklistItems(
+	html: string,
+): GeniusAlbumTrackInfo[] {
+	const root = parse(html);
+	const items: GeniusAlbumTrackInfo[] = [];
+	const seenUrls = new Set<string>();
 
-	if (!tracklistMatch) return urls;
+	const oldRows = root.querySelectorAll(".chart_row");
+	if (oldRows.length > 0) {
+		for (const row of oldRows) {
+			const numberText = row
+				.querySelector(".chart_row-number_container span")
+				?.textContent.trim();
+			const trackNumber = Number.parseInt(numberText ?? "", 10);
+			const link = row.querySelector('a[href*="-lyrics"]');
+			const url = normalizeGeniusTrackUrl(link?.getAttribute("href"));
+			const title = normalizeTrackTitle(link?.textContent);
 
-	const tracklistHtml = tracklistMatch[1];
-
-	// Extract all song URLs from the tracklist
-	const linkRegex =
-		/<a[^>]*href="(https:\/\/genius\.com\/[^"]*-lyrics)"[^>]*>/g;
-	const linkMatches = tracklistHtml?.matchAll(linkRegex);
-
-	if (linkMatches) {
-		for (const match of linkMatches) {
-			if (match[1]) {
-				urls.push(match[1]);
+			if (!url || !title || !Number.isFinite(trackNumber) || trackNumber <= 0) {
+				continue;
 			}
+			if (seenUrls.has(url)) continue;
+
+			seenUrls.add(url);
+			items.push({ trackNumber, title, url });
 		}
+
+		return items.sort((a, b) => a.trackNumber - b.trackNumber);
 	}
 
-	return urls;
+	const tracklistContainer = root.querySelector(
+		'[class*="AlbumTracklist__Container"]',
+	);
+	if (!tracklistContainer) return [];
+
+	for (const trackItem of tracklistContainer.querySelectorAll(
+		'li[class*="AlbumTracklist__Track"]',
+	)) {
+		const trackNumberText =
+			trackItem
+				.querySelector('[class*="AlbumTracklist__TrackNumber"]')
+				?.textContent.trim() ?? "";
+		const trackNumber = Number.parseInt(trackNumberText.replace(".", ""), 10);
+		const link = trackItem.querySelector('a[href*="-lyrics"]');
+		const url = normalizeGeniusTrackUrl(link?.getAttribute("href"));
+		const title = normalizeTrackTitle(link?.textContent);
+
+		if (!url || !title || !Number.isFinite(trackNumber) || trackNumber <= 0) {
+			continue;
+		}
+		if (seenUrls.has(url)) continue;
+
+		seenUrls.add(url);
+		items.push({ trackNumber, title, url });
+	}
+
+	return items.sort((a, b) => a.trackNumber - b.trackNumber);
+}
+
+function normalizeGeniusTrackUrl(href: string | undefined): string | undefined {
+	const trimmed = href?.trim();
+	if (!trimmed) return undefined;
+	if (trimmed.startsWith("http")) return trimmed;
+	if (trimmed.startsWith("/")) return `https://genius.com${trimmed}`;
+
+	return undefined;
+}
+
+function normalizeTrackTitle(value: string | undefined): string | undefined {
+	const title = value?.replace(/\s+/g, " ").trim();
+	return title || undefined;
 }
 
 /**

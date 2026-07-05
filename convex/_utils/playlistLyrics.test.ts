@@ -8,8 +8,8 @@ import {
 	isDuplicatePlaylistSongError,
 	isPublicPlaylistStatus,
 	normalizeGeniusSongUrl,
-	shouldRefreshScrapeBeforePlaylistReuse,
 	planCompactPlaylistPositions,
+	shouldRefreshScrapeBeforePlaylistReuse,
 	sortPlaylistItems,
 } from "./playlistLyrics";
 
@@ -164,6 +164,54 @@ test("buildGeniusSongScrape extracts ready scrape input from Genius HTML", () =>
 			"It's okay to just admit that you're jealous of me\nYeah, I heard you talk about me",
 		about: "A lead single from BRAT.",
 	});
+});
+
+test("buildGeniusSongScrape includes structured Genius credits", () => {
+	const html = `
+		<h1 class="SongHeader__Title"><span>Coronus, The Terminator</span></h1>
+		<h2 class="SongHeader__Title">
+			<div class="HoverMarquee"><span>Flying Lotus</span></div>
+		</h2>
+		<a class="PrimaryAlbum__Title" href="/albums/Flying-lotus/Youre-dead">You're Dead!</a>
+		<div data-lyrics-container="true">The days of men are coming to an end</div>
+		<div data-testid="song-info">
+			<div class="SongInfo__Title">Credits</div>
+			<div class="SongCredits__Columns">
+				<div class="Credit__Container">
+					<div class="Credit__Label">Producer</div>
+					<div class="Credit__Contributor">
+						<a href="https://genius.com/artists/Flying-lotus">Flying Lotus</a>
+					</div>
+				</div>
+				<div class="Credit__Container">
+					<div class="Credit__Label">Released on</div>
+					<div class="Credit__Contributor">October 6, 2014</div>
+				</div>
+			</div>
+		</div>
+	`;
+
+	const result = buildGeniusSongScrape({
+		canonicalUrl:
+			"https://genius.com/Flying-lotus-coronus-the-terminator-lyrics",
+		html,
+	});
+
+	assert.deepEqual(result.credits, [
+		{
+			label: "Producer",
+			contributors: [
+				{
+					name: "Flying Lotus",
+					url: "https://genius.com/artists/Flying-lotus",
+				},
+			],
+		},
+		{
+			label: "Released on",
+			contributors: [{ name: "October 6, 2014" }],
+		},
+	]);
 });
 
 test("buildGeniusSongScrape extracts album art from the Genius cover art block", () => {

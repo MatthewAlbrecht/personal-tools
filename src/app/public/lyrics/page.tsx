@@ -22,7 +22,9 @@ function AlbumListSkeleton() {
 }
 
 export default function PublicLyricsIndexPage() {
-	const recentAlbums = useQuery(api.geniusAlbums.listRecent, { limit: 100 });
+	const recentAlbums = useQuery(api.geniusAlbums.listPublicRecent, {
+		limit: 100,
+	});
 	const albumsLoading = recentAlbums === undefined;
 
 	return (

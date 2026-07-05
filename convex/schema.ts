@@ -1,5 +1,30 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import {
+	zineCoverTextAlignValidator,
+	zineCoverTextAnchorValidator,
+} from "./_utils/zineCoverTextLayout";
+
+const geniusCreditValidator = v.object({
+	label: v.string(),
+	contributors: v.array(
+		v.object({
+			name: v.string(),
+			url: v.optional(v.string()),
+		}),
+	),
+});
+
+const zineDisplaySettingsValidator = v.object({
+	showArtist: v.optional(v.boolean()),
+	showAlbum: v.optional(v.boolean()),
+	showYear: v.optional(v.boolean()),
+	showAlbumArt: v.optional(v.boolean()),
+	showIntro: v.optional(v.boolean()),
+	showGeniusInfo: v.optional(v.boolean()),
+	showSectionLabels: v.optional(v.boolean()),
+	showUserNote: v.optional(v.boolean()),
+});
 
 export default defineSchema({
 	folioSocietyConfig: defineTable({
@@ -117,6 +142,32 @@ export default defineSchema({
 		zineCoverImageUrl: v.optional(v.string()),
 		zineCoverImageStorageId: v.optional(v.id("_storage")),
 		zineCoverGreyscale: v.optional(v.boolean()),
+		zineCoverTextAnchor: v.optional(zineCoverTextAnchorValidator),
+		zineCoverTextAlign: v.optional(zineCoverTextAlignValidator),
+		zineCoverTextOffsetXIn: v.optional(v.number()),
+		zineCoverTextOffsetYIn: v.optional(v.number()),
+		introPageContent: v.optional(v.string()),
+		zineIntroParagraphSpacingPt: v.optional(v.number()),
+		zineIntroMarginPt: v.optional(v.number()),
+		zineIntroVerticalAlign: v.optional(
+			v.union(v.literal("top"), v.literal("center")),
+		),
+		zineIntroFontSizePt: v.optional(v.number()),
+		zineDisplaySettings: v.optional(zineDisplaySettingsValidator),
+		albumTitleOverride: v.optional(v.string()),
+		artistNameOverride: v.optional(v.string()),
+		summaryOverride: v.optional(v.string()),
+		frontPageImageUrlOverride: v.optional(v.string()),
+		spotifyAlbumId: v.optional(v.string()),
+		spotifyAlbumConvexId: v.optional(v.id("spotifyAlbums")),
+		spotifyAlbumMatchMethod: v.optional(
+			v.union(
+				v.literal("spotify_id"),
+				v.literal("title_artist"),
+				v.literal("manual"),
+			),
+		),
+		spotifyAlbumMatchedAt: v.optional(v.number()),
 		createdAt: v.number(), // Unix timestamp
 		updatedAt: v.number(), // Unix timestamp
 	})
@@ -130,6 +181,15 @@ export default defineSchema({
 		trackNumber: v.number(),
 		lyrics: v.string(),
 		about: v.optional(v.string()),
+		credits: v.optional(v.array(geniusCreditValidator)),
+		scrapeState: v.optional(v.union(v.literal("ready"), v.literal("failed"))),
+		scrapeError: v.optional(v.string()),
+		songTitleOverride: v.optional(v.string()),
+		lyricsOverride: v.optional(v.string()),
+		aboutOverride: v.optional(v.string()),
+		durationSecondsOverride: v.optional(v.number()),
+		hiddenCreditLabels: v.optional(v.array(v.string())),
+		shownCreditLabels: v.optional(v.array(v.string())),
 		zineLyricsColumnCount: v.optional(v.union(v.literal(1), v.literal(2))),
 		zineLyricsFontSizePt: v.optional(v.number()),
 		zineTitleCondenseScale: v.optional(v.number()),
@@ -148,12 +208,17 @@ export default defineSchema({
 		zineCoverImageUrl: v.optional(v.string()),
 		zineCoverImageStorageId: v.optional(v.id("_storage")),
 		zineCoverGreyscale: v.optional(v.boolean()),
+		zineCoverTextAnchor: v.optional(zineCoverTextAnchorValidator),
+		zineCoverTextAlign: v.optional(zineCoverTextAlignValidator),
+		zineCoverTextOffsetXIn: v.optional(v.number()),
+		zineCoverTextOffsetYIn: v.optional(v.number()),
 		zineSpotifyQrStorageId: v.optional(v.id("_storage")),
 		zineSpotifyQrImageUrl: v.optional(v.string()),
 		zineAppleMusicQrStorageId: v.optional(v.id("_storage")),
 		zineAppleMusicQrImageUrl: v.optional(v.string()),
 		zineShowSpotifyQr: v.optional(v.boolean()),
 		zineShowAppleMusicQr: v.optional(v.boolean()),
+		zineDisplaySettings: v.optional(zineDisplaySettingsValidator),
 		status: v.union(v.literal("draft"), v.literal("ready")),
 		createdAt: v.number(),
 		updatedAt: v.number(),
@@ -171,6 +236,7 @@ export default defineSchema({
 		albumArtUrl: v.optional(v.string()),
 		lyrics: v.string(),
 		about: v.optional(v.string()),
+		credits: v.optional(v.array(geniusCreditValidator)),
 		scrapeStatus: v.union(v.literal("ready"), v.literal("failed")),
 		lastScrapedAt: v.number(),
 		createdAt: v.number(),
@@ -195,6 +261,8 @@ export default defineSchema({
 		zineTitleCondenseScale: v.optional(v.number()),
 		zineShowCredits: v.optional(v.boolean()),
 		durationSecondsOverride: v.optional(v.number()),
+		hiddenCreditLabels: v.optional(v.array(v.string())),
+		shownCreditLabels: v.optional(v.array(v.string())),
 		pendingUrl: v.optional(v.string()),
 		scrapeState: v.union(
 			v.literal("scraping"),
@@ -209,6 +277,18 @@ export default defineSchema({
 		.index("by_playlistId", ["playlistId"])
 		.index("by_playlistId_position", ["playlistId", "position"])
 		.index("by_lyricScrapeId", ["lyricScrapeId"]),
+
+	geniusCreditLabels: defineTable({
+		key: v.string(),
+		label: v.string(),
+		hiddenByDefault: v.boolean(),
+		ignored: v.optional(v.boolean()),
+		createdAt: v.number(),
+		updatedAt: v.number(),
+	})
+		.index("by_key", ["key"])
+		.index("by_hiddenByDefault", ["hiddenByDefault"])
+		.index("by_ignored", ["ignored"]),
 
 	articles: defineTable({
 		userId: v.string(),
