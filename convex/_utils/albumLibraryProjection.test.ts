@@ -24,8 +24,8 @@ test("rowMatchesAlbumLibraryFilters matches projection search text", () => {
 	assert.equal(
 		rowMatchesAlbumLibraryFilters(
 			{
-				name: "Dragon New Warm Mountain",
-				artistName: "Big Thief",
+				name: "Unrelated Album",
+				artistName: "Different Artist",
 				searchText: "dragon new warm mountain\nbig thief",
 				releaseYear: 2022,
 				albumType: "album",
@@ -40,8 +40,8 @@ test("rowMatchesAlbumLibraryFilters matches projection search text", () => {
 	assert.equal(
 		rowMatchesAlbumLibraryFilters(
 			{
-				name: "Dragon New Warm Mountain",
-				artistName: "Big Thief",
+				name: "Unrelated Album",
+				artistName: "Different Artist",
 				searchText: "dragon new warm mountain\nbig thief",
 				releaseYear: 2022,
 				albumType: "album",
