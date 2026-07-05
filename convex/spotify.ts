@@ -2345,10 +2345,11 @@ const albumLibraryFiltersValidator = v.object({
 });
 
 const albumLibrarySortValidator = v.union(
-	v.literal("createdAt"),
+	v.literal("recent"),
 	v.literal("artist"),
-	v.literal("releaseYear"),
 );
+
+const MAX_ALBUM_LIBRARY_SOURCE_PAGES = 5;
 
 type AlbumLibraryRow = {
 	_id: Id<"spotifyAlbums">;
@@ -2586,110 +2587,126 @@ export const listAlbumLibraryRowsPaginated = query({
 		continueCursor: v.string(),
 	}),
 	handler: async (ctx, args) => {
-		let result: {
-			page: Doc<"albumLibraryItems">[];
-			isDone: boolean;
-			continueCursor: string;
-		};
+		const page: AlbumLibraryRow[] = [];
+		let cursor = args.paginationOpts.cursor;
+		let isDone = false;
+		let continueCursor = cursor ?? "";
+		let sourcePagesScanned = 0;
 
-		if (args.filters.releaseYear !== undefined) {
-			result = await ctx.db
-				.query("albumLibraryItems")
-				.withIndex("by_userId_releaseYear_createdAt", (q) =>
-					q
-						.eq("userId", args.userId)
-						.eq("releaseYear", args.filters.releaseYear),
-				)
-				.order("desc")
-				.paginate(args.paginationOpts);
-		} else if (args.filters.listenStatus === "listened") {
-			result = await ctx.db
-				.query("albumLibraryItems")
-				.withIndex("by_userId_filterHasListened_createdAt", (q) =>
-					q.eq("userId", args.userId).eq("filterHasListened", true),
-				)
-				.order("desc")
-				.paginate(args.paginationOpts);
-		} else if (args.filters.listenStatus === "unlistened") {
-			result = await ctx.db
-				.query("albumLibraryItems")
-				.withIndex("by_userId_filterHasListened_createdAt", (q) =>
-					q.eq("userId", args.userId).eq("filterHasListened", false),
-				)
-				.order("desc")
-				.paginate(args.paginationOpts);
-		} else if (
-			args.filters.rymStatus === "linked" ||
-			args.filters.rymStatus === "unlinked"
+		while (
+			page.length < args.paginationOpts.numItems &&
+			!isDone &&
+			sourcePagesScanned < MAX_ALBUM_LIBRARY_SOURCE_PAGES
 		) {
-			const rymStatus = args.filters.rymStatus;
-			result = await ctx.db
-				.query("albumLibraryItems")
-				.withIndex("by_userId_rymStatus_createdAt", (q) =>
-					q.eq("userId", args.userId).eq("rymStatus", rymStatus),
-				)
-				.order("desc")
-				.paginate(args.paginationOpts);
-		} else if (
-			args.filters.albumType === "album" ||
-			args.filters.albumType === "single"
-		) {
-			const albumType = args.filters.albumType;
-			result = await ctx.db
-				.query("albumLibraryItems")
-				.withIndex("by_userId_albumType_createdAt", (q) =>
-					q.eq("userId", args.userId).eq("albumType", albumType),
-				)
-				.order("desc")
-				.paginate(args.paginationOpts);
-		} else if (
-			args.filters.robRankingStatus === "appears" ||
-			args.filters.robRankingStatus === "not_appears"
-		) {
-			result = await ctx.db
-				.query("albumLibraryItems")
-				.withIndex("by_userId_appearsInRobRankings_createdAt", (q) =>
-					q
-						.eq("userId", args.userId)
-						.eq(
-							"appearsInRobRankings",
-							args.filters.robRankingStatus === "appears",
-						),
-				)
-				.order("desc")
-				.paginate(args.paginationOpts);
-		} else if (args.sortBy === "artist") {
-			result = await ctx.db
-				.query("albumLibraryItems")
-				.withIndex("by_userId_artistSortKey_albumSortKey", (q) =>
-					q.eq("userId", args.userId),
-				)
-				.order("asc")
-				.paginate(args.paginationOpts);
-		} else {
-			result = await ctx.db
-				.query("albumLibraryItems")
-				.withIndex("by_userId_createdAt", (q) => q.eq("userId", args.userId))
-				.order("desc")
-				.paginate(args.paginationOpts);
-		}
+			const remainingItems = args.paginationOpts.numItems - page.length;
+			const paginationOpts = {
+				...args.paginationOpts,
+				cursor,
+				numItems: remainingItems,
+			};
+			let result: {
+				page: Doc<"albumLibraryItems">[];
+				isDone: boolean;
+				continueCursor: string;
+			};
 
-		const filteredRows = result.page
-			.filter((row) => rowMatchesAlbumLibraryFilters(row, args.filters))
-			.map(mapAlbumLibraryProjectionRow);
-		const page =
-			args.sortBy === "releaseYear"
-				? filteredRows.sort(
-						(a, b) =>
-							(b.releaseYear ?? 0) - (a.releaseYear ?? 0) ||
-							b.createdAt - a.createdAt,
+			if (args.sortBy === "artist") {
+				result = await ctx.db
+					.query("albumLibraryItems")
+					.withIndex("by_userId_artistSortKey_albumSortKey", (q) =>
+						q.eq("userId", args.userId),
 					)
-				: filteredRows;
+					.order("asc")
+					.paginate(paginationOpts);
+			} else if (args.filters.releaseYear !== undefined) {
+				result = await ctx.db
+					.query("albumLibraryItems")
+					.withIndex("by_userId_releaseYear_createdAt", (q) =>
+						q
+							.eq("userId", args.userId)
+							.eq("releaseYear", args.filters.releaseYear),
+					)
+					.order("desc")
+					.paginate(paginationOpts);
+			} else if (args.filters.listenStatus === "listened") {
+				result = await ctx.db
+					.query("albumLibraryItems")
+					.withIndex("by_userId_filterHasListened_createdAt", (q) =>
+						q.eq("userId", args.userId).eq("filterHasListened", true),
+					)
+					.order("desc")
+					.paginate(paginationOpts);
+			} else if (args.filters.listenStatus === "unlistened") {
+				result = await ctx.db
+					.query("albumLibraryItems")
+					.withIndex("by_userId_filterHasListened_createdAt", (q) =>
+						q.eq("userId", args.userId).eq("filterHasListened", false),
+					)
+					.order("desc")
+					.paginate(paginationOpts);
+			} else if (
+				args.filters.rymStatus === "linked" ||
+				args.filters.rymStatus === "unlinked"
+			) {
+				const rymStatus = args.filters.rymStatus;
+				result = await ctx.db
+					.query("albumLibraryItems")
+					.withIndex("by_userId_rymStatus_createdAt", (q) =>
+						q.eq("userId", args.userId).eq("rymStatus", rymStatus),
+					)
+					.order("desc")
+					.paginate(paginationOpts);
+			} else if (
+				args.filters.albumType === "album" ||
+				args.filters.albumType === "single"
+			) {
+				const albumType = args.filters.albumType;
+				result = await ctx.db
+					.query("albumLibraryItems")
+					.withIndex("by_userId_albumType_createdAt", (q) =>
+						q.eq("userId", args.userId).eq("albumType", albumType),
+					)
+					.order("desc")
+					.paginate(paginationOpts);
+			} else if (
+				args.filters.robRankingStatus === "appears" ||
+				args.filters.robRankingStatus === "not_appears"
+			) {
+				result = await ctx.db
+					.query("albumLibraryItems")
+					.withIndex("by_userId_appearsInRobRankings_createdAt", (q) =>
+						q
+							.eq("userId", args.userId)
+							.eq(
+								"appearsInRobRankings",
+								args.filters.robRankingStatus === "appears",
+							),
+					)
+					.order("desc")
+					.paginate(paginationOpts);
+			} else {
+				result = await ctx.db
+					.query("albumLibraryItems")
+					.withIndex("by_userId_createdAt", (q) => q.eq("userId", args.userId))
+					.order("desc")
+					.paginate(paginationOpts);
+			}
+
+			for (const row of result.page) {
+				if (rowMatchesAlbumLibraryFilters(row, args.filters)) {
+					page.push(mapAlbumLibraryProjectionRow(row));
+				}
+			}
+			cursor = result.continueCursor;
+			continueCursor = result.continueCursor;
+			isDone = result.isDone;
+			sourcePagesScanned += 1;
+		}
 
 		return {
 			page,
-			isDone: result.isDone,
-			continueCursor: result.continueCursor,
+			isDone,
+			continueCursor,
 		};
 	},
 });
