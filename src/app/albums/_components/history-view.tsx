@@ -2,6 +2,7 @@
 
 import { Disc3, MoreHorizontal, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { extractReleaseYear } from "~/lib/album-tiers";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -46,14 +47,36 @@ export function HistoryView({
 	} | null>(null);
 	const [onlyUnranked, setOnlyUnranked] = useState(false);
 	const [onlyFirstListens, setOnlyFirstListens] = useState(false);
+	const [yearFilter, setYearFilter] = useState("all");
+
+	const availableYears = useMemo(() => {
+		const years = new Set<number>();
+		for (const listens of listensByMonth.values()) {
+			for (const listen of listens) {
+				const year = extractReleaseYear(listen.album?.releaseDate);
+				if (year !== null) years.add(year);
+			}
+		}
+		return Array.from(years).sort((a, b) => b - a);
+	}, [listensByMonth]);
 
 	const filteredListensByMonth = useMemo(() => {
-		if (!onlyUnranked && !onlyFirstListens) return listensByMonth;
+		const hasFilters =
+			onlyUnranked || onlyFirstListens || yearFilter !== "all";
+		if (!hasFilters) return listensByMonth;
+
+		const selectedYear =
+			yearFilter === "all" ? null : Number.parseInt(yearFilter, 10);
+
 		const filtered = new Map<string, HistoryListen[]>();
 		for (const [month, listens] of listensByMonth.entries()) {
 			const matchingListens = listens.filter((listen) => {
 				if (onlyUnranked && albumRatings.has(listen.albumId)) return false;
 				if (onlyFirstListens && listenOrdinals.get(listen._id) !== 1) return false;
+				if (selectedYear !== null) {
+					const releaseYear = extractReleaseYear(listen.album?.releaseDate);
+					if (releaseYear !== selectedYear) return false;
+				}
 				return true;
 			});
 			if (matchingListens.length > 0) {
@@ -67,6 +90,7 @@ export function HistoryView({
 		listenOrdinals,
 		onlyUnranked,
 		onlyFirstListens,
+		yearFilter,
 	]);
 
 	if (isLoading) {
@@ -118,6 +142,24 @@ export function HistoryView({
 					<label htmlFor="only-first-listens" className="font-medium text-sm">
 						Only first listens
 					</label>
+				</div>
+				<div className="flex items-center gap-2">
+					<label htmlFor="history-year-filter" className="font-medium text-sm">
+						Year:
+					</label>
+					<select
+						id="history-year-filter"
+						value={yearFilter}
+						onChange={(e) => setYearFilter(e.target.value)}
+						className="rounded-md border bg-background px-2 py-1 text-sm"
+					>
+						<option value="all">All Years</option>
+						{availableYears.map((year) => (
+							<option key={year} value={year.toString()}>
+								{year}
+							</option>
+						))}
+					</select>
 				</div>
 			</div>
 
