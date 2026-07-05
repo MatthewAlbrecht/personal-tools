@@ -1,9 +1,14 @@
 "use client";
 
-import { useQuery } from "convex/react";
-import { Suspense } from "react";
+import { usePaginatedQuery, useQuery } from "convex/react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useMemo } from "react";
 import { api } from "../../../../convex/_generated/api";
-import { AllAlbumsView } from "../_components/all-albums-view";
+import {
+	AllAlbumsView,
+	getAlbumLibraryReleaseYearFilter,
+	parseAlbumLibraryFilterState,
+} from "../_components/all-albums-view";
 import { useAlbums } from "../_context/albums-context";
 
 export default function AllAlbumsPage() {
@@ -22,15 +27,48 @@ export default function AllAlbumsPage() {
 
 function AllAlbumsPageInner() {
 	const { userId, openAddListenDrawer, openRatingDrawer } = useAlbums();
-	const albums = useQuery(
-		api.spotify.listAlbumLibraryRows,
+	const searchParams = useSearchParams();
+	const searchParamsString = searchParams?.toString() ?? "";
+	const filterState = useMemo(
+		() => parseAlbumLibraryFilterState(new URLSearchParams(searchParamsString)),
+		[searchParamsString],
+	);
+	const releaseYear = getAlbumLibraryReleaseYearFilter(filterState.yearFilter);
+	const filters = useMemo(
+		() => ({
+			search: filterState.searchQuery,
+			rymStatus: filterState.rymFilter,
+			robRankingStatus: filterState.robRankingFilter,
+			listenStatus: filterState.listenFilter,
+			albumType: filterState.albumTypeFilter,
+			...(releaseYear === undefined ? {} : { releaseYear }),
+		}),
+		[filterState, releaseYear],
+	);
+	const albums = usePaginatedQuery(
+		api.spotify.listAlbumLibraryRowsPaginated,
+		userId
+			? {
+					userId,
+					filters,
+					sortBy: filterState.sortBy,
+				}
+			: "skip",
+		{ initialNumItems: 50 },
+	);
+	const releaseYears = useQuery(
+		api.spotify.listAlbumLibraryReleaseYears,
 		userId ? { userId } : "skip",
 	);
 
 	return (
 		<AllAlbumsView
-			albums={albums ?? []}
-			isLoading={albums === undefined}
+			albums={albums.results ?? []}
+			availableYears={releaseYears ?? []}
+			isLoading={albums.status === "LoadingFirstPage"}
+			isLoadingMore={albums.status === "LoadingMore"}
+			canLoadMore={albums.status === "CanLoadMore"}
+			onLoadMore={() => albums.loadMore(50)}
 			onAddListen={(album) => openAddListenDrawer(album, "album")}
 			onRateAlbum={(album) =>
 				openRatingDrawer({

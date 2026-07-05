@@ -2711,6 +2711,28 @@ export const listAlbumLibraryRowsPaginated = query({
 	},
 });
 
+export const listAlbumLibraryReleaseYears = query({
+	args: { userId: v.string() },
+	returns: v.array(v.number()),
+	handler: async (ctx, args) => {
+		const rows = await ctx.db
+			.query("albumLibraryItems")
+			.withIndex("by_userId_releaseYear_createdAt", (q) =>
+				q.eq("userId", args.userId),
+			)
+			.collect();
+		const years = new Set<number>();
+
+		for (const row of rows) {
+			if (row.releaseYear !== undefined) {
+				years.add(row.releaseYear);
+			}
+		}
+
+		return Array.from(years).sort((a, b) => b - a);
+	},
+});
+
 export const getAllAlbums = query({
 	args: { limit: v.optional(v.number()) },
 	handler: async (ctx, args) => {

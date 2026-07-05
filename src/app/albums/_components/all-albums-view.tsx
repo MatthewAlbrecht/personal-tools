@@ -34,12 +34,11 @@ import {
 } from "~/components/ui/dropdown-menu";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
-import {
-	type AlbumLibraryAlbumType,
-	type AlbumLibraryListenStatus,
-	type AlbumLibraryRobRankingStatus,
-	type AlbumLibraryRymStatus,
-	rowMatchesAlbumLibraryFilters,
+import type {
+	AlbumLibraryAlbumType,
+	AlbumLibraryListenStatus,
+	AlbumLibraryRobRankingStatus,
+	AlbumLibraryRymStatus,
 } from "../../../../convex/_utils/albumLibraryRows";
 import { formatRelativeTime } from "../_utils/formatters";
 import type { AlbumLibraryRowData } from "../_utils/types";
@@ -80,14 +79,22 @@ const ALBUM_LIBRARY_QUERY_PARAMS = [
 
 type AllAlbumsViewProps = {
 	albums: AlbumLibraryRowData[];
+	availableYears: number[];
 	isLoading: boolean;
+	isLoadingMore: boolean;
+	canLoadMore: boolean;
+	onLoadMore: () => void;
 	onAddListen: (album: AlbumLibraryRowData) => void;
 	onRateAlbum: (album: AlbumLibraryRowData) => void;
 };
 
 export function AllAlbumsView({
 	albums,
+	availableYears,
 	isLoading,
+	isLoadingMore,
+	canLoadMore,
+	onLoadMore,
 	onAddListen,
 	onRateAlbum,
 }: AllAlbumsViewProps) {
@@ -125,65 +132,17 @@ export function AllAlbumsView({
 	const backfillRymLinks = useMutation(
 		api.rateYourMusicScrapes.backfillRymScrapeSpotifyAlbumMatches,
 	);
-
-	// Extract available years from albums
-	const availableYears = useMemo(() => {
-		const years = new Set<number>();
-		for (const album of albums) {
-			if (album.releaseYear) years.add(album.releaseYear);
-		}
+	const availableYearOptions = useMemo(() => {
+		const years = new Set(availableYears);
+		const selectedYear = getAlbumLibraryReleaseYearFilter(yearFilter);
+		if (selectedYear !== undefined) years.add(selectedYear);
 		return Array.from(years).sort((a, b) => b - a);
-	}, [albums]);
-
-	const filteredAlbums = useMemo(() => {
-		const selectedYear =
-			yearFilter === "all" ? undefined : Number.parseInt(yearFilter, 10);
-
-		const filtered = albums.filter((album) =>
-			rowMatchesAlbumLibraryFilters(album, {
-				search: searchQuery,
-				rymStatus: rymFilter,
-				robRankingStatus: robRankingFilter,
-				listenStatus: listenFilter,
-				albumType: albumTypeFilter,
-				releaseYear: selectedYear,
-			}),
-		);
-
-		if (sortBy === "artist") {
-			return filtered.sort(compareAlbumsByArtistName);
-		}
-
-		return filtered.sort(compareAlbumsByRecent);
-	}, [
-		albums,
-		yearFilter,
-		rymFilter,
-		robRankingFilter,
-		listenFilter,
-		albumTypeFilter,
-		searchQuery,
-		sortBy,
-	]);
+	}, [availableYears, yearFilter]);
 
 	if (isLoading) {
 		return (
 			<div className="flex h-64 items-center justify-center">
 				<p className="text-muted-foreground">Loading albums...</p>
-			</div>
-		);
-	}
-
-	if (albums.length === 0) {
-		return (
-			<div className="flex h-64 items-center justify-center rounded-lg border border-dashed">
-				<div className="text-center">
-					<Disc3 className="mx-auto h-12 w-12 text-muted-foreground/50" />
-					<p className="mt-4 text-muted-foreground">No albums found</p>
-					<p className="mt-1 text-muted-foreground text-sm">
-						Albums will appear here after syncing your Spotify history
-					</p>
-				</div>
 			</div>
 		);
 	}
@@ -334,7 +293,7 @@ export function AllAlbumsView({
 							className="rounded-md border bg-background px-2 py-1 text-sm"
 						>
 							<option value="all">All Years</option>
-							{availableYears.map((year) => (
+							{availableYearOptions.map((year) => (
 								<option key={year} value={year.toString()}>
 									{year}
 								</option>
@@ -448,7 +407,7 @@ export function AllAlbumsView({
 					</div>
 
 					<p className="text-muted-foreground text-sm">
-						Showing {filteredAlbums.length} of {albums.length}
+						Showing {albums.length} loaded
 					</p>
 					<Button
 						type="button"
@@ -502,14 +461,15 @@ export function AllAlbumsView({
 
 			{/* Albums List */}
 			<div className="space-y-1">
-				{filteredAlbums.length === 0 ? (
-					<div className="flex h-32 items-center justify-center rounded-lg border border-dashed">
-						<p className="text-muted-foreground text-sm">
-							No albums match the selected filters
-						</p>
-					</div>
+				{albums.length === 0 ? (
+					<AllAlbumsEmptyState
+						hasFilters={hasNonDefaultFilters}
+						canLoadMore={canLoadMore}
+						isLoadingMore={isLoadingMore}
+						onLoadMore={onLoadMore}
+					/>
 				) : (
-					filteredAlbums.map((album) => (
+					albums.map((album) => (
 						<AlbumCardRow
 							key={album._id}
 							album={album}
@@ -523,6 +483,14 @@ export function AllAlbumsView({
 					))
 				)}
 			</div>
+			{albums.length > 0 && (canLoadMore || isLoadingMore) ? (
+				<div className="flex justify-center pt-2">
+					<LoadMoreAlbumsButton
+						isLoadingMore={isLoadingMore}
+						onLoadMore={onLoadMore}
+					/>
+				</div>
+			) : null}
 			<AlbumRymAssociateDrawer
 				album={rymAssociateAlbum}
 				open={rymAssociateAlbum !== null}
@@ -553,6 +521,71 @@ export function AllAlbumsView({
 				</AlertDialogContent>
 			</AlertDialog>
 		</div>
+	);
+}
+
+function AllAlbumsEmptyState({
+	hasFilters,
+	canLoadMore,
+	isLoadingMore,
+	onLoadMore,
+}: {
+	hasFilters: boolean;
+	canLoadMore: boolean;
+	isLoadingMore: boolean;
+	onLoadMore: () => void;
+}) {
+	if (canLoadMore) {
+		return (
+			<div className="flex h-40 items-center justify-center rounded-lg border border-dashed">
+				<div className="space-y-3 text-center">
+					<p className="text-muted-foreground text-sm">
+						No matches loaded yet. Load more to continue searching.
+					</p>
+					<LoadMoreAlbumsButton
+						isLoadingMore={isLoadingMore}
+						onLoadMore={onLoadMore}
+					/>
+				</div>
+			</div>
+		);
+	}
+
+	return (
+		<div className="flex h-64 items-center justify-center rounded-lg border border-dashed">
+			<div className="text-center">
+				<Disc3 className="mx-auto h-12 w-12 text-muted-foreground/50" />
+				<p className="mt-4 text-muted-foreground">
+					{hasFilters
+						? "No albums match the selected filters"
+						: "No albums found"}
+				</p>
+				<p className="mt-1 text-muted-foreground text-sm">
+					{hasFilters
+						? "Try adjusting the filters to see more albums."
+						: "Albums will appear here after syncing your Spotify history"}
+				</p>
+			</div>
+		</div>
+	);
+}
+
+function LoadMoreAlbumsButton({
+	isLoadingMore,
+	onLoadMore,
+}: {
+	isLoadingMore: boolean;
+	onLoadMore: () => void;
+}) {
+	return (
+		<Button
+			type="button"
+			variant="outline"
+			onClick={onLoadMore}
+			disabled={isLoadingMore}
+		>
+			{isLoadingMore ? "Loading..." : "Load more"}
+		</Button>
 	);
 }
 
@@ -873,7 +906,7 @@ function TaxonomyLine({
 	return <p className={className}>{tags.map((tag) => tag.label).join(", ")}</p>;
 }
 
-function parseAlbumLibraryFilterState(
+export function parseAlbumLibraryFilterState(
 	params: URLSearchParams,
 ): AlbumLibraryFilterState {
 	return {
@@ -972,35 +1005,16 @@ function parseAlbumLibraryYear(value: string | null): string {
 	return DEFAULT_ALBUM_LIBRARY_FILTERS.yearFilter;
 }
 
+export function getAlbumLibraryReleaseYearFilter(
+	yearFilter: string,
+): number | undefined {
+	if (yearFilter === "all") return undefined;
+	return Number.parseInt(yearFilter, 10);
+}
+
 function parseAlbumLibrarySort(value: string | null): AlbumLibrarySort {
 	if (value === "artist") return value;
 	return DEFAULT_ALBUM_LIBRARY_FILTERS.sortBy;
-}
-
-function compareAlbumsByArtistName(
-	a: AlbumLibraryRowData,
-	b: AlbumLibraryRowData,
-): number {
-	const artistCompare = a.artistName.localeCompare(b.artistName, undefined, {
-		sensitivity: "base",
-	});
-
-	if (artistCompare !== 0) return artistCompare;
-
-	const albumCompare = a.name.localeCompare(b.name, undefined, {
-		sensitivity: "base",
-	});
-
-	if (albumCompare !== 0) return albumCompare;
-
-	return compareAlbumsByRecent(a, b);
-}
-
-function compareAlbumsByRecent(
-	a: AlbumLibraryRowData,
-	b: AlbumLibraryRowData,
-): number {
-	return b.createdAt - a.createdAt;
 }
 
 async function copyArtworkUrl(url: string): Promise<void> {
