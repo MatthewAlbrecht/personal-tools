@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
+import { upsertAlbumLibraryProjection } from "./_utils/albumLibraryProjection";
 import {
 	buildSpotifyAlbumRymMatchArgs,
 	matchRymForSpotifyAlbum,
@@ -639,6 +640,11 @@ export const replaceYearFromAlbums = mutation({
 			.query("robRankingAlbums")
 			.withIndex("by_yearId", (q) => q.eq("yearId", args.yearId))
 			.collect();
+		const existingSpotifyAlbumIds = existing
+			.map((row) => row.albumId)
+			.filter(
+				(albumId): albumId is Id<"spotifyAlbums"> => albumId !== undefined,
+			);
 
 		for (const row of existing) {
 			await ctx.db.delete(row._id);
@@ -662,6 +668,12 @@ export const replaceYearFromAlbums = mutation({
 		}
 
 		await ctx.db.patch(args.yearId, { updatedAt: now });
+		for (const albumId of [...existingSpotifyAlbumIds, ...args.albumIds]) {
+			await upsertAlbumLibraryProjection(ctx, {
+				userId: args.userId,
+				albumId,
+			});
+		}
 		return { imported: args.albumIds.length };
 	},
 });
@@ -705,6 +717,10 @@ export const addAlbumToYear = mutation({
 		});
 
 		await attemptRymMatchForRankingAlbum(ctx, args.albumId, now);
+		await upsertAlbumLibraryProjection(ctx, {
+			userId: args.userId,
+			albumId: args.albumId,
+		});
 
 		return rankingAlbumId;
 	},
@@ -720,6 +736,7 @@ export const updateRankingAlbumManual = mutation({
 	handler: async (ctx, args) => {
 		const ranking = await ctx.db.get(args.rankingAlbumId);
 		if (!ranking) throw new Error("Entry not found");
+		const oldAlbumId = ranking.albumId;
 
 		const trimmedTitle = args.albumTitle.trim();
 		const trimmedArtist = args.artistName.trim();
@@ -737,6 +754,12 @@ export const updateRankingAlbumManual = mutation({
 			artistNames: [trimmedArtist],
 			updatedAt: Date.now(),
 		});
+		if (oldAlbumId) {
+			await upsertAlbumLibraryProjection(ctx, {
+				userId: ranking.userId,
+				albumId: oldAlbumId,
+			});
+		}
 	},
 });
 
@@ -868,6 +891,12 @@ export const removeAlbumFromYear = mutation({
 			await ctx.db.patch(album._id, {
 				position: album.position - 1,
 				updatedAt: Date.now(),
+			});
+		}
+		if (ranking.albumId) {
+			await upsertAlbumLibraryProjection(ctx, {
+				userId: ranking.userId,
+				albumId: ranking.albumId,
 			});
 		}
 	},

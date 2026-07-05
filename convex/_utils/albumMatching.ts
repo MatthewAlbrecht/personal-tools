@@ -1,5 +1,6 @@
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
+import { refreshAlbumLibraryProjectionsForAlbum } from "./albumLibraryProjection";
 import {
 	artistKeysIntersect,
 	buildArtistKeys,
@@ -359,4 +360,5 @@ export async function linkRymScrapeToSpotifyAlbum(
 		now: args.now,
 	});
 	await patchScrapeAlbumConvexId(ctx, args.scrapeId, args.albumId);
+	await refreshAlbumLibraryProjectionsForAlbum(ctx, args.albumId);
 }

@@ -3,7 +3,10 @@ import { api, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { action, mutation, query } from "./_generated/server";
-import { upsertAlbumLibraryProjection } from "./_utils/albumLibraryProjection";
+import {
+	refreshAlbumLibraryProjectionsForAlbum,
+	upsertAlbumLibraryProjection,
+} from "./_utils/albumLibraryProjection";
 import {
 	getAlbumLibraryAlbumType,
 	getAlbumLibraryRymStatus,
@@ -1563,10 +1566,11 @@ export const upsertAlbum = mutation({
 				...(args.rawData !== undefined ? { rawData: args.rawData } : {}),
 				updatedAt: now,
 			});
+			await refreshAlbumLibraryProjectionsForAlbum(ctx, existing._id);
 			return existing._id;
 		}
 
-		return await ctx.db.insert("spotifyAlbums", {
+		const albumId = await ctx.db.insert("spotifyAlbums", {
 			spotifyAlbumId: args.spotifyAlbumId,
 			name: args.name,
 			albumTitleKey,
@@ -1579,6 +1583,8 @@ export const upsertAlbum = mutation({
 			createdAt: now,
 			updatedAt: now,
 		});
+		await refreshAlbumLibraryProjectionsForAlbum(ctx, albumId);
+		return albumId;
 	},
 });
 
@@ -1686,6 +1692,7 @@ export const setSpotifyAlbumRymNotOnSite = mutation({
 			rymNotOnSite: args.notOnSite ? true : undefined,
 			updatedAt: Date.now(),
 		});
+		await refreshAlbumLibraryProjectionsForAlbum(ctx, args.albumId);
 
 		return null;
 	},
@@ -1722,6 +1729,7 @@ export const associateSpotifyAlbumWithRymScrape = mutation({
 			rymNotOnSite: undefined,
 			updatedAt: now,
 		});
+		await refreshAlbumLibraryProjectionsForAlbum(ctx, args.albumId);
 
 		return null;
 	},
@@ -2564,6 +2572,10 @@ export const recordAlbumListen = mutation({
 			userId: args.userId,
 			albumId: args.albumId,
 		});
+		await upsertAlbumLibraryProjection(ctx, {
+			userId: args.userId,
+			albumId: args.albumId,
+		});
 		return { recorded: true };
 	},
 });
@@ -2648,6 +2660,10 @@ export const addManualAlbumListen = mutation({
 		}
 
 		await refreshForLaterProjectionsForUserAlbum(ctx, {
+			userId: args.userId,
+			albumId: album._id,
+		});
+		await upsertAlbumLibraryProjection(ctx, {
 			userId: args.userId,
 			albumId: album._id,
 		});
@@ -2753,6 +2769,10 @@ export const deleteAlbumListen = mutation({
 		}
 
 		await refreshForLaterProjectionsForUserAlbum(ctx, {
+			userId: listen.userId,
+			albumId: listen.albumId,
+		});
+		await upsertAlbumLibraryProjection(ctx, {
 			userId: listen.userId,
 			albumId: listen.albumId,
 		});
@@ -2921,6 +2941,10 @@ export const updateAlbumRating = mutation({
 		await ctx.db.patch(args.userAlbumId, {
 			rating: args.rating,
 			position: args.position,
+		});
+		await upsertAlbumLibraryProjection(ctx, {
+			userId: userAlbum.userId,
+			albumId: userAlbum.albumId,
 		});
 	},
 });
