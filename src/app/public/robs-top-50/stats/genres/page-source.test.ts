@@ -27,6 +27,8 @@ test("genres stats page uses published years and genre count query", () => {
 	assert.match(pageSource, /year: String\(view\)/);
 	assert.match(pageSource, /top: String\(topCount\)/);
 	assert.match(pageSource, /Slider/);
+	assert.match(pageSource, /onValueChange/);
+	assert.match(pageSource, /onValueCommit/);
 	assert.match(pageSource, /TOP_COUNT_OPTIONS = \[3, 5, 10, 15, 25, 50\]/);
 	assert.match(pageSource, /topCount: activeTopCount/);
 	assert.match(pageSource, /showAlbumDetails=\{!isAllYears\}/);

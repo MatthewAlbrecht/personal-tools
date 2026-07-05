@@ -3,7 +3,7 @@
 import { useQuery } from "convex/react";
 import { ListMusic } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Slider } from "~/components/ui/slider";
 import { cn } from "~/lib/utils";
@@ -36,6 +36,12 @@ function PublicRobsTop50GenreStatsPageInner() {
 	const activeView: GenreStatsView | null = isAllYears ? "all" : activeYear;
 	const activeTopCount = getActiveTopCount(topParam);
 	const activeTopCountIndex = TOP_COUNT_OPTIONS.indexOf(activeTopCount);
+	const [sliderTopCountIndex, setSliderTopCountIndex] =
+		useState(activeTopCountIndex);
+
+	useEffect(() => {
+		setSliderTopCountIndex(activeTopCountIndex);
+	}, [activeTopCountIndex]);
 
 	const yearGenreSummary = useQuery(
 		api.robRankings.getPublishedTopLevelGenreCountsForYear,
@@ -120,13 +126,21 @@ function PublicRobsTop50GenreStatsPageInner() {
 												aria-live="polite"
 												className="text-muted-foreground text-sm"
 											>
-												Top {activeTopCount}
+												Top{" "}
+												{TOP_COUNT_OPTIONS[sliderTopCountIndex] ??
+													activeTopCount}
 											</span>
 										</div>
 										<Slider
 											aria-label="Filter genre counts by top placement range"
 											max={TOP_COUNT_OPTIONS.length - 1}
 											min={0}
+											onValueChange={(values) => {
+												const nextIndex = values[0];
+												if (nextIndex !== undefined) {
+													setSliderTopCountIndex(nextIndex);
+												}
+											}}
 											onValueCommit={(values) => {
 												const nextIndex = values[0];
 												if (
@@ -143,7 +157,7 @@ function PublicRobsTop50GenreStatsPageInner() {
 												}
 											}}
 											step={1}
-											value={[activeTopCountIndex]}
+											value={[sliderTopCountIndex]}
 										/>
 										<div className="flex justify-between text-muted-foreground text-xs">
 											{TOP_COUNT_OPTIONS.map((option) => (
