@@ -93,7 +93,6 @@ function InsideBackSectionBlock({
 						<DiscographyRow
 							key={`${item.spotifyAlbumId ?? item.albumTitle}-${index}`}
 							item={item}
-							artistDisplay={artistDisplay}
 						/>
 					))}
 				</ul>
@@ -120,18 +119,11 @@ function InsideBackSectionBlock({
 	);
 }
 
-function DiscographyRow({
-	item,
-	artistDisplay,
-}: {
-	item: ZineDiscographyItem;
-	artistDisplay: ZineInsideBackLayoutSettings["artistDisplay"];
-}) {
-	const { titleLine, artistLine } = formatInsideBackAlbumTitle({
+function DiscographyRow({ item }: { item: ZineDiscographyItem }) {
+	const { titleLine } = formatInsideBackAlbumTitle({
 		albumTitle: item.albumTitle,
 		year: item.year,
-		artistName: item.artistName,
-		artistDisplay,
+		artistDisplay: "newline",
 	});
 
 	return (
@@ -147,9 +139,6 @@ function DiscographyRow({
 			)}
 			<div className="zine-inside-back-discography-text">
 				<p className="zine-inside-back-item-title">{titleLine}</p>
-				{artistLine ? (
-					<p className="zine-inside-back-item-artist">{artistLine}</p>
-				) : null}
 				{item.blurb.trim() !== "" ? (
 					<p className="zine-inside-back-item-blurb">{item.blurb}</p>
 				) : null}
