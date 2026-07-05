@@ -17,6 +17,7 @@ import { useDebouncedState } from "~/lib/hooks/use-debounced-state";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import type { HistoryListen } from "../_utils/types";
+import { useAlbums } from "../_context/albums-context";
 
 type SpotifyAlbumSearchResult = {
 	albumId: Id<"spotifyAlbums">;
@@ -44,6 +45,7 @@ export function ConvertListenDrawer({
 	const [searchAllAlbums, setSearchAllAlbums] = useState(false);
 	const [isConverting, setIsConverting] = useState(false);
 	const searchInputRef = useRef<HTMLInputElement>(null);
+	const { userId } = useAlbums();
 	const convertAlbumListen = useMutation(api.spotify.convertAlbumListen);
 
 	useEffect(() => {
@@ -84,8 +86,9 @@ export function ConvertListenDrawer({
 
 	const allAlbumResults = useQuery(
 		api.spotify.searchSpotifyAlbumsForListenConversion,
-		open && listen && searchAllAlbums
+		open && listen && searchAllAlbums && userId
 			? {
+					userId,
 					excludeAlbumId: listen.albumId as Id<"spotifyAlbums">,
 					search: searchArg,
 					limit: 50,

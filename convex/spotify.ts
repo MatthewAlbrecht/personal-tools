@@ -3164,6 +3164,7 @@ export const searchSpotifyAlbumsByTitleKey = query({
 
 export const searchSpotifyAlbumsForListenConversion = query({
 	args: {
+		userId: v.string(),
 		search: v.optional(v.string()),
 		excludeAlbumId: v.id("spotifyAlbums"),
 		limit: v.optional(v.number()),
@@ -3171,22 +3172,36 @@ export const searchSpotifyAlbumsForListenConversion = query({
 	returns: v.array(spotifyAlbumSearchResultValidator),
 	handler: async (ctx, args) => {
 		const limit = Math.min(Math.max(args.limit ?? 50, 1), 100);
+		const search = args.search?.trim();
+		const fetchLimit = limit + 1;
 
-		const albums = await ctx.db
-			.query("spotifyAlbums")
-			.withIndex("by_createdAt")
-			.order("desc")
-			.take(500);
+		const rows = search
+			? await ctx.db
+					.query("albumLibraryItems")
+					.withSearchIndex("search_albumLibraryItems", (q) =>
+						q.search("searchText", search).eq("userId", args.userId),
+					)
+					.take(fetchLimit)
+			: await ctx.db
+					.query("albumLibraryItems")
+					.withIndex("by_userId_createdAt", (q) => q.eq("userId", args.userId))
+					.order("desc")
+					.take(fetchLimit);
 
 		const results = [];
-		for (const album of albums) {
-			if (album._id === args.excludeAlbumId) {
+		for (const row of rows) {
+			if (row.albumId === args.excludeAlbumId) {
 				continue;
 			}
-			if (!albumMatchesSearchTerm(album, args.search ?? "")) {
-				continue;
-			}
-			results.push(toSpotifyAlbumSearchResult(album));
+			results.push({
+				albumId: row.albumId,
+				spotifyAlbumId: row.spotifyAlbumId,
+				name: row.name,
+				artistName: row.artistName,
+				totalTracks: row.totalTracks,
+				...(row.imageUrl ? { imageUrl: row.imageUrl } : {}),
+				...(row.releaseDate ? { releaseDate: row.releaseDate } : {}),
+			});
 			if (results.length >= limit) {
 				break;
 			}
