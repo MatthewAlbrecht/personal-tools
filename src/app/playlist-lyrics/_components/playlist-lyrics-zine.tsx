@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Button } from "~/components/ui/button";
 import { LyricsZine, LyricsZineSkeleton } from "~/components/zine/lyrics-zine";
 import { coverTextLayoutFromStoredFields } from "~/lib/zine/zine-cover-text-layout";
+import { hasInsideBackContent } from "~/lib/zine/zine-inside-back-sections";
 import type { ZineItemSettings } from "~/lib/zine/zine-types";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
@@ -111,12 +112,19 @@ export function PlaylistLyricsZine({ slug, variant }: PlaylistLyricsZineProps) {
 	}
 
 	const playlist = playlistData.playlist;
+	const insideBackSections =
+		variant === "public"
+			? hasInsideBackContent(playlist.zineInsideBackSections)
+				? (playlist.zineInsideBackSections ?? [])
+				: undefined
+			: (playlist.zineInsideBackSections ?? []);
 
 	return (
 		<LyricsZine
 			backHref={backHref}
 			canEdit={canEdit}
 			collectionTitle={playlist.title}
+			insideBackSections={insideBackSections}
 			backCoverQrCodes={{
 				spotify: {
 					imageUrl: playlist.zineSpotifyQrImageUrl,

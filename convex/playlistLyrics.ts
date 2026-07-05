@@ -77,6 +77,7 @@ const playlistValidator = v.object({
 	zineShowSpotifyQr: v.optional(v.boolean()),
 	zineShowAppleMusicQr: v.optional(v.boolean()),
 	zineDisplaySettings: v.optional(zineDisplaySettingsValidator),
+	zineInsideBackSections: v.optional(zineInsideBackSectionsValidator),
 	status: playlistStatusValidator,
 	createdAt: v.number(),
 	updatedAt: v.number(),
@@ -98,6 +99,7 @@ const publicPlaylistValidator = v.object({
 	zineShowSpotifyQr: v.optional(v.boolean()),
 	zineShowAppleMusicQr: v.optional(v.boolean()),
 	zineDisplaySettings: v.optional(zineDisplaySettingsValidator),
+	zineInsideBackSections: v.optional(zineInsideBackSectionsValidator),
 });
 
 const scrapeValidator = v.object({
@@ -1372,6 +1374,7 @@ function toPublicPlaylist(ctx: QueryCtx, playlist: Doc<"playlistLyrics">) {
 			zineShowSpotifyQr: playlist.zineShowSpotifyQr,
 			zineShowAppleMusicQr: playlist.zineShowAppleMusicQr,
 			zineDisplaySettings: playlist.zineDisplaySettings,
+			zineInsideBackSections: playlist.zineInsideBackSections,
 		}),
 	);
 }

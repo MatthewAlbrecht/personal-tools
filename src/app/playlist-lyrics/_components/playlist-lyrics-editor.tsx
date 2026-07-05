@@ -24,6 +24,8 @@ import {
 	parseTrackDurationInput,
 } from "~/lib/zine/zine-song-header-content";
 import { IntroContentEditor } from "~/components/zine/intro-content-editor";
+import { ZineInsideBackSectionsEditor } from "~/components/zine/zine-inside-back-sections-editor";
+import type { ZineInsideBackSection } from "~/lib/zine/zine-inside-back-sections";
 import { api } from "../../../../convex/_generated/api";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import { getPlaylistDisplayTrackNumber } from "../_utils/song-display";
@@ -644,6 +646,11 @@ export function PlaylistLyricsEditor({ slug }: { slug: string }): ReactElement {
 				spotifyQrImageUrl={playlist.zineSpotifyQrImageUrl}
 			/>
 
+			<PlaylistInsideBackSectionsCard
+				initialSections={playlist.zineInsideBackSections ?? []}
+				playlistId={playlist._id}
+			/>
+
 			<Card>
 				<CardHeader>
 					<CardTitle>Add Song</CardTitle>
@@ -824,6 +831,70 @@ async function readPlaylistLyricsRouteError(
 	} catch {
 		return "Playlist lyrics request failed";
 	}
+}
+
+function PlaylistInsideBackSectionsCard({
+	playlistId,
+	initialSections,
+}: {
+	playlistId: Id<"playlistLyrics">;
+	initialSections: ZineInsideBackSection[];
+}): ReactElement {
+	const updateZineInsideBackSections = useMutation(
+		api.playlistLyrics.updateZineInsideBackSections,
+	);
+	const [sections, setSections] =
+		useState<ZineInsideBackSection[]>(initialSections);
+	const [isSaving, setIsSaving] = useState(false);
+
+	useEffect(() => {
+		setSections(initialSections);
+	}, [initialSections]);
+
+	async function handleSave(): Promise<void> {
+		setIsSaving(true);
+		try {
+			await updateZineInsideBackSections({ playlistId, sections });
+			toast.success("Inside back cover saved");
+		} catch (error) {
+			console.error("Failed to save inside back cover sections:", error);
+			toast.error(
+				error instanceof Error
+					? error.message
+					: "Failed to save inside back cover",
+			);
+		} finally {
+			setIsSaving(false);
+		}
+	}
+
+	return (
+		<Card>
+			<CardHeader>
+				<CardTitle>Zine inside back cover</CardTitle>
+				<CardDescription>
+					Optional discography and recommendations sections on the page before
+					the back cover.
+				</CardDescription>
+			</CardHeader>
+			<CardContent className="space-y-4">
+				<ZineInsideBackSectionsEditor
+					sections={sections}
+					disabled={isSaving}
+					onChange={setSections}
+				/>
+				<Button
+					type="button"
+					disabled={isSaving}
+					onClick={() => {
+						void handleSave();
+					}}
+				>
+					{isSaving ? "Saving..." : "Save inside back cover"}
+				</Button>
+			</CardContent>
+		</Card>
+	);
 }
 
 function PlaylistBackCoverQrCard({
