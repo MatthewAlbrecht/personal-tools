@@ -55,7 +55,9 @@ type StoredSection =
 			}>;
 	  };
 
-function normalizeOptionalString(value: string | undefined): string | undefined {
+function normalizeOptionalString(
+	value: string | undefined,
+): string | undefined {
 	const trimmed = value?.trim();
 	return trimmed === "" ? undefined : trimmed;
 }
@@ -97,9 +99,7 @@ export function normalizeZineInsideBackSections(
 				imageUrl: normalizeOptionalString(item.imageUrl),
 				similarityBlurb: normalizeOptionalString(item.similarityBlurb),
 			}))
-			.filter(
-				(item) => item.albumTitle !== "" && item.artistName !== "",
-			)
+			.filter((item) => item.albumTitle !== "" && item.artistName !== "")
 			.slice(0, 4);
 
 		if (items.length === 0) continue;

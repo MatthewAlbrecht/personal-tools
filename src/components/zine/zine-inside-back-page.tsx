@@ -1,5 +1,6 @@
 "use client";
 
+import { cn } from "~/lib/utils";
 import type {
 	ZineDiscographyItem,
 	ZineInsideBackSection,
@@ -9,7 +10,6 @@ import {
 	ZINE_INSIDE_BACK_DEFAULT_TITLES,
 	hasInsideBackContent,
 } from "~/lib/zine/zine-inside-back-sections";
-import { cn } from "~/lib/utils";
 
 export function ZineInsideBackPage({
 	sections,
@@ -58,8 +58,7 @@ function InsideBackSectionBlock({
 		return (
 			<div className="zine-inside-back-section zine-inside-back-discography">
 				<h2 className="zine-inside-back-section-title">
-					{section.title?.trim() ||
-						ZINE_INSIDE_BACK_DEFAULT_TITLES.discography}
+					{section.title?.trim() || ZINE_INSIDE_BACK_DEFAULT_TITLES.discography}
 				</h2>
 				<ul className="zine-inside-back-discography-list">
 					{section.items.map((item, index) => (
@@ -78,10 +77,7 @@ function InsideBackSectionBlock({
 			</h2>
 			<ul className="zine-inside-back-recommendations-list">
 				{section.items.map((item, index) => (
-					<RecommendationRow
-						key={`${item.albumTitle}-${index}`}
-						item={item}
-					/>
+					<RecommendationRow key={`${item.albumTitle}-${index}`} item={item} />
 				))}
 			</ul>
 		</div>

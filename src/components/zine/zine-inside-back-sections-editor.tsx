@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown, ChevronUp, Plus, Trash2 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -29,7 +29,11 @@ function createEmptySection(type: SectionType): ZineInsideBackSection {
 		: { type: "recommendations", items: [{ albumTitle: "", artistName: "" }] };
 }
 
-function moveAdjacent<T>(items: T[], index: number, direction: "up" | "down"): T[] {
+function moveAdjacent<T>(
+	items: T[],
+	index: number,
+	direction: "up" | "down",
+): T[] {
 	const targetIndex = direction === "up" ? index - 1 : index + 1;
 	if (targetIndex < 0 || targetIndex >= items.length) {
 		return items;
@@ -66,7 +70,8 @@ export function ZineInsideBackSectionsEditor({
 	onChange: (sections: ZineInsideBackSection[]) => void;
 	disabled?: boolean;
 }) {
-	const [sectionTypeToAdd, setSectionTypeToAdd] = useState<SectionType>("discography");
+	const [sectionTypeToAdd, setSectionTypeToAdd] =
+		useState<SectionType>("discography");
 	const atMaxSections = sections.length >= ZINE_INSIDE_BACK_LIMITS.maxSections;
 
 	function handleAddSection(): void {
@@ -81,7 +86,10 @@ export function ZineInsideBackSectionsEditor({
 		onChange(sections.filter((_, index) => index !== sectionIndex));
 	}
 
-	function handleMoveSection(sectionIndex: number, direction: "up" | "down"): void {
+	function handleMoveSection(
+		sectionIndex: number,
+		direction: "up" | "down",
+	): void {
 		onChange(moveAdjacent(sections, sectionIndex, direction));
 	}
 
@@ -128,10 +136,14 @@ export function ZineInsideBackSectionsEditor({
 					sectionIndex={sectionIndex}
 					sectionCount={sections.length}
 					disabled={disabled}
-					onTitleChange={(title) => handleSectionTitleChange(sectionIndex, title)}
+					onTitleChange={(title) =>
+						handleSectionTitleChange(sectionIndex, title)
+					}
 					onMove={(direction) => handleMoveSection(sectionIndex, direction)}
 					onRemove={() => handleRemoveSection(sectionIndex)}
-					onItemsChange={(items) => handleSectionItemsChange(sectionIndex, items)}
+					onItemsChange={(items) =>
+						handleSectionItemsChange(sectionIndex, items)
+					}
 				/>
 			))}
 
@@ -518,7 +530,9 @@ function RecommendationItemEditor({
 					/>
 				</div>
 				<div className="space-y-2 sm:col-span-2">
-					<Label htmlFor={`${idPrefix}-similarity-blurb`}>Similarity blurb</Label>
+					<Label htmlFor={`${idPrefix}-similarity-blurb`}>
+						Similarity blurb
+					</Label>
 					<Textarea
 						id={`${idPrefix}-similarity-blurb`}
 						className="min-h-20"

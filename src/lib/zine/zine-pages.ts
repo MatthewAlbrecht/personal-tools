@@ -1,8 +1,8 @@
-import { buildCollapsedSongPages } from "./zine-instrumental-pages";
 import {
-	hasInsideBackContent,
 	type ZineInsideBackSection,
+	hasInsideBackContent,
 } from "./zine-inside-back-sections";
+import { buildCollapsedSongPages } from "./zine-instrumental-pages";
 import type { ZineIntroSettings } from "./zine-intro-layout";
 import type { ZineSongDisplayInput } from "./zine-types";
 

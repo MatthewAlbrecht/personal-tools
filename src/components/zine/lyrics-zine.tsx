@@ -20,27 +20,27 @@ import { Label } from "~/components/ui/label";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Slider } from "~/components/ui/slider";
 import { cn } from "~/lib/utils";
+import { buildBookletSheets } from "~/lib/zine/zine-booklet";
+import {
+	type ZineCoverTextLayout,
+	resolveZineCoverTextLayout,
+} from "~/lib/zine/zine-cover-text-layout";
+import {
+	type ZineDisplaySettings,
+	resolveZineDisplaySettings,
+} from "~/lib/zine/zine-display-settings";
+import type { ZineInsideBackSection } from "~/lib/zine/zine-inside-back-sections";
 import {
 	ZINE_INTRO_FONT_SIZE_SLIDER,
 	ZINE_INTRO_MARGIN_SLIDER,
 	ZINE_INTRO_SPACING_SLIDER,
-	resolveZineIntroSettings,
 	type ZineIntroSettings,
+	resolveZineIntroSettings,
 } from "~/lib/zine/zine-intro-layout";
-import { buildBookletSheets } from "~/lib/zine/zine-booklet";
-import {
-	resolveZineDisplaySettings,
-	type ZineDisplaySettings,
-} from "~/lib/zine/zine-display-settings";
-import {
-	resolveZineCoverTextLayout,
-	type ZineCoverTextLayout,
-} from "~/lib/zine/zine-cover-text-layout";
 import {
 	ZINE_LYRICS_SIZE_SLIDER,
 	ZINE_TEXT_CONDENSE,
 } from "~/lib/zine/zine-layout";
-import type { ZineInsideBackSection } from "~/lib/zine/zine-inside-back-sections";
 import { buildZinePages } from "~/lib/zine/zine-pages";
 import type {
 	ZineBackCoverQrCodes,
@@ -48,14 +48,14 @@ import type {
 	ZineSongDisplayInput,
 } from "~/lib/zine/zine-types";
 import {
-	getHiddenCreditLabelsForRestore,
 	type CreditVisibilityState,
+	getHiddenCreditLabelsForRestore,
 } from "../../../convex/_utils/geniusCreditVisibility";
+import { IntroContentEditor } from "./intro-content-editor";
 import { ZineCoverPage } from "./zine-cover-page";
 import { ZineCoverTextLayoutControls } from "./zine-cover-text-layout-controls";
-import { ZineInstrumentalGroupPage } from "./zine-instrumental-group-page";
-import { IntroContentEditor } from "./intro-content-editor";
 import { ZineInsideBackPage } from "./zine-inside-back-page";
+import { ZineInstrumentalGroupPage } from "./zine-instrumental-group-page";
 import { ZineIntroPage } from "./zine-intro-page";
 import { triggerZinePrintRemeasure } from "./zine-print-remeasure";
 import { ZinePrintStyles } from "./zine-print-styles";
@@ -325,7 +325,9 @@ export function LyricsZine({
 		persistZineTimersRef.current.set(songId, timeoutId);
 	}
 
-	function queueDebouncedPersistIntroSettings(settings: ZineIntroSettings): void {
+	function queueDebouncedPersistIntroSettings(
+		settings: ZineIntroSettings,
+	): void {
 		const persist = persistence?.saveIntroSettings;
 		if (!persist) return;
 
@@ -563,8 +565,7 @@ export function LyricsZine({
 					}
 					onHideCreditLabel={
 						canEdit && persistence?.hideCreditLabel
-							? (songId, label) =>
-									persistence.hideCreditLabel?.(songId, label)
+							? (songId, label) => persistence.hideCreditLabel?.(songId, label)
 							: undefined
 					}
 					songs={page.songs}
@@ -876,14 +877,14 @@ export function LyricsZine({
 							<>
 								Editing is reading order ({pages.length} half-letter portrait
 								pages at 5.5×8.5&nbsp;in, padded to a booklet multiple of 4).
-								Per track, tune 1 or 2 lyrics columns (default 2), lyrics size
-								({ZINE_LYRICS_SIZE_SLIDER.minPt}–
-								{ZINE_LYRICS_SIZE_SLIDER.maxPt}
+								Per track, tune 1 or 2 lyrics columns (default 2), lyrics size (
+								{ZINE_LYRICS_SIZE_SLIDER.minPt}–{ZINE_LYRICS_SIZE_SLIDER.maxPt}
 								pt, default {ZINE_LYRICS_SIZE_SLIDER.defaultPt} pt), and title
 								width ({Math.round(ZINE_TEXT_CONDENSE.min * 100)}–
 								{Math.round(ZINE_TEXT_CONDENSE.max * 100)}
-								%, default {Math.round(ZINE_TEXT_CONDENSE.default * 100)}%)—controls
-								sit to the right of each page in preview. Printing emits
+								%, default {Math.round(ZINE_TEXT_CONDENSE.default * 100)}
+								%)—controls sit to the right of each page in preview. Printing
+								emits
 							</>
 						) : (
 							<>
@@ -1130,13 +1131,10 @@ export function LyricsZine({
 																nextShowCredits,
 															),
 														);
-														queueDebouncedPersistZineItemSettings(
-															page.songId,
-															{
-																...getZineSettingsSnapshot(page.songId),
-																showCredits: nextShowCredits,
-															},
-														);
+														queueDebouncedPersistZineItemSettings(page.songId, {
+															...getZineSettingsSnapshot(page.songId),
+															showCredits: nextShowCredits,
+														});
 													}}
 													onCondenseScaleChange={(nextScale) => {
 														setSongTextCondenseScales((previous) =>
@@ -1146,13 +1144,10 @@ export function LyricsZine({
 																nextScale,
 															),
 														);
-														queueDebouncedPersistZineItemSettings(
-															page.songId,
-															{
-																...getZineSettingsSnapshot(page.songId),
-																condenseScale: clampCondenseScale(nextScale),
-															},
-														);
+														queueDebouncedPersistZineItemSettings(page.songId, {
+															...getZineSettingsSnapshot(page.songId),
+															condenseScale: clampCondenseScale(nextScale),
+														});
 													}}
 													onLyricsSizePtChange={(nextPt) => {
 														setSongLyricsTargetSizesPt((previous) =>
@@ -1164,17 +1159,13 @@ export function LyricsZine({
 														);
 														const roundedHalf = Math.round(nextPt * 2) / 2;
 														const resolvedPt =
-															roundedHalf ===
-															ZINE_LYRICS_SIZE_SLIDER.defaultPt
+															roundedHalf === ZINE_LYRICS_SIZE_SLIDER.defaultPt
 																? ZINE_LYRICS_SIZE_SLIDER.defaultPt
 																: roundedHalf;
-														queueDebouncedPersistZineItemSettings(
-															page.songId,
-															{
-																...getZineSettingsSnapshot(page.songId),
-																fontSizePt: resolvedPt,
-															},
-														);
+														queueDebouncedPersistZineItemSettings(page.songId, {
+															...getZineSettingsSnapshot(page.songId),
+															fontSizePt: resolvedPt,
+														});
 													}}
 													onModeChange={(mode) => {
 														setSongLyricsColumnModes((previous) =>
@@ -1184,13 +1175,10 @@ export function LyricsZine({
 																mode,
 															),
 														);
-														queueDebouncedPersistZineItemSettings(
-															page.songId,
-															{
-																...getZineSettingsSnapshot(page.songId),
-																columnCount: mode,
-															},
-														);
+														queueDebouncedPersistZineItemSettings(page.songId, {
+															...getZineSettingsSnapshot(page.songId),
+															columnCount: mode,
+														});
 													}}
 													songId={page.songId}
 													songTitle={page.title}
@@ -1240,7 +1228,11 @@ function ZineIntroPageContentDialog({
 	return (
 		<Dialog>
 			<DialogTrigger asChild>
-				<Button type="button" variant="outline" className="w-full justify-start">
+				<Button
+					type="button"
+					variant="outline"
+					className="w-full justify-start"
+				>
 					<Pencil className="mr-2 h-4 w-4 shrink-0" />
 					<span className="truncate">
 						{hasContent ? "Edit album intro" : "Add album intro"}
@@ -1251,8 +1243,8 @@ function ZineIntroPageContentDialog({
 				<DialogHeader>
 					<DialogTitle>Album intro</DialogTitle>
 					<DialogDescription>
-						Appears on the page after the cover. Use **bold**, *italic*, and blank
-						lines for paragraphs.
+						Appears on the page after the cover. Use **bold**, *italic*, and
+						blank lines for paragraphs.
 					</DialogDescription>
 				</DialogHeader>
 				<IntroContentEditor
@@ -1711,10 +1703,7 @@ function ZineIntroLayoutControls({
 						<Label htmlFor={fontSizeSliderId} className="text-sm">
 							Font size
 						</Label>
-						<span
-							aria-live="polite"
-							className="text-muted-foreground text-xs"
-						>
+						<span aria-live="polite" className="text-muted-foreground text-xs">
 							{settings.fontSizePt.toFixed(1)} pt
 						</span>
 					</div>
@@ -1739,10 +1728,7 @@ function ZineIntroLayoutControls({
 						<Label htmlFor={spacingSliderId} className="text-sm">
 							Paragraph spacing
 						</Label>
-						<span
-							aria-live="polite"
-							className="text-muted-foreground text-xs"
-						>
+						<span aria-live="polite" className="text-muted-foreground text-xs">
 							{settings.paragraphSpacingPt} pt
 						</span>
 					</div>
@@ -1767,10 +1753,7 @@ function ZineIntroLayoutControls({
 						<Label htmlFor={marginSliderId} className="text-sm">
 							Margins
 						</Label>
-						<span
-							aria-live="polite"
-							className="text-muted-foreground text-xs"
-						>
+						<span aria-live="polite" className="text-muted-foreground text-xs">
 							{settings.marginPt} pt
 						</span>
 					</div>
