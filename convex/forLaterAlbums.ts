@@ -2032,6 +2032,7 @@ const unmappedRymScrapeRowValidator = v.object({
 		v.literal("ep"),
 		v.literal("mixtape"),
 		v.literal("comp"),
+		v.literal("additional"),
 	),
 	createdAt: v.number(),
 });
@@ -2066,7 +2067,7 @@ export const searchUnmappedRymScrapes = query({
 			rymUrl: string;
 			albumTitle: string;
 			artists: Array<{ name: string; href?: string }>;
-			releaseKind: "album" | "ep" | "mixtape" | "comp";
+			releaseKind: "album" | "ep" | "mixtape" | "comp" | "additional";
 			createdAt: number;
 		}> = [];
 

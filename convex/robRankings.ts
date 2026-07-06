@@ -11,6 +11,7 @@ import { loadRymGenreParentKeysByChild } from "./_utils/forLaterFilterProjection
 import {
 	type ArtistFinishInput,
 	buildArtistHighestPlacementRows,
+	buildArtistOneTimePlacementRows,
 	buildArtistStatsRows,
 	buildArtistUniqueTierRows,
 	resolveArtistNamesForRankingEntry,
@@ -198,6 +199,7 @@ const artistUniqueTierValidator = v.union(
 );
 
 const robRankingTopCountValidator = v.union(
+	v.literal(1),
 	v.literal(3),
 	v.literal(5),
 	v.literal(10),
@@ -298,6 +300,15 @@ export const getPublishedArtistHighestPlacements = query({
 	},
 });
 
+export const getPublishedArtistOneTimePlacements = query({
+	args: {},
+	returns: v.array(publishedArtistHighestPlacementRowValidator),
+	handler: async (ctx) => {
+		const entries = await collectPublishedArtistFinishEntries(ctx);
+		return buildArtistOneTimePlacementRows(entries);
+	},
+});
+
 export const getPublishedArtistUniqueTierPlacements = query({
 	args: {
 		tier: artistUniqueTierValidator,
@@ -368,7 +379,7 @@ async function buildPublishedTopLevelGenreCountsSummary(
 		year: number | null;
 		yearRows: Doc<"robRankingYears">[];
 		includeAlbumDetails: boolean;
-		topCount: 3 | 5 | 10 | 15 | 25 | 50;
+		topCount: 1 | 3 | 5 | 10 | 15 | 25 | 50;
 	},
 ) {
 	const [parentKeysByChild, topLevelGenres] = await Promise.all([

@@ -5,6 +5,7 @@ import {
 	computeAlbumRepeatSummaries,
 	computeArtistRepeatSummaries,
 	computeTrackRepeatSummaries,
+	excludeAlreadyWrittenPlaylistWrites,
 	normalizePlaylistTrack,
 	planPlaylistWrites,
 } from "~/lib/music-funnel-sync-utils";
@@ -395,23 +396,42 @@ async function writeTracksToSpotifyPlaylist({
 		reason: "first_seen" | "second_source_repeat";
 	}>;
 }): Promise<number> {
+	if (writes.length === 0) {
+		return 0;
+	}
+
+	const alreadyWritten = await convex.query(api.musicFunnel.getWrittenTrackIds, {
+		userId,
+		kind,
+		spotifyTrackIds: writes.map((write) => write.spotifyTrackId),
+	});
+	const pendingWrites = excludeAlreadyWrittenPlaylistWrites(
+		writes,
+		new Set(alreadyWritten),
+	);
+
 	let written = 0;
-	for (const chunk of chunkSpotifyUris(writes.map((write) => write.trackUri))) {
+	for (const chunk of chunkSpotifyUris(
+		pendingWrites.map((write) => write.trackUri),
+	)) {
 		const response = await addTracksToPlaylist(accessToken, playlistId, chunk);
-		const chunkWrites = writes.filter((write) =>
+		const chunkWrites = pendingWrites.filter((write) =>
 			chunk.includes(write.trackUri),
 		);
-		await convex.mutation(api.musicFunnel.recordPlaylistWrites, {
-			userId,
-			runId,
-			sourceRunId,
-			kind,
-			spotifyPlaylistId: playlistId,
-			spotifySnapshotId: response.snapshot_id,
-			writes: chunkWrites,
-			writtenAt: Date.now(),
-		});
-		written += chunkWrites.length;
+		const insertedCount = await convex.mutation(
+			api.musicFunnel.recordPlaylistWrites,
+			{
+				userId,
+				runId,
+				sourceRunId,
+				kind,
+				spotifyPlaylistId: playlistId,
+				spotifySnapshotId: response.snapshot_id,
+				writes: chunkWrites,
+				writtenAt: Date.now(),
+			},
+		);
+		written += insertedCount;
 	}
 	return written;
 }

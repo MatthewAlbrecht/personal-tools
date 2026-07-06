@@ -29,7 +29,8 @@ test("genres stats page uses published years and genre count query", () => {
 	assert.match(pageSource, /Slider/);
 	assert.match(pageSource, /onValueChange/);
 	assert.match(pageSource, /onValueCommit/);
-	assert.match(pageSource, /TOP_COUNT_OPTIONS = \[3, 5, 10, 15, 25, 50\]/);
+	assert.match(pageSource, /ALL_YEARS_TOP_COUNT_OPTIONS = \[1, 3, 5, 10, 15, 25, 50\]/);
+	assert.match(pageSource, /YEAR_TOP_COUNT_OPTIONS = \[3, 5, 10, 15, 25, 50\]/);
 	assert.match(pageSource, /topCount: activeTopCount/);
 	assert.match(pageSource, /showAlbumDetails=\{!isAllYears\}/);
 	assert.match(pageSource, /TopLevelGenreCountsTable/);
@@ -38,4 +39,6 @@ test("genres stats page uses published years and genre count query", () => {
 test("public stats nav links to genres stats", () => {
 	assert.match(navSource, /\/public\/robs-top-50\/stats\/genres/);
 	assert.match(navSource, /Genres/);
+	assert.match(navSource, /\/public\/robs-top-50\/stats\/one-time-artists/);
+	assert.match(navSource, /One-time artists/);
 });

@@ -410,9 +410,11 @@ function sendCapture(payload) {
 				return;
 			}
 			const detail =
-				typeof backend?.status === "number"
-					? `HTTP ${backend.status}`
-					: "network or permission error";
+				typeof backend?.error === "string" && backend.error.trim()
+					? backend.error.trim()
+					: typeof backend?.status === "number"
+						? `HTTP ${backend.status}`
+						: "network or permission error";
 			setCaptureToast(
 				"warn",
 				`Saved locally — backend sync failed (${detail}). Open extension options.`,

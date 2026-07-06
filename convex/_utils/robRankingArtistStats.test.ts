@@ -3,6 +3,7 @@ import test from "node:test";
 import {
 	type ArtistFinishInput,
 	buildArtistHighestPlacementRows,
+	buildArtistOneTimePlacementRows,
 	buildArtistStatsRows,
 	buildArtistUniqueTierRows,
 	resolveArtistNamesForRankingEntry,
@@ -249,6 +250,31 @@ test("resolveArtistNamesForRankingEntry manual fallback keeps comma-containing n
 		),
 		["Tyler, The Creator"],
 	);
+});
+
+test("buildArtistOneTimePlacementRows includes artists with exactly one finish", () => {
+	const entries: ArtistFinishInput[] = [
+		{ position: 12, artistNames: ["Big Thief"], year: 2020 },
+		{ position: 3, artistNames: ["Big Thief"], year: 2024 },
+		{ position: 8, artistNames: ["Radiohead"], year: 2022 },
+		{ position: 25, artistNames: ["Weyes Blood"], year: 2019 },
+	];
+
+	const rows = buildArtistOneTimePlacementRows(entries);
+	assert.deepEqual(rows, [
+		{
+			artistKey: "radiohead",
+			displayName: "Radiohead",
+			bestPlacement: 8,
+			bestPlacementYear: 2022,
+		},
+		{
+			artistKey: "weyes blood",
+			displayName: "Weyes Blood",
+			bestPlacement: 25,
+			bestPlacementYear: 2019,
+		},
+	]);
 });
 
 test("buildArtistHighestPlacementRows tracks best finish per artist", () => {

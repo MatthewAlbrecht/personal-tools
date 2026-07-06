@@ -84,16 +84,25 @@ async function forwardCaptureToBackend(payload) {
 
 		if (!res.ok) {
 			const text = await res.text();
+			let errorMessage = text;
+			try {
+				const parsed = JSON.parse(text);
+				if (typeof parsed?.error === "string" && parsed.error.trim()) {
+					errorMessage = parsed.error.trim();
+				}
+			} catch {
+				// keep raw response text
+			}
 			console.error(
 				"[rym-release-scraper] backend sync failed",
 				res.status,
-				text,
+				errorMessage,
 			);
 			return {
 				synced: false,
 				skipped: false,
 				status: res.status,
-				error: text,
+				error: errorMessage,
 			};
 		}
 

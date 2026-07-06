@@ -5,6 +5,7 @@ import {
 	computeAlbumRepeatSummaries,
 	computeArtistRepeatSummaries,
 	computeTrackRepeatSummaries,
+	excludeAlreadyWrittenPlaylistWrites,
 	normalizePlaylistTrack,
 	planPlaylistWrites,
 } from "./music-funnel-sync-utils";
@@ -297,4 +298,29 @@ test("chunkSpotifyUris chunks at 100 URIs", () => {
 	assert.equal(chunks[0]?.length, 100);
 	assert.equal(chunks[1]?.length, 100);
 	assert.equal(chunks[2]?.length, 5);
+});
+
+test("excludeAlreadyWrittenPlaylistWrites drops tracks already in the write ledger", () => {
+	const writes = [
+		{
+			spotifyTrackId: "track-1",
+			trackUri: "spotify:track:track-1",
+			reason: "second_source_repeat" as const,
+		},
+		{
+			spotifyTrackId: "track-2",
+			trackUri: "spotify:track:track-2",
+			reason: "second_source_repeat" as const,
+		},
+	];
+
+	const pending = excludeAlreadyWrittenPlaylistWrites(
+		writes,
+		new Set(["track-1"]),
+	);
+
+	assert.deepEqual(
+		pending.map((write) => write.spotifyTrackId),
+		["track-2"],
+	);
 });

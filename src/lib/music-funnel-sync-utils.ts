@@ -213,6 +213,15 @@ export function computeArtistRepeatSummaries(
 		.sort(sortRepeatSummaries);
 }
 
+export function excludeAlreadyWrittenPlaylistWrites(
+	writes: PlannedPlaylistWrite[],
+	alreadyWrittenTrackIds: ReadonlySet<string>,
+): PlannedPlaylistWrite[] {
+	return writes.filter(
+		(write) => !alreadyWrittenTrackIds.has(write.spotifyTrackId),
+	);
+}
+
 export function planPlaylistWrites({
 	candidateEncounters,
 	totalSourceCountsByTrackId,

@@ -30,6 +30,9 @@ export function SiteHeader() {
 							<Link href="/albums" className="text-sm hover:underline">
 								Albums
 							</Link>
+							<Link href="/music-funnel" className="text-sm hover:underline">
+								Music Funnel
+							</Link>
 							<Link href="/concerts" className="text-sm hover:underline">
 								Concerts
 							</Link>

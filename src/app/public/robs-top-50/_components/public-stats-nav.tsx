@@ -11,6 +11,10 @@ const STATS_NAV_OPTIONS = [
 		label: "Highest placement",
 	},
 	{
+		href: "/public/robs-top-50/stats/one-time-artists",
+		label: "One-time artists",
+	},
+	{
 		href: "/public/robs-top-50/stats/unique-artists",
 		label: "Unique artists",
 	},

@@ -34,8 +34,17 @@ function PublicRobsTop50GenreStatsPageInner() {
 		? null
 		: getActivePublishedYear(publishedYears ?? [], yearParam);
 	const activeView: GenreStatsView | null = isAllYears ? "all" : activeYear;
-	const activeTopCount = getActiveTopCount(topParam);
-	const activeTopCountIndex = TOP_COUNT_OPTIONS.indexOf(activeTopCount);
+	const activeYearTopCount = getActiveYearTopCount(topParam);
+	const activeAllYearsTopCount = getActiveAllYearsTopCount(topParam);
+	const activeTopCount = isAllYears
+		? activeAllYearsTopCount
+		: activeYearTopCount;
+	const topCountOptions = isAllYears
+		? ALL_YEARS_TOP_COUNT_OPTIONS
+		: YEAR_TOP_COUNT_OPTIONS;
+	const activeTopCountIndex = isAllYears
+		? ALL_YEARS_TOP_COUNT_OPTIONS.indexOf(activeAllYearsTopCount)
+		: YEAR_TOP_COUNT_OPTIONS.indexOf(activeYearTopCount);
 	const [sliderTopCountIndex, setSliderTopCountIndex] =
 		useState(activeTopCountIndex);
 
@@ -46,12 +55,12 @@ function PublicRobsTop50GenreStatsPageInner() {
 	const yearGenreSummary = useQuery(
 		api.robRankings.getPublishedTopLevelGenreCountsForYear,
 		!isAllYears && activeYear !== null
-			? { year: activeYear, topCount: activeTopCount }
+			? { year: activeYear, topCount: activeYearTopCount }
 			: "skip",
 	);
 	const allYearsGenreSummary = useQuery(
 		api.robRankings.getPublishedTopLevelGenreCountsForAllYears,
-		isAllYears ? { topCount: activeTopCount } : "skip",
+		isAllYears ? { topCount: activeAllYearsTopCount } : "skip",
 	);
 	const genreSummary = isAllYears ? allYearsGenreSummary : yearGenreSummary;
 
@@ -100,7 +109,10 @@ function PublicRobsTop50GenreStatsPageInner() {
 										type="button"
 										onClick={() =>
 											router.replace(
-												getGenreStatsHref(entry.year, activeTopCount),
+												getGenreStatsHref(
+													entry.year,
+													toYearTopCount(activeTopCount),
+												),
 											)
 										}
 										className={cn(
@@ -122,18 +134,17 @@ function PublicRobsTop50GenreStatsPageInner() {
 									<div className="mb-6 space-y-3 rounded-md border bg-background px-3 py-3">
 										<div className="flex items-baseline justify-between gap-3">
 											<p className="font-medium text-sm">Placement range</p>
-											<span
-												aria-live="polite"
-												className="text-muted-foreground text-sm"
-											>
-												Top{" "}
-												{TOP_COUNT_OPTIONS[sliderTopCountIndex] ??
-													activeTopCount}
-											</span>
+										<span
+											aria-live="polite"
+											className="text-muted-foreground text-sm"
+										>
+											Top{" "}
+											{topCountOptions[sliderTopCountIndex] ?? activeTopCount}
+										</span>
 										</div>
 										<Slider
 											aria-label="Filter genre counts by top placement range"
-											max={TOP_COUNT_OPTIONS.length - 1}
+											max={topCountOptions.length - 1}
 											min={0}
 											onValueChange={(values) => {
 												const nextIndex = values[0];
@@ -149,7 +160,7 @@ function PublicRobsTop50GenreStatsPageInner() {
 												) {
 													return;
 												}
-												const nextTopCount = TOP_COUNT_OPTIONS[nextIndex];
+												const nextTopCount = topCountOptions[nextIndex];
 												if (nextTopCount !== undefined && activeView !== null) {
 													router.replace(
 														getGenreStatsHref(activeView, nextTopCount),
@@ -160,7 +171,7 @@ function PublicRobsTop50GenreStatsPageInner() {
 											value={[sliderTopCountIndex]}
 										/>
 										<div className="flex justify-between text-muted-foreground text-xs">
-											{TOP_COUNT_OPTIONS.map((option) => (
+											{topCountOptions.map((option) => (
 												<span key={option}>Top {option}</span>
 											))}
 										</div>
@@ -230,19 +241,38 @@ function getActivePublishedYear(
 	return publishedYears[0]?.year ?? null;
 }
 
-const TOP_COUNT_OPTIONS = [3, 5, 10, 15, 25, 50] as const;
+const YEAR_TOP_COUNT_OPTIONS = [3, 5, 10, 15, 25, 50] as const;
+const ALL_YEARS_TOP_COUNT_OPTIONS = [1, 3, 5, 10, 15, 25, 50] as const;
 
-type TopCountOption = (typeof TOP_COUNT_OPTIONS)[number];
+type YearTopCountOption = (typeof YEAR_TOP_COUNT_OPTIONS)[number];
+type AllYearsTopCountOption = (typeof ALL_YEARS_TOP_COUNT_OPTIONS)[number];
+type TopCountOption = YearTopCountOption | AllYearsTopCountOption;
 
 type GenreStatsView = "all" | number;
 
-function getActiveTopCount(topParam: string | null): TopCountOption {
+function getActiveYearTopCount(topParam: string | null): YearTopCountOption {
 	const paramTopCount = topParam ? Number(topParam) : null;
-	const matchedTopCount = TOP_COUNT_OPTIONS.find(
+	const matchedTopCount = YEAR_TOP_COUNT_OPTIONS.find(
 		(option) => option === paramTopCount,
 	);
 
 	return matchedTopCount ?? 50;
+}
+
+function getActiveAllYearsTopCount(
+	topParam: string | null,
+): AllYearsTopCountOption {
+	const paramTopCount = topParam ? Number(topParam) : null;
+	const matchedTopCount = ALL_YEARS_TOP_COUNT_OPTIONS.find(
+		(option) => option === paramTopCount,
+	);
+
+	return matchedTopCount ?? 50;
+}
+
+function toYearTopCount(topCount: TopCountOption): YearTopCountOption {
+	if (topCount === 1) return 3;
+	return topCount;
 }
 
 function getGenreStatsHref(

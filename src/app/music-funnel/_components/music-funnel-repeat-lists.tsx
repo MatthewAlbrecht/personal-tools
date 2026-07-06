@@ -10,6 +10,7 @@ import {
 	CardHeader,
 	CardTitle,
 } from "~/components/ui/card";
+import { formatRelativeTime } from "~/lib/utils";
 import { api } from "../../../../convex/_generated/api";
 
 export function MusicFunnelRepeatLists({ userId }: { userId: string }) {
@@ -44,6 +45,9 @@ export function MusicFunnelRepeatLists({ userId }: { userId: string }) {
 						subtitle={`${repeat.primaryArtistName} · ${repeat.albumName}`}
 						sourceCount={repeat.sourceCount}
 						sources={repeat.sources.map((s) => s.displayName).join(", ")}
+						firstSeenAt={repeat.firstSeenAt}
+						latestSeenAt={repeat.latestSeenAt}
+						addedToRepeatPlaylistAt={repeat.addedToRepeatPlaylistAt}
 					/>
 				))}
 			</RepeatCard>
@@ -64,6 +68,8 @@ export function MusicFunnelRepeatLists({ userId }: { userId: string }) {
 						subtitle={`${repeat.primaryArtistName} · ${repeat.contributingTrackCount} tracks`}
 						sourceCount={repeat.sourceCount}
 						sources={repeat.sources.map((s) => s.displayName).join(", ")}
+						firstSeenAt={repeat.firstSeenAt}
+						latestSeenAt={repeat.latestSeenAt}
 					/>
 				))}
 			</RepeatCard>
@@ -82,6 +88,8 @@ export function MusicFunnelRepeatLists({ userId }: { userId: string }) {
 						subtitle={`${repeat.contributingTrackCount} contributing tracks`}
 						sourceCount={repeat.sourceCount}
 						sources={repeat.sources.map((s) => s.displayName).join(", ")}
+						firstSeenAt={repeat.firstSeenAt}
+						latestSeenAt={repeat.latestSeenAt}
 					/>
 				))}
 			</RepeatCard>
@@ -130,6 +138,9 @@ function RepeatRow({
 	subtitle,
 	sourceCount,
 	sources,
+	firstSeenAt,
+	latestSeenAt,
+	addedToRepeatPlaylistAt,
 }: {
 	imageUrl?: string;
 	imageAlt?: string;
@@ -137,6 +148,9 @@ function RepeatRow({
 	subtitle: string;
 	sourceCount: number;
 	sources: string;
+	firstSeenAt: number;
+	latestSeenAt: number;
+	addedToRepeatPlaylistAt?: number;
 }) {
 	return (
 		<li className="flex items-start gap-3 rounded-lg border p-3">
@@ -156,6 +170,13 @@ function RepeatRow({
 				<p className="text-muted-foreground text-sm">{subtitle}</p>
 				<p className="mt-1 text-muted-foreground text-xs">
 					{sourceCount} sources · {sources}
+				</p>
+				<p className="mt-0.5 text-muted-foreground text-xs">
+					First seen {formatRelativeTime(firstSeenAt)} · Last seen{" "}
+					{formatRelativeTime(latestSeenAt)}
+					{addedToRepeatPlaylistAt !== undefined
+						? ` · Added to repeats ${formatRelativeTime(addedToRepeatPlaylistAt)}`
+						: null}
 				</p>
 			</div>
 		</li>

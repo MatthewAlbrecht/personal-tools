@@ -1,8 +1,8 @@
 {
 	"manifest_version": 3,
 	"name": "RYM release capture",
-	"version": "0.1.3",
-	"description": "Locally saves Rate Your Music album, EP, mixtape, or compilation metadata when you open a release page.",
+	"version": "0.1.4",
+	"description": "Locally saves Rate Your Music album, EP, mixtape, compilation, or additional release metadata when you open a release page.",
 	"permissions": ["storage"],
 	"optional_host_permissions": ["http://*/*", "https://*/*"],
 	"host_permissions": [
@@ -25,10 +25,12 @@
 				"https://rateyourmusic.com/release/ep/*",
 				"https://rateyourmusic.com/release/mixtape/*",
 				"https://rateyourmusic.com/release/comp/*",
+				"https://rateyourmusic.com/release/additional/*",
 				"https://www.rateyourmusic.com/release/album/*",
 				"https://www.rateyourmusic.com/release/ep/*",
 				"https://www.rateyourmusic.com/release/mixtape/*",
-				"https://www.rateyourmusic.com/release/comp/*"
+				"https://www.rateyourmusic.com/release/comp/*",
+				"https://www.rateyourmusic.com/release/additional/*"
 			],
 			"js": ["content.js"],
 			"run_at": "document_idle"

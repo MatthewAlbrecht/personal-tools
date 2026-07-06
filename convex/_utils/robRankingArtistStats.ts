@@ -218,6 +218,36 @@ type HighestPlacementAccumulator = {
 	bestPlacementYear: number;
 };
 
+export function buildArtistOneTimePlacementRows(
+	entries: ArtistFinishInput[],
+): ArtistHighestPlacementRow[] {
+	const finishCountByKey = new Map<string, number>();
+
+	for (const entry of entries) {
+		const seenInEntry = new Set<string>();
+
+		for (const artistName of entry.artistNames) {
+			const artistKey = normalizeArtistName(artistName);
+			if (!artistKey || seenInEntry.has(artistKey)) continue;
+			seenInEntry.add(artistKey);
+			finishCountByKey.set(
+				artistKey,
+				(finishCountByKey.get(artistKey) ?? 0) + 1,
+			);
+		}
+	}
+
+	const oneTimeKeys = new Set(
+		[...finishCountByKey.entries()]
+			.filter(([, count]) => count === 1)
+			.map(([artistKey]) => artistKey),
+	);
+
+	return buildArtistHighestPlacementRows(entries).filter((row) =>
+		oneTimeKeys.has(row.artistKey),
+	);
+}
+
 export function buildArtistHighestPlacementRows(
 	entries: ArtistFinishInput[],
 ): ArtistHighestPlacementRow[] {

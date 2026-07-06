@@ -141,6 +141,7 @@ const trackRepeatValidator = v.object({
 	sources: v.array(sourceLabelValidator),
 	firstSeenAt: v.number(),
 	latestSeenAt: v.number(),
+	addedToRepeatPlaylistAt: v.optional(v.number()),
 });
 
 const albumRepeatValidator = v.object({
@@ -788,7 +789,15 @@ export const listTrackRepeats = query({
 		const limit = clampLimit(args.limit, 25, 50);
 		const encounters = await loadEncounterRows(ctx, args.userId, 5000);
 		const sourceLabels = await loadSourceLabelMap(ctx, args.userId);
-		const repeats = buildTrackRepeats(encounters, sourceLabels);
+		const repeatAddedAtByTrackId = await loadRepeatPlaylistAddedAtByTrackId(
+			ctx,
+			args.userId,
+		);
+		const repeats = buildTrackRepeats(
+			encounters,
+			sourceLabels,
+			repeatAddedAtByTrackId,
+		);
 		return repeats.slice(0, limit);
 	},
 });
@@ -899,9 +908,26 @@ async function loadSourceLabelMap(
 	);
 }
 
+async function loadRepeatPlaylistAddedAtByTrackId(
+	ctx: QueryCtx,
+	userId: string,
+): Promise<Map<string, number>> {
+	const rows = await ctx.db
+		.query("musicFunnelPlaylistWrites")
+		.withIndex("by_userId_kind_spotifyTrackId", (q) =>
+			q.eq("userId", userId).eq("kind", "repeat"),
+		)
+		.collect();
+
+	return new Map(
+		rows.map((row) => [row.spotifyTrackId, row.writtenAt] as const),
+	);
+}
+
 function buildTrackRepeats(
 	encounters: EncounterLike[],
 	sourceLabels: Map<Id<"musicFunnelSources">, SourceLabel>,
+	repeatAddedAtByTrackId: Map<string, number>,
 ) {
 	const rowsByTrackId = new Map<string, EncounterLike[]>();
 	for (const encounter of encounters) {
@@ -921,6 +947,7 @@ function buildTrackRepeats(
 				return null;
 			}
 			const timing = getRepeatTiming(rows);
+			const addedToRepeatPlaylistAt = repeatAddedAtByTrackId.get(spotifyTrackId);
 			return {
 				spotifyTrackId,
 				trackName: first.trackName,
@@ -930,6 +957,9 @@ function buildTrackRepeats(
 				sourceCount: sourceIds.length,
 				sources: sourceIdsToLabels(sourceIds, sourceLabels),
 				...timing,
+				...(addedToRepeatPlaylistAt !== undefined
+					? { addedToRepeatPlaylistAt }
+					: {}),
 			};
 		})
 		.filter(
