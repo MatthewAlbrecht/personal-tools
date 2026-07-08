@@ -31,12 +31,12 @@ import {
 	type ZineDisplaySettings,
 	resolveZineDisplaySettings,
 } from "~/lib/zine/zine-display-settings";
-import type { ZineInsideBackSection } from "~/lib/zine/zine-inside-back-sections";
 import {
 	ZINE_INSIDE_BACK_MARGIN_SLIDER,
 	type ZineInsideBackLayoutSettings,
 	resolveZineInsideBackLayoutSettings,
 } from "~/lib/zine/zine-inside-back-layout";
+import type { ZineInsideBackSection } from "~/lib/zine/zine-inside-back-sections";
 import {
 	ZINE_INTRO_FONT_SIZE_SLIDER,
 	ZINE_INTRO_MARGIN_SLIDER,
@@ -66,6 +66,7 @@ import { ZineInstrumentalGroupPage } from "./zine-instrumental-group-page";
 import { ZineIntroPage } from "./zine-intro-page";
 import { triggerZinePrintRemeasure } from "./zine-print-remeasure";
 import { ZinePrintStyles } from "./zine-print-styles";
+import { ZineSongGroupPage } from "./zine-song-group-page";
 import {
 	type ZineDisplayOptions,
 	type ZineLyricsColumnMode,
@@ -194,6 +195,17 @@ export function LyricsZine({
 		}
 		return hidden;
 	});
+	const [songCollapseWithPrevious, setSongCollapseWithPrevious] = useState<
+		Record<string, true>
+	>(() => {
+		const collapsed: Record<string, true> = {};
+		for (const [id, settings] of Object.entries(itemSettingsById)) {
+			if (settings.collapseWithPrevious === true) {
+				collapsed[id] = true;
+			}
+		}
+		return collapsed;
+	});
 	const [coverImageUrl, setCoverImageUrl] = useState(cover.imageUrl ?? "");
 	const [coverGreyscale, setCoverGreyscale] = useState(cover.greyscale);
 	const [coverTextLayout, setCoverTextLayout] = useState<ZineCoverTextLayout>(
@@ -270,7 +282,12 @@ export function LyricsZine({
 			song.id in songIntroContentById
 				? songIntroContentById[song.id]
 				: song.introContent,
+		collapseWithPrevious: song.id in songCollapseWithPrevious,
 	}));
+
+	const orderedSongIds = [...songs]
+		.sort((left, right) => left.position - right.position)
+		.map((song) => song.id);
 
 	const displayOptions: ZineDisplayOptions = {
 		showArtist: displaySettings.showArtist,
@@ -286,8 +303,9 @@ export function LyricsZine({
 	const resolvedCoverImageUrl = coverImageUrl.trim() || undefined;
 	const resolvedCoverGreyscale =
 		coverGreyscale && Boolean(resolvedCoverImageUrl);
-	const resolvedCoverReleaseYear =
-		parseZineCoverReleaseYearInput(coverReleaseYearInput);
+	const resolvedCoverReleaseYear = parseZineCoverReleaseYearInput(
+		coverReleaseYearInput,
+	);
 
 	const pages = buildZinePages({
 		playlistTitle: collectionTitle,
@@ -321,7 +339,18 @@ export function LyricsZine({
 			fontSizePt: getLyricsTargetPtForSong(songLyricsTargetSizesPt, songId),
 			condenseScale: getCondenseScaleForSong(songTextCondenseScales, songId),
 			showCredits: !(songId in songCreditsHidden),
+			collapseWithPrevious: songId in songCollapseWithPrevious,
 		};
+	}
+
+	function updateCollapseWithPrevious(songId: string, collapse: boolean): void {
+		setSongCollapseWithPrevious((previous) =>
+			setSongCollapsed(previous, songId, collapse),
+		);
+		queueDebouncedPersistZineItemSettings(songId, {
+			...getZineSettingsSnapshot(songId),
+			collapseWithPrevious: collapse,
+		});
 	}
 
 	function queueDebouncedPersistZineItemSettings(
@@ -350,6 +379,7 @@ export function LyricsZine({
 				fontSizePt: roundedPt,
 				condenseScale: roundedCondense,
 				showCredits: settings.showCredits,
+				collapseWithPrevious: settings.collapseWithPrevious,
 			});
 		}, 500);
 
@@ -634,6 +664,30 @@ export function LyricsZine({
 					creditVisibility={creditVisibility}
 					displayOptions={displayOptions}
 					getShowCredits={(songId) => !(songId in songCreditsHidden)}
+					getTitleCondenseScale={(songId) =>
+						getCondenseScaleForSong(songTextCondenseScales, songId)
+					}
+					onHideCreditLabel={
+						canEdit && persistence?.hideCreditLabel
+							? (songId, label) => persistence.hideCreditLabel?.(songId, label)
+							: undefined
+					}
+					songs={page.songs}
+				/>
+			);
+		}
+
+		if (page.kind === "song-group") {
+			return (
+				<ZineSongGroupPage
+					key={`${keyPrefix}-song-group-${page.songs.map((song) => song.songId).join("-")}`}
+					canEditCredits={canEdit}
+					creditVisibility={creditVisibility}
+					displayOptions={displayOptions}
+					getShowCredits={(songId) => !(songId in songCreditsHidden)}
+					getLyricsFontSizePt={(songId) =>
+						getLyricsTargetPtForSong(songLyricsTargetSizesPt, songId)
+					}
 					getTitleCondenseScale={(songId) =>
 						getCondenseScaleForSong(songTextCondenseScales, songId)
 					}
@@ -1080,7 +1134,10 @@ export function LyricsZine({
 											{persistence?.saveCoverTextLayout ? (
 												<aside className="no-print zine-song-columns-panel space-y-4 rounded-lg border bg-card px-3 py-3 shadow-sm">
 													<div className="space-y-2">
-														<Label htmlFor="zine-cover-release-year" className="text-sm">
+														<Label
+															htmlFor="zine-cover-release-year"
+															className="text-sm"
+														>
 															Release year
 														</Label>
 														<Input
@@ -1095,7 +1152,8 @@ export function LyricsZine({
 															value={coverReleaseYearInput}
 														/>
 														<p className="text-muted-foreground text-xs leading-snug">
-															Optional · shown above the title in a small white box
+															Optional · shown above the title in a small white
+															box
 														</p>
 													</div>
 													<ZineCoverTextLayoutControls
@@ -1186,6 +1244,48 @@ export function LyricsZine({
 													page (up to 6 per page). Turn on &ldquo;Separate
 													instrumental pages&rdquo; to give each its own page.
 												</p>
+											</aside>
+										</>
+									) : (
+										renderPageByReadingIndex(index, `scr-${index}`)
+									)}
+								</div>
+							);
+						}
+
+						if (page.kind === "song-group") {
+							const groupKey = page.songs.map((song) => song.songId).join("-");
+							return (
+								<div
+									key={`song-group-${groupKey}`}
+									className={cn(canEdit && "zine-song-preview-shell")}
+								>
+									{canEdit ? (
+										<>
+											<div className="flex shrink-0 justify-start">
+												{renderPageByReadingIndex(index, `scr-${index}`)}
+											</div>
+											<aside className="no-print zine-song-columns-panel space-y-3 rounded-lg border bg-card px-3 py-3 shadow-sm">
+												<div>
+													<p className="font-medium text-foreground text-sm">
+														{page.songs.length} tracks share this page
+													</p>
+													<p className="mt-1 text-muted-foreground text-xs leading-snug">
+														Combine short tracks onto one page, or split any
+														track back onto its own page.
+													</p>
+												</div>
+												<ZineCollapseControls
+													getTitle={(songId) =>
+														songsById.get(songId)?.title ?? "Untitled"
+													}
+													isCollapsed={(songId) =>
+														songId in songCollapseWithPrevious
+													}
+													onSetCollapse={updateCollapseWithPrevious}
+													orderedSongIds={orderedSongIds}
+													unitSongIds={page.songs.map((song) => song.songId)}
+												/>
 											</aside>
 										</>
 									) : (
@@ -1303,6 +1403,19 @@ export function LyricsZine({
 													songTitle={page.title}
 													trackNumber={page.position}
 												/>
+												<div className="border-t pt-3">
+													<ZineCollapseControls
+														getTitle={(songId) =>
+															songsById.get(songId)?.title ?? "Untitled"
+														}
+														isCollapsed={(songId) =>
+															songId in songCollapseWithPrevious
+														}
+														onSetCollapse={updateCollapseWithPrevious}
+														orderedSongIds={orderedSongIds}
+														unitSongIds={[page.songId]}
+													/>
+												</div>
 												{persistence?.saveSongIntroContent ? (
 													<div className="border-t pt-3">
 														<IntroContentEditor
@@ -1510,6 +1623,100 @@ function setSongCreditsVisible(
 	}
 
 	return { ...previous, [songId]: true };
+}
+
+function setSongCollapsed(
+	previous: Record<string, true>,
+	songId: string,
+	collapse: boolean,
+): Record<string, true> {
+	if (collapse) {
+		if (previous[songId] === true) {
+			return previous;
+		}
+		return { ...previous, [songId]: true };
+	}
+
+	if (!(songId in previous)) {
+		return previous;
+	}
+	const next = { ...previous };
+	delete next[songId];
+	return next;
+}
+
+function ZineCollapseControls({
+	unitSongIds,
+	orderedSongIds,
+	getTitle,
+	isCollapsed,
+	onSetCollapse,
+}: {
+	unitSongIds: string[];
+	orderedSongIds: string[];
+	getTitle: (songId: string) => string;
+	isCollapsed: (songId: string) => boolean;
+	onSetCollapse: (songId: string, collapse: boolean) => void;
+}) {
+	const firstId = unitSongIds[0];
+	const lastId = unitSongIds[unitSongIds.length - 1];
+	if (!firstId || !lastId) {
+		return null;
+	}
+
+	const lastIndex = orderedSongIds.indexOf(lastId);
+	const nextId = lastIndex >= 0 ? orderedSongIds[lastIndex + 1] : undefined;
+
+	// One toggle per boundary between consecutive tracks. Each boundary's flag
+	// lives on the lower track (the one that "collapses with previous").
+	const boundarySongIds = [...unitSongIds];
+	if (nextId) {
+		boundarySongIds.push(nextId);
+	}
+
+	const rows = boundarySongIds
+		.map((songId) => {
+			const index = orderedSongIds.indexOf(songId);
+			const previousId = index > 0 ? orderedSongIds[index - 1] : undefined;
+			return previousId ? { songId, previousId } : undefined;
+		})
+		.filter(
+			(row): row is { songId: string; previousId: string } => row !== undefined,
+		);
+
+	if (rows.length === 0) {
+		return (
+			<p className="text-muted-foreground text-xs leading-snug">
+				This is the only track — nothing to combine with.
+			</p>
+		);
+	}
+
+	return (
+		<div className="space-y-2">
+			<p className="font-medium text-foreground text-xs">Combine pages</p>
+			{rows.map(({ songId, previousId }) => (
+				<label
+					key={songId}
+					className="flex cursor-pointer items-start gap-2 text-xs"
+				>
+					<input
+						checked={isCollapsed(songId)}
+						className="mt-0.5"
+						onChange={(event) => onSetCollapse(songId, event.target.checked)}
+						type="checkbox"
+					/>
+					<span className="leading-snug">
+						Share a page:{" "}
+						<span className="text-muted-foreground">
+							{getTitle(previousId)}
+						</span>{" "}
+						+ <span className="text-muted-foreground">{getTitle(songId)}</span>
+					</span>
+				</label>
+			))}
+		</div>
+	);
 }
 
 function ZineTrackLyricsColumnControls({

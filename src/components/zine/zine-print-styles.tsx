@@ -551,23 +551,13 @@ export function ZinePrintStyles() {
 						min-height: 0.85in;
 						max-height: 0.85in;
 						margin-top: auto;
-						justify-content: flex-start;
-					}
-
-					.zine-song-footer-rule {
-						border: 0;
-						border-top: 1px solid #666666;
-						margin: 0;
-						width: 100%;
-						height: 0;
-						flex-shrink: 0;
+						justify-content: flex-end;
 					}
 
 					.zine-song-footer {
-						flex: 1 1 auto;
+						flex: 0 0 auto;
 						min-height: 0;
 						overflow: hidden;
-						margin-top: 0.08in;
 					}
 
 					.zine-footer-credits {
@@ -636,7 +626,7 @@ export function ZinePrintStyles() {
 						display: flex;
 						flex-direction: column;
 						gap: 0.12in;
-						justify-content: flex-start;
+						justify-content: center;
 					}
 
 					.zine-instrumental-group-block {
@@ -651,8 +641,44 @@ export function ZinePrintStyles() {
 					}
 
 					.zine-instrumental-group-block + .zine-instrumental-group-block {
-						padding-top: 0.1in;
-						border-top: 0.5pt solid #cccccc;
+						padding-top: 0.2in;
+					}
+
+					.zine-page-song-group {
+						display: flex;
+						flex-direction: column;
+						gap: 0.12in;
+						justify-content: center;
+					}
+
+					.zine-song-group-block {
+						display: flex;
+						flex-direction: column;
+						flex-shrink: 0;
+						gap: 0;
+						min-height: 0;
+					}
+
+					.zine-song-group-block .zine-song-top {
+						margin-bottom: 0.08in;
+					}
+
+					.zine-song-group-block + .zine-song-group-block {
+						padding-top: 0.2in;
+					}
+
+					.zine-song-group-lyrics {
+						margin: 0.04in 0 0;
+					}
+
+					.zine-song-group-credits {
+						margin-top: 0.06in;
+					}
+
+					.zine-song-group-credits-with-lyrics {
+						margin-top: 0.08in;
+						padding-top: 0.06in;
+						border-top: 0.5pt solid #e2e2e2;
 					}
 
 					.print-only {

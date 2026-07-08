@@ -6,19 +6,19 @@ import {
 	ZINE_TEXT_CONDENSE,
 } from "~/lib/zine/zine-layout";
 import type { ZineCredit } from "~/lib/zine/zine-types";
-import type { CreditVisibilityState } from "../../../convex/_utils/geniusCreditVisibility";
 import {
 	filterVisibleCredits,
 	hasRenderableLyrics,
 } from "../../../convex/_utils/geniusAlbumLyrics";
+import type { CreditVisibilityState } from "../../../convex/_utils/geniusCreditVisibility";
 import { LyricsRenderer } from "./lyrics-renderer";
-import { ZineSongPageFooterCredits } from "./zine-song-page-footer-credits";
 import {
 	type ZineLyricsColumnMode,
 	useZineSongLyricsFit,
 } from "./use-zine-song-lyrics-fit";
 import type { ZineDisplayOptions } from "./zine-song-header";
 import { ZineSongHeader } from "./zine-song-header";
+import { ZineSongPageFooterCredits } from "./zine-song-page-footer-credits";
 
 export type { ZineDisplayOptions } from "./zine-song-header";
 export type { ZineLyricsColumnMode } from "./use-zine-song-lyrics-fit";
@@ -152,9 +152,7 @@ function ZineSongPageContent({
 					song={song}
 				/>
 				{hasLyrics ? (
-					<p className="zine-section-label zine-song-lyrics-label">
-						LYRICS
-					</p>
+					<p className="zine-section-label zine-song-lyrics-label">LYRICS</p>
 				) : null}
 			</div>
 			<div
@@ -177,9 +175,7 @@ function ZineSongPageContent({
 							: "flex items-center justify-center",
 					)}
 					style={
-						hasLyrics
-							? { fontSize: `${lyricsFit.fontSizePt}pt` }
-							: undefined
+						hasLyrics ? { fontSize: `${lyricsFit.fontSizePt}pt` } : undefined
 					}
 				>
 					{hasLyrics ? (
@@ -194,7 +190,6 @@ function ZineSongPageContent({
 			</div>
 			{showCredits ? (
 				<div className="zine-song-page-footer">
-					<hr className="zine-song-footer-rule" />
 					<div className="zine-song-footer">
 						{visibleCredits ? (
 							<ZineSongPageFooterCredits

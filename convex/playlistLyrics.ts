@@ -17,15 +17,18 @@ import {
 	zineCoverTextLayoutMutationValidator,
 } from "./_utils/zineCoverTextLayout";
 import {
-	normalizeZineInsideBackSections,
-	zineInsideBackSectionsValidator,
-} from "./_utils/zineInsideBackSections";
-import {
 	zineInsideBackContentAlignStoredValidator,
 	zineInsideBackLayoutMutationValidator,
 } from "./_utils/zineInsideBackLayout";
+import {
+	normalizeZineInsideBackSections,
+	zineInsideBackSectionsValidator,
+} from "./_utils/zineInsideBackSections";
 import { requireAuth } from "./auth";
-import { getSiteWideHiddenCreditLabelKeys, getIgnoredCreditLabelKeys } from "./geniusCreditLabels";
+import {
+	getIgnoredCreditLabelKeys,
+	getSiteWideHiddenCreditLabelKeys,
+} from "./geniusCreditLabels";
 
 const playlistStatusValidator = v.union(v.literal("draft"), v.literal("ready"));
 const scrapeStatusValidator = v.union(v.literal("ready"), v.literal("failed"));
@@ -179,6 +182,7 @@ const itemWithScrapeValidator = v.object({
 	zineLyricsFontSizePt: v.optional(v.number()),
 	zineTitleCondenseScale: v.optional(v.number()),
 	zineShowCredits: v.optional(v.boolean()),
+	zineCollapseWithPrevious: v.optional(v.boolean()),
 	durationSecondsOverride: v.optional(v.number()),
 	hiddenCreditLabels: v.optional(v.array(v.string())),
 	shownCreditLabels: v.optional(v.array(v.string())),
@@ -202,6 +206,7 @@ const publicItemWithScrapeValidator = v.object({
 	zineLyricsFontSizePt: v.optional(v.number()),
 	zineTitleCondenseScale: v.optional(v.number()),
 	zineShowCredits: v.optional(v.boolean()),
+	zineCollapseWithPrevious: v.optional(v.boolean()),
 	durationSecondsOverride: v.optional(v.number()),
 	hiddenCreditLabels: v.optional(v.array(v.string())),
 	shownCreditLabels: v.optional(v.array(v.string())),
@@ -1045,6 +1050,7 @@ export const updateZineItemSettings = mutation({
 		zineLyricsFontSizePt: v.optional(v.number()),
 		zineTitleCondenseScale: v.optional(v.number()),
 		zineShowCredits: v.optional(v.boolean()),
+		zineCollapseWithPrevious: v.optional(v.boolean()),
 	},
 	returns: v.id("playlistLyricsItems"),
 	handler: async (ctx, args) => {
@@ -1054,7 +1060,8 @@ export const updateZineItemSettings = mutation({
 			args.zineLyricsColumnCount === undefined &&
 			args.zineLyricsFontSizePt === undefined &&
 			args.zineTitleCondenseScale === undefined &&
-			args.zineShowCredits === undefined
+			args.zineShowCredits === undefined &&
+			args.zineCollapseWithPrevious === undefined
 		) {
 			throw new Error("No zine settings provided");
 		}
@@ -1101,6 +1108,7 @@ export const updateZineItemSettings = mutation({
 			zineLyricsFontSizePt?: number | undefined;
 			zineTitleCondenseScale?: number | undefined;
 			zineShowCredits?: boolean | undefined;
+			zineCollapseWithPrevious?: boolean | undefined;
 			updatedAt: number;
 		} = {
 			updatedAt: Date.now(),
@@ -1128,6 +1136,12 @@ export const updateZineItemSettings = mutation({
 
 		if (args.zineShowCredits !== undefined) {
 			patch.zineShowCredits = args.zineShowCredits ? undefined : false;
+		}
+
+		if (args.zineCollapseWithPrevious !== undefined) {
+			patch.zineCollapseWithPrevious = args.zineCollapseWithPrevious
+				? true
+				: undefined;
 		}
 
 		await ctx.db.patch(args.itemId, patch);
@@ -1574,6 +1588,7 @@ function toPublicItemWithScrape(item: ItemWithScrape) {
 		zineLyricsFontSizePt: item.zineLyricsFontSizePt,
 		zineTitleCondenseScale: item.zineTitleCondenseScale,
 		zineShowCredits: item.zineShowCredits,
+		zineCollapseWithPrevious: item.zineCollapseWithPrevious,
 		durationSecondsOverride: item.durationSecondsOverride,
 		hiddenCreditLabels: item.hiddenCreditLabels,
 		shownCreditLabels: item.shownCreditLabels,

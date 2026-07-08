@@ -1,11 +1,11 @@
+import type { ZineInsideBackLayoutSettings } from "./zine-inside-back-layout";
+import { resolveZineInsideBackLayoutSettings } from "./zine-inside-back-layout";
 import {
 	type ZineInsideBackSection,
 	hasInsideBackContent,
 } from "./zine-inside-back-sections";
 import { buildCollapsedSongPages } from "./zine-instrumental-pages";
 import type { ZineIntroSettings } from "./zine-intro-layout";
-import type { ZineInsideBackLayoutSettings } from "./zine-inside-back-layout";
-import { resolveZineInsideBackLayoutSettings } from "./zine-inside-back-layout";
 import type { ZineSongDisplayInput } from "./zine-types";
 
 export type ZineSongInput = ZineSongDisplayInput;
@@ -32,6 +32,7 @@ export type ZineSongPageData = {
 	credits?: ZineSongDisplayInput["credits"];
 	hiddenCreditLabels?: string[];
 	shownCreditLabels?: string[];
+	collapseWithPrevious?: boolean;
 };
 
 export type ZineSongPage = {
@@ -40,6 +41,11 @@ export type ZineSongPage = {
 
 export type ZineInstrumentalGroupPage = {
 	kind: "instrumental-group";
+	songs: ZineSongPageData[];
+};
+
+export type ZineSongGroupPage = {
+	kind: "song-group";
 	songs: ZineSongPageData[];
 };
 
@@ -68,6 +74,7 @@ export type ZinePage =
 	| ZineIntroPageModel
 	| ZineSongPage
 	| ZineInstrumentalGroupPage
+	| ZineSongGroupPage
 	| ZineBlankPage
 	| ZineInsideBackPage
 	| ZineBackCoverPage;
@@ -89,6 +96,7 @@ function mapSongInputToPageData(song: ZineSongInput): ZineSongPageData {
 		credits: song.credits,
 		hiddenCreditLabels: song.hiddenCreditLabels,
 		shownCreditLabels: song.shownCreditLabels,
+		collapseWithPrevious: song.collapseWithPrevious,
 	};
 }
 
@@ -152,6 +160,14 @@ export function buildZinePages({
 	for (const songPage of collapsedSongPages) {
 		if (songPage.kind === "song") {
 			pages.push({ kind: "song", ...songPage.data });
+			continue;
+		}
+
+		if (songPage.kind === "song-group") {
+			pages.push({
+				kind: "song-group",
+				songs: songPage.songs,
+			});
 			continue;
 		}
 

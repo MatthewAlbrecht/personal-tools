@@ -170,7 +170,9 @@ export default defineSchema({
 		zineInsideBackContentAlign: v.optional(
 			zineInsideBackContentAlignStoredValidator,
 		),
-		zineInsideBackArtistDisplay: v.optional(zineInsideBackArtistDisplayValidator),
+		zineInsideBackArtistDisplay: v.optional(
+			zineInsideBackArtistDisplayValidator,
+		),
 		zineInsideBackRecommendationRowAlign: v.optional(
 			zineInsideBackRecommendationRowAlignValidator,
 		),
@@ -214,6 +216,7 @@ export default defineSchema({
 		zineLyricsFontSizePt: v.optional(v.number()),
 		zineTitleCondenseScale: v.optional(v.number()),
 		zineShowCredits: v.optional(v.boolean()),
+		zineCollapseWithPrevious: v.optional(v.boolean()),
 		createdAt: v.number(), // Unix timestamp
 	})
 		.index("by_albumId", ["albumId"]) // For fetching songs by album
@@ -248,7 +251,9 @@ export default defineSchema({
 		zineInsideBackContentAlign: v.optional(
 			zineInsideBackContentAlignStoredValidator,
 		),
-		zineInsideBackArtistDisplay: v.optional(zineInsideBackArtistDisplayValidator),
+		zineInsideBackArtistDisplay: v.optional(
+			zineInsideBackArtistDisplayValidator,
+		),
 		zineInsideBackRecommendationRowAlign: v.optional(
 			zineInsideBackRecommendationRowAlignValidator,
 		),
@@ -293,6 +298,7 @@ export default defineSchema({
 		zineLyricsFontSizePt: v.optional(v.number()),
 		zineTitleCondenseScale: v.optional(v.number()),
 		zineShowCredits: v.optional(v.boolean()),
+		zineCollapseWithPrevious: v.optional(v.boolean()),
 		durationSecondsOverride: v.optional(v.number()),
 		hiddenCreditLabels: v.optional(v.array(v.string())),
 		shownCreditLabels: v.optional(v.array(v.string())),

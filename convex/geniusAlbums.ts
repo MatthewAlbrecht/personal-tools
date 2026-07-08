@@ -10,23 +10,6 @@ import {
 } from "./_utils/albumMatchingCore";
 import { buildAlbumSongRecordInput } from "./_utils/geniusAlbumLyrics";
 import {
-	syncGeniusAlbumTrackDurationsFromSpotify,
-	type SyncTrackDurationsResult,
-} from "./_utils/geniusSpotifyTrackDurations";
-import {
-	zineCoverTextAlignValidator,
-	zineCoverTextAnchorValidator,
-	zineCoverTextLayoutMutationValidator,
-} from "./_utils/zineCoverTextLayout";
-import {
-	normalizeZineInsideBackSections,
-	zineInsideBackSectionsValidator,
-} from "./_utils/zineInsideBackSections";
-import {
-	zineInsideBackContentAlignStoredValidator,
-	zineInsideBackLayoutMutationValidator,
-} from "./_utils/zineInsideBackLayout";
-import {
 	applyHideCreditLabel,
 	applyShowCreditLabel,
 	normalizeCreditLabelList,
@@ -40,8 +23,28 @@ import {
 	extractSongTitle,
 	slugify,
 } from "./_utils/geniusParser";
-import { getSiteWideHiddenCreditLabelKeys, getIgnoredCreditLabelKeys } from "./geniusCreditLabels";
+import {
+	type SyncTrackDurationsResult,
+	syncGeniusAlbumTrackDurationsFromSpotify,
+} from "./_utils/geniusSpotifyTrackDurations";
+import {
+	zineCoverTextAlignValidator,
+	zineCoverTextAnchorValidator,
+	zineCoverTextLayoutMutationValidator,
+} from "./_utils/zineCoverTextLayout";
+import {
+	zineInsideBackContentAlignStoredValidator,
+	zineInsideBackLayoutMutationValidator,
+} from "./_utils/zineInsideBackLayout";
+import {
+	normalizeZineInsideBackSections,
+	zineInsideBackSectionsValidator,
+} from "./_utils/zineInsideBackSections";
 import { requireAuth } from "./auth";
+import {
+	getIgnoredCreditLabelKeys,
+	getSiteWideHiddenCreditLabelKeys,
+} from "./geniusCreditLabels";
 
 const geniusCreditValidator = v.object({
 	label: v.string(),
@@ -1119,6 +1122,7 @@ export const updateZineSongSettings = mutation({
 		zineLyricsFontSizePt: v.optional(v.number()),
 		zineTitleCondenseScale: v.optional(v.number()),
 		zineShowCredits: v.optional(v.boolean()),
+		zineCollapseWithPrevious: v.optional(v.boolean()),
 	},
 	returns: v.id("geniusSongs"),
 	handler: async (ctx, args) => {
@@ -1127,7 +1131,8 @@ export const updateZineSongSettings = mutation({
 			args.zineLyricsColumnCount === undefined &&
 			args.zineLyricsFontSizePt === undefined &&
 			args.zineTitleCondenseScale === undefined &&
-			args.zineShowCredits === undefined
+			args.zineShowCredits === undefined &&
+			args.zineCollapseWithPrevious === undefined
 		) {
 			throw new Error("No zine settings provided");
 		}
@@ -1139,6 +1144,7 @@ export const updateZineSongSettings = mutation({
 			zineLyricsFontSizePt?: number | undefined;
 			zineTitleCondenseScale?: number | undefined;
 			zineShowCredits?: boolean | undefined;
+			zineCollapseWithPrevious?: boolean | undefined;
 		} = {};
 
 		if (args.zineLyricsColumnCount !== undefined) {
@@ -1155,6 +1161,11 @@ export const updateZineSongSettings = mutation({
 		}
 		if (args.zineShowCredits !== undefined) {
 			patch.zineShowCredits = args.zineShowCredits ? undefined : false;
+		}
+		if (args.zineCollapseWithPrevious !== undefined) {
+			patch.zineCollapseWithPrevious = args.zineCollapseWithPrevious
+				? true
+				: undefined;
 		}
 
 		await ctx.db.patch(args.songId, patch);

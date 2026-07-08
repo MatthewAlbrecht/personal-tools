@@ -6,8 +6,8 @@ import Link from "next/link";
 import { Button } from "~/components/ui/button";
 import { LyricsZine, LyricsZineSkeleton } from "~/components/zine/lyrics-zine";
 import { coverTextLayoutFromStoredFields } from "~/lib/zine/zine-cover-text-layout";
-import { hasInsideBackContent } from "~/lib/zine/zine-inside-back-sections";
 import { insideBackLayoutFromStoredFields } from "~/lib/zine/zine-inside-back-layout";
+import { hasInsideBackContent } from "~/lib/zine/zine-inside-back-sections";
 import type { ZineItemSettings } from "~/lib/zine/zine-types";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
@@ -114,7 +114,8 @@ export function PlaylistLyricsZine({ slug, variant }: PlaylistLyricsZineProps) {
 			columnCount: song.zineLyricsColumnCount,
 			fontSizePt: song.zineLyricsFontSizePt,
 			condenseScale: song.zineTitleCondenseScale,
-			showCredits: song.zineShowCredits === false ? false : true,
+			showCredits: song.zineShowCredits !== false,
+			collapseWithPrevious: song.zineCollapseWithPrevious === true,
 		};
 	}
 
@@ -151,9 +152,7 @@ export function PlaylistLyricsZine({ slug, variant }: PlaylistLyricsZineProps) {
 			coverReleaseYear={playlist.zineCoverReleaseYear}
 			itemSettingsById={itemSettingsById}
 			displaySettings={playlist.zineDisplaySettings ?? undefined}
-			siteWideHiddenCreditLabelKeys={
-				playlistData.siteWideHiddenCreditLabelKeys
-			}
+			siteWideHiddenCreditLabelKeys={playlistData.siteWideHiddenCreditLabelKeys}
 			ignoredCreditLabelKeys={playlistData.ignoredCreditLabelKeys}
 			songs={songs}
 			persistence={
@@ -166,6 +165,7 @@ export function PlaylistLyricsZine({ slug, variant }: PlaylistLyricsZineProps) {
 									zineLyricsFontSizePt: s.fontSizePt,
 									zineTitleCondenseScale: s.condenseScale,
 									zineShowCredits: s.showCredits,
+									zineCollapseWithPrevious: s.collapseWithPrevious,
 								});
 							},
 							hideCreditLabel: (songId, label) => {

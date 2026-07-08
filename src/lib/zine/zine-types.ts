@@ -24,6 +24,8 @@ export type ZineSongDisplayInput = {
 	credits?: ZineCredit[];
 	hiddenCreditLabels?: string[];
 	shownCreditLabels?: string[];
+	/** When true, this track shares a page with the track above it. */
+	collapseWithPrevious?: boolean;
 };
 
 export type ZineItemSettings = {
@@ -32,6 +34,8 @@ export type ZineItemSettings = {
 	condenseScale?: number;
 	/** Default true when unset. */
 	showCredits?: boolean;
+	/** When true, this track shares a page with the track above it. */
+	collapseWithPrevious?: boolean;
 };
 
 export type ZineBackCoverQrSlot = {
