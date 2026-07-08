@@ -51,9 +51,6 @@ export function ZineInstrumentalGroupPage({
 						/>
 						{visibleCredits?.length ? (
 							<div className="zine-instrumental-group-track-credits">
-								<p className="zine-section-label zine-song-footer-credits-label">
-									CREDITS
-								</p>
 								<ZineSongPageFooterCredits
 									canEditCredits={canEditCredits ?? false}
 									credits={visibleCredits}
