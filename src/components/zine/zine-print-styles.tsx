@@ -541,11 +541,6 @@ export function ZinePrintStyles() {
 						margin: 0.08in 0 0.04in;
 					}
 
-					.zine-song-footer-credits-label {
-						margin: 0.08in 0 0.04in;
-						flex-shrink: 0;
-					}
-
 					/* Matches ZINE_FOOTER_ZONE_IN (= ZINE_FOOTER_ZONE_HEIGHT_PT / 72) in zine-layout.ts. */
 					.zine-song-page-footer {
 						box-sizing: border-box;
@@ -657,11 +652,6 @@ export function ZinePrintStyles() {
 					.zine-instrumental-group-block + .zine-instrumental-group-block {
 						padding-top: 0.1in;
 						border-top: 0.5pt solid #cccccc;
-					}
-
-					.zine-instrumental-group-track-credits
-						.zine-song-footer-credits-label {
-						margin: 0 0 0.03in;
 					}
 
 					.print-only {

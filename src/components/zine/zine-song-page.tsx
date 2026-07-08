@@ -195,9 +195,6 @@ function ZineSongPageContent({
 			{showCredits ? (
 				<div className="zine-song-page-footer">
 					<hr className="zine-song-footer-rule" />
-					<p className="zine-section-label zine-song-footer-credits-label">
-						CREDITS
-					</p>
 					<div className="zine-song-footer">
 						{visibleCredits ? (
 							<ZineSongPageFooterCredits
