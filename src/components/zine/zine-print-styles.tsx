@@ -651,7 +651,7 @@ export function ZinePrintStyles() {
 					}
 
 					.zine-song-group-lyrics {
-						margin: 0.04in 0 0;
+						margin: 0.08in 0;
 					}
 
 					.zine-song-group-credits {
