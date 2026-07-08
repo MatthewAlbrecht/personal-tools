@@ -314,6 +314,15 @@ export function ZinePrintStyles() {
 						align-items: center;
 					}
 
+					/* Keep the first row of each section top-aligned so the gap from
+					   the section header to its content matches across sections,
+					   even when recommendation rows are vertically centered. */
+					.zine-inside-back-discography-row:first-child,
+					.zine-page-inside-back-recommendation-rows-center
+						.zine-inside-back-recommendation-row:first-child {
+						align-items: flex-start;
+					}
+
 					.zine-inside-back-recommendation-row:last-child {
 						margin-bottom: 0;
 					}
