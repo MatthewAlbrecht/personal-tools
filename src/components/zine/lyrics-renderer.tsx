@@ -7,37 +7,42 @@ export function LyricsRenderer({
 	lyrics: string;
 	showSectionLabels?: boolean;
 }) {
-	return lyrics
-		.replace(/^(?:[ \t]*\n)+/, "")
-		.split("\n")
-		.map((line, lineIndex) => {
-			if (line.trim() === "") {
-				return <br key={lineIndex} />;
-			}
+	return dropLeadingBlankLines(lyrics.split("\n")).map((line, lineIndex) => {
+		if (line.trim() === "") {
+			return <br key={lineIndex} />;
+		}
 
-			if (/^\[.*\]$/.test(line.trim())) {
-				if (!showSectionLabels) {
-					return null;
-				}
-
-				return (
-					<span
-						key={lineIndex}
-						className="text-muted-foreground text-sm print:text-xs"
-					>
-						{line}
-						<br />
-					</span>
-				);
+		if (/^\[.*\]$/.test(line.trim())) {
+			if (!showSectionLabels) {
+				return null;
 			}
 
 			return (
-				<span key={lineIndex}>
-					{formatInlineLyrics(line, lineIndex)}
+				<span
+					key={lineIndex}
+					className="text-muted-foreground text-sm print:text-xs"
+				>
+					{line}
 					<br />
 				</span>
 			);
-		});
+		}
+
+		return (
+			<span key={lineIndex}>
+				{formatInlineLyrics(line, lineIndex)}
+				<br />
+			</span>
+		);
+	});
+}
+
+function dropLeadingBlankLines(lines: string[]): string[] {
+	let start = 0;
+	while (start < lines.length && lines[start]?.trim() === "") {
+		start += 1;
+	}
+	return lines.slice(start);
 }
 
 function formatInlineLyrics(

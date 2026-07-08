@@ -32,6 +32,17 @@ test("LyricsRenderer drops multiple leading blank lines", async () => {
 	assert.match(collectText(rendered), /First lyric/);
 });
 
+test("LyricsRenderer drops a leading CRLF blank line", async () => {
+	const rendered = await renderLyrics({ lyrics: "\r\nFirst lyric" });
+	const nodes = React.Children.toArray(rendered as React.ReactNode);
+	const firstElement = nodes.find((node) => React.isValidElement(node)) as
+		| React.ReactElement
+		| undefined;
+
+	assert.notEqual(firstElement?.type, "br");
+	assert.match(collectText(rendered), /First lyric/);
+});
+
 test("LyricsRenderer can hide song part labels", async () => {
 	const props = {
 		lyrics: "[Verse 1]\nFirst lyric\n\n[Chorus]\nThis is the hook",
