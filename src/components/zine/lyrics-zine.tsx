@@ -323,7 +323,7 @@ export function LyricsZine({
 		insideBack: {
 			sections: insideBackSections ?? [],
 			settings: insideBackLayoutSettings,
-			includeWhenEmpty: canEdit,
+			includeWhenEmpty: false,
 		},
 	});
 	const bookletSheets = buildBookletSheets(pages);
