@@ -699,6 +699,7 @@ export function ZinePrintStyles() {
 						font-size: 8.5pt;
 						font-style: italic;
 						line-height: 1.35;
+						color: #555;
 					}
 
 					.zine-song-intro-paragraph {
