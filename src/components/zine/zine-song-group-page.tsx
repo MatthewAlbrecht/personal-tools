@@ -64,6 +64,9 @@ export function ZineSongGroupPage({
 							song={song}
 						/>
 						{hasLyrics ? (
+							<p className="zine-section-label zine-song-intro-label">LYRICS</p>
+						) : null}
+						{hasLyrics ? (
 							<div
 								className="zine-song-group-lyrics zine-lyrics-single-column leading-[1.35]"
 								style={{ fontSize: `${lyricsFontSizePt}pt` }}
