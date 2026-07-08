@@ -678,7 +678,6 @@ export function ZinePrintStyles() {
 					.zine-song-group-credits-with-lyrics {
 						margin-top: 0.08in;
 						padding-top: 0.06in;
-						border-top: 0.5pt solid #e2e2e2;
 					}
 
 					.print-only {
