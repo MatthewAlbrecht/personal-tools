@@ -113,7 +113,6 @@ export function ZineSongHeader({
 					) : null}
 					{displayOptions.showIntro && hasCustomIntro ? (
 						<div className="zine-song-intro">
-							<p className="zine-section-label zine-song-intro-label">INTRO</p>
 							<FormattedIntroContent
 								className="zine-song-intro-body"
 								content={introContent ?? ""}
