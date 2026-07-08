@@ -567,6 +567,7 @@ export function ZinePrintStyles() {
 						flex: 1 1 auto;
 						min-height: 0;
 						overflow: hidden;
+						margin-top: 0.08in;
 					}
 
 					.zine-footer-credits {
