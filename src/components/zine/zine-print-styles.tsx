@@ -625,46 +625,46 @@ export function ZinePrintStyles() {
 					.zine-page-instrumental-group {
 						display: flex;
 						flex-direction: column;
-						gap: 0.12in;
-						justify-content: center;
+						gap: 0;
+						justify-content: stretch;
 					}
 
 					.zine-instrumental-group-block {
 						display: flex;
 						flex-direction: column;
-						flex-shrink: 0;
+						flex: 1 1 0;
+						justify-content: flex-start;
 						gap: 0;
+						min-height: 0;
+						overflow: hidden;
 					}
 
 					.zine-instrumental-group-block .zine-song-top {
 						margin-bottom: 0.12in;
 					}
 
-					.zine-instrumental-group-block + .zine-instrumental-group-block {
-						padding-top: 0.2in;
-					}
-
 					.zine-page-song-group {
 						display: flex;
 						flex-direction: column;
-						gap: 0.12in;
-						justify-content: center;
+						gap: 0;
+						justify-content: stretch;
 					}
 
+					/* Each track gets an equal vertical slice of the page and sits at
+					   the top of its slice, so N shared tracks split the page into N
+					   evenly sized top-aligned chunks. */
 					.zine-song-group-block {
 						display: flex;
 						flex-direction: column;
-						flex-shrink: 0;
+						flex: 1 1 0;
+						justify-content: flex-start;
 						gap: 0;
 						min-height: 0;
+						overflow: hidden;
 					}
 
 					.zine-song-group-block .zine-song-top {
 						margin-bottom: 0.08in;
-					}
-
-					.zine-song-group-block + .zine-song-group-block {
-						padding-top: 0.2in;
 					}
 
 					.zine-song-group-lyrics {

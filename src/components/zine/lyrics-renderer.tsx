@@ -7,34 +7,37 @@ export function LyricsRenderer({
 	lyrics: string;
 	showSectionLabels?: boolean;
 }) {
-	return lyrics.split("\n").map((line, lineIndex) => {
-		if (line.trim() === "") {
-			return <br key={lineIndex} />;
-		}
+	return lyrics
+		.replace(/^(?:[ \t]*\n)+/, "")
+		.split("\n")
+		.map((line, lineIndex) => {
+			if (line.trim() === "") {
+				return <br key={lineIndex} />;
+			}
 
-		if (/^\[.*\]$/.test(line.trim())) {
-			if (!showSectionLabels) {
-				return null;
+			if (/^\[.*\]$/.test(line.trim())) {
+				if (!showSectionLabels) {
+					return null;
+				}
+
+				return (
+					<span
+						key={lineIndex}
+						className="text-muted-foreground text-sm print:text-xs"
+					>
+						{line}
+						<br />
+					</span>
+				);
 			}
 
 			return (
-				<span
-					key={lineIndex}
-					className="text-muted-foreground text-sm print:text-xs"
-				>
-					{line}
+				<span key={lineIndex}>
+					{formatInlineLyrics(line, lineIndex)}
 					<br />
 				</span>
 			);
-		}
-
-		return (
-			<span key={lineIndex}>
-				{formatInlineLyrics(line, lineIndex)}
-				<br />
-			</span>
-		);
-	});
+		});
 }
 
 function formatInlineLyrics(
