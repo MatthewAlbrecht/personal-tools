@@ -719,6 +719,12 @@ export function ZinePrintStyles() {
 						box-sizing: border-box;
 					}
 
+					/* Backstop: never let a leading blank line push lyrics down. */
+					.zine-song-lyrics-scaled-inner > br:first-child,
+					.zine-song-group-lyrics > br:first-child {
+						display: none;
+					}
+
 					.zine-song-primary-line {
 						display: flex;
 						flex-wrap: nowrap;
