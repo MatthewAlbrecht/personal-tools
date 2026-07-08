@@ -524,23 +524,6 @@ export function ZinePrintStyles() {
 						margin-top: 0.13in;
 					}
 
-					.zine-section-label {
-						margin: 0;
-						font-size: 6pt;
-						font-weight: 600;
-						line-height: 1;
-						text-transform: uppercase;
-						color: #666;
-					}
-
-					.zine-song-intro-label {
-						margin: 0 0 0.04in;
-					}
-
-					.zine-song-lyrics-label {
-						margin: 0.08in 0 0.04in;
-					}
-
 					/* Matches ZINE_FOOTER_ZONE_IN (= ZINE_FOOTER_ZONE_HEIGHT_PT / 72) in zine-layout.ts. */
 					.zine-song-page-footer {
 						box-sizing: border-box;

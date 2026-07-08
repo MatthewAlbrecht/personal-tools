@@ -151,9 +151,6 @@ function ZineSongPageContent({
 					titleCondenseScale={titleCondenseScale}
 					song={song}
 				/>
-				{hasLyrics ? (
-					<p className="zine-section-label zine-song-lyrics-label">LYRICS</p>
-				) : null}
 			</div>
 			<div
 				ref={lyricsFit.lyricsClipRef}
