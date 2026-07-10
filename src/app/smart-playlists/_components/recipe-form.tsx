@@ -129,6 +129,10 @@ export function RecipeForm({
 		api.rateYourMusicScrapes.listRateYourMusicGenreKeys,
 		{ limit: 3000 },
 	);
+	const descriptorOptions = useQuery(
+		api.rateYourMusicScrapes.listRateYourMusicDescriptorKeys,
+		{ limit: 500 },
+	);
 
 	const preview = useQuery(api.smartPlaylists.previewMatches, {
 		userId,
@@ -145,9 +149,19 @@ export function RecipeForm({
 	const genreLabelByKey = new Map(
 		(genreOptions ?? []).map((g) => [g.key, g.label] as const),
 	);
+	const descriptorKeysPool = (descriptorOptions ?? [])
+		.map((d) => d.key)
+		.sort();
+	const descriptorLabelByKey = new Map(
+		(descriptorOptions ?? []).map((d) => [d.key, d.label] as const),
+	);
 
 	function formatGenreOption(key: string): string {
 		return genreLabelByKey.get(key) ?? key;
+	}
+
+	function formatDescriptorOption(key: string): string {
+		return descriptorLabelByKey.get(key) ?? key;
 	}
 
 	function refreshPreviewNow(): void {
@@ -459,6 +473,61 @@ export function RecipeForm({
 								Primary genres only
 							</Label>
 						</div>
+					</div>
+
+					<div className="flex flex-col gap-1.5 md:col-span-2">
+						<div className="flex flex-wrap items-center justify-between gap-2">
+							<Label htmlFor="recipe-descriptors">Descriptors</Label>
+							<fieldset className="m-0 inline-flex rounded-md border border-border bg-background px-0.5 py-0.5">
+								<SegmentButton
+									active={filters.descriptorMatch === "any"}
+									onClick={() => patchFilters({ descriptorMatch: "any" })}
+								>
+									Any
+								</SegmentButton>
+								<SegmentButton
+									active={filters.descriptorMatch === "all"}
+									onClick={() => patchFilters({ descriptorMatch: "all" })}
+								>
+									All
+								</SegmentButton>
+							</fieldset>
+						</div>
+						<Combobox
+							items={descriptorKeysPool}
+							multiple
+							getItemLabel={formatDescriptorOption}
+							value={filters.descriptorKeys}
+							onValueChange={(descriptorKeys) =>
+								patchFilters({ descriptorKeys })
+							}
+						>
+							<ComboboxTrigger>
+								<ComboboxChips>
+									<ComboboxValue>
+										{filters.descriptorKeys.map((key) => (
+											<ComboboxChip key={key} value={key}>
+												{formatDescriptorOption(key)}
+											</ComboboxChip>
+										))}
+									</ComboboxValue>
+									<ComboboxChipsInput
+										id="recipe-descriptors"
+										placeholder="Add descriptor"
+									/>
+								</ComboboxChips>
+							</ComboboxTrigger>
+							<ComboboxContent>
+								<ComboboxEmpty>No descriptors found.</ComboboxEmpty>
+								<ComboboxList>
+									{(item) => (
+										<ComboboxItem key={item} value={item}>
+											{formatDescriptorOption(item)}
+										</ComboboxItem>
+									)}
+								</ComboboxList>
+							</ComboboxContent>
+						</Combobox>
 					</div>
 
 					<div className="flex flex-col gap-1.5 md:col-span-2">
