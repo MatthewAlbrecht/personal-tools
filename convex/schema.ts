@@ -10,6 +10,13 @@ import {
 	zineInsideBackRecommendationRowAlignValidator,
 } from "./_utils/zineInsideBackLayout";
 import { zineInsideBackSectionsValidator } from "./_utils/zineInsideBackSections";
+import {
+	smartPlaylistFiltersValidator,
+	smartPlaylistSourceValidator,
+	smartPlaylistSyncModeValidator,
+	smartPlaylistSyncStatusValidator,
+	trackSelectionValidator,
+} from "./_utils/smartPlaylistValidators";
 
 const geniusCreditValidator = v.object({
 	label: v.string(),
@@ -373,6 +380,29 @@ export default defineSchema({
 		.index("by_userId", ["userId"])
 		.index("by_userId_active", ["userId", "isActive"])
 		.index("by_spotifyPlaylistId", ["spotifyPlaylistId"]),
+
+	smartPlaylists: defineTable({
+		userId: v.string(),
+		name: v.string(),
+		spotifyPlaylistId: v.string(),
+		source: smartPlaylistSourceValidator,
+		filters: smartPlaylistFiltersValidator,
+		syncMode: smartPlaylistSyncModeValidator,
+		trackSelection: trackSelectionValidator,
+		isPaused: v.boolean(),
+		syncedAlbumIds: v.array(v.string()),
+		syncedTrackUris: v.array(v.string()),
+		contentHash: v.optional(v.string()),
+		matchAlbumCount: v.number(),
+		matchTrackCount: v.number(),
+		lastSyncedAt: v.optional(v.number()),
+		syncStatus: smartPlaylistSyncStatusValidator,
+		lastError: v.optional(v.string()),
+		createdAt: v.number(),
+		updatedAt: v.number(),
+	})
+		.index("by_userId", ["userId"])
+		.index("by_userId_and_isPaused", ["userId", "isPaused"]),
 
 	spotifySongCategorizations: defineTable({
 		userId: v.string(),
