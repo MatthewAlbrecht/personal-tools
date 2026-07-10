@@ -264,6 +264,45 @@ export async function addTracksToPlaylist(
 	);
 }
 
+export async function replacePlaylistItems(
+	accessToken: string,
+	playlistId: string,
+	trackUris: string[],
+): Promise<{ snapshot_id: string }> {
+	return spotifyFetch<{ snapshot_id: string }>(
+		`/playlists/${playlistId}/items`,
+		accessToken,
+		{
+			method: "PUT",
+			body: JSON.stringify({ uris: trackUris }),
+		},
+	);
+}
+
+export async function addItemsToPlaylist(
+	accessToken: string,
+	playlistId: string,
+	trackUris: string[],
+): Promise<{ snapshot_id: string }> {
+	return spotifyFetch<{ snapshot_id: string }>(
+		`/playlists/${playlistId}/items`,
+		accessToken,
+		{
+			method: "POST",
+			body: JSON.stringify({ uris: trackUris }),
+		},
+	);
+}
+
+export async function unfollowPlaylist(
+	accessToken: string,
+	playlistId: string,
+): Promise<void> {
+	await spotifyFetch<void>(`/playlists/${playlistId}/followers`, accessToken, {
+		method: "DELETE",
+	});
+}
+
 export async function createPlaylist(
 	accessToken: string,
 	userId: string,
@@ -606,6 +645,41 @@ export async function getAlbums(
 	}
 
 	return results;
+}
+
+type SpotifyAlbumTracksPage = {
+	items: Array<{ id: string | null }>;
+	next: string | null;
+	total: number;
+};
+
+export async function getAlbumTrackUris(
+	accessToken: string,
+	spotifyAlbumId: string,
+): Promise<string[]> {
+	const uris: string[] = [];
+	let offset = 0;
+	const limit = 50;
+
+	while (true) {
+		const data = await spotifyFetch<SpotifyAlbumTracksPage>(
+			`/albums/${spotifyAlbumId}/tracks?limit=${limit}&offset=${offset}`,
+			accessToken,
+		);
+
+		for (const track of data.items) {
+			if (track.id !== null) {
+				uris.push(trackToUri(track.id));
+			}
+		}
+
+		offset += limit;
+		if (data.next === null || offset >= data.total) {
+			break;
+		}
+	}
+
+	return uris;
 }
 
 // ============================================================================
