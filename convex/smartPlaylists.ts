@@ -459,26 +459,26 @@ async function resolveRankingsMatches(
 		return a.item.name.localeCompare(b.item.name);
 	});
 
-	return Promise.all(
-		candidates.map(async (c) => {
-			let album = albumByAlbumId.get(c.item.albumId);
-			if (!album) {
-				const loaded = await ctx.db.get(c.item.albumId);
-				if (!loaded) {
-					throw new Error(`Album not found: ${c.item.albumId}`);
-				}
-				album = loaded;
+	const matches: MatchedAlbum[] = [];
+	for (const c of candidates) {
+		let album = albumByAlbumId.get(c.item.albumId);
+		if (!album) {
+			const loaded = await ctx.db.get(c.item.albumId);
+			if (!loaded) {
+				continue;
 			}
+			album = loaded;
+		}
 
-			return {
-				spotifyAlbumId: c.item.spotifyAlbumId,
-				albumId: c.item.albumId,
-				name: c.item.name,
-				artistName: c.item.artistName,
-				totalTracks: album.totalTracks,
-			};
-		}),
-	);
+		matches.push({
+			spotifyAlbumId: c.item.spotifyAlbumId,
+			albumId: c.item.albumId,
+			name: c.item.name,
+			artistName: c.item.artistName,
+			totalTracks: album.totalTracks,
+		});
+	}
+	return matches;
 }
 
 async function resolveMatchingAlbums(
@@ -555,6 +555,7 @@ export const previewMatches = query({
 	returns: v.object({
 		albums: v.array(matchedAlbumValidator),
 		albumCount: v.number(),
+		estimatedTrackCount: v.number(),
 	}),
 	handler: async (ctx, args) => {
 		const albums = await resolveMatchingAlbums(ctx, {
@@ -567,6 +568,10 @@ export const previewMatches = query({
 		return {
 			albums: albums.slice(0, PREVIEW_ALBUM_LIMIT),
 			albumCount: albums.length,
+			estimatedTrackCount: albums.reduce(
+				(sum, album) => sum + album.totalTracks,
+				0,
+			),
 		};
 	},
 });

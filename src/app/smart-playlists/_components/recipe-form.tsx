@@ -265,11 +265,23 @@ export function RecipeForm({
 					}),
 				});
 
+				const body = (await response.json().catch(() => null)) as {
+					error?: string;
+					recipeId?: string;
+					sync?: { success?: boolean; error?: string };
+				} | null;
+
 				if (!response.ok) {
-					const body = (await response.json().catch(() => null)) as {
-						error?: string;
-					} | null;
 					throw new Error(body?.error ?? "Failed to create recipe");
+				}
+
+				if (body?.sync && body.sync.success === false) {
+					toast.error(
+						body.sync.error ??
+							`Created “${trimmedName}” but initial sync failed`,
+					);
+					router.push("/smart-playlists");
+					return;
 				}
 
 				toast.success(`Created “${trimmedName}”`);
@@ -868,7 +880,7 @@ export function RecipeForm({
 					<p className="text-muted-foreground text-sm">
 						{preview === undefined
 							? "Loading…"
-							: `${preview.albumCount} album${preview.albumCount === 1 ? "" : "s"}`}
+							: `${preview.albumCount} album${preview.albumCount === 1 ? "" : "s"} · ~${preview.estimatedTrackCount} tracks`}
 					</p>
 				</div>
 				{preview === undefined ? (
