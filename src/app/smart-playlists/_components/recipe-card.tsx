@@ -210,7 +210,7 @@ export function RecipeCard({
 					<Button
 						variant="outline"
 						size="sm"
-						disabled={isSyncing || recipe.isPaused}
+						disabled={isSyncing}
 						onClick={() => void handleSync()}
 					>
 						{isSyncing ? (
