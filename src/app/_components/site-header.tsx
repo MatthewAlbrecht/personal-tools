@@ -42,6 +42,9 @@ export function SiteHeader() {
 							>
 								For Later
 							</Link>
+							<Link href="/smart-playlists" className="text-sm hover:underline">
+								Smart Playlists
+							</Link>
 						</nav>
 					)}
 				</div>
