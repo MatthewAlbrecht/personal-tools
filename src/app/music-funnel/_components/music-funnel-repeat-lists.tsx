@@ -97,37 +97,39 @@ function RepeatRow({
 				isNew={
 					visitSince !== null && isNewSince(repeat.becameRepeatAt, visitSince)
 				}
-				className="flex items-start gap-3 rounded-lg border p-3"
+				className="rounded-lg border p-3"
 			>
-				{imageUrl ? (
-					<Image
-						src={imageUrl}
-						alt={imageAlt}
-						width={48}
-						height={48}
-						className="size-12 shrink-0 rounded object-cover"
-					/>
-				) : (
-					<div className="size-12 shrink-0 rounded bg-muted" />
-				)}
-				<div className="min-w-0 flex-1">
-					<div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-						<p className="font-medium">{title}</p>
-						<span className="font-semibold tabular-nums">
-							{repeat.sourceCount}×
-						</span>
-						<span className="text-muted-foreground text-xs">{typeLabel}</span>
+				<div className="flex items-start gap-3">
+					{imageUrl ? (
+						<Image
+							src={imageUrl}
+							alt={imageAlt}
+							width={48}
+							height={48}
+							className="size-12 shrink-0 rounded object-cover"
+						/>
+					) : (
+						<div className="size-12 shrink-0 rounded bg-muted" />
+					)}
+					<div className="min-w-0 flex-1">
+						<div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+							<p className="font-medium">{title}</p>
+							<span className="font-semibold tabular-nums">
+								{repeat.sourceCount}×
+							</span>
+							<span className="text-muted-foreground text-xs">{typeLabel}</span>
+						</div>
+						<p className="text-muted-foreground text-sm">{subtitle}</p>
+						<p className="mt-1 text-muted-foreground text-xs">{sources}</p>
+						<p className="mt-0.5 text-muted-foreground text-xs">
+							First seen {formatRelativeTime(repeat.firstSeenAt)} · Last seen{" "}
+							{formatRelativeTime(repeat.latestSeenAt)}
+							{repeat.type === "track" &&
+							repeat.addedToRepeatPlaylistAt !== undefined
+								? ` · Added to repeats ${formatRelativeTime(repeat.addedToRepeatPlaylistAt)}`
+								: null}
+						</p>
 					</div>
-					<p className="text-muted-foreground text-sm">{subtitle}</p>
-					<p className="mt-1 text-muted-foreground text-xs">{sources}</p>
-					<p className="mt-0.5 text-muted-foreground text-xs">
-						First seen {formatRelativeTime(repeat.firstSeenAt)} · Last seen{" "}
-						{formatRelativeTime(repeat.latestSeenAt)}
-						{repeat.type === "track" &&
-						repeat.addedToRepeatPlaylistAt !== undefined
-							? ` · Added to repeats ${formatRelativeTime(repeat.addedToRepeatPlaylistAt)}`
-							: null}
-					</p>
 				</div>
 			</MusicFunnelNewChrome>
 		</li>
