@@ -4,7 +4,7 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 export function resolveAddedWindow(
 	window: AddedWindow,
-	_now: number,
+	now: number,
 ): { afterMs?: number; beforeMs?: number } | null {
 	switch (window.type) {
 		case "absolute":
@@ -15,7 +15,7 @@ export function resolveAddedWindow(
 					? window.amount * MS_PER_DAY
 					: // v1 approximation: treat each month as 30 days
 						window.amount * 30 * MS_PER_DAY;
-			return { afterMs: _now - ms, beforeMs: undefined };
+			return { afterMs: now - ms, beforeMs: undefined };
 		}
 		case "calendar_month": {
 			const afterMs = Date.UTC(window.year, window.month - 1, 1, 0, 0, 0);
