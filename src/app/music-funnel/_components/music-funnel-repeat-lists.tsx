@@ -10,90 +10,39 @@ import {
 	CardHeader,
 	CardTitle,
 } from "~/components/ui/card";
+import { isNewSince } from "~/lib/music-funnel-visit";
 import { formatRelativeTime } from "~/lib/utils";
 import { api } from "../../../../convex/_generated/api";
+import { MusicFunnelNewChrome } from "./music-funnel-new-chrome";
 
-export function MusicFunnelRepeatLists({ userId }: { userId: string }) {
-	const trackRepeats = useQuery(api.musicFunnel.listTrackRepeats, {
+export function MusicFunnelRepeatLists({
+	userId,
+	visitSince,
+}: {
+	userId: string;
+	visitSince: number | null;
+}) {
+	const repeats = useQuery(api.musicFunnel.listRepeats, {
 		userId,
-		limit: 25,
-	});
-	const albumRepeats = useQuery(api.musicFunnel.listAlbumRepeats, {
-		userId,
-		limit: 25,
-	});
-	const artistRepeats = useQuery(api.musicFunnel.listArtistRepeats, {
-		userId,
-		limit: 25,
+		limit: 60,
 	});
 
 	return (
-		<div className="space-y-6">
-			<RepeatCard
-				title="Track repeats"
-				description="Tracks recommended by two or more distinct sources."
-				isLoading={trackRepeats === undefined}
-				isEmpty={trackRepeats?.length === 0}
-				emptyMessage="No cross-source track repeats yet."
-			>
-				{trackRepeats?.map((repeat) => (
-					<RepeatRow
-						key={repeat.spotifyTrackId}
-						imageUrl={repeat.albumImageUrl}
-						imageAlt={repeat.albumName}
-						title={repeat.trackName}
-						subtitle={`${repeat.primaryArtistName} · ${repeat.albumName}`}
-						sourceCount={repeat.sourceCount}
-						sources={repeat.sources.map((s) => s.displayName).join(", ")}
-						firstSeenAt={repeat.firstSeenAt}
-						latestSeenAt={repeat.latestSeenAt}
-						addedToRepeatPlaylistAt={repeat.addedToRepeatPlaylistAt}
-					/>
-				))}
-			</RepeatCard>
-
-			<RepeatCard
-				title="Album repeats"
-				description="Albums appearing across multiple recommendation sources."
-				isLoading={albumRepeats === undefined}
-				isEmpty={albumRepeats?.length === 0}
-				emptyMessage="No cross-source album repeats yet."
-			>
-				{albumRepeats?.map((repeat) => (
-					<RepeatRow
-						key={repeat.spotifyAlbumId}
-						imageUrl={repeat.albumImageUrl}
-						imageAlt={repeat.albumName}
-						title={repeat.albumName}
-						subtitle={`${repeat.primaryArtistName} · ${repeat.contributingTrackCount} tracks`}
-						sourceCount={repeat.sourceCount}
-						sources={repeat.sources.map((s) => s.displayName).join(", ")}
-						firstSeenAt={repeat.firstSeenAt}
-						latestSeenAt={repeat.latestSeenAt}
-					/>
-				))}
-			</RepeatCard>
-
-			<RepeatCard
-				title="Artist repeats"
-				description="Artists credited on tracks from multiple sources."
-				isLoading={artistRepeats === undefined}
-				isEmpty={artistRepeats?.length === 0}
-				emptyMessage="No cross-source artist repeats yet."
-			>
-				{artistRepeats?.map((repeat) => (
-					<RepeatRow
-						key={repeat.spotifyArtistId}
-						title={repeat.name}
-						subtitle={`${repeat.contributingTrackCount} contributing tracks`}
-						sourceCount={repeat.sourceCount}
-						sources={repeat.sources.map((s) => s.displayName).join(", ")}
-						firstSeenAt={repeat.firstSeenAt}
-						latestSeenAt={repeat.latestSeenAt}
-					/>
-				))}
-			</RepeatCard>
-		</div>
+		<RepeatCard
+			title="Repeats"
+			description="Cross-source tracks, albums, and artists — most recently active first."
+			isLoading={repeats === undefined}
+			isEmpty={repeats?.length === 0}
+			emptyMessage="No cross-source repeats yet."
+		>
+			{repeats?.map((repeat) => (
+				<RepeatRow
+					key={getRepeatKey(repeat)}
+					repeat={repeat}
+					visitSince={visitSince}
+				/>
+			))}
+		</RepeatCard>
 	);
 }
 
@@ -132,53 +81,100 @@ function RepeatCard({
 }
 
 function RepeatRow({
-	imageUrl,
-	imageAlt,
-	title,
-	subtitle,
-	sourceCount,
-	sources,
-	firstSeenAt,
-	latestSeenAt,
-	addedToRepeatPlaylistAt,
+	repeat,
+	visitSince,
 }: {
-	imageUrl?: string;
-	imageAlt?: string;
-	title: string;
-	subtitle: string;
-	sourceCount: number;
-	sources: string;
-	firstSeenAt: number;
-	latestSeenAt: number;
-	addedToRepeatPlaylistAt?: number;
+	repeat: NonNullable<typeof api.musicFunnel.listRepeats._returnType>[number];
+	visitSince: number | null;
 }) {
+	const { title, subtitle, typeLabel, imageUrl, imageAlt } =
+		getRepeatDisplay(repeat);
+	const sources = repeat.sources.map((source) => source.displayName).join(", ");
+
 	return (
-		<li className="flex items-start gap-3 rounded-lg border p-3">
-			{imageUrl ? (
-				<Image
-					src={imageUrl}
-					alt={imageAlt ?? title}
-					width={48}
-					height={48}
-					className="size-12 shrink-0 rounded object-cover"
-				/>
-			) : (
-				<div className="size-12 shrink-0 rounded bg-muted" />
-			)}
-			<div className="min-w-0 flex-1">
-				<p className="font-medium">{title}</p>
-				<p className="text-muted-foreground text-sm">{subtitle}</p>
-				<p className="mt-1 text-muted-foreground text-xs">
-					{sourceCount} sources · {sources}
-				</p>
-				<p className="mt-0.5 text-muted-foreground text-xs">
-					First seen {formatRelativeTime(firstSeenAt)} · Last seen{" "}
-					{formatRelativeTime(latestSeenAt)}
-					{addedToRepeatPlaylistAt !== undefined
-						? ` · Added to repeats ${formatRelativeTime(addedToRepeatPlaylistAt)}`
-						: null}
-				</p>
-			</div>
+		<li>
+			<MusicFunnelNewChrome
+				isNew={
+					visitSince !== null && isNewSince(repeat.becameRepeatAt, visitSince)
+				}
+				className="flex items-start gap-3 rounded-lg border p-3"
+			>
+				{imageUrl ? (
+					<Image
+						src={imageUrl}
+						alt={imageAlt}
+						width={48}
+						height={48}
+						className="size-12 shrink-0 rounded object-cover"
+					/>
+				) : (
+					<div className="size-12 shrink-0 rounded bg-muted" />
+				)}
+				<div className="min-w-0 flex-1">
+					<div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+						<p className="font-medium">{title}</p>
+						<span className="font-semibold tabular-nums">
+							{repeat.sourceCount}×
+						</span>
+						<span className="text-muted-foreground text-xs">{typeLabel}</span>
+					</div>
+					<p className="text-muted-foreground text-sm">{subtitle}</p>
+					<p className="mt-1 text-muted-foreground text-xs">{sources}</p>
+					<p className="mt-0.5 text-muted-foreground text-xs">
+						First seen {formatRelativeTime(repeat.firstSeenAt)} · Last seen{" "}
+						{formatRelativeTime(repeat.latestSeenAt)}
+						{repeat.type === "track" &&
+						repeat.addedToRepeatPlaylistAt !== undefined
+							? ` · Added to repeats ${formatRelativeTime(repeat.addedToRepeatPlaylistAt)}`
+							: null}
+					</p>
+				</div>
+			</MusicFunnelNewChrome>
 		</li>
 	);
+}
+
+function getRepeatKey(
+	repeat: NonNullable<typeof api.musicFunnel.listRepeats._returnType>[number],
+): string {
+	if (repeat.type === "track") return repeat.spotifyTrackId;
+	if (repeat.type === "album") return repeat.spotifyAlbumId;
+	return repeat.spotifyArtistId;
+}
+
+function getRepeatDisplay(
+	repeat: NonNullable<typeof api.musicFunnel.listRepeats._returnType>[number],
+): {
+	title: string;
+	subtitle: string;
+	typeLabel: string;
+	imageUrl?: string;
+	imageAlt: string;
+} {
+	if (repeat.type === "track") {
+		return {
+			title: repeat.trackName,
+			subtitle: `${repeat.primaryArtistName} · ${repeat.albumName}`,
+			typeLabel: "Track",
+			imageUrl: repeat.albumImageUrl,
+			imageAlt: repeat.albumName,
+		};
+	}
+
+	if (repeat.type === "album") {
+		return {
+			title: repeat.albumName,
+			subtitle: `${repeat.primaryArtistName} · ${repeat.contributingTrackCount} tracks`,
+			typeLabel: "Album",
+			imageUrl: repeat.albumImageUrl,
+			imageAlt: repeat.albumName,
+		};
+	}
+
+	return {
+		title: repeat.name,
+		subtitle: `${repeat.contributingTrackCount} contributing tracks`,
+		typeLabel: "Artist",
+		imageAlt: repeat.name,
+	};
 }

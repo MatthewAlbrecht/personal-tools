@@ -4,6 +4,7 @@ import { useQuery } from "convex/react";
 import { Music2 } from "lucide-react";
 import { useState } from "react";
 import { LoginPrompt } from "~/components/login-prompt";
+import { useMusicFunnelVisitCursor } from "~/lib/hooks/use-music-funnel-visit-cursor";
 import { useSpotifyAuth } from "~/lib/hooks/use-spotify-auth";
 import { api } from "../../../convex/_generated/api";
 import { MusicFunnelConfigDrawer } from "./_components/music-funnel-config-drawer";
@@ -18,6 +19,7 @@ export default function MusicFunnelPage() {
 	const { userId, isConnected, connection, isLoading } = useSpotifyAuth();
 	const [activeTab, setActiveTab] = useState<MusicFunnelTab>("timeline");
 	const [configOpen, setConfigOpen] = useState(false);
+	const { visitSince } = useMusicFunnelVisitCursor(userId ?? "");
 
 	const summary = useQuery(
 		api.musicFunnel.getUiSummary,
@@ -66,11 +68,13 @@ export default function MusicFunnelPage() {
 				onTabChange={setActiveTab}
 				onOpenConfig={() => setConfigOpen(true)}
 			/>
-			{activeTab === "timeline" ? <MusicFunnelMissedBanner userId={userId} /> : null}
+			{activeTab === "timeline" ? (
+				<MusicFunnelMissedBanner userId={userId} />
+			) : null}
 			{activeTab === "timeline" ? (
 				<MusicFunnelTimeline userId={userId} sources={sources} />
 			) : (
-				<MusicFunnelRepeatLists userId={userId} />
+				<MusicFunnelRepeatLists userId={userId} visitSince={visitSince} />
 			)}
 			<MusicFunnelConfigDrawer
 				open={configOpen}
