@@ -2,6 +2,10 @@ import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
+import {
+	computeBecameRepeatAt,
+	sortUnifiedRepeatsByLatestSeenAt,
+} from "./_utils/musicFunnelRepeats";
 
 const syncSourceValidator = v.union(v.literal("manual"), v.literal("cron"));
 const runStatusValidator = v.union(
@@ -141,6 +145,7 @@ const trackRepeatValidator = v.object({
 	sources: v.array(sourceLabelValidator),
 	firstSeenAt: v.number(),
 	latestSeenAt: v.number(),
+	becameRepeatAt: v.number(),
 	addedToRepeatPlaylistAt: v.optional(v.number()),
 });
 
@@ -154,6 +159,7 @@ const albumRepeatValidator = v.object({
 	contributingTrackCount: v.number(),
 	firstSeenAt: v.number(),
 	latestSeenAt: v.number(),
+	becameRepeatAt: v.number(),
 });
 
 const artistRepeatValidator = v.object({
@@ -164,7 +170,49 @@ const artistRepeatValidator = v.object({
 	contributingTrackCount: v.number(),
 	firstSeenAt: v.number(),
 	latestSeenAt: v.number(),
+	becameRepeatAt: v.number(),
 });
+
+const unifiedRepeatValidator = v.union(
+	v.object({
+		type: v.literal("track"),
+		spotifyTrackId: v.string(),
+		trackName: v.string(),
+		primaryArtistName: v.string(),
+		albumName: v.string(),
+		albumImageUrl: v.optional(v.string()),
+		sourceCount: v.number(),
+		sources: v.array(sourceLabelValidator),
+		firstSeenAt: v.number(),
+		latestSeenAt: v.number(),
+		becameRepeatAt: v.number(),
+		addedToRepeatPlaylistAt: v.optional(v.number()),
+	}),
+	v.object({
+		type: v.literal("album"),
+		spotifyAlbumId: v.string(),
+		albumName: v.string(),
+		primaryArtistName: v.string(),
+		albumImageUrl: v.optional(v.string()),
+		sourceCount: v.number(),
+		sources: v.array(sourceLabelValidator),
+		contributingTrackCount: v.number(),
+		firstSeenAt: v.number(),
+		latestSeenAt: v.number(),
+		becameRepeatAt: v.number(),
+	}),
+	v.object({
+		type: v.literal("artist"),
+		spotifyArtistId: v.string(),
+		name: v.string(),
+		sourceCount: v.number(),
+		sources: v.array(sourceLabelValidator),
+		contributingTrackCount: v.number(),
+		firstSeenAt: v.number(),
+		latestSeenAt: v.number(),
+		becameRepeatAt: v.number(),
+	}),
+);
 
 type EncounterLike = {
 	sourceId: Id<"musicFunnelSources">;
@@ -802,6 +850,41 @@ export const listTrackRepeats = query({
 	},
 });
 
+export const listRepeats = query({
+	args: {
+		userId: v.string(),
+		limit: v.optional(v.number()),
+	},
+	returns: v.array(unifiedRepeatValidator),
+	handler: async (ctx, args) => {
+		const limit = clampLimit(args.limit, 60, 100);
+		const encounters = await loadEncounterRows(ctx, args.userId, 5000);
+		const sourceLabels = await loadSourceLabelMap(ctx, args.userId);
+		const repeatAddedAtByTrackId = await loadRepeatPlaylistAddedAtByTrackId(
+			ctx,
+			args.userId,
+		);
+		const tracks = buildTrackRepeats(
+			encounters,
+			sourceLabels,
+			repeatAddedAtByTrackId,
+		).map((row) => ({ type: "track" as const, ...row }));
+		const albums = buildAlbumRepeats(encounters, sourceLabels).map((row) => ({
+			type: "album" as const,
+			...row,
+		}));
+		const artists = buildArtistRepeats(encounters, sourceLabels).map((row) => ({
+			type: "artist" as const,
+			...row,
+		}));
+		return sortUnifiedRepeatsByLatestSeenAt([
+			...tracks,
+			...albums,
+			...artists,
+		]).slice(0, limit);
+	},
+});
+
 export const listAlbumRepeats = query({
 	args: {
 		userId: v.string(),
@@ -957,6 +1040,12 @@ function buildTrackRepeats(
 				sourceCount: sourceIds.length,
 				sources: sourceIdsToLabels(sourceIds, sourceLabels),
 				...timing,
+				becameRepeatAt: computeBecameRepeatAt(
+					rows.map((row) => ({
+						sourceId: row.sourceId,
+						firstSeenAt: row.firstSeenAt,
+					})),
+				),
 				...(addedToRepeatPlaylistAt !== undefined
 					? { addedToRepeatPlaylistAt }
 					: {}),
@@ -999,6 +1088,12 @@ function buildAlbumRepeats(
 				contributingTrackCount: new Set(rows.map((row) => row.spotifyTrackId))
 					.size,
 				...getRepeatTiming(rows),
+				becameRepeatAt: computeBecameRepeatAt(
+					rows.map((row) => ({
+						sourceId: row.sourceId,
+						firstSeenAt: row.firstSeenAt,
+					})),
+				),
 			};
 		})
 		.filter(
@@ -1053,6 +1148,12 @@ function buildArtistRepeats(
 					.size,
 				firstSeenAt: Math.min(...rows.map((row) => row.firstSeenAt)),
 				latestSeenAt: Math.max(...rows.map((row) => row.firstSeenAt)),
+				becameRepeatAt: computeBecameRepeatAt(
+					rows.map((row) => ({
+						sourceId: row.sourceId,
+						firstSeenAt: row.firstSeenAt,
+					})),
+				),
 			};
 		})
 		.filter(
