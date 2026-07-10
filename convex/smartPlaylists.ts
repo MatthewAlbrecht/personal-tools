@@ -8,6 +8,10 @@ import {
 	taxonomyKeysPassAgainstSet,
 } from "./_utils/forLaterAlbumsUi";
 import { durationBucketKeyFromMinutes } from "./_utils/forLaterDurationBuckets";
+import {
+	buildFilterGenreKeysSortedWithAncestors,
+	loadRymGenreParentKeysByChild,
+} from "./_utils/forLaterFilterProjection";
 import { resolveAddedWindow } from "./_utils/smartPlaylistAddedWindow";
 import {
 	smartPlaylistFiltersValidator,
@@ -232,6 +236,9 @@ async function resolveForLaterMatches(
 
 	const needsPrimaryGenreLoad =
 		args.filters.primaryGenresOnly && args.filters.genreKeys.length > 0;
+	const parentKeysByChild = needsPrimaryGenreLoad
+		? await loadRymGenreParentKeysByChild(ctx)
+		: null;
 
 	type Candidate = {
 		item: Doc<"forLaterAlbumItems">;
@@ -280,10 +287,19 @@ async function resolveForLaterMatches(
 		if (args.filters.genreKeys.length > 0) {
 			let genreKeys: Set<string>;
 			if (needsPrimaryGenreLoad) {
-				if (!item.rymScrapeId) {
+				if (!item.rymScrapeId || !parentKeysByChild) {
 					continue;
 				}
-				genreKeys = await loadPrimaryGenreKeysForScrape(ctx, item.rymScrapeId);
+				const primaryKeys = await loadPrimaryGenreKeysForScrape(
+					ctx,
+					item.rymScrapeId,
+				);
+				genreKeys = new Set(
+					buildFilterGenreKeysSortedWithAncestors(
+						[...primaryKeys],
+						parentKeysByChild,
+					),
+				);
 			} else {
 				genreKeys = new Set(item.filterGenreKeysSorted ?? []);
 			}
@@ -351,6 +367,10 @@ async function resolveRankingsMatches(
 	}
 
 	const userAlbumsByAlbumId = await loadUserAlbumByAlbumId(ctx, args.userId);
+	const parentKeysByChild =
+		args.filters.genreKeys.length > 0
+			? await loadRymGenreParentKeysByChild(ctx)
+			: null;
 
 	type Candidate = {
 		item: Doc<"albumLibraryItems">;
@@ -381,11 +401,20 @@ async function resolveRankingsMatches(
 			}
 		}
 
-		const genreKeys = genreKeySetFromTags(
+		const directGenreKeys = genreKeySetFromTags(
 			item.primaryGenres,
 			item.secondaryGenres,
 			args.filters.primaryGenresOnly,
 		);
+		const genreKeys =
+			parentKeysByChild !== null
+				? new Set(
+						buildFilterGenreKeysSortedWithAncestors(
+							[...directGenreKeys],
+							parentKeysByChild,
+						),
+					)
+				: directGenreKeys;
 		if (
 			!taxonomyKeysPassAgainstSet(
 				args.filters.genreKeys,
