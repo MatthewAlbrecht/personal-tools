@@ -36,6 +36,7 @@ import type * as _utils_rateYourMusicTaxonomy from "../_utils/rateYourMusicTaxon
 import type * as _utils_robRankingArtistStats from "../_utils/robRankingArtistStats.js";
 import type * as _utils_robRankingGenreStats from "../_utils/robRankingGenreStats.js";
 import type * as _utils_rymGenreHierarchy from "../_utils/rymGenreHierarchy.js";
+import type * as _utils_smartPlaylistValidators from "../_utils/smartPlaylistValidators.js";
 import type * as _utils_spotify_album_list from "../_utils/spotify_album_list.js";
 import type * as _utils_ticketmasterConcerts from "../_utils/ticketmasterConcerts.js";
 import type * as _utils_unmappedRymScrapes from "../_utils/unmappedRymScrapes.js";
@@ -102,6 +103,7 @@ declare const fullApi: ApiFromModules<{
   "_utils/robRankingArtistStats": typeof _utils_robRankingArtistStats;
   "_utils/robRankingGenreStats": typeof _utils_robRankingGenreStats;
   "_utils/rymGenreHierarchy": typeof _utils_rymGenreHierarchy;
+  "_utils/smartPlaylistValidators": typeof _utils_smartPlaylistValidators;
   "_utils/spotify_album_list": typeof _utils_spotify_album_list;
   "_utils/ticketmasterConcerts": typeof _utils_ticketmasterConcerts;
   "_utils/unmappedRymScrapes": typeof _utils_unmappedRymScrapes;
