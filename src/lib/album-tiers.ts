@@ -243,12 +243,13 @@ export function getTierColors(tier: TierName): {
   const ratings = getRatingsForTier(tier);
   return getRatingColors(ratings.high);
 } /**
- * Get a short label for display (e.g., "Holy Moly ↑" or "Holy Moly →" or "Holy Moly ↓")
+ * Get a short label for display (e.g., "Holy Moly ↗" or "Holy Moly →" or "Holy Moly ↘")
+ * High = 45°, Med = 0°, Low = 135° (from up, clockwise)
  */
 export function getTierShortLabel(rating: number): string {
   const info = getTierInfo(rating);
   if (!info) return 'Unrated';
   const arrow =
-    info.subTier === 'High' ? '↑' : info.subTier === 'Med' ? '→' : '↓';
+    info.subTier === 'High' ? '↗' : info.subTier === 'Med' ? '→' : '↘';
   return `${info.tier} ${arrow}`;
 }
