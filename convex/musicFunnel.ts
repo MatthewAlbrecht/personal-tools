@@ -772,20 +772,11 @@ export const listRecentSourceRuns = query({
 	returns: v.array(sourceRunReturnValidator),
 	handler: async (ctx, args): Promise<Array<Doc<"musicFunnelSourceRuns">>> => {
 		const limit = clampLimit(args.limit, 50, 100);
-		const rows = await ctx.db
+		return await ctx.db
 			.query("musicFunnelSourceRuns")
 			.withIndex("by_userId_startedAt", (q) => q.eq("userId", args.userId))
 			.order("desc")
-			.take(limit * 2);
-		return rows
-			.filter(
-				(row) =>
-					row.newEncounters > 0 ||
-					row.trackRepeatsFound > 0 ||
-					row.albumRepeatsFound > 0 ||
-					row.artistRepeatsFound > 0,
-			)
-			.slice(0, limit);
+			.take(limit);
 	},
 });
 
