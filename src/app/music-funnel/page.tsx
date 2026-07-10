@@ -68,11 +68,13 @@ export default function MusicFunnelPage() {
 				onTabChange={setActiveTab}
 				onOpenConfig={() => setConfigOpen(true)}
 			/>
+			<MusicFunnelMissedBanner userId={userId} visitSince={visitSince} />
 			{activeTab === "timeline" ? (
-				<MusicFunnelMissedBanner userId={userId} />
-			) : null}
-			{activeTab === "timeline" ? (
-				<MusicFunnelTimeline userId={userId} sources={sources} />
+				<MusicFunnelTimeline
+					userId={userId}
+					sources={sources}
+					visitSince={visitSince}
+				/>
 			) : (
 				<MusicFunnelRepeatLists userId={userId} visitSince={visitSince} />
 			)}

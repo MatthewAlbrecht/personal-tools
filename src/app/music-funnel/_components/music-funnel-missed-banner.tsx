@@ -1,70 +1,49 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "~/components/ui/button";
+import { summarizeMissed } from "~/lib/music-funnel-visit";
 import { api } from "../../../../convex/_generated/api";
-import type { Doc } from "../../../../convex/_generated/dataModel";
+import { musicFunnelNewBannerClassName } from "./music-funnel-new-chrome";
 
-function getLastSeenStorageKey(userId: string): string {
-	return `music-funnel-last-seen-${userId}`;
-}
-
-function summarizeSince(
-	sourceRuns: Doc<"musicFunnelSourceRuns">[],
-	since: number,
-) {
-	const sinceRuns = sourceRuns.filter(
-		(run) => run.startedAt > since && run.newEncounters > 0,
-	);
-	return {
-		syncCount: sinceRuns.length,
-		repeatTrackCount: sinceRuns.reduce(
-			(sum, run) => sum + (run.trackRepeatsFound ?? 0),
-			0,
-		),
-		repeatAlbumCount: sinceRuns.reduce(
-			(sum, run) => sum + (run.albumRepeatsFound ?? 0),
-			0,
-		),
-		repeatArtistCount: sinceRuns.reduce(
-			(sum, run) => sum + (run.artistRepeatsFound ?? 0),
-			0,
-		),
-	};
-}
-
-export function MusicFunnelMissedBanner({ userId }: { userId: string }) {
-	const [since, setSince] = useState<number | null>(null);
+export function MusicFunnelMissedBanner({
+	userId,
+	visitSince,
+}: {
+	userId: string;
+	visitSince: number | null;
+}) {
 	const [dismissed, setDismissed] = useState(false);
-
-	useEffect(() => {
-		const stored = localStorage.getItem(getLastSeenStorageKey(userId));
-		if (stored) {
-			const parsed = Number.parseInt(stored, 10);
-			if (!Number.isNaN(parsed)) {
-				setSince(parsed);
-				return;
-			}
-		}
-		const now = Date.now();
-		localStorage.setItem(getLastSeenStorageKey(userId), String(now));
-		setSince(now);
-	}, [userId]);
 
 	const sourceRuns = useQuery(api.musicFunnel.listRecentSourceRuns, {
 		userId,
 		limit: 100,
 	});
+	const repeats = useQuery(api.musicFunnel.listRepeats, {
+		userId,
+		limit: 100,
+	});
 
 	const summary = useMemo(() => {
-		if (since === null || sourceRuns === undefined) {
+		if (
+			visitSince === null ||
+			sourceRuns === undefined ||
+			repeats === undefined
+		) {
 			return null;
 		}
-		return summarizeSince(sourceRuns, since);
-	}, [since, sourceRuns]);
+		return summarizeMissed({
+			visitSince,
+			sourceRuns,
+			repeats: repeats.map((repeat) => ({
+				type: repeat.type,
+				becameRepeatAt: repeat.becameRepeatAt,
+			})),
+		});
+	}, [visitSince, sourceRuns, repeats]);
 
-	if (since === null || dismissed || summary === null) {
+	if (visitSince === null || dismissed || summary === null) {
 		return null;
 	}
 
@@ -79,14 +58,13 @@ export function MusicFunnelMissedBanner({ userId }: { userId: string }) {
 	}
 
 	function handleDismiss(): void {
-		const now = Date.now();
-		localStorage.setItem(getLastSeenStorageKey(userId), String(now));
-		setSince(now);
 		setDismissed(true);
 	}
 
 	return (
-		<div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/40 px-4 py-3">
+		<div
+			className={`${musicFunnelNewBannerClassName} flex flex-wrap items-center justify-between gap-3`}
+		>
 			<p className="text-sm">
 				<span className="font-medium">What you missed: </span>
 				{summary.syncCount} sync{summary.syncCount === 1 ? "" : "s"}
