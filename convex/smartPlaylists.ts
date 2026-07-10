@@ -47,6 +47,7 @@ type MatchedAlbum = {
 	albumId: Id<"spotifyAlbums">;
 	name: string;
 	artistName: string;
+	totalTracks: number;
 };
 
 const PREVIEW_ALBUM_LIMIT = 20;
@@ -56,6 +57,7 @@ const matchedAlbumValidator = v.object({
 	albumId: v.id("spotifyAlbums"),
 	name: v.string(),
 	artistName: v.string(),
+	totalTracks: v.number(),
 });
 
 const recipeValidator = v.object({
@@ -333,6 +335,7 @@ async function resolveForLaterMatches(
 		albumId: c.item.albumId,
 		name: c.album.name,
 		artistName: c.album.artistName,
+		totalTracks: c.album.totalTracks,
 	}));
 }
 
@@ -355,14 +358,16 @@ async function resolveRankingsMatches(
 		args.filters.durationMinMinutes !== undefined ||
 		args.filters.durationMaxMinutes !== undefined;
 
-	const durationByAlbumId = new Map<Id<"spotifyAlbums">, number | undefined>();
+	const albumByAlbumId = new Map<Id<"spotifyAlbums">, Doc<"spotifyAlbums">>();
 	if (needsDuration) {
 		for (const item of rated) {
-			if (durationByAlbumId.has(item.albumId)) {
+			if (albumByAlbumId.has(item.albumId)) {
 				continue;
 			}
 			const album = await ctx.db.get(item.albumId);
-			durationByAlbumId.set(item.albumId, album?.totalDurationMs);
+			if (album) {
+				albumByAlbumId.set(item.albumId, album);
+			}
 		}
 	}
 
@@ -395,7 +400,7 @@ async function resolveRankingsMatches(
 		}
 
 		if (needsDuration) {
-			const durationMs = durationByAlbumId.get(item.albumId);
+			const durationMs = albumByAlbumId.get(item.albumId)?.totalDurationMs;
 			if (!durationMatchesFilters(durationMs, args.filters)) {
 				continue;
 			}
@@ -455,12 +460,26 @@ async function resolveRankingsMatches(
 		return a.item.name.localeCompare(b.item.name);
 	});
 
-	return candidates.map((c) => ({
-		spotifyAlbumId: c.item.spotifyAlbumId,
-		albumId: c.item.albumId,
-		name: c.item.name,
-		artistName: c.item.artistName,
-	}));
+	return Promise.all(
+		candidates.map(async (c) => {
+			let album = albumByAlbumId.get(c.item.albumId);
+			if (!album) {
+				const loaded = await ctx.db.get(c.item.albumId);
+				if (!loaded) {
+					throw new Error(`Album not found: ${c.item.albumId}`);
+				}
+				album = loaded;
+			}
+
+			return {
+				spotifyAlbumId: c.item.spotifyAlbumId,
+				albumId: c.item.albumId,
+				name: c.item.name,
+				artistName: c.item.artistName,
+				totalTracks: album.totalTracks,
+			};
+		}),
+	);
 }
 
 async function resolveMatchingAlbums(

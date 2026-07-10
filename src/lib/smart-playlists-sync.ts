@@ -76,6 +76,7 @@ export async function syncSmartPlaylistRecipe({
 				convex,
 				accessToken,
 				spotifyAlbumId: album.spotifyAlbumId,
+				totalTracks: album.totalTracks,
 			});
 			albumsWithTracks.push({
 				albumId: album.spotifyAlbumId,
@@ -243,17 +244,22 @@ async function loadAlbumTrackUris({
 	convex,
 	accessToken,
 	spotifyAlbumId,
+	totalTracks,
 }: {
 	convex: ConvexHttpClient;
 	accessToken: string;
 	spotifyAlbumId: string;
+	totalTracks: number;
 }): Promise<string[]> {
 	const canonicalUris = await convex.query(
 		api.smartPlaylists.listCanonicalTrackUrisByAlbum,
 		{ spotifyAlbumId },
 	);
 
-	if (canonicalUris.length > 0) {
+	if (
+		totalTracks > 0 &&
+		canonicalUris.length === totalTracks
+	) {
 		return canonicalUris;
 	}
 
