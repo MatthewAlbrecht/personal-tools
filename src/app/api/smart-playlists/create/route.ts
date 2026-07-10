@@ -1,13 +1,13 @@
 import { ConvexHttpClient } from "convex/browser";
 import { type NextRequest, NextResponse } from "next/server";
 import { env } from "~/env.js";
+import { syncSmartPlaylistRecipe } from "~/lib/smart-playlists-sync";
 import type {
 	SmartPlaylistFilters,
 	SmartPlaylistSource,
 	SmartPlaylistSyncMode,
 	TrackSelection,
 } from "~/lib/smart-playlists/types";
-import { syncSmartPlaylistRecipe } from "~/lib/smart-playlists-sync";
 import { createPlaylist } from "~/lib/spotify";
 import { api } from "../../../../../convex/_generated/api";
 
@@ -54,10 +54,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 	}
 
 	if (!filters) {
-		return NextResponse.json(
-			{ error: "No filters provided" },
-			{ status: 400 },
-		);
+		return NextResponse.json({ error: "No filters provided" }, { status: 400 });
 	}
 
 	if (syncMode !== "mirror" && syncMode !== "addOnly") {

@@ -1,6 +1,13 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import {
+	smartPlaylistFiltersValidator,
+	smartPlaylistSourceValidator,
+	smartPlaylistSyncModeValidator,
+	smartPlaylistSyncStatusValidator,
+	trackSelectionValidator,
+} from "./_utils/smartPlaylistValidators";
+import {
 	zineCoverTextAlignValidator,
 	zineCoverTextAnchorValidator,
 } from "./_utils/zineCoverTextLayout";
@@ -10,13 +17,6 @@ import {
 	zineInsideBackRecommendationRowAlignValidator,
 } from "./_utils/zineInsideBackLayout";
 import { zineInsideBackSectionsValidator } from "./_utils/zineInsideBackSections";
-import {
-	smartPlaylistFiltersValidator,
-	smartPlaylistSourceValidator,
-	smartPlaylistSyncModeValidator,
-	smartPlaylistSyncStatusValidator,
-	trackSelectionValidator,
-} from "./_utils/smartPlaylistValidators";
 
 const geniusCreditValidator = v.object({
 	label: v.string(),

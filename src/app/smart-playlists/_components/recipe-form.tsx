@@ -149,9 +149,7 @@ export function RecipeForm({
 	const genreLabelByKey = new Map(
 		(genreOptions ?? []).map((g) => [g.key, g.label] as const),
 	);
-	const descriptorKeysPool = (descriptorOptions ?? [])
-		.map((d) => d.key)
-		.sort();
+	const descriptorKeysPool = (descriptorOptions ?? []).map((d) => d.key).sort();
 	const descriptorLabelByKey = new Map(
 		(descriptorOptions ?? []).map((d) => [d.key, d.label] as const),
 	);

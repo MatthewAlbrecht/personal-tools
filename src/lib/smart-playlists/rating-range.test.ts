@@ -17,8 +17,8 @@ test("Holy Moly High maps to 15-15", () => {
 });
 
 test("Really Enjoyed or above uses min 10 and no max", () => {
-	assert.deepEqual(
-		ratingBoundsFromSelection({ minTier: "Really Enjoyed" }),
-		{ ratingMin: 10, ratingMax: undefined },
-	);
+	assert.deepEqual(ratingBoundsFromSelection({ minTier: "Really Enjoyed" }), {
+		ratingMin: 10,
+		ratingMax: undefined,
+	});
 });

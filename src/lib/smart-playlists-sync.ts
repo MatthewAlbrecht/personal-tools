@@ -256,10 +256,7 @@ async function loadAlbumTrackUris({
 		{ spotifyAlbumId },
 	);
 
-	if (
-		totalTracks > 0 &&
-		canonicalUris.length === totalTracks
-	) {
+	if (totalTracks > 0 && canonicalUris.length === totalTracks) {
 		return canonicalUris;
 	}
 
@@ -283,7 +280,11 @@ async function addPlaylistItemsInChunks(
 	playlistId: string,
 	uris: string[],
 ): Promise<void> {
-	for (let index = 0; index < uris.length; index += SPOTIFY_PLAYLIST_URI_CHUNK) {
+	for (
+		let index = 0;
+		index < uris.length;
+		index += SPOTIFY_PLAYLIST_URI_CHUNK
+	) {
 		const chunk = uris.slice(index, index + SPOTIFY_PLAYLIST_URI_CHUNK);
 		await addItemsToPlaylist(accessToken, playlistId, chunk);
 	}

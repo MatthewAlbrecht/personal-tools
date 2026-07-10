@@ -86,10 +86,7 @@ function formatDurationSegment(
 	filters: SmartPlaylistFilters,
 ): string | undefined {
 	const { durationMinMinutes, durationMaxMinutes } = filters;
-	if (
-		durationMinMinutes !== undefined &&
-		durationMaxMinutes !== undefined
-	) {
+	if (durationMinMinutes !== undefined && durationMaxMinutes !== undefined) {
 		return `${durationMinMinutes}–${durationMaxMinutes}m`;
 	}
 	if (durationMaxMinutes !== undefined) return `under ${durationMaxMinutes}m`;
@@ -97,9 +94,7 @@ function formatDurationSegment(
 	return undefined;
 }
 
-function formatAddedSegment(
-	filters: SmartPlaylistFilters,
-): string | undefined {
+function formatAddedSegment(filters: SmartPlaylistFilters): string | undefined {
 	const window = filters.addedWindow;
 	if (!window) return undefined;
 

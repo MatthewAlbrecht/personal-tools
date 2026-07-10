@@ -263,8 +263,7 @@ async function resolveForLaterMatches(
 			continue;
 		}
 
-		const addedAt =
-			item.playlistAddedAt ?? item.firstSeenAt ?? item.createdAt;
+		const addedAt = item.playlistAddedAt ?? item.firstSeenAt ?? item.createdAt;
 		if (!addedAtMatchesWindow(addedAt, addedRange)) {
 			continue;
 		}
@@ -790,7 +789,8 @@ export const listCanonicalTrackUrisByAlbum = query({
 			.collect();
 
 		tracks.sort(
-			(a, b) => (a.trackNumber ?? Number.MAX_SAFE_INTEGER) -
+			(a, b) =>
+				(a.trackNumber ?? Number.MAX_SAFE_INTEGER) -
 				(b.trackNumber ?? Number.MAX_SAFE_INTEGER),
 		);
 
