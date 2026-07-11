@@ -2,18 +2,13 @@
 
 import { useQuery } from "convex/react";
 import Image from "next/image";
-import type { ReactNode } from "react";
-import {
-	Card,
-	CardContent,
-	CardDescription,
-	CardHeader,
-	CardTitle,
-} from "~/components/ui/card";
 import { isNewSince } from "~/lib/music-funnel-visit";
 import { formatRelativeTime } from "~/lib/utils";
 import { api } from "../../../../convex/_generated/api";
-import { MusicFunnelNewChrome } from "./music-funnel-new-chrome";
+import {
+	MusicFunnelNewBadge,
+	MusicFunnelNewChrome,
+} from "./music-funnel-new-chrome";
 
 export function MusicFunnelRepeatLists({
 	userId,
@@ -28,55 +23,31 @@ export function MusicFunnelRepeatLists({
 	});
 
 	return (
-		<RepeatCard
-			title="Repeats"
-			description="Cross-source tracks, albums, and artists — most recently active first."
-			isLoading={repeats === undefined}
-			isEmpty={repeats?.length === 0}
-			emptyMessage="No cross-source repeats yet."
-		>
-			{repeats?.map((repeat) => (
-				<RepeatRow
-					key={getRepeatKey(repeat)}
-					repeat={repeat}
-					visitSince={visitSince}
-				/>
-			))}
-		</RepeatCard>
-	);
-}
-
-function RepeatCard({
-	title,
-	description,
-	isLoading,
-	isEmpty,
-	emptyMessage,
-	children,
-}: {
-	title: string;
-	description: string;
-	isLoading: boolean;
-	isEmpty?: boolean;
-	emptyMessage: string;
-	children: ReactNode;
-}) {
-	return (
-		<Card>
-			<CardHeader>
-				<CardTitle>{title}</CardTitle>
-				<CardDescription>{description}</CardDescription>
-			</CardHeader>
-			<CardContent>
-				{isLoading ? (
-					<p className="text-muted-foreground text-sm">Loading...</p>
-				) : isEmpty ? (
-					<p className="text-muted-foreground text-sm">{emptyMessage}</p>
-				) : (
-					<ul className="space-y-3">{children}</ul>
-				)}
-			</CardContent>
-		</Card>
+		<section className="space-y-4">
+			<div>
+				<h2 className="font-semibold text-lg">Repeats</h2>
+				<p className="text-muted-foreground text-sm">
+					Cross-source tracks, albums, and artists — most recently active first.
+				</p>
+			</div>
+			{repeats === undefined ? (
+				<p className="text-muted-foreground text-sm">Loading...</p>
+			) : repeats.length === 0 ? (
+				<p className="text-muted-foreground text-sm">
+					No cross-source repeats yet.
+				</p>
+			) : (
+				<ul className="divide-y">
+					{repeats.map((repeat) => (
+						<RepeatRow
+							key={getRepeatKey(repeat)}
+							repeat={repeat}
+							visitSince={visitSince}
+						/>
+					))}
+				</ul>
+			)}
+		</section>
 	);
 }
 
@@ -90,26 +61,23 @@ function RepeatRow({
 	const { title, subtitle, typeLabel, imageUrl, imageAlt } =
 		getRepeatDisplay(repeat);
 	const sources = repeat.sources.map((source) => source.displayName).join(", ");
+	const isNew =
+		visitSince !== null && isNewSince(repeat.becameRepeatAt, visitSince);
 
 	return (
-		<li>
-			<MusicFunnelNewChrome
-				isNew={
-					visitSince !== null && isNewSince(repeat.becameRepeatAt, visitSince)
-				}
-				className="rounded-lg border p-3"
-			>
+		<li className="py-3">
+			<MusicFunnelNewChrome isNew={isNew}>
 				<div className="flex items-start gap-3">
 					{imageUrl ? (
 						<Image
 							src={imageUrl}
 							alt={imageAlt}
-							width={48}
-							height={48}
-							className="size-12 shrink-0 rounded object-cover"
+							width={40}
+							height={40}
+							className="size-10 shrink-0 rounded object-cover"
 						/>
 					) : (
-						<div className="size-12 shrink-0 rounded bg-muted" />
+						<div className="size-10 shrink-0 rounded bg-muted" />
 					)}
 					<div className="min-w-0 flex-1">
 						<div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
@@ -118,10 +86,11 @@ function RepeatRow({
 								{repeat.sourceCount}×
 							</span>
 							<span className="text-muted-foreground text-xs">{typeLabel}</span>
+							{isNew ? <MusicFunnelNewBadge /> : null}
 						</div>
 						<p className="text-muted-foreground text-sm">{subtitle}</p>
-						<p className="mt-1 text-muted-foreground text-xs">{sources}</p>
-						<p className="mt-0.5 text-muted-foreground text-xs">
+						<p className="text-muted-foreground text-xs">{sources}</p>
+						<p className="text-muted-foreground text-xs">
 							First seen {formatRelativeTime(repeat.firstSeenAt)} · Last seen{" "}
 							{formatRelativeTime(repeat.latestSeenAt)}
 							{repeat.type === "track" &&
