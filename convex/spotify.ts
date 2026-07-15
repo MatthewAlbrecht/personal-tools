@@ -356,7 +356,9 @@ export const backfillAlbumLibraryItems = mutation({
 		done: boolean;
 		cursor?: string;
 	}> => {
-		const batchSize = Math.min(args.batchSize ?? 100, 500);
+		// Cap hard: each projection may read RYM genres/descriptors/rob rows.
+		// Batches of ~500 blow Convex's 4096-read / 16MB-read mutation limits.
+		const batchSize = Math.min(args.batchSize ?? 50, 100);
 		const page = await ctx.db
 			.query("spotifyAlbums")
 			.withIndex("by_createdAt")

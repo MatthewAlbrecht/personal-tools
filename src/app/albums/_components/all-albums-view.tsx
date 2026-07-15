@@ -241,9 +241,11 @@ export function AllAlbumsView({
 			let processed = 0;
 			let cursor: string | undefined;
 			for (;;) {
+				// Keep batches small: each album projection can load RYM taxonomy
+				// and hits Convex's per-mutation read limit (~4096) around ~500 albums.
 				const batch = await backfillAlbumLibraryItems({
 					userId,
-					batchSize: 500,
+					batchSize: 50,
 					...(cursor === undefined ? {} : { cursor }),
 				});
 				processed += batch.processed;
@@ -261,7 +263,12 @@ export function AllAlbumsView({
 			);
 		} catch (error) {
 			console.error("Album library index backfill failed:", error);
-			toast.error("Could not build library index", { id: toastId });
+			toast.error(
+				error instanceof Error
+					? error.message
+					: "Could not build library index",
+				{ id: toastId },
+			);
 		} finally {
 			setIsBackfillingLibraryIndex(false);
 		}
