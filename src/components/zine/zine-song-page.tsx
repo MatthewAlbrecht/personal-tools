@@ -193,6 +193,7 @@ function ZineSongPageContent({
 								canEditCredits={canEditCredits}
 								credits={visibleCredits}
 								onHideCreditLabel={onHideCreditLabel}
+								showRule={displayOptions.showCreditsRule}
 							/>
 						) : null}
 					</div>

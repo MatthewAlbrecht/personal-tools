@@ -16,6 +16,7 @@ export type ZineDisplayOptions = {
 	showGeniusInfo: boolean;
 	showSectionLabels: boolean;
 	showUserNote: boolean;
+	showCreditsRule: boolean;
 };
 
 export function ZineSongHeader({

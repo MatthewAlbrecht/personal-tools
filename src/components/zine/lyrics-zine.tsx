@@ -298,6 +298,7 @@ export function LyricsZine({
 		showGeniusInfo: displaySettings.showGeniusInfo,
 		showSectionLabels: displaySettings.showSectionLabels,
 		showUserNote: canEdit && displaySettings.showUserNote,
+		showCreditsRule: displaySettings.showCreditsRule,
 	};
 
 	const resolvedCoverImageUrl = coverImageUrl.trim() || undefined;
@@ -988,6 +989,14 @@ export function LyricsZine({
 								}
 								label="Separate instrumental pages"
 							/>
+							<ZineToggleControl
+								id="zine-show-credits-rule"
+								checked={displaySettings.showCreditsRule}
+								onCheckedChange={(checked) =>
+									updateDisplaySettings({ showCreditsRule: checked })
+								}
+								label="Line above credits"
+							/>
 							{canEdit ? (
 								<ZineToggleControl
 									id="zine-show-user-note"
@@ -1423,7 +1432,7 @@ export function LyricsZine({
 															value={getSongIntroContent(page.songId)}
 															label="Track intro"
 															placeholder="Optional intro for the INTRO section"
-															helperText="Use **bold**, *italic*, and blank lines for paragraphs."
+															helperText="Use *bold*, _italic_, and blank lines for paragraphs."
 															textareaClassName="min-h-28 font-mono text-sm"
 															onChange={(value) =>
 																updateSongIntroContent(page.songId, value)
@@ -1475,7 +1484,7 @@ function ZineIntroPageContentDialog({
 				<DialogHeader>
 					<DialogTitle>Album intro</DialogTitle>
 					<DialogDescription>
-						Appears on the page after the cover. Use **bold**, *italic*, and
+						Appears on the page after the cover. Use *bold*, _italic_, and
 						blank lines for paragraphs.
 					</DialogDescription>
 				</DialogHeader>

@@ -26,6 +26,18 @@ test("For Later album upsert calls RYM matching after item upsert", () => {
 	assert.match(source, /rymMatch/);
 });
 
+test("For Later album upsert seeds album library projection", () => {
+	const upsertIndex = source.indexOf("upsertForLaterAlbumItem");
+	const libraryIndex = source.indexOf("await upsertAlbumLibraryProjection");
+
+	assert.ok(upsertIndex >= 0, "upsertForLaterAlbumItem must exist");
+	assert.ok(
+		libraryIndex > upsertIndex,
+		"upsertAlbumLibraryProjection must be called in the upsert flow",
+	);
+	assert.match(source, /import \{ upsertAlbumLibraryProjection \}/);
+});
+
 test("recommendation genre counts use filterGenreKeysSorted not item.rymScrapeId", () => {
 	assert.match(
 		source,

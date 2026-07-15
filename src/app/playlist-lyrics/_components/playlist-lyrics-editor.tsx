@@ -32,7 +32,7 @@ import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import { getPlaylistDisplayTrackNumber } from "../_utils/song-display";
 
 const TRACK_INTRO_HELPER_TEXT =
-	"Use **bold**, *italic*, and blank lines for paragraphs.";
+	"Use *bold*, _italic_, and blank lines for paragraphs.";
 
 type PlaylistFields = {
 	title: string;

@@ -1,16 +1,24 @@
 import type { ZineCredit } from "~/lib/zine/zine-types";
+import { cn } from "~/lib/utils";
 
 export function ZineSongPageFooterCredits({
 	credits,
 	canEditCredits,
 	onHideCreditLabel,
+	showRule = false,
 }: {
 	credits: ZineCredit[];
 	canEditCredits: boolean;
 	onHideCreditLabel?: (label: string) => void;
+	showRule?: boolean;
 }) {
 	return (
-		<div className="zine-footer-credits">
+		<div
+			className={cn(
+				"zine-footer-credits",
+				showRule && "zine-footer-credits-with-rule",
+			)}
+		>
 			{credits.map((credit) => (
 				<span key={credit.label} className="zine-footer-credit-item">
 					{canEditCredits && onHideCreditLabel ? (

@@ -3,7 +3,7 @@
 import { useQuery } from "convex/react";
 import Image from "next/image";
 import { sourceRunHasActivity } from "~/lib/music-funnel-visit";
-import { formatRelativeTime } from "~/lib/utils";
+import { cn, formatRelativeTime } from "~/lib/utils";
 import { api } from "../../../../convex/_generated/api";
 import type { Doc } from "../../../../convex/_generated/dataModel";
 import {
@@ -52,9 +52,18 @@ export function MusicFunnelTimeline({
 							sourceRun.startedAt > visitSince &&
 							sourceRunHasActivity(sourceRun);
 						return (
-							<li key={sourceRun._id} className="pb-4">
-								<span className="-left-[4px] absolute mt-1.5 size-2 rounded-full bg-foreground" />
-								<MusicFunnelNewChrome isNew={isNew}>
+							<li key={sourceRun._id}>
+								<span
+									className={cn(
+										"-left-[4px] absolute mt-4 size-2 rounded-full",
+										isNew ? "bg-amber-500" : "bg-foreground",
+									)}
+								/>
+								<MusicFunnelNewChrome
+									isNew={isNew}
+									accent="none"
+									className="-ml-2 pl-2"
+								>
 									<div className="flex items-start gap-3">
 										{source?.imageUrl ? (
 											<Image
@@ -62,10 +71,10 @@ export function MusicFunnelTimeline({
 												alt={sourceRun.sourceDisplayName}
 												width={40}
 												height={40}
-												className="size-10 shrink-0 rounded object-cover"
+												className="size-10 shrink-0 rounded border border-border/60 bg-background object-cover"
 											/>
 										) : (
-											<div className="size-10 shrink-0 rounded bg-muted" />
+											<div className="size-10 shrink-0 rounded border border-border/60 bg-muted" />
 										)}
 										<div className="min-w-0 flex-1">
 											<p className="flex flex-wrap items-baseline gap-x-2 font-medium">
@@ -74,15 +83,14 @@ export function MusicFunnelTimeline({
 											</p>
 											<p className="text-muted-foreground text-sm">
 												{formatSourceRunSummary(sourceRun)}
-											</p>
-											<p className="text-muted-foreground text-xs">
+												{" · "}
 												{formatRelativeTime(sourceRun.startedAt)}
-												{sourceRun.status === "failed" && (
+												{sourceRun.status === "failed" ? (
 													<span className="text-destructive">
 														{" · "}
 														Sync failed
 													</span>
-												)}
+												) : null}
 											</p>
 										</div>
 									</div>
@@ -99,19 +107,7 @@ export function MusicFunnelTimeline({
 function formatSourceRunSummary(
 	sourceRun: Doc<"musicFunnelSourceRuns">,
 ): string {
-	const trackLabel = sourceRun.tracksFetched === 1 ? "track" : "tracks";
-	let summary = `${sourceRun.tracksFetched} ${trackLabel} synced`;
-
-	if (sourceRun.alreadySeenFromSource > 0) {
-		const dupLabel =
-			sourceRun.alreadySeenFromSource === 1 ? "duplicate" : "duplicates";
-		summary += ` (${sourceRun.alreadySeenFromSource} ${dupLabel})`;
-	}
-
-	if (sourceRun.newEncounters > 0) {
-		const newLabel = sourceRun.newEncounters === 1 ? "new track" : "new tracks";
-		summary += ` · ${sourceRun.newEncounters} ${newLabel}`;
-	}
-
-	return summary;
+	const count = sourceRun.newEncounters;
+	if (count === 1) return "1 new track";
+	return `${count} new tracks`;
 }

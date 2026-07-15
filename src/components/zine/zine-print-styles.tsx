@@ -561,6 +561,11 @@ export function ZinePrintStyles() {
 						overflow: hidden;
 					}
 
+					.zine-footer-credits-with-rule {
+						border-top: 0.5pt solid #999999;
+						padding-top: 0.06in;
+					}
+
 					.zine-footer-credit-item {
 						display: inline-flex;
 						max-width: 100%;
@@ -689,9 +694,13 @@ export function ZinePrintStyles() {
 					.zine-song-intro-body {
 						margin: 0;
 						font-size: 8.5pt;
-						font-style: italic;
+						font-style: normal;
 						line-height: 1.35;
 						color: #555;
+					}
+
+					.zine-song-intro-body em {
+						font-style: italic;
 					}
 
 					.zine-song-intro-paragraph {

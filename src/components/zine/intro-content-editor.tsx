@@ -14,7 +14,7 @@ export function IntroContentEditor({
 	onBlur,
 	disabled = false,
 	label = "Zine intro page",
-	placeholder = "Notes for the page after the cover. Use **bold**, *italic*, and blank lines for paragraphs.",
+	placeholder = "Notes for the page after the cover. Use *bold*, _italic_, and blank lines for paragraphs.",
 	helperText = "Appears after the cover in the album zine. Blank lines start new paragraphs.",
 	textareaClassName,
 }: {
@@ -63,13 +63,13 @@ export function IntroContentEditor({
 
 		if (event.key === "b" || event.key === "B") {
 			event.preventDefault();
-			wrapSelection("**", "**");
+			wrapSelection("*", "*");
 			return;
 		}
 
 		if (event.key === "i" || event.key === "I") {
 			event.preventDefault();
-			wrapSelection("*", "*");
+			wrapSelection("_", "_");
 		}
 	}
 
@@ -84,7 +84,7 @@ export function IntroContentEditor({
 						size="sm"
 						className="h-8 px-2"
 						disabled={disabled}
-						onClick={() => wrapSelection("**", "**")}
+						onClick={() => wrapSelection("*", "*")}
 					>
 						<Bold className="h-4 w-4" />
 						<span className="sr-only">Bold</span>
@@ -95,7 +95,7 @@ export function IntroContentEditor({
 						size="sm"
 						className="h-8 px-2"
 						disabled={disabled}
-						onClick={() => wrapSelection("*", "*")}
+						onClick={() => wrapSelection("_", "_")}
 					>
 						<Italic className="h-4 w-4" />
 						<span className="sr-only">Italic</span>

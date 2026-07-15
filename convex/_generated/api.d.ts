@@ -31,6 +31,7 @@ import type * as _utils_geniusCreditVisibility from "../_utils/geniusCreditVisib
 import type * as _utils_geniusParser from "../_utils/geniusParser.js";
 import type * as _utils_geniusSpotifyTrackDurations from "../_utils/geniusSpotifyTrackDurations.js";
 import type * as _utils_google_rym_lucky_search from "../_utils/google_rym_lucky_search.js";
+import type * as _utils_musicFunnelRepeats from "../_utils/musicFunnelRepeats.js";
 import type * as _utils_playlistLyrics from "../_utils/playlistLyrics.js";
 import type * as _utils_rateYourMusicTaxonomy from "../_utils/rateYourMusicTaxonomy.js";
 import type * as _utils_robRankingArtistStats from "../_utils/robRankingArtistStats.js";
@@ -100,6 +101,7 @@ declare const fullApi: ApiFromModules<{
   "_utils/geniusParser": typeof _utils_geniusParser;
   "_utils/geniusSpotifyTrackDurations": typeof _utils_geniusSpotifyTrackDurations;
   "_utils/google_rym_lucky_search": typeof _utils_google_rym_lucky_search;
+  "_utils/musicFunnelRepeats": typeof _utils_musicFunnelRepeats;
   "_utils/playlistLyrics": typeof _utils_playlistLyrics;
   "_utils/rateYourMusicTaxonomy": typeof _utils_rateYourMusicTaxonomy;
   "_utils/robRankingArtistStats": typeof _utils_robRankingArtistStats;

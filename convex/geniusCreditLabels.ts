@@ -2,7 +2,6 @@ import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
-import type { GeniusCredit } from "./_utils/geniusParser";
 import {
 	collectCreditLabelsFromCredits,
 	isCreditLabelIgnored,
@@ -10,6 +9,7 @@ import {
 	sortCreditLabelsForAdminList,
 	sortIgnoredCreditLabelsForAdminList,
 } from "./_utils/geniusCreditVisibility";
+import type { GeniusCredit } from "./_utils/geniusParser";
 import { requireAuth } from "./auth";
 
 const creditLabelRowValidator = v.object({
@@ -47,6 +47,41 @@ export async function getIgnoredCreditLabelKeys(
 		.collect();
 
 	return rows.map((row) => row.key);
+}
+
+/** Mark a credit label hidden-by-default site-wide (albums + playlists). */
+export async function ensureCreditLabelHiddenByDefault(
+	ctx: MutationCtx,
+	label: string,
+): Promise<void> {
+	const trimmed = label.trim();
+	const key = normalizeCreditLabelKey(trimmed);
+	if (!key) return;
+
+	const now = Date.now();
+	const existing = await ctx.db
+		.query("geniusCreditLabels")
+		.withIndex("by_key", (q) => q.eq("key", key))
+		.first();
+
+	if (existing) {
+		if (existing.ignored === true) return;
+		if (existing.hiddenByDefault) return;
+		await ctx.db.patch(existing._id, {
+			hiddenByDefault: true,
+			updatedAt: now,
+		});
+		return;
+	}
+
+	await ctx.db.insert("geniusCreditLabels", {
+		key,
+		label: trimmed,
+		hiddenByDefault: true,
+		ignored: false,
+		createdAt: now,
+		updatedAt: now,
+	});
 }
 
 export const listCreditLabels = query({

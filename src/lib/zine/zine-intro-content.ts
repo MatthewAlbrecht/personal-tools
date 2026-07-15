@@ -53,24 +53,38 @@ function parseIntroParagraph(paragraphText: string): IntroContentParagraph {
 
 function parseInlineSpans(text: string): IntroContentSpan[] {
 	const spans: IntroContentSpan[] = [];
-	const pattern = /\*\*([^*]+)\*\*|\*([^*]+)\*|([^*]+)/g;
-	let match = pattern.exec(text);
+	let index = 0;
+	let plain = "";
 
-	while (match !== null) {
-		if (match[1] !== undefined) {
-			spans.push({ text: match[1], bold: true });
-		} else if (match[2] !== undefined) {
-			spans.push({ text: match[2], italic: true });
-		} else if (match[3] !== undefined && match[3] !== "") {
-			spans.push({ text: match[3] });
+	function flushPlain(): void {
+		if (plain === "") {
+			return;
+		}
+		spans.push({ text: plain });
+		plain = "";
+	}
+
+	while (index < text.length) {
+		const char = text[index] ?? "";
+		if (char === "*" || char === "_") {
+			const closeIndex = text.indexOf(char, index + 1);
+			if (closeIndex > index + 1) {
+				flushPlain();
+				const inner = text.slice(index + 1, closeIndex);
+				spans.push(
+					char === "*"
+						? { text: inner, bold: true }
+						: { text: inner, italic: true },
+				);
+				index = closeIndex + 1;
+				continue;
+			}
 		}
 
-		match = pattern.exec(text);
+		plain += char;
+		index += 1;
 	}
 
-	if (spans.length === 0 && text !== "") {
-		spans.push({ text });
-	}
-
+	flushPlain();
 	return spans;
 }

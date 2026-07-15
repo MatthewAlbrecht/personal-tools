@@ -10,6 +10,7 @@ import {
 	matchRymForForLaterAlbum,
 	normalizeAlbumTitle,
 } from "./_utils/albumMatching";
+import { upsertAlbumLibraryProjection } from "./_utils/albumLibraryProjection";
 import {
 	type ForLaterAlbumRowFilterInput,
 	type ForLaterFiltersNormalizeInput,
@@ -1551,6 +1552,10 @@ export const upsertForLaterAlbumItem = mutation({
 		});
 
 		await syncForLaterItemFilterProjection(ctx, itemId);
+		await upsertAlbumLibraryProjection(ctx, {
+			userId: args.userId,
+			albumId: args.albumId,
+		});
 
 		return {
 			itemId,

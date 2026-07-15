@@ -61,7 +61,9 @@ export function CreditDefaultsDrawer({
 			);
 		} catch (error) {
 			toast.error(
-				error instanceof Error ? error.message : "Failed to refresh credit labels",
+				error instanceof Error
+					? error.message
+					: "Failed to refresh credit labels",
 			);
 		} finally {
 			setIsRefreshing(false);
@@ -241,8 +243,10 @@ export function CreditDefaultsDrawer({
 
 							<section className="space-y-3">
 								<p className="text-muted-foreground text-xs leading-snug">
-									Discovered labels appear here. Checked labels are hidden unless
-									you show them on an individual track in the zine editor.
+									Discovered labels appear here. Checked labels are hidden on
+									album and playlist lyrics unless you show them on an
+									individual track in the zine editor. Hiding a credit in either
+									zine also checks it here so the same label drops everywhere.
 								</p>
 								{creditLabels.length === 0 ? (
 									<p className="text-muted-foreground text-sm">

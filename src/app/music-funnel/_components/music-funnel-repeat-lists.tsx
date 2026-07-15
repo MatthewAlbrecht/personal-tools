@@ -37,7 +37,7 @@ export function MusicFunnelRepeatLists({
 					No cross-source repeats yet.
 				</p>
 			) : (
-				<ul className="divide-y">
+				<ul>
 					{repeats.map((repeat) => (
 						<RepeatRow
 							key={getRepeatKey(repeat)}
@@ -65,7 +65,7 @@ function RepeatRow({
 		visitSince !== null && isNewSince(repeat.becameRepeatAt, visitSince);
 
 	return (
-		<li className="py-3">
+		<li>
 			<MusicFunnelNewChrome isNew={isNew}>
 				<div className="flex items-start gap-3">
 					{imageUrl ? (
@@ -74,10 +74,10 @@ function RepeatRow({
 							alt={imageAlt}
 							width={40}
 							height={40}
-							className="size-10 shrink-0 rounded object-cover"
+							className="size-10 shrink-0 rounded border border-border/60 bg-background object-cover"
 						/>
 					) : (
-						<div className="size-10 shrink-0 rounded bg-muted" />
+						<div className="size-10 shrink-0 rounded border border-border/60 bg-muted" />
 					)}
 					<div className="min-w-0 flex-1">
 						<div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">

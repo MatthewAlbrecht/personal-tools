@@ -59,6 +59,7 @@ export function ZineInstrumentalGroupPage({
 											? (label) => onHideCreditLabel(song.songId, label)
 											: undefined
 									}
+									showRule={displayOptions.showCreditsRule}
 								/>
 							</div>
 						) : null}

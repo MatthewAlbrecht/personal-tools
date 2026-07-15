@@ -8,6 +8,7 @@ import {
 	Loader2,
 	Pencil,
 	Plus,
+	Settings2,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -18,6 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
 import { api } from "../../../../convex/_generated/api";
 import type { Doc } from "../../../../convex/_generated/dataModel";
+import { CreditDefaultsDrawer } from "../../lyrics/_components/credit-defaults-drawer";
 
 type Playlist = Doc<"playlistLyrics">;
 
@@ -33,6 +35,7 @@ export function PlaylistLyricsList() {
 	const router = useRouter();
 	const [isCreating, setIsCreating] = useState(false);
 	const [isSyncing, setIsSyncing] = useState(false);
+	const [creditDefaultsOpen, setCreditDefaultsOpen] = useState(false);
 
 	const playlists = useQuery(api.playlistLyrics.list, { limit: 100 });
 	const createDraft = useMutation(api.playlistLyrics.createDraft);
@@ -84,7 +87,12 @@ export function PlaylistLyricsList() {
 	}
 
 	return (
-		<Card>
+		<>
+			<CreditDefaultsDrawer
+				open={creditDefaultsOpen}
+				onOpenChange={setCreditDefaultsOpen}
+			/>
+			<Card>
 				<CardHeader>
 					<div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
 						<div>
@@ -97,6 +105,14 @@ export function PlaylistLyricsList() {
 							</p>
 						</div>
 						<div className="flex flex-wrap gap-2">
+							<Button
+								type="button"
+								variant="outline"
+								onClick={() => setCreditDefaultsOpen(true)}
+							>
+								<Settings2 className="mr-2 h-4 w-4" />
+								Credit defaults
+							</Button>
 							<Button
 								variant="outline"
 								onClick={handleSyncToProduction}
@@ -221,6 +237,7 @@ export function PlaylistLyricsList() {
 					)}
 				</CardContent>
 			</Card>
+		</>
 	);
 }
 

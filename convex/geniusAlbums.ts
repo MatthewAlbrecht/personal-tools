@@ -42,6 +42,7 @@ import {
 } from "./_utils/zineInsideBackSections";
 import { requireAuth } from "./auth";
 import {
+	ensureCreditLabelHiddenByDefault,
 	getIgnoredCreditLabelKeys,
 	getSiteWideHiddenCreditLabelKeys,
 } from "./geniusCreditLabels";
@@ -424,6 +425,7 @@ const zineDisplaySettingsMutationValidator = v.object({
 	showSectionLabels: v.boolean(),
 	showUserNote: v.boolean(),
 	separateInstrumentalPages: v.boolean(),
+	showCreditsRule: v.boolean(),
 });
 
 export const updateZineDisplaySettings = mutation({
@@ -499,6 +501,7 @@ export const hideSongCreditLabel = mutation({
 			args.label,
 		);
 
+		await ensureCreditLabelHiddenByDefault(ctx, args.label);
 		await ctx.db.patch(args.songId, next);
 		return args.songId;
 	},
@@ -1183,6 +1186,7 @@ const zineDisplaySettingsSyncValidator = v.object({
 	showSectionLabels: v.optional(v.boolean()),
 	showUserNote: v.optional(v.boolean()),
 	separateInstrumentalPages: v.optional(v.boolean()),
+	showCreditsRule: v.optional(v.boolean()),
 });
 
 const syncAlbumSongInputValidator = v.object({

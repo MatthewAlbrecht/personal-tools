@@ -16,16 +16,24 @@ export function MusicFunnelNewChrome({
 	isNew,
 	className,
 	children,
+	accent = "rail",
 }: {
 	isNew: boolean;
 	className?: string;
 	children: ReactNode;
+	accent?: "rail" | "none";
 }): ReactNode {
 	return (
 		<div
 			className={cn(
+				"py-3",
+				accent === "rail" && "border-l-2 pl-3",
+				accent === "rail" &&
+					(isNew
+						? "border-amber-500 bg-amber-500/10"
+						: "border-transparent"),
+				accent === "none" && isNew && "bg-amber-500/10",
 				className,
-				isNew && "border-amber-500 border-l-2 bg-amber-500/10 pl-3",
 			)}
 		>
 			{children}

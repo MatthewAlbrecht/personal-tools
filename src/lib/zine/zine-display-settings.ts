@@ -8,6 +8,7 @@ export type ZineDisplaySettings = {
 	showSectionLabels: boolean;
 	showUserNote: boolean;
 	separateInstrumentalPages: boolean;
+	showCreditsRule: boolean;
 };
 
 export const ZINE_DISPLAY_DEFAULTS: ZineDisplaySettings = {
@@ -20,6 +21,7 @@ export const ZINE_DISPLAY_DEFAULTS: ZineDisplaySettings = {
 	showSectionLabels: false,
 	showUserNote: true,
 	separateInstrumentalPages: false,
+	showCreditsRule: false,
 };
 
 export function resolveZineDisplaySettings(
