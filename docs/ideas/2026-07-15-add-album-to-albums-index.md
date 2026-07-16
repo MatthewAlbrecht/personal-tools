@@ -3,12 +3,13 @@ title: Add album to albums index
 domain: albums
 kind: feature
 size: 3
-status: open
+status: planned
 captured: 2026-07-15
 ---
 
 ## Notes
 
+- Planned — spec: `docs/superpowers/specs/2026-07-16-add-album-to-albums-index-design.md`, plan: `docs/superpowers/plans/2026-07-16-add-album-to-albums-index.md`
 - Ability to add an album from the albums index surface (`/albums/all` / all-albums view — referenced as `/albums/albums`)
 - Add by Spotify album ID (lookup/import from Spotify)
 - Newly added albums should participate fully in existing index, sort, and filter behavior
