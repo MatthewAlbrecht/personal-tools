@@ -3,15 +3,16 @@ title: Centralize singular album model
 domain: albums
 kind: enhancement
 size: 5
-status: open
+status: done
 captured: 2026-07-15
 ---
 
 ## Notes
 
-- One shared notion of an album across the app (not parallel album memberships)
-- For Later becomes extra fields / state on that singular album idea, not a separate album concept
-- Related gap: for-later and album library already share `spotifyAlbums` but maintain separate list memberships
+- Done — already in place: canonical `spotifyAlbums` shared across features; for-later upserts project into `albumLibraryItems` via `upsertAlbumLibraryProjection`
+- For Later remains a separate membership table for queue/discovery fields (not a parallel album identity)
+- Remaining gaps are separate ideas (e.g. add-by-Spotify-ID on `/albums/all`, library type filter/heuristic vs Spotify `album_type`)
+- Original intent: one shared notion of an album; for-later as extra state, not a separate album concept
 
 ## Raw
 
