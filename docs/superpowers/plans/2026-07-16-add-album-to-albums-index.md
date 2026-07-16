@@ -29,7 +29,8 @@
 | Create | `convex/spotify.add-album-to-library-source.test.ts` | Source-level guard that mutation upserts + projects and returns `alreadyInLibrary` |
 | Create | `src/app/albums/_components/add-album-to-library-dialog.tsx` | Dialog UI, paste normalize, fetch + mutate, toasts |
 | Modify | `src/app/albums/_components/all-albums-view.tsx` | Header “Add album” button + dialog open state |
-| Modify | `docs/ideas/2026-07-15-add-album-to-albums-index.md` | Mark `planned` with spec/plan links (final task) |
+
+Idea already marked `planned` with spec/plan links: `docs/ideas/2026-07-15-add-album-to-albums-index.md`.
 
 ---
 
@@ -434,32 +435,6 @@ With `pnpm dev` + Convex running and Spotify connected:
 git add src/app/albums/_components/all-albums-view.tsx
 git commit -m "$(cat <<'EOF'
 feat(albums): wire Add album dialog on /albums/all
-
-EOF
-)"
-```
-
----
-
-### Task 4: Mark idea planned
-
-**Files:**
-- Modify: `docs/ideas/2026-07-15-add-album-to-albums-index.md`
-
-- [ ] **Step 1: Update frontmatter/notes**
-
-Set `status: planned` and add a Notes bullet:
-
-```markdown
-- Planned — spec: `docs/superpowers/specs/2026-07-16-add-album-to-albums-index-design.md`, plan: `docs/superpowers/plans/2026-07-16-add-album-to-albums-index.md`
-```
-
-- [ ] **Step 2: Commit**
-
-```bash
-git add docs/ideas/2026-07-15-add-album-to-albums-index.md
-git commit -m "$(cat <<'EOF'
-docs: mark add-album-to-albums-index idea as planned
 
 EOF
 )"
