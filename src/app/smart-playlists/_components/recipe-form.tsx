@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery } from "convex/react";
-import { Loader2, RefreshCw } from "lucide-react";
+import { Loader2, RefreshCw, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -143,6 +143,19 @@ export function RecipeForm({
 	function patchFilters(patch: Partial<SmartPlaylistFilters>): void {
 		setFilters((current) => ({ ...current, ...patch }));
 		refreshPreviewNow();
+	}
+
+	function excludeAlbum(albumId: Id<"spotifyAlbums">): void {
+		if (filters.excludedAlbumIds.includes(albumId)) return;
+		patchFilters({
+			excludedAlbumIds: [...filters.excludedAlbumIds, albumId],
+		});
+	}
+
+	function removeExclusion(albumId: string): void {
+		patchFilters({
+			excludedAlbumIds: filters.excludedAlbumIds.filter((id) => id !== albumId),
+		});
 	}
 
 	function handleSourceChange(next: SmartPlaylistSource): void {
@@ -637,12 +650,24 @@ export function RecipeForm({
 				) : (
 					<ul className="space-y-1 text-sm">
 						{preview.albums.slice(0, 12).map((album) => (
-							<li key={album.spotifyAlbumId} className="truncate">
-								<span className="font-medium">{album.name}</span>
-								<span className="text-muted-foreground">
-									{" "}
-									· {album.artistName}
+							<li
+								key={album.spotifyAlbumId}
+								className="flex items-center justify-between gap-2"
+							>
+								<span className="truncate">
+									<span className="font-medium">{album.name}</span>
+									<span className="text-muted-foreground">
+										{" "}
+										· {album.artistName}
+									</span>
 								</span>
+								<button
+									type="button"
+									className="text-muted-foreground text-xs hover:text-foreground"
+									onClick={() => excludeAlbum(album.albumId)}
+								>
+									Exclude
+								</button>
 							</li>
 						))}
 						{preview.albumCount > preview.albums.length ? (
@@ -652,6 +677,36 @@ export function RecipeForm({
 						) : null}
 					</ul>
 				)}
+				{filters.excludedAlbumIds.length > 0 ? (
+					<div className="flex flex-col gap-1.5 border-t pt-3">
+						<Label className="text-muted-foreground text-xs">
+							Excluded albums
+						</Label>
+						<div className="flex flex-wrap gap-1.5">
+							{filters.excludedAlbumIds.map((albumId) => {
+								const known = preview?.albums.find(
+									(album) => album.albumId === albumId,
+								);
+								return (
+									<span
+										key={albumId}
+										className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-xs"
+									>
+										{known ? known.name : "Excluded album"}
+										<button
+											type="button"
+											className="text-muted-foreground hover:text-foreground"
+											aria-label="Remove exclusion"
+											onClick={() => removeExclusion(albumId)}
+										>
+											<X className="size-3" />
+										</button>
+									</span>
+								);
+							})}
+						</div>
+					</div>
+				) : null}
 			</div>
 
 			<div className="flex flex-wrap items-center gap-2">
