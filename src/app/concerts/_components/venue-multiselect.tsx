@@ -1,6 +1,5 @@
 "use client";
 
-import { Check } from "lucide-react";
 import {
 	Combobox,
 	ComboboxChip,
@@ -10,9 +9,9 @@ import {
 	ComboboxEmpty,
 	ComboboxItem,
 	ComboboxList,
-	ComboboxTrigger,
+	ComboboxValue,
+	useComboboxAnchor,
 } from "~/components/ui/combobox";
-import { cn } from "~/lib/utils";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import type { SelectedConcertVenueRow } from "../_utils/types";
 
@@ -25,6 +24,7 @@ export function VenueMultiSelect({
 	value: Id<"concertVenues">[];
 	venues: SelectedConcertVenueRow[];
 }) {
+	const anchor = useComboboxAnchor();
 	const items = venues.map((row) => row.venueId);
 	const venueLabels = new Map(
 		venues.map((row) => [row.venueId, getVenueDisplayName(row)]),
@@ -36,41 +36,39 @@ export function VenueMultiSelect({
 
 	return (
 		<Combobox
-			getItemLabel={(item) =>
-				venueLabels.get(item as Id<"concertVenues">) ?? item
-			}
 			items={items}
 			multiple
+			itemToStringLabel={(item) =>
+				venueLabels.get(item as Id<"concertVenues">) ?? item
+			}
 			onValueChange={handleValueChange}
 			value={value}
 		>
-			<ComboboxTrigger>
-				<ComboboxChips>
-					{value.map((venueId) => (
-						<ComboboxChip key={venueId} value={venueId}>
-							{venueLabels.get(venueId) ?? venueId}
-						</ComboboxChip>
-					))}
-					<ComboboxChipsInput
-						placeholder={value.length > 0 ? "Add venue..." : "Filter venues..."}
-					/>
-				</ComboboxChips>
-			</ComboboxTrigger>
-			<ComboboxContent>
+			<ComboboxChips ref={anchor} className="w-full">
+				<ComboboxValue>
+					{(values: string[]) => (
+						<>
+							{values.map((venueId) => (
+								<ComboboxChip key={venueId}>
+									{venueLabels.get(venueId as Id<"concertVenues">) ?? venueId}
+								</ComboboxChip>
+							))}
+							<ComboboxChipsInput
+								placeholder={
+									values.length > 0 ? "Add venue..." : "Filter venues..."
+								}
+							/>
+						</>
+					)}
+				</ComboboxValue>
+			</ComboboxChips>
+			<ComboboxContent anchor={anchor}>
 				<ComboboxEmpty>No venues found.</ComboboxEmpty>
 				<ComboboxList>
 					{(item) => {
 						const venueId = item as Id<"concertVenues">;
-						const isSelected = value.includes(venueId);
-
 						return (
-							<ComboboxItem value={item}>
-								<Check
-									className={cn(
-										"mr-2 size-4",
-										isSelected ? "opacity-100" : "opacity-0",
-									)}
-								/>
+							<ComboboxItem key={item} value={item}>
 								{venueLabels.get(venueId) ?? item}
 							</ComboboxItem>
 						);
