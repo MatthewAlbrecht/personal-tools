@@ -7,12 +7,20 @@ import type { ForLaterAlbumRowData } from "~/app/for-later-albums/_utils/types";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 
+type OptimisticForLaterRymLink = {
+	rymStatus: "matched";
+	rymUrl: string;
+};
+
 export function useForLaterRymAssociateDrawer({
 	userId,
 }: {
 	userId: string | null;
 }) {
 	const [row, setRow] = useState<ForLaterAlbumRowData | null>(null);
+	const [optimisticRymLinks, setOptimisticRymLinks] = useState(
+		() => new Map<string, OptimisticForLaterRymLink>(),
+	);
 	const associateMutation = useMutation(
 		api.forLaterAlbums.associateForLaterAlbumWithRymScrape,
 	);
@@ -26,22 +34,40 @@ export function useForLaterRymAssociateDrawer({
 	}, []);
 
 	const handleAssociate = useCallback(
-		async (scrapeId: Id<"rateYourMusicScrapes">): Promise<void> => {
+		async (selection: {
+			scrapeId: Id<"rateYourMusicScrapes">;
+			rymUrl: string;
+		}): Promise<void> => {
 			if (!userId || !row) {
 				return;
 			}
 
+			const itemId = row.albumItemId;
 			const albumName = row.name;
+
+			setOptimisticRymLinks((current) => {
+				const next = new Map(current);
+				next.set(itemId, {
+					rymStatus: "matched",
+					rymUrl: selection.rymUrl,
+				});
+				return next;
+			});
+			setRow(null);
 
 			try {
 				await associateMutation({
 					userId,
-					itemId: row.albumItemId,
-					scrapeId,
+					itemId,
+					scrapeId: selection.scrapeId,
 				});
-				setRow(null);
 				toast.success(`Linked RYM page for "${albumName}"`);
 			} catch (error) {
+				setOptimisticRymLinks((current) => {
+					const next = new Map(current);
+					next.delete(itemId);
+					return next;
+				});
 				console.error("Failed to associate RYM scrape:", error);
 				toast.error("Could not link RYM scrape");
 			}
@@ -54,5 +80,6 @@ export function useForLaterRymAssociateDrawer({
 		openAssociateDrawer,
 		closeAssociateDrawer,
 		handleAssociate,
+		optimisticRymLinks,
 	};
 }

@@ -584,6 +584,101 @@ async function syncForLaterItemFilterProjection(
 	});
 }
 
+async function syncForLaterRymLinkFilterProjection(
+	ctx: MutationCtx,
+	args: {
+		item: Doc<"forLaterAlbumItems">;
+		album: Doc<"spotifyAlbums"> | null;
+		scrape: Doc<"rateYourMusicScrapes">;
+		tags: {
+			primaryGenres: Array<{ key: string; label: string }>;
+			secondaryGenres: Array<{ key: string; label: string }>;
+			descriptors: Array<{ key: string; label: string }>;
+		};
+		parentKeysByChild: Map<string, string[]>;
+		now: number;
+	},
+): Promise<void> {
+	const { item, album, scrape, tags, parentKeysByChild, now } = args;
+
+	const listenSummary = await loadListenSummary(ctx, {
+		userId: item.userId,
+		albumId: item.albumId,
+	});
+
+	const filterReleaseYear = parseReleaseYearFromIsoDate(album?.releaseDate);
+	const filterHasListened = listenSummary.hasListened;
+	const rymUrl = scrape.rymUrl;
+	const rymStatus = deriveRymStatus({
+		rymScrapeId: scrape._id,
+	});
+	const filterRymMatched = rymStatus === "matched";
+	const filterHasRymUrl = Boolean(rymUrl);
+
+	const directGenreKeys = buildDirectFilterGenreKeys(
+		tags.primaryGenres,
+		tags.secondaryGenres,
+	);
+	const filterGenreKeysSorted = buildFilterGenreKeysSortedWithAncestors(
+		directGenreKeys,
+		parentKeysByChild,
+	);
+
+	const filterDescriptorKeysSorted = buildFilterDescriptorKeysSorted(
+		tags.descriptors,
+	);
+	const filterDurationMs =
+		album?.totalDurationMs !== undefined ? album.totalDurationMs : undefined;
+	const filterDurationBucketKey = durationMsToBucketKey(filterDurationMs);
+
+	await ctx.db.patch(item._id, {
+		...(filterReleaseYear !== undefined
+			? { filterReleaseYear }
+			: { filterReleaseYear: undefined }),
+		...(filterDurationMs !== undefined
+			? { filterDurationMs }
+			: { filterDurationMs: undefined }),
+		...(filterDurationBucketKey !== undefined
+			? { filterDurationBucketKey }
+			: { filterDurationBucketKey: undefined }),
+		filterHasListened,
+		filterRymMatched,
+		filterHasRymUrl,
+		filterRymNotOnSite: item.rymNotOnSite === true ? true : undefined,
+		filterMarkedAsSingle: item.markedAsSingle === true ? true : undefined,
+		filterRemovedFromForLater:
+			item.removedFromForLater === true ? true : undefined,
+		filterGenreKeysSorted,
+		filterDescriptorKeysSorted,
+		filterSearchText: buildFilterSearchText({
+			albumName: album?.name ?? "",
+			artistName: album?.artistName ?? "",
+		}),
+		updatedAt: now,
+	});
+
+	await syncForLaterAlbumGenreFacets(ctx, {
+		itemId: item._id,
+		userId: item.userId,
+		lastSeenAt: item.lastSeenAt,
+		genreKeysSorted: filterGenreKeysSorted,
+	});
+
+	await syncForLaterAlbumDescriptorFacets(ctx, {
+		itemId: item._id,
+		userId: item.userId,
+		lastSeenAt: item.lastSeenAt,
+		descriptorKeysSorted: filterDescriptorKeysSorted,
+	});
+
+	await syncForLaterAlbumDurationFacets(ctx, {
+		itemId: item._id,
+		userId: item.userId,
+		lastSeenAt: item.lastSeenAt,
+		durationBucketKey: filterDurationBucketKey,
+	});
+}
+
 async function hydrateForLaterAlbumRow(
 	ctx: QueryCtx,
 	args: { userId: string; item: Doc<"forLaterAlbumItems"> },
@@ -2056,6 +2151,9 @@ export const associateForLaterAlbumWithRymScrape = mutation({
 		}
 
 		const now = Date.now();
+		const tags = await loadTagsForScrape(ctx, args.scrapeId);
+		const parentKeysByChild = await loadRymGenreParentKeysByChild(ctx);
+		const album = await ctx.db.get(item.albumId);
 
 		await linkRymScrapeToSpotifyAlbum(ctx, {
 			scrapeId: args.scrapeId,
@@ -2063,6 +2161,7 @@ export const associateForLaterAlbumWithRymScrape = mutation({
 			spotifyAlbumId: item.spotifyAlbumId,
 			method: "manual",
 			now,
+			refreshMode: "rym-slice",
 		});
 
 		await ctx.db.patch(args.itemId, {
@@ -2074,7 +2173,24 @@ export const associateForLaterAlbumWithRymScrape = mutation({
 			updatedAt: now,
 		});
 
-		await syncForLaterItemFilterProjection(ctx, args.itemId);
+		if (album) {
+			await syncForLaterRymLinkFilterProjection(ctx, {
+				item: {
+					...item,
+					rymScrapeId: args.scrapeId,
+					rymMatchMethod: "manual",
+					rymMatchedAt: now,
+					rymDiscoveryStatus: "found",
+					rymNotOnSite: undefined,
+					updatedAt: now,
+				},
+				album,
+				scrape,
+				tags,
+				parentKeysByChild,
+				now,
+			});
+		}
 
 		return null;
 	},

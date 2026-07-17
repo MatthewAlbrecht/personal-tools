@@ -36,3 +36,14 @@ test("album library manual association permits a scrape on multiple Spotify albu
 	assert.doesNotMatch(body, /by_scrapeId/);
 	assert.match(body, /linkRymScrapeToSpotifyAlbum\(ctx/);
 });
+
+test("album library manual association does not double-refresh projections", () => {
+	const body = getSourceBetween(
+		spotifySource,
+		"export const associateSpotifyAlbumWithRymScrape = mutation({",
+		"// Upsert canonical track data",
+	);
+
+	assert.doesNotMatch(body, /refreshAlbumLibraryProjectionsForAlbum/);
+	assert.match(body, /refreshMode:\s*"rym-slice"/);
+});

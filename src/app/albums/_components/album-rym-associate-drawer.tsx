@@ -25,7 +25,10 @@ export function AlbumRymAssociateDrawer({
 	album: AlbumLibraryRowData | null;
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
-	onAssociate: (scrapeId: Id<"rateYourMusicScrapes">) => Promise<void>;
+	onAssociate: (selection: {
+		scrapeId: Id<"rateYourMusicScrapes">;
+		rymUrl: string;
+	}) => void;
 }) {
 	const [searchInput, debouncedSearch, setSearchInput] = useDebouncedState(
 		"",
@@ -108,7 +111,12 @@ export function AlbumRymAssociateDrawer({
 								<li key={scrape.scrapeId}>
 									<ScrapePickerRow
 										scrape={scrape}
-										onSelect={() => void onAssociate(scrape.scrapeId)}
+										onSelect={() =>
+											onAssociate({
+												scrapeId: scrape.scrapeId,
+												rymUrl: scrape.rymUrl,
+											})
+										}
 									/>
 								</li>
 							))}

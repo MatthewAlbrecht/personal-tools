@@ -1,6 +1,9 @@
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
-import { refreshAlbumLibraryProjectionsForAlbum } from "./albumLibraryProjection";
+import {
+	patchAlbumLibraryRymFieldsForAlbum,
+	refreshAlbumLibraryProjectionsForAlbum,
+} from "./albumLibraryProjection";
 import {
 	artistKeysIntersect,
 	buildArtistKeys,
@@ -343,6 +346,7 @@ export async function linkRymScrapeToSpotifyAlbum(
 		method: RymMatchMethod;
 		matchedArtistKey?: string;
 		now: number;
+		refreshMode?: "full" | "rym-slice" | "none";
 	},
 ): Promise<void> {
 	await upsertRymSpotifyAlbumLink(ctx, {
@@ -354,5 +358,18 @@ export async function linkRymScrapeToSpotifyAlbum(
 		now: args.now,
 	});
 	await patchScrapeAlbumConvexId(ctx, args.scrapeId, args.albumId);
-	await refreshAlbumLibraryProjectionsForAlbum(ctx, args.albumId);
+
+	const mode = args.refreshMode ?? "full";
+	if (mode === "full") {
+		await refreshAlbumLibraryProjectionsForAlbum(ctx, args.albumId);
+	} else if (mode === "rym-slice") {
+		const scrape = await ctx.db.get(args.scrapeId);
+		if (!scrape) throw new Error("RYM scrape not found");
+		await patchAlbumLibraryRymFieldsForAlbum(ctx, {
+			albumId: args.albumId,
+			scrape,
+			linkMethod: args.method,
+			linkedAt: args.now,
+		});
+	}
 }

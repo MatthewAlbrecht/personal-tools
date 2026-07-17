@@ -78,12 +78,21 @@ function ForLaterAlbumsPageInner() {
 		openAssociateDrawer,
 		closeAssociateDrawer,
 		handleAssociate,
+		optimisticRymLinks,
 	} = useForLaterRymAssociateDrawer({ userId });
 	const {
 		isRecommendationDrawerOpen,
 		openRecommendationDrawer,
 		setRecommendationDrawerOpen,
 	} = useForLaterRecommendationDrawer();
+
+	const displayRows = useMemo(
+		() =>
+			(rows.results ?? []).map((row) =>
+				withOptimisticRym(row, optimisticRymLinks),
+			),
+		[optimisticRymLinks, rows.results],
+	);
 
 	function handleRateAlbum(row: ForLaterAlbumRowData): void {
 		const album = albumToRateFromForLaterRow(row);
@@ -150,7 +159,7 @@ function ForLaterAlbumsPageInner() {
 					onChange={updateFilters}
 				/>
 				<ForLaterList
-					rows={rows.results ?? []}
+					rows={displayRows}
 					userId={userId}
 					isLoading={rows.status === "LoadingFirstPage"}
 					isLoadingMore={rows.status === "LoadingMore"}
@@ -186,4 +195,13 @@ function ForLaterAlbumsPageInner() {
 			/>
 		</div>
 	);
+}
+
+function withOptimisticRym(
+	row: ForLaterAlbumRowData,
+	overlays: Map<string, { rymStatus: "matched"; rymUrl: string }>,
+): ForLaterAlbumRowData {
+	const overlay = overlays.get(row.albumItemId);
+	if (!overlay) return row;
+	return { ...row, ...overlay, rymNotOnSite: undefined };
 }

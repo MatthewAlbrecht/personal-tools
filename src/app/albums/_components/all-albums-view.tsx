@@ -1,11 +1,18 @@
 "use client";
 
 import { useMutation } from "convex/react";
-import { Check, Copy, DatabaseBackup, Disc3, Download, MoreHorizontal } from "lucide-react";
+import {
+	Check,
+	Copy,
+	DatabaseBackup,
+	Disc3,
+	Download,
+	MoreHorizontal,
+	Plus,
+} from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { useDebouncedState } from "~/lib/hooks/use-debounced-state";
 import { AlbumRatingBadge } from "~/components/album-rating-badge";
 import {
 	AlertDialog,
@@ -25,6 +32,7 @@ import {
 	DropdownMenuLabel,
 	DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
+import { useDebouncedState } from "~/lib/hooks/use-debounced-state";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import type {
@@ -35,10 +43,15 @@ import type {
 } from "../../../../convex/_utils/albumLibraryRows";
 import { formatRelativeTime } from "../_utils/formatters";
 import type { AlbumLibraryRowData } from "../_utils/types";
+import { AddAlbumToLibraryDialog } from "./add-album-to-library-dialog";
 import { AlbumRymAssociateDrawer } from "./album-rym-associate-drawer";
 
 type CopiedField = "album" | "artist";
 type AlbumLibrarySort = "recent" | "artist";
+type OptimisticRymLink = {
+	rymStatus: "linked";
+	rymUrl: string;
+};
 
 type AlbumLibraryFilterState = {
 	searchQuery: string;
@@ -156,6 +169,10 @@ export function AllAlbumsView({
 		!albumLibraryFiltersAreDefault(filterState);
 	const [rymAssociateAlbum, setRymAssociateAlbum] =
 		useState<AlbumLibraryRowData | null>(null);
+	const [optimisticRymLinks, setOptimisticRymLinks] = useState(
+		() => new Map<string, OptimisticRymLink>(),
+	);
+	const [addAlbumDialogOpen, setAddAlbumDialogOpen] = useState(false);
 	const [backfillDialogOpen, setBackfillDialogOpen] = useState(false);
 	const [isBackfillingLibraryIndex, setIsBackfillingLibraryIndex] =
 		useState(false);
@@ -209,20 +226,45 @@ export function AllAlbumsView({
 		}
 	}
 
-	async function handleAssociateRymScrape(
-		scrapeId: Id<"rateYourMusicScrapes">,
-	): Promise<void> {
+	function applyOptimisticRymLink(
+		album: AlbumLibraryRowData,
+	): AlbumLibraryRowData {
+		const overlay = optimisticRymLinks.get(album._id);
+		if (!overlay) return album;
+		return { ...album, ...overlay };
+	}
+
+	async function handleAssociateRymScrape(selection: {
+		scrapeId: Id<"rateYourMusicScrapes">;
+		rymUrl: string;
+	}): Promise<void> {
 		if (!rymAssociateAlbum) return;
 
+		const albumId = rymAssociateAlbum._id;
 		const albumName = rymAssociateAlbum.name;
+
+		setOptimisticRymLinks((current) => {
+			const next = new Map(current);
+			next.set(albumId, {
+				rymStatus: "linked",
+				rymUrl: selection.rymUrl,
+			});
+			return next;
+		});
+		setRymAssociateAlbum(null);
+
 		try {
 			await associateRymScrape({
-				albumId: rymAssociateAlbum._id as Id<"spotifyAlbums">,
-				scrapeId,
+				albumId: albumId as Id<"spotifyAlbums">,
+				scrapeId: selection.scrapeId,
 			});
-			setRymAssociateAlbum(null);
 			toast.success(`Linked RYM page for "${albumName}"`);
 		} catch (error) {
+			setOptimisticRymLinks((current) => {
+				const next = new Map(current);
+				next.delete(albumId);
+				return next;
+			});
 			console.error("Failed to associate RYM scrape:", error);
 			toast.error("Could not link RYM scrape");
 		}
@@ -387,7 +429,18 @@ export function AllAlbumsView({
 
 	return (
 		<div className="space-y-4">
-			<div className="flex justify-end">
+			<div className="flex items-center justify-end gap-2">
+				{userId ? (
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						onClick={() => setAddAlbumDialogOpen(true)}
+					>
+						<Plus className="mr-1.5 h-4 w-4" />
+						Add album
+					</Button>
+				) : null}
 				<AlbumLibraryAdminMenu
 					userId={userId}
 					isRunningLibraryAction={isRunningLibraryAction}
@@ -576,18 +629,21 @@ export function AllAlbumsView({
 						onLoadMore={onLoadMore}
 					/>
 				) : (
-					albums.map((album) => (
-						<AlbumCardRow
-							key={album._id}
-							album={album}
-							onAddListen={() => onAddListen(album)}
-							onRate={() => onRateAlbum(album)}
-							onLinkRym={() => setRymAssociateAlbum(album)}
-							onSetRymNotOnSite={(notOnSite) =>
-								handleSetRymNotOnSite(album, notOnSite)
-							}
-						/>
-					))
+					albums.map((album) => {
+						const displayAlbum = applyOptimisticRymLink(album);
+						return (
+							<AlbumCardRow
+								key={album._id}
+								album={displayAlbum}
+								onAddListen={() => onAddListen(album)}
+								onRate={() => onRateAlbum(album)}
+								onLinkRym={() => setRymAssociateAlbum(album)}
+								onSetRymNotOnSite={(notOnSite) =>
+									handleSetRymNotOnSite(album, notOnSite)
+								}
+							/>
+						);
+					})
 				)}
 			</div>
 			{albums.length > 0 && (canLoadMore || isLoadingMore) ? (
@@ -605,6 +661,10 @@ export function AllAlbumsView({
 					if (!open) setRymAssociateAlbum(null);
 				}}
 				onAssociate={handleAssociateRymScrape}
+			/>
+			<AddAlbumToLibraryDialog
+				open={addAlbumDialogOpen}
+				onOpenChange={setAddAlbumDialogOpen}
 			/>
 			<AlertDialog
 				open={backfillDialogOpen}

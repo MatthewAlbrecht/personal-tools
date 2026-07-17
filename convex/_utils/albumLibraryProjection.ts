@@ -143,6 +143,70 @@ export async function refreshAlbumLibraryProjectionsForAlbum(
 	}
 }
 
+export function buildAlbumLibraryRymPatchFields(args: {
+	scrape: Doc<"rateYourMusicScrapes">;
+	linkMethod: Doc<"rateYourMusicSpotifyAlbumLinks">["method"];
+	linkedAt: number;
+	taxonomy: AlbumLibraryTaxonomy;
+	existingUpdatedAt: number;
+}): Pick<
+	Doc<"albumLibraryItems">,
+	| "rymStatus"
+	| "rymScrapeId"
+	| "rymLinkMethod"
+	| "rymUrl"
+	| "rymLinkedAt"
+	| "primaryGenres"
+	| "secondaryGenres"
+	| "descriptors"
+	| "updatedAt"
+> {
+	return {
+		rymStatus: getAlbumLibraryRymStatus(true),
+		rymScrapeId: args.scrape._id,
+		rymLinkMethod: args.linkMethod,
+		rymUrl: args.scrape.rymUrl,
+		rymLinkedAt: args.linkedAt,
+		primaryGenres: args.taxonomy.primaryGenres,
+		secondaryGenres: args.taxonomy.secondaryGenres,
+		descriptors: args.taxonomy.descriptors,
+		updatedAt: Math.max(
+			args.existingUpdatedAt,
+			args.linkedAt,
+			args.scrape.updatedAt,
+		),
+	};
+}
+
+export async function patchAlbumLibraryRymFieldsForAlbum(
+	ctx: MutationCtx,
+	args: {
+		albumId: Id<"spotifyAlbums">;
+		scrape: Doc<"rateYourMusicScrapes">;
+		linkMethod: Doc<"rateYourMusicSpotifyAlbumLinks">["method"];
+		linkedAt: number;
+	},
+): Promise<void> {
+	const taxonomy = await loadRymTaxonomyForScrape(ctx, args.scrape._id);
+	const rows = await ctx.db
+		.query("albumLibraryItems")
+		.withIndex("by_albumId", (q) => q.eq("albumId", args.albumId))
+		.collect();
+
+	for (const row of rows) {
+		await ctx.db.patch(
+			row._id,
+			buildAlbumLibraryRymPatchFields({
+				scrape: args.scrape,
+				linkMethod: args.linkMethod,
+				linkedAt: args.linkedAt,
+				taxonomy,
+				existingUpdatedAt: row.updatedAt,
+			}),
+		);
+	}
+}
+
 async function loadLatestRymLinkForAlbum(
 	ctx: AlbumLibraryDbCtx,
 	albumId: Id<"spotifyAlbums">,
