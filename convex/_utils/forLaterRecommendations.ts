@@ -1,31 +1,8 @@
 import { resolveTopLevelGenreKey } from "./rymGenreHierarchy";
-import {
-	type DurationBucketAnswer,
-	durationBucketMatches,
-	buildDurationBucketCounts,
-} from "./forLaterDurationBuckets";
+import { buildDurationBucketCounts } from "./forLaterDurationBuckets";
 
-export type { DurationBucketAnswer } from "./forLaterDurationBuckets";
-
-export type AddedTimeframeAnswer =
-	| "day"
-	| "week"
-	| "month"
-	| "two_months"
-	| "older_than_two_months"
-	| "any";
-
-export type ReleaseTimeAnswer =
-	| "new_release"
-	| "recent"
-	| "modern"
-	| "old"
-	| "any";
-
-export type RatingTierAnswer = "holy_moly" | "really_enjoyed" | "good" | "any";
-
-/** @deprecated Legacy short/medium/long tiers for stored recommendations. */
-export type DurationTierAnswer = "short" | "medium" | "long" | "any";
+export type ListenedAnswer = "any" | "heard" | "not_yet";
+export type GenreMatchAnswer = "any" | "all";
 
 export type ForLaterRecommendationCandidate = {
 	id: string;
@@ -37,19 +14,23 @@ export type ForLaterRecommendationCandidate = {
 	filterGenreKeysSorted: string[];
 	filterDescriptorKeysSorted: string[];
 	rating?: number;
+	hasListened?: boolean;
 	markedAsSingle?: boolean;
 	removedFromForLater?: boolean;
 };
 
 export type ForLaterRecommendationAnswers = {
-	addedTimeframe: AddedTimeframeAnswer;
-	genreKey: string;
-	releaseTime: ReleaseTimeAnswer;
-	descriptorKey: string;
-	ratingTier: RatingTierAnswer;
-	durationBucket: DurationBucketAnswer;
-	/** Legacy stored answers only; ignored when durationBucket is set. */
-	durationTier?: DurationTierAnswer;
+	addedDaysMin: number;
+	addedDaysMax: number;
+	yearMin?: number;
+	yearMax?: number;
+	durationMinMs: number;
+	durationMaxMs: number;
+	ratingMin: number;
+	ratingMax: number;
+	listened: ListenedAnswer;
+	genreKeys: string[];
+	genreMatch: GenreMatchAnswer;
 	count: number;
 };
 
@@ -64,10 +45,23 @@ export type RecommendationTagOption = RecommendationTagInput & {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MINUTE_MS = 60 * 1000;
-const SHORT_DURATION_MAX_MS = 35 * MINUTE_MS;
-const LONG_DURATION_MIN_MS = 55 * MINUTE_MS;
+const ADDED_DAYS_MIN = 0;
+const ADDED_DAYS_MAX = 365;
+const DURATION_MINUTES_MIN = 0;
+const DURATION_MINUTES_MAX = 120;
+const RATING_MIN = 1;
+const RATING_MAX = 15;
 const MIN_RECOMMENDATION_COUNT = 1;
 const MAX_RECOMMENDATION_COUNT = 5;
+
+export {
+	ADDED_DAYS_MIN,
+	ADDED_DAYS_MAX,
+	DURATION_MINUTES_MIN,
+	DURATION_MINUTES_MAX,
+	RATING_MIN,
+	RATING_MAX,
+};
 
 export function normalizeRecommendationCount(count?: number): number {
 	if (count === undefined) {
@@ -101,41 +95,52 @@ export function recommendationAddedAt(
 	);
 }
 
-export function addedTimeframeMatches(
+export function isAddedDaysRangeUnconstrained(
+	min: number,
+	max: number,
+): boolean {
+	return min === ADDED_DAYS_MIN && max === ADDED_DAYS_MAX;
+}
+
+export function isDurationRangeUnconstrained(
+	minMs: number,
+	maxMs: number,
+): boolean {
+	return (
+		minMs === DURATION_MINUTES_MIN * MINUTE_MS &&
+		maxMs === DURATION_MINUTES_MAX * MINUTE_MS
+	);
+}
+
+export function isRatingRangeUnconstrained(min: number, max: number): boolean {
+	return min === RATING_MIN && max === RATING_MAX;
+}
+
+export function addedDaysRangeMatches(
 	candidate: ForLaterRecommendationCandidate,
-	addedTimeframe: AddedTimeframeAnswer,
+	min: number,
+	max: number,
 	now: number,
 ): boolean {
-	if (addedTimeframe === "any") {
+	if (isAddedDaysRangeUnconstrained(min, max)) {
 		return true;
 	}
 
 	const ageMs = now - recommendationAddedAt(candidate);
-
 	if (ageMs < 0) {
 		return false;
 	}
 
-	switch (addedTimeframe) {
-		case "day":
-			return ageMs <= DAY_MS;
-		case "week":
-			return ageMs > DAY_MS && ageMs <= 7 * DAY_MS;
-		case "month":
-			return ageMs > 7 * DAY_MS && ageMs <= 30 * DAY_MS;
-		case "two_months":
-			return ageMs > 30 * DAY_MS && ageMs <= 60 * DAY_MS;
-		case "older_than_two_months":
-			return ageMs > 60 * DAY_MS;
-	}
+	const ageDays = Math.floor(ageMs / DAY_MS);
+	return ageDays >= min && ageDays <= max;
 }
 
-export function releaseTimeMatches(
+export function yearRangeMatches(
 	candidate: ForLaterRecommendationCandidate,
-	releaseTime: ReleaseTimeAnswer,
-	now: number,
+	yearMin?: number,
+	yearMax?: number,
 ): boolean {
-	if (releaseTime === "any") {
+	if (yearMin === undefined && yearMax === undefined) {
 		return true;
 	}
 
@@ -143,60 +148,23 @@ export function releaseTimeMatches(
 		return false;
 	}
 
-	const currentYear = new Date(now).getUTCFullYear();
-	const releaseAge = currentYear - candidate.releaseYear;
-
-	if (releaseAge < 0) {
+	if (yearMin !== undefined && candidate.releaseYear < yearMin) {
 		return false;
 	}
 
-	switch (releaseTime) {
-		case "new_release":
-			return releaseAge <= 1;
-		case "recent":
-			return releaseAge >= 2 && releaseAge <= 5;
-		case "modern":
-			return releaseAge >= 6 && releaseAge <= 20;
-		case "old":
-			return releaseAge > 20;
-	}
-}
-
-export function ratingTierMatches(
-	rating: number | undefined,
-	ratingTier: RatingTierAnswer,
-): boolean {
-	if (ratingTier === "any") {
-		return true;
-	}
-
-	if (rating === undefined) {
+	if (yearMax !== undefined && candidate.releaseYear > yearMax) {
 		return false;
 	}
 
-	switch (ratingTier) {
-		case "holy_moly":
-			return rating >= 13 && rating <= 15;
-		case "really_enjoyed":
-			return rating >= 10 && rating <= 12;
-		case "good":
-			return rating >= 7 && rating <= 9;
-	}
+	return true;
 }
 
-export function durationBucketMatchesAnswer(
+export function durationRangeMatches(
 	filterDurationMs: number | undefined,
-	durationBucket: DurationBucketAnswer,
+	minMs: number,
+	maxMs: number,
 ): boolean {
-	return durationBucketMatches(filterDurationMs, durationBucket);
-}
-
-/** @deprecated Legacy tier matching for stored recommendations. */
-export function durationTierMatches(
-	filterDurationMs: number | undefined,
-	durationTier: DurationTierAnswer,
-): boolean {
-	if (durationTier === "any") {
+	if (isDurationRangeUnconstrained(minMs, maxMs)) {
 		return true;
 	}
 
@@ -204,23 +172,57 @@ export function durationTierMatches(
 		return false;
 	}
 
-	switch (durationTier) {
-		case "short":
-			return filterDurationMs < SHORT_DURATION_MAX_MS;
-		case "medium":
-			return (
-				filterDurationMs >= SHORT_DURATION_MAX_MS &&
-				filterDurationMs <= LONG_DURATION_MIN_MS
-			);
-		case "long":
-			return filterDurationMs > LONG_DURATION_MIN_MS;
-	}
+	return filterDurationMs >= minMs && filterDurationMs <= maxMs;
 }
 
-export function buildDurationBucketRecommendationOptions(
-	items: readonly { filterDurationMs?: number }[],
-): RecommendationTagOption[] {
-	return buildDurationBucketCounts(items);
+export function ratingRangeMatches(
+	rating: number | undefined,
+	min: number,
+	max: number,
+): boolean {
+	if (isRatingRangeUnconstrained(min, max)) {
+		return true;
+	}
+
+	if (rating === undefined) {
+		return false;
+	}
+
+	return rating >= min && rating <= max;
+}
+
+export function listenedMatches(
+	hasListened: boolean | undefined,
+	listened: ListenedAnswer,
+): boolean {
+	if (listened === "any") {
+		return true;
+	}
+
+	const heard = hasListened === true;
+	if (listened === "heard") {
+		return heard;
+	}
+
+	return !heard;
+}
+
+export function genreKeysMatch(
+	filterGenreKeysSorted: readonly string[],
+	genreKeys: readonly string[],
+	genreMatch: GenreMatchAnswer,
+): boolean {
+	if (genreKeys.length === 0) {
+		return true;
+	}
+
+	const albumKeys = new Set(filterGenreKeysSorted);
+
+	if (genreMatch === "all") {
+		return genreKeys.every((key) => albumKeys.has(key));
+	}
+
+	return genreKeys.some((key) => albumKeys.has(key));
 }
 
 export function candidateMatchesRecommendationAnswers(
@@ -232,45 +234,47 @@ export function candidateMatchesRecommendationAnswers(
 		return false;
 	}
 
-	if (!addedTimeframeMatches(candidate, answers.addedTimeframe, now)) {
-		return false;
-	}
-
-	if (!releaseTimeMatches(candidate, answers.releaseTime, now)) {
-		return false;
-	}
-
-	if (answers.durationBucket !== "any") {
-		if (
-			!durationBucketMatchesAnswer(
-				candidate.filterDurationMs,
-				answers.durationBucket,
-			)
-		) {
-			return false;
-		}
-	} else if (
-		answers.durationTier !== undefined &&
-		answers.durationTier !== "any" &&
-		!durationTierMatches(candidate.filterDurationMs, answers.durationTier)
+	if (
+		!addedDaysRangeMatches(
+			candidate,
+			answers.addedDaysMin,
+			answers.addedDaysMax,
+			now,
+		)
 	) {
 		return false;
 	}
 
-	if (!ratingTierMatches(candidate.rating, answers.ratingTier)) {
+	if (!yearRangeMatches(candidate, answers.yearMin, answers.yearMax)) {
 		return false;
 	}
 
 	if (
-		answers.genreKey !== "any" &&
-		!candidate.filterGenreKeysSorted.includes(answers.genreKey)
+		!durationRangeMatches(
+			candidate.filterDurationMs,
+			answers.durationMinMs,
+			answers.durationMaxMs,
+		)
 	) {
 		return false;
 	}
 
 	if (
-		answers.descriptorKey !== "any" &&
-		!candidate.filterDescriptorKeysSorted.includes(answers.descriptorKey)
+		!ratingRangeMatches(candidate.rating, answers.ratingMin, answers.ratingMax)
+	) {
+		return false;
+	}
+
+	if (!listenedMatches(candidate.hasListened, answers.listened)) {
+		return false;
+	}
+
+	if (
+		!genreKeysMatch(
+			candidate.filterGenreKeysSorted,
+			answers.genreKeys,
+			answers.genreMatch,
+		)
 	) {
 		return false;
 	}
@@ -300,6 +304,12 @@ export function chooseRecommendationRows<
 		0,
 		normalizeRecommendationCount(count),
 	);
+}
+
+export function buildDurationBucketRecommendationOptions(
+	items: readonly { filterDurationMs?: number }[],
+): RecommendationTagOption[] {
+	return buildDurationBucketCounts(items);
 }
 
 export function buildTopLevelGenreCounts(args: {

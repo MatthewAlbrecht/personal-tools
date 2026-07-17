@@ -1,27 +1,28 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+	type ForLaterRecommendationAnswers,
 	type ForLaterRecommendationCandidate,
-	addedTimeframeMatches,
+	addedDaysRangeMatches,
 	buildSavedRecommendationAlbumRefs,
 	buildSubgenreCountsForTopLevel,
 	buildTopLevelGenreCounts,
 	candidateMatchesRecommendationAnswers,
 	chooseRecommendationRows,
-	durationBucketMatchesAnswer,
-	durationTierMatches,
+	genreKeysMatch,
+	listenedMatches,
 	normalizeRecommendationCount,
-	ratingTierMatches,
-	releaseTimeMatches,
 	selectRandomTagOptions,
 	sortRecommendationTagOptionsByCount,
+	yearRangeMatches,
 } from "./forLaterRecommendations";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const MINUTE_MS = 60 * 1000;
 const NOW = Date.UTC(2026, 5, 22);
 
 function candidate(
-	overrides: Partial<ForLaterRecommendationCandidate>,
+	overrides: Partial<ForLaterRecommendationCandidate> = {},
 ): ForLaterRecommendationCandidate {
 	return {
 		id: "row-1",
@@ -33,8 +34,27 @@ function candidate(
 		filterDescriptorKeysSorted: [],
 		filterDurationMs: undefined,
 		rating: undefined,
+		hasListened: false,
 		markedAsSingle: undefined,
 		removedFromForLater: undefined,
+		...overrides,
+	};
+}
+
+function defaultAnswers(
+	overrides: Partial<ForLaterRecommendationAnswers> = {},
+): ForLaterRecommendationAnswers {
+	return {
+		addedDaysMin: 0,
+		addedDaysMax: 365,
+		durationMinMs: 0,
+		durationMaxMs: 120 * MINUTE_MS,
+		ratingMin: 1,
+		ratingMax: 15,
+		listened: "any",
+		genreKeys: [],
+		genreMatch: "any",
+		count: 1,
 		...overrides,
 	};
 }
@@ -50,384 +70,108 @@ test("normalizeRecommendationCount defaults and clamps to 1 through 5", () => {
 	assert.equal(normalizeRecommendationCount(6), 5);
 });
 
-test("addedTimeframeMatches uses mutually exclusive buckets", () => {
+test("full-span ranges and empty genres do not filter", () => {
 	assert.equal(
-		addedTimeframeMatches(
-			candidate({ playlistAddedAt: NOW - 12 * 60 * 60 * 1000 }),
-			"day",
-			NOW,
-		),
-		true,
-	);
-	assert.equal(
-		addedTimeframeMatches(
-			candidate({ playlistAddedAt: NOW - 3 * DAY_MS }),
-			"week",
-			NOW,
-		),
-		true,
-	);
-	assert.equal(
-		addedTimeframeMatches(
-			candidate({ playlistAddedAt: NOW - 12 * DAY_MS }),
-			"week",
-			NOW,
-		),
-		false,
-	);
-	assert.equal(
-		addedTimeframeMatches(
-			candidate({ playlistAddedAt: NOW - 12 * DAY_MS }),
-			"month",
-			NOW,
-		),
-		true,
-	);
-	assert.equal(
-		addedTimeframeMatches(
-			candidate({ playlistAddedAt: NOW - 3 * DAY_MS }),
-			"month",
-			NOW,
-		),
-		false,
-	);
-	assert.equal(
-		addedTimeframeMatches(
-			candidate({ playlistAddedAt: NOW - 45 * DAY_MS }),
-			"two_months",
-			NOW,
-		),
-		true,
-	);
-	assert.equal(
-		addedTimeframeMatches(
-			candidate({ playlistAddedAt: NOW - 12 * DAY_MS }),
-			"two_months",
-			NOW,
-		),
-		false,
-	);
-	assert.equal(
-		addedTimeframeMatches(
-			candidate({ playlistAddedAt: NOW - 90 * DAY_MS }),
-			"older_than_two_months",
-			NOW,
-		),
-		true,
-	);
-	assert.equal(
-		addedTimeframeMatches(
-			candidate({ playlistAddedAt: NOW - 45 * DAY_MS }),
-			"older_than_two_months",
-			NOW,
-		),
-		false,
-	);
-	assert.equal(
-		addedTimeframeMatches(
-			candidate({ playlistAddedAt: NOW - 60 * DAY_MS }),
-			"older_than_two_months",
-			NOW,
-		),
-		false,
-	);
-});
-
-test("addedTimeframeMatches returns true for any and false for future constrained dates", () => {
-	assert.equal(
-		addedTimeframeMatches(
-			candidate({ playlistAddedAt: NOW + DAY_MS }),
-			"any",
-			NOW,
-		),
-		true,
-	);
-	assert.equal(
-		addedTimeframeMatches(
-			candidate({ playlistAddedAt: NOW + DAY_MS }),
-			"day",
-			NOW,
-		),
-		false,
-	);
-});
-
-test("addedTimeframeMatches falls back to firstSeenAt then createdAt", () => {
-	assert.equal(
-		addedTimeframeMatches(
+		candidateMatchesRecommendationAnswers(
 			candidate({
-				playlistAddedAt: undefined,
-				firstSeenAt: NOW - 3 * DAY_MS,
-				createdAt: NOW - 45 * DAY_MS,
+				playlistAddedAt: NOW - 10 * DAY_MS,
+				releaseYear: 1999,
+				filterDurationMs: 45 * MINUTE_MS,
+				rating: undefined,
+				hasListened: false,
+				filterGenreKeysSorted: ["ambient"],
 			}),
-			"week",
-			NOW,
-		),
-		true,
-	);
-	assert.equal(
-		addedTimeframeMatches(
-			candidate({
-				playlistAddedAt: undefined,
-				firstSeenAt: undefined,
-				createdAt: NOW - 45 * DAY_MS,
-			}),
-			"two_months",
+			defaultAnswers(),
 			NOW,
 		),
 		true,
 	);
 });
 
-test("releaseTimeMatches maps years to user-facing buckets", () => {
+test("addedDaysRangeMatches inclusive day-age window", () => {
 	assert.equal(
-		releaseTimeMatches(candidate({ releaseYear: 2026 }), "new_release", NOW),
+		addedDaysRangeMatches(
+			candidate({ playlistAddedAt: NOW - 3 * DAY_MS }),
+			2,
+			7,
+			NOW,
+		),
 		true,
 	);
 	assert.equal(
-		releaseTimeMatches(candidate({ releaseYear: 2025 }), "new_release", NOW),
-		true,
-	);
-	assert.equal(
-		releaseTimeMatches(candidate({ releaseYear: 2023 }), "recent", NOW),
-		true,
-	);
-	assert.equal(
-		releaseTimeMatches(candidate({ releaseYear: 2014 }), "modern", NOW),
-		true,
-	);
-	assert.equal(
-		releaseTimeMatches(candidate({ releaseYear: 2000 }), "old", NOW),
-		true,
-	);
-	assert.equal(
-		releaseTimeMatches(candidate({ releaseYear: undefined }), "old", NOW),
-		false,
-	);
-	assert.equal(
-		releaseTimeMatches(candidate({ releaseYear: undefined }), "any", NOW),
-		true,
-	);
-});
-
-test("releaseTimeMatches includes bucket boundaries and excludes adjacent buckets", () => {
-	assert.equal(
-		releaseTimeMatches(candidate({ releaseYear: 2026 }), "new_release", NOW),
-		true,
-	);
-	assert.equal(
-		releaseTimeMatches(candidate({ releaseYear: 2025 }), "new_release", NOW),
-		true,
-	);
-	assert.equal(
-		releaseTimeMatches(candidate({ releaseYear: 2024 }), "new_release", NOW),
-		false,
-	);
-	assert.equal(
-		releaseTimeMatches(candidate({ releaseYear: 2024 }), "recent", NOW),
-		true,
-	);
-	assert.equal(
-		releaseTimeMatches(candidate({ releaseYear: 2021 }), "recent", NOW),
-		true,
-	);
-	assert.equal(
-		releaseTimeMatches(candidate({ releaseYear: 2025 }), "recent", NOW),
-		false,
-	);
-	assert.equal(
-		releaseTimeMatches(candidate({ releaseYear: 2020 }), "modern", NOW),
-		true,
-	);
-	assert.equal(
-		releaseTimeMatches(candidate({ releaseYear: 2006 }), "modern", NOW),
-		true,
-	);
-	assert.equal(
-		releaseTimeMatches(candidate({ releaseYear: 2021 }), "modern", NOW),
-		false,
-	);
-	assert.equal(
-		releaseTimeMatches(candidate({ releaseYear: 2005 }), "modern", NOW),
-		false,
-	);
-	assert.equal(
-		releaseTimeMatches(candidate({ releaseYear: 2005 }), "old", NOW),
-		true,
-	);
-	assert.equal(
-		releaseTimeMatches(candidate({ releaseYear: 2006 }), "old", NOW),
+		addedDaysRangeMatches(
+			candidate({ playlistAddedAt: NOW - 1 * DAY_MS }),
+			2,
+			7,
+			NOW,
+		),
 		false,
 	);
 });
 
-test("ratingTierMatches includes boundaries and excludes lower categories", () => {
-	assert.equal(ratingTierMatches(13, "holy_moly"), true);
-	assert.equal(ratingTierMatches(15, "holy_moly"), true);
-	assert.equal(ratingTierMatches(12, "holy_moly"), false);
-	assert.equal(ratingTierMatches(10, "really_enjoyed"), true);
-	assert.equal(ratingTierMatches(12, "really_enjoyed"), true);
-	assert.equal(ratingTierMatches(9, "really_enjoyed"), false);
-	assert.equal(ratingTierMatches(13, "really_enjoyed"), false);
-	assert.equal(ratingTierMatches(7, "good"), true);
-	assert.equal(ratingTierMatches(9, "good"), true);
-	assert.equal(ratingTierMatches(6, "good"), false);
-	assert.equal(ratingTierMatches(10, "good"), false);
-
-	for (let rating = 1; rating <= 6; rating += 1) {
-		assert.equal(ratingTierMatches(rating, "good"), false);
-		assert.equal(ratingTierMatches(rating, "really_enjoyed"), false);
-		assert.equal(ratingTierMatches(rating, "holy_moly"), false);
-	}
+test("yearRangeMatches respects min/max and missing year", () => {
+	assert.equal(
+		yearRangeMatches(candidate({ releaseYear: 1971 }), 1970, 1979),
+		true,
+	);
+	assert.equal(
+		yearRangeMatches(candidate({ releaseYear: undefined }), 1970, 1979),
+		false,
+	);
+	assert.equal(
+		yearRangeMatches(candidate({ releaseYear: 1980 }), undefined, undefined),
+		true,
+	);
 });
 
-test("durationBucketMatchesAnswer maps playlist duration to minute buckets", () => {
-	const ms = 45 * 60 * 1000;
-	assert.equal(durationBucketMatchesAnswer(ms, "40_50"), true);
-	assert.equal(durationBucketMatchesAnswer(ms, "50_60"), false);
-	assert.equal(durationBucketMatchesAnswer(undefined, "40_50"), false);
-	assert.equal(durationBucketMatchesAnswer(undefined, "any"), true);
+test("listenedMatches heard / not_yet / any", () => {
+	assert.equal(listenedMatches(true, "heard"), true);
+	assert.equal(listenedMatches(false, "heard"), false);
+	assert.equal(listenedMatches(false, "not_yet"), true);
+	assert.equal(listenedMatches(true, "not_yet"), false);
+	assert.equal(listenedMatches(false, "any"), true);
 });
 
-test("durationTierMatches maps playlist duration to short medium and long tiers", () => {
-	const shortMs = 30 * 60 * 1000;
-	const mediumMs = 45 * 60 * 1000;
-	const longMs = 60 * 60 * 1000;
-
-	assert.equal(durationTierMatches(shortMs, "short"), true);
-	assert.equal(durationTierMatches(shortMs, "medium"), false);
-	assert.equal(durationTierMatches(mediumMs, "medium"), true);
-	assert.equal(durationTierMatches(longMs, "long"), true);
-	assert.equal(durationTierMatches(35 * 60 * 1000, "medium"), true);
-	assert.equal(durationTierMatches(55 * 60 * 1000, "medium"), true);
-	assert.equal(durationTierMatches(55 * 60 * 1000 + 1, "long"), true);
-	assert.equal(durationTierMatches(undefined, "short"), false);
-	assert.equal(durationTierMatches(undefined, "any"), true);
+test("genreKeysMatch OR and AND against filterGenreKeysSorted", () => {
+	const keys = ["ambient", "electronic", "drone"];
+	assert.equal(genreKeysMatch(keys, ["ambient", "jazz"], "any"), true);
+	assert.equal(genreKeysMatch(keys, ["ambient", "jazz"], "all"), false);
+	assert.equal(genreKeysMatch(keys, ["ambient", "drone"], "all"), true);
+	assert.equal(genreKeysMatch(keys, [], "all"), true);
 });
 
-test("candidateMatchesRecommendationAnswers applies genre descriptor and rating filters", () => {
-	const row = candidate({
-		filterGenreKeysSorted: ["slowcore", "rock"],
-		filterDescriptorKeysSorted: ["melancholic"],
-		rating: 11,
-	});
+test("constrained rating excludes unrated; listened independent", () => {
 	assert.equal(
 		candidateMatchesRecommendationAnswers(
-			row,
-			{
-				addedTimeframe: "any",
-				genreKey: "slowcore",
-				releaseTime: "any",
-				descriptorKey: "melancholic",
-				ratingTier: "really_enjoyed",
-				durationBucket: "any",
-				count: 1,
-			},
-			NOW,
-		),
-		true,
-	);
-	assert.equal(
-		candidateMatchesRecommendationAnswers(
-			row,
-			{
-				addedTimeframe: "any",
-				genreKey: "ambient",
-				releaseTime: "any",
-				descriptorKey: "melancholic",
-				ratingTier: "really_enjoyed",
-				durationBucket: "any",
-				count: 1,
-			},
+			candidate({ rating: undefined, hasListened: true }),
+			defaultAnswers({ ratingMin: 10, ratingMax: 15 }),
 			NOW,
 		),
 		false,
 	);
 	assert.equal(
 		candidateMatchesRecommendationAnswers(
-			row,
-			{
-				addedTimeframe: "any",
-				genreKey: "slowcore",
-				releaseTime: "any",
-				descriptorKey: "warm",
-				ratingTier: "really_enjoyed",
-				durationBucket: "any",
-				count: 1,
-			},
-			NOW,
-		),
-		false,
-	);
-});
-
-test("candidateMatchesRecommendationAnswers applies duration bucket filter", () => {
-	const row = candidate({
-		filterDurationMs: 40 * 60 * 1000,
-	});
-	assert.equal(
-		candidateMatchesRecommendationAnswers(
-			row,
-			{
-				addedTimeframe: "any",
-				genreKey: "any",
-				releaseTime: "any",
-				descriptorKey: "any",
-				ratingTier: "any",
-				durationBucket: "40_50",
-				count: 1,
-			},
+			candidate({ rating: 12, hasListened: true }),
+			defaultAnswers({ ratingMin: 10, ratingMax: 15, listened: "heard" }),
 			NOW,
 		),
 		true,
 	);
 	assert.equal(
 		candidateMatchesRecommendationAnswers(
-			row,
-			{
-				addedTimeframe: "any",
-				genreKey: "any",
-				releaseTime: "any",
-				descriptorKey: "any",
-				ratingTier: "any",
-				durationBucket: "30_40",
-				count: 1,
-			},
-			NOW,
-		),
-		false,
-	);
-	assert.equal(
-		candidateMatchesRecommendationAnswers(
-			candidate({ filterDurationMs: undefined }),
-			{
-				addedTimeframe: "any",
-				genreKey: "any",
-				releaseTime: "any",
-				descriptorKey: "any",
-				ratingTier: "any",
-				durationBucket: "30_40",
-				count: 1,
-			},
+			candidate({ rating: undefined, hasListened: false }),
+			defaultAnswers({ ratingMin: 10, ratingMax: 15, listened: "not_yet" }),
 			NOW,
 		),
 		false,
 	);
 });
 
-test("candidateMatchesRecommendationAnswers excludes hidden rows and unrated rows for rating tiers", () => {
+test("candidateMatchesRecommendationAnswers excludes hidden rows", () => {
 	assert.equal(
 		candidateMatchesRecommendationAnswers(
 			candidate({ markedAsSingle: true, rating: 15 }),
-			{
-				addedTimeframe: "any",
-				genreKey: "any",
-				releaseTime: "any",
-				descriptorKey: "any",
-				ratingTier: "holy_moly",
-				durationBucket: "any",
-				count: 1,
-			},
+			defaultAnswers(),
 			NOW,
 		),
 		false,
@@ -435,31 +179,7 @@ test("candidateMatchesRecommendationAnswers excludes hidden rows and unrated row
 	assert.equal(
 		candidateMatchesRecommendationAnswers(
 			candidate({ removedFromForLater: true, rating: 15 }),
-			{
-				addedTimeframe: "any",
-				genreKey: "any",
-				releaseTime: "any",
-				descriptorKey: "any",
-				ratingTier: "holy_moly",
-				durationBucket: "any",
-				count: 1,
-			},
-			NOW,
-		),
-		false,
-	);
-	assert.equal(
-		candidateMatchesRecommendationAnswers(
-			candidate({ rating: undefined }),
-			{
-				addedTimeframe: "any",
-				genreKey: "any",
-				releaseTime: "any",
-				descriptorKey: "any",
-				ratingTier: "holy_moly",
-				durationBucket: "any",
-				count: 1,
-			},
+			defaultAnswers(),
 			NOW,
 		),
 		false,
