@@ -8,10 +8,12 @@ import {
 	excludeAlreadyWrittenPlaylistWrites,
 	normalizePlaylistTrack,
 	planPlaylistWrites,
+	qualifiesAsMusicFunnelAlbumRepeat,
 } from "./music-funnel-sync-utils";
 import type {
 	MusicFunnelArtist,
 	MusicFunnelEncounterLike,
+	SpotifyAlbumType,
 } from "./music-funnel-sync-utils";
 import type { PlaylistTrackItem } from "./spotify";
 
@@ -26,6 +28,7 @@ function createEncounter({
 	albumName = "Album One",
 	artists = [{ spotifyArtistId: "artist-1", name: "Artist One" }],
 	firstSeenAt = 1000,
+	spotifyAlbumType = "album" as SpotifyAlbumType | null | undefined,
 }: {
 	sourceId: string;
 	spotifyTrackId: string;
@@ -33,8 +36,9 @@ function createEncounter({
 	albumName?: string;
 	artists?: MusicFunnelArtist[];
 	firstSeenAt?: number;
+	spotifyAlbumType?: SpotifyAlbumType | null;
 }): MusicFunnelEncounterLike {
-	return {
+	const encounter: MusicFunnelEncounterLike = {
 		sourceId,
 		spotifyTrackId,
 		trackName: `Track ${spotifyTrackId}`,
@@ -46,6 +50,10 @@ function createEncounter({
 		albumImageUrl: "https://example.com/cover.jpg",
 		firstSeenAt,
 	};
+	if (spotifyAlbumType !== null) {
+		encounter.spotifyAlbumType = spotifyAlbumType ?? "album";
+	}
+	return encounter;
 }
 
 function createPlaylistTrackItem(overrides?: {
@@ -64,6 +72,7 @@ function createPlaylistTrackItem(overrides?: {
 			album: {
 				id: "album-1",
 				name: "Cool Album",
+				album_type: "album",
 				images: overrides?.images ?? [
 					{ url: "https://example.com/cover.jpg", height: 640, width: 640 },
 				],
@@ -90,9 +99,78 @@ test("normalizePlaylistTrack returns metadata needed by the funnel ledger", () =
 		],
 		spotifyAlbumId: "album-1",
 		albumName: "Cool Album",
+		spotifyAlbumType: "album",
 		albumImageUrl: "https://example.com/cover.jpg",
 		playlistAddedAt: Date.parse("2026-07-04T12:00:00Z"),
 	});
+});
+
+test("normalizePlaylistTrack copies album_type when present", () => {
+	const item = createPlaylistTrackItem();
+	if (item.track) {
+		item.track.album.album_type = "compilation";
+	}
+	assert.equal(normalizePlaylistTrack(item)?.spotifyAlbumType, "compilation");
+});
+
+test("qualifiesAsMusicFunnelAlbumRepeat allows album and compilation only", () => {
+	assert.equal(qualifiesAsMusicFunnelAlbumRepeat("album"), true);
+	assert.equal(qualifiesAsMusicFunnelAlbumRepeat("compilation"), true);
+	assert.equal(qualifiesAsMusicFunnelAlbumRepeat("single"), false);
+	assert.equal(qualifiesAsMusicFunnelAlbumRepeat(undefined), false);
+});
+
+test("computeAlbumRepeatSummaries excludes singles and missing album type", () => {
+	const singles = computeAlbumRepeatSummaries([
+		createEncounter({
+			sourceId: sourceA,
+			spotifyTrackId: "t1",
+			spotifyAlbumId: "single-1",
+			spotifyAlbumType: "single",
+		}),
+		createEncounter({
+			sourceId: sourceB,
+			spotifyTrackId: "t2",
+			spotifyAlbumId: "single-1",
+			spotifyAlbumType: "single",
+		}),
+	]);
+	assert.equal(singles.length, 0);
+
+	const missing = computeAlbumRepeatSummaries([
+		createEncounter({
+			sourceId: sourceA,
+			spotifyTrackId: "t3",
+			spotifyAlbumId: "unknown-1",
+			spotifyAlbumType: null,
+		}),
+		createEncounter({
+			sourceId: sourceB,
+			spotifyTrackId: "t4",
+			spotifyAlbumId: "unknown-1",
+			spotifyAlbumType: null,
+		}),
+	]);
+	assert.equal(missing.length, 0);
+});
+
+test("computeAlbumRepeatSummaries keeps compilations with 2+ sources", () => {
+	const repeats = computeAlbumRepeatSummaries([
+		createEncounter({
+			sourceId: sourceA,
+			spotifyTrackId: "t1",
+			spotifyAlbumId: "comp-1",
+			spotifyAlbumType: "compilation",
+		}),
+		createEncounter({
+			sourceId: sourceB,
+			spotifyTrackId: "t2",
+			spotifyAlbumId: "comp-1",
+			spotifyAlbumType: "compilation",
+		}),
+	]);
+	assert.equal(repeats.length, 1);
+	assert.equal(repeats[0]?.spotifyAlbumId, "comp-1");
 });
 
 test("normalizePlaylistTrack returns null for local or unavailable tracks", () => {

@@ -1,5 +1,13 @@
 import type { PlaylistTrackItem } from "~/lib/spotify";
 
+export type SpotifyAlbumType = "album" | "single" | "compilation";
+
+export function qualifiesAsMusicFunnelAlbumRepeat(
+	spotifyAlbumType: SpotifyAlbumType | undefined,
+): boolean {
+	return spotifyAlbumType === "album" || spotifyAlbumType === "compilation";
+}
+
 export type MusicFunnelArtist = {
 	spotifyArtistId: string;
 	name: string;
@@ -13,6 +21,7 @@ export type NormalizedMusicFunnelTrack = {
 	artists: MusicFunnelArtist[];
 	spotifyAlbumId: string;
 	albumName: string;
+	spotifyAlbumType?: SpotifyAlbumType;
 	albumImageUrl?: string;
 	playlistAddedAt?: number;
 };
@@ -90,6 +99,14 @@ export function normalizePlaylistTrack(
 		spotifyAlbumId: item.track.album.id,
 		albumName: item.track.album.name,
 	};
+	const albumType = item.track.album.album_type;
+	if (
+		albumType === "album" ||
+		albumType === "single" ||
+		albumType === "compilation"
+	) {
+		normalized.spotifyAlbumType = albumType;
+	}
 	const albumImageUrl = item.track.album.images[0]?.url;
 	if (albumImageUrl) {
 		normalized.albumImageUrl = albumImageUrl;
@@ -152,6 +169,18 @@ export function computeAlbumRepeatSummaries(
 			const sourceIds = uniqueSorted(rows.map((row) => row.sourceId));
 			const first = rows[0];
 			if (!first || sourceIds.length < 2) {
+				return null;
+			}
+
+			const albumType = rows
+				.map((row) => row.spotifyAlbumType)
+				.find(
+					(value): value is SpotifyAlbumType =>
+						value === "album" ||
+						value === "single" ||
+						value === "compilation",
+				);
+			if (!qualifiesAsMusicFunnelAlbumRepeat(albumType)) {
 				return null;
 			}
 

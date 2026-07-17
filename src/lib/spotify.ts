@@ -14,6 +14,7 @@ export type SpotifyTrack = {
 	album: {
 		id: string;
 		name: string;
+		album_type: "album" | "single" | "compilation";
 		images: Array<{ url: string; height: number; width: number }>;
 	};
 	duration_ms: number;
@@ -52,6 +53,7 @@ export type SavedTrackItem = {
 export type SpotifyAlbum = {
 	id: string;
 	name: string;
+	album_type: "album" | "single" | "compilation";
 	artists: Array<{ id: string; name: string }>;
 	images: Array<{ url: string; height: number; width: number }>;
 	release_date: string;
