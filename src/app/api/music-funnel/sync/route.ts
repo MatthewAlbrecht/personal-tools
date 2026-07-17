@@ -1,12 +1,19 @@
 import { ConvexHttpClient } from "convex/browser";
 import { type NextRequest, NextResponse } from "next/server";
 import { env } from "~/env.js";
-import { syncMusicFunnel } from "~/lib/music-funnel-sync";
+import {
+	syncMusicFunnel,
+	syncMusicFunnelSource,
+} from "~/lib/music-funnel-sync";
 import { refreshAccessToken } from "~/lib/spotify";
 import { api } from "../../../../../convex/_generated/api";
+import type { Id } from "../../../../../convex/_generated/dataModel";
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
-	const body = (await request.json()) as { userId?: string };
+	const body = (await request.json()) as {
+		userId?: string;
+		sourceId?: string;
+	};
 	if (!body.userId) {
 		return NextResponse.json({ error: "Missing userId" }, { status: 400 });
 	}
@@ -36,11 +43,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 			accessToken = tokens.access_token;
 		}
 
-		const result = await syncMusicFunnel({
-			accessToken,
-			userId: body.userId,
-			source: "manual",
-		});
+		const result = body.sourceId
+			? await syncMusicFunnelSource({
+					accessToken,
+					userId: body.userId,
+					sourceId: body.sourceId as Id<"musicFunnelSources">,
+				})
+			: await syncMusicFunnel({
+					accessToken,
+					userId: body.userId,
+					source: "manual",
+				});
 
 		if (!result.success && result.sourcesScanned === 0 && result.errors.length > 0) {
 			return NextResponse.json(result, { status: 400 });

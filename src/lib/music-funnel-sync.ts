@@ -73,6 +73,10 @@ export async function syncMusicFunnel({
 		}
 
 		for (const musicFunnelSource of sources) {
+			const kind = musicFunnelSource.kind ?? "recurring";
+			if (kind === "one_off") {
+				continue;
+			}
 			const result = await syncSourcePlaylist({
 				convex,
 				accessToken,
@@ -103,6 +107,162 @@ export async function syncMusicFunnel({
 			computeArtistRepeatSummaries(allEncounters).length;
 		const status =
 			sources.length === 0
+				? "failed"
+				: errors.length > 0
+					? sourcesScanned > 0
+						? "partial"
+						: "failed"
+					: "success";
+		const completedAt = Date.now();
+
+		await convex.mutation(api.musicFunnel.finishRun, {
+			runId,
+			status,
+			completedAt,
+			durationMs: completedAt - startedAt,
+			sourcesScanned,
+			tracksSeen,
+			newEncounters,
+			newTracksAddedToMain,
+			repeatTracksAdded,
+			trackRepeatsFound,
+			albumRepeatsFound,
+			artistRepeatsFound,
+			errors,
+		});
+
+		return {
+			success: status !== "failed",
+			status,
+			runId,
+			durationMs: completedAt - startedAt,
+			sourcesScanned,
+			tracksSeen,
+			newEncounters,
+			newTracksAddedToMain,
+			repeatTracksAdded,
+			trackRepeatsFound,
+			albumRepeatsFound,
+			artistRepeatsFound,
+			errors,
+		};
+	} catch (error) {
+		const completedAt = Date.now();
+		const message =
+			error instanceof Error
+				? error.message
+				: "Unknown music funnel sync error";
+		await convex.mutation(api.musicFunnel.finishRun, {
+			runId,
+			status: "failed",
+			completedAt,
+			durationMs: completedAt - startedAt,
+			sourcesScanned,
+			tracksSeen,
+			newEncounters,
+			newTracksAddedToMain,
+			repeatTracksAdded,
+			trackRepeatsFound: 0,
+			albumRepeatsFound: 0,
+			artistRepeatsFound: 0,
+			errors: [...errors, message],
+		});
+		return {
+			success: false,
+			status: "failed",
+			runId,
+			durationMs: completedAt - startedAt,
+			sourcesScanned,
+			tracksSeen,
+			newEncounters,
+			newTracksAddedToMain,
+			repeatTracksAdded,
+			trackRepeatsFound: 0,
+			albumRepeatsFound: 0,
+			artistRepeatsFound: 0,
+			errors: [...errors, message],
+		};
+	}
+}
+
+export async function syncMusicFunnelSource({
+	accessToken,
+	userId,
+	sourceId,
+}: {
+	accessToken: string;
+	userId: string;
+	sourceId: Id<"musicFunnelSources">;
+}): Promise<MusicFunnelSyncResult> {
+	const startedAt = Date.now();
+	const convex = new ConvexHttpClient(env.NEXT_PUBLIC_CONVEX_URL);
+	const runId = await convex.mutation(api.musicFunnel.startRun, {
+		userId,
+		source: "manual",
+		startedAt,
+	});
+
+	const errors: string[] = [];
+	let sourcesScanned = 0;
+	let tracksSeen = 0;
+	let newEncounters = 0;
+	let newTracksAddedToMain = 0;
+	let repeatTracksAdded = 0;
+
+	try {
+		const settings = await convex.query(api.musicFunnel.getSettings, {
+			userId,
+		});
+		const sources = await convex.query(api.musicFunnel.listSources, {
+			userId,
+		});
+		const musicFunnelSource = sources.find(
+			(source) => source._id === sourceId,
+		);
+
+		if (!musicFunnelSource) {
+			errors.push("Source playlist not found.");
+		} else {
+			const result = await syncSourcePlaylist({
+				convex,
+				accessToken,
+				userId,
+				runId,
+				source: musicFunnelSource,
+				mainPlaylistId: settings?.mainPlaylistId,
+				repeatsPlaylistId: settings?.repeatsPlaylistId,
+			});
+			sourcesScanned += result.sourceSucceeded ? 1 : 0;
+			tracksSeen += result.tracksSeen;
+			newEncounters += result.newEncounters;
+			newTracksAddedToMain += result.newTracksAddedToMain;
+			repeatTracksAdded += result.repeatTracksAdded;
+			errors.push(...result.errors);
+
+			if (
+				result.sourceSucceeded &&
+				(musicFunnelSource.kind ?? "recurring") === "one_off"
+			) {
+				await convex.mutation(api.musicFunnel.setSourceActive, {
+					sourceId: musicFunnelSource._id,
+					isActive: false,
+				});
+			}
+		}
+
+		const allEncounters = await convex.query(
+			api.musicFunnel.listEncounterRowsForAnalytics,
+			{
+				userId,
+				limit: 5000,
+			},
+		);
+		const trackRepeatsFound = computeTrackRepeatSummaries(allEncounters).length;
+		const albumRepeatsFound = computeAlbumRepeatSummaries(allEncounters).length;
+		const artistRepeatsFound =
+			computeArtistRepeatSummaries(allEncounters).length;
+		const status =
+			!musicFunnelSource
 				? "failed"
 				: errors.length > 0
 					? sourcesScanned > 0
