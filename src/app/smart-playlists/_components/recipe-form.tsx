@@ -17,8 +17,8 @@ import {
 	ComboboxEmpty,
 	ComboboxItem,
 	ComboboxList,
-	ComboboxTrigger,
 	ComboboxValue,
+	useComboboxAnchor,
 } from "~/components/ui/combobox";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -141,11 +141,10 @@ export function RecipeForm({
 		now: previewNow,
 	});
 
+	const genreAnchor = useComboboxAnchor();
+	const descriptorAnchor = useComboboxAnchor();
+
 	const genreKeysPool = (genreOptions ?? []).map((g) => g.key).sort();
-	const topLevelGenreKeysPool = (genreOptions ?? [])
-		.filter((g) => g.isTopLevel)
-		.map((g) => g.key)
-		.sort();
 	const genreLabelByKey = new Map(
 		(genreOptions ?? []).map((g) => [g.key, g.label] as const),
 	);
@@ -439,28 +438,29 @@ export function RecipeForm({
 						</div>
 						<Combobox
 							items={genreKeysPool}
-							browseItems={topLevelGenreKeysPool}
 							multiple
-							getItemLabel={formatGenreOption}
+							itemToStringLabel={formatGenreOption}
 							value={filters.genreKeys}
 							onValueChange={(genreKeys) => patchFilters({ genreKeys })}
 						>
-							<ComboboxTrigger>
-								<ComboboxChips>
-									<ComboboxValue>
-										{filters.genreKeys.map((key) => (
-											<ComboboxChip key={key} value={key}>
-												{formatGenreOption(key)}
-											</ComboboxChip>
-										))}
-									</ComboboxValue>
-									<ComboboxChipsInput
-										id="recipe-genres"
-										placeholder="Add genre"
-									/>
-								</ComboboxChips>
-							</ComboboxTrigger>
-							<ComboboxContent>
+							<ComboboxChips ref={genreAnchor}>
+								<ComboboxValue>
+									{(values: string[]) => (
+										<>
+											{values.map((key) => (
+												<ComboboxChip key={key}>
+													{formatGenreOption(key)}
+												</ComboboxChip>
+											))}
+											<ComboboxChipsInput
+												id="recipe-genres"
+												placeholder="Add genre"
+											/>
+										</>
+									)}
+								</ComboboxValue>
+							</ComboboxChips>
+							<ComboboxContent anchor={genreAnchor}>
 								<ComboboxEmpty>No genres found.</ComboboxEmpty>
 								<ComboboxList>
 									{(item) => (
@@ -506,28 +506,30 @@ export function RecipeForm({
 						<Combobox
 							items={descriptorKeysPool}
 							multiple
-							getItemLabel={formatDescriptorOption}
+							itemToStringLabel={formatDescriptorOption}
 							value={filters.descriptorKeys}
 							onValueChange={(descriptorKeys) =>
 								patchFilters({ descriptorKeys })
 							}
 						>
-							<ComboboxTrigger>
-								<ComboboxChips>
-									<ComboboxValue>
-										{filters.descriptorKeys.map((key) => (
-											<ComboboxChip key={key} value={key}>
-												{formatDescriptorOption(key)}
-											</ComboboxChip>
-										))}
-									</ComboboxValue>
-									<ComboboxChipsInput
-										id="recipe-descriptors"
-										placeholder="Add descriptor"
-									/>
-								</ComboboxChips>
-							</ComboboxTrigger>
-							<ComboboxContent>
+							<ComboboxChips ref={descriptorAnchor}>
+								<ComboboxValue>
+									{(values: string[]) => (
+										<>
+											{values.map((key) => (
+												<ComboboxChip key={key}>
+													{formatDescriptorOption(key)}
+												</ComboboxChip>
+											))}
+											<ComboboxChipsInput
+												id="recipe-descriptors"
+												placeholder="Add descriptor"
+											/>
+										</>
+									)}
+								</ComboboxValue>
+							</ComboboxChips>
+							<ComboboxContent anchor={descriptorAnchor}>
 								<ComboboxEmpty>No descriptors found.</ComboboxEmpty>
 								<ComboboxList>
 									{(item) => (
