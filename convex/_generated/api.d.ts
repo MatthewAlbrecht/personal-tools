@@ -38,6 +38,8 @@ import type * as _utils_robRankingArtistStats from "../_utils/robRankingArtistSt
 import type * as _utils_robRankingGenreStats from "../_utils/robRankingGenreStats.js";
 import type * as _utils_rymGenreHierarchy from "../_utils/rymGenreHierarchy.js";
 import type * as _utils_smartPlaylistAddedWindow from "../_utils/smartPlaylistAddedWindow.js";
+import type * as _utils_smartPlaylistFilterModel from "../_utils/smartPlaylistFilterModel.js";
+import type * as _utils_smartPlaylistGenreMatch from "../_utils/smartPlaylistGenreMatch.js";
 import type * as _utils_smartPlaylistValidators from "../_utils/smartPlaylistValidators.js";
 import type * as _utils_spotify_album_list from "../_utils/spotify_album_list.js";
 import type * as _utils_ticketmasterConcerts from "../_utils/ticketmasterConcerts.js";
@@ -109,6 +111,8 @@ declare const fullApi: ApiFromModules<{
   "_utils/robRankingGenreStats": typeof _utils_robRankingGenreStats;
   "_utils/rymGenreHierarchy": typeof _utils_rymGenreHierarchy;
   "_utils/smartPlaylistAddedWindow": typeof _utils_smartPlaylistAddedWindow;
+  "_utils/smartPlaylistFilterModel": typeof _utils_smartPlaylistFilterModel;
+  "_utils/smartPlaylistGenreMatch": typeof _utils_smartPlaylistGenreMatch;
   "_utils/smartPlaylistValidators": typeof _utils_smartPlaylistValidators;
   "_utils/spotify_album_list": typeof _utils_spotify_album_list;
   "_utils/ticketmasterConcerts": typeof _utils_ticketmasterConcerts;
