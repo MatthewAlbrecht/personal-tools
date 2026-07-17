@@ -3,12 +3,13 @@ title: Repeats type filter and denser rows
 domain: music-funnel
 kind: enhancement
 size: 3
-status: planned
+status: started
 captured: 2026-07-17
 ---
 
 ## Notes
 
+- Started — building via plan `docs/superpowers/plans/2026-07-17-repeats-type-filter-density-and-album-gate.md` (shared with stricter album type)
 - Planned — spec: `docs/superpowers/specs/2026-07-17-repeats-type-filter-density-and-album-gate-design.md`, plan: `docs/superpowers/plans/2026-07-17-repeats-type-filter-density-and-album-gate.md`
 - Add type filtering on the music-funnel repeats page (track / album / artist or equivalent)
 - Compress each row vertically — keep only what's necessary to scan and act

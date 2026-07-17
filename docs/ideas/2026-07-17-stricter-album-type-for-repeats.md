@@ -3,12 +3,13 @@ title: Stricter album type for repeats
 domain: music-funnel
 kind: fix
 size: 2
-status: planned
+status: started
 captured: 2026-07-17
 ---
 
 ## Notes
 
+- Started — building via plan `docs/superpowers/plans/2026-07-17-repeats-type-filter-density-and-album-gate.md` (shared with type filter / denser rows)
 - Planned — spec: `docs/superpowers/specs/2026-07-17-repeats-type-filter-density-and-album-gate-design.md`, plan: `docs/superpowers/plans/2026-07-17-repeats-type-filter-density-and-album-gate.md`
 - Repeats that count as albums should be stricter about Spotify album type
 - Only treat Spotify `album` and `compilation` as albums for repeats (exclude singles, EPs, etc. if those come through as other types)
