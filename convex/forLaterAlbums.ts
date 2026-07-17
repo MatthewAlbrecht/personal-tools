@@ -38,29 +38,24 @@ import {
 import { chooseIndexedForLaterListScan } from "./_utils/forLaterIndexedList";
 import { projectionMatchesFilters } from "./_utils/forLaterProjectionPredicate";
 import {
-	type AddedTimeframeAnswer,
-	type DurationBucketAnswer,
-	type DurationTierAnswer,
+	ADDED_DAYS_MAX,
+	ADDED_DAYS_MIN,
 	type ForLaterRecommendationAnswers,
 	type ForLaterRecommendationCandidate,
-	type RatingTierAnswer,
+	type GenreMatchAnswer,
+	type ListenedAnswer,
+	RATING_MAX,
+	RATING_MIN,
 	type RecommendationTagInput,
 	type RecommendationTagOption,
-	type ReleaseTimeAnswer,
-	buildSavedRecommendationAlbumRefs,
 	buildDurationBucketRecommendationOptions,
-	buildSubgenreCountsForTopLevel,
-	buildTopLevelGenreCounts,
+	buildSavedRecommendationAlbumRefs,
 	candidateMatchesRecommendationAnswers,
 	chooseRecommendationRows,
 	normalizeRecommendationCount,
 	sortRecommendationTagOptionsByCount,
 } from "./_utils/forLaterRecommendations";
 import { buildOpenableGoogleRymSearchLinks } from "./_utils/google_rym_lucky_search";
-import {
-	buildChildKeysByParentKey,
-	collectDescendantGenreKeys,
-} from "./_utils/rymGenreHierarchy";
 import {
 	collectMappedRymScrapeIds,
 	isRymScrapeMappedElsewhere,
@@ -112,57 +107,22 @@ const forLaterFiltersValidator = v.object({
 	durationBucketKey: v.optional(v.string()),
 });
 
-const recommendationAddedTimeframeValidator = v.union(
-	v.literal("day"),
-	v.literal("week"),
-	v.literal("month"),
-	v.literal("two_months"),
-	v.literal("older_than_two_months"),
-	v.literal("any"),
-);
-
-const recommendationReleaseTimeValidator = v.union(
-	v.literal("new_release"),
-	v.literal("recent"),
-	v.literal("modern"),
-	v.literal("old"),
-	v.literal("any"),
-);
-
-const recommendationRatingTierValidator = v.union(
-	v.literal("holy_moly"),
-	v.literal("really_enjoyed"),
-	v.literal("good"),
-	v.literal("any"),
-);
-
-const recommendationDurationBucketValidator = v.union(
-	v.literal("under_20"),
-	v.literal("20_30"),
-	v.literal("30_40"),
-	v.literal("40_50"),
-	v.literal("50_60"),
-	v.literal("60_70"),
-	v.literal("70_plus"),
-	v.literal("any"),
-);
-
-const recommendationDurationTierValidator = v.union(
-	v.literal("short"),
-	v.literal("medium"),
-	v.literal("long"),
-	v.literal("any"),
-);
-
 const recommendationAnswersValidator = v.object({
-	addedTimeframe: recommendationAddedTimeframeValidator,
-	genreKey: v.string(),
-	releaseTime: recommendationReleaseTimeValidator,
-	descriptorKey: v.string(),
-	ratingTier: recommendationRatingTierValidator,
-	durationBucket: v.optional(recommendationDurationBucketValidator),
-	/** @deprecated Use durationBucket */
-	durationTier: v.optional(recommendationDurationTierValidator),
+	addedDaysMin: v.number(),
+	addedDaysMax: v.number(),
+	yearMin: v.optional(v.number()),
+	yearMax: v.optional(v.number()),
+	durationMinMs: v.number(),
+	durationMaxMs: v.number(),
+	ratingMin: v.number(),
+	ratingMax: v.number(),
+	listened: v.union(
+		v.literal("any"),
+		v.literal("heard"),
+		v.literal("not_yet"),
+	),
+	genreKeys: v.array(v.string()),
+	genreMatch: v.union(v.literal("any"), v.literal("all")),
 	count: v.number(),
 });
 
@@ -697,7 +657,7 @@ async function hydrateForLaterAlbumRow(
 }
 
 const FOR_LATER_RECOMMENDATION_SCAN_LIMIT = 2000;
-const FOR_LATER_RECOMMENDATION_SUBGENRE_LIMIT = 15;
+const DEFAULT_GENRE_BUTTON_LIMIT = 12;
 
 type ForLaterRecommendationHydratedCandidate = {
 	row: ForLaterAlbumRow;
@@ -750,6 +710,7 @@ function recommendationCandidateFromItem(
 		filterGenreKeysSorted: item.filterGenreKeysSorted ?? [],
 		filterDescriptorKeysSorted: item.filterDescriptorKeysSorted ?? [],
 		filterDurationMs: item.filterDurationMs,
+		hasListened: item.filterHasListened === true,
 		markedAsSingle: item.markedAsSingle,
 		removedFromForLater: item.removedFromForLater,
 	};
@@ -769,6 +730,7 @@ function recommendationCandidateFromRow(
 		filterDescriptorKeysSorted: item.filterDescriptorKeysSorted ?? [],
 		filterDurationMs: item.filterDurationMs,
 		rating: row.rating,
+		hasListened: row.hasListened,
 		markedAsSingle: row.markedAsSingle,
 		removedFromForLater: row.removedFromForLater,
 	};
@@ -816,85 +778,58 @@ function applyRecommendationOptionLabels(
 	}));
 }
 
-async function loadTopLevelGenreKeySet(ctx: QueryCtx): Promise<Set<string>> {
-	const topLevelGenres = await ctx.db
-		.query("rateYourMusicGenres")
-		.withIndex("by_isTopLevel", (q) => q.eq("isTopLevel", true))
-		.collect();
-
-	return new Set(topLevelGenres.map((genre) => genre.key));
-}
-
-function recommendationFilterGenreKeysForItems(
+function countBacklogGenreKeys(
 	items: Doc<"forLaterAlbumItems">[],
-): string[][] {
-	return items.map((item) => item.filterGenreKeysSorted ?? []);
+): Map<string, number> {
+	const counts = new Map<string, number>();
+
+	for (const item of items) {
+		const seen = new Set<string>();
+		for (const key of item.filterGenreKeysSorted ?? []) {
+			if (seen.has(key)) {
+				continue;
+			}
+			seen.add(key);
+			counts.set(key, (counts.get(key) ?? 0) + 1);
+		}
+	}
+
+	return counts;
 }
 
-async function collectForLaterRecommendationTagOptions(
+async function collectForLaterRecommendationGenreOptions(
 	ctx: QueryCtx,
-	args: { userId: string; parentGenreKey?: string },
-): Promise<{
-	genres: RecommendationTagOption[];
-	durations: RecommendationTagOption[];
-}> {
+	args: { userId: string; search?: string },
+): Promise<RecommendationTagOption[]> {
 	const items = await collectVisibleActiveForLaterRecommendationItems(ctx, {
 		userId: args.userId,
 	});
-	const durationOptions = buildDurationBucketRecommendationOptions(items);
-	const albumFilterGenreKeys = recommendationFilterGenreKeysForItems(items);
-	const [parentKeysByChild, topLevelGenreKeys] = await Promise.all([
-		loadRymGenreParentKeysByChild(ctx),
-		loadTopLevelGenreKeySet(ctx),
-	]);
+	const counts = countBacklogGenreKeys(items);
+	const search = args.search?.trim().toLowerCase() ?? "";
 
-	if (args.parentGenreKey) {
-		const relationships = await ctx.db
-			.query("rateYourMusicGenreRelationships")
-			.collect();
-		const childKeysByParent = buildChildKeysByParentKey(relationships);
-		const descendantGenreKeys = collectDescendantGenreKeys(
-			args.parentGenreKey,
-			childKeysByParent,
-		);
-		const genreOptions = buildSubgenreCountsForTopLevel({
-			albumAllGenreKeys: albumFilterGenreKeys,
-			topLevelGenreKey: args.parentGenreKey,
-			descendantGenreKeys,
-			limit: FOR_LATER_RECOMMENDATION_SUBGENRE_LIMIT,
-		});
-		const genreLabels = await loadRecommendationGenreLabels(
-			ctx,
-			genreOptions.map((option) => option.key),
-		);
-
-		return {
-			genres: applyRecommendationOptionLabels(genreOptions, genreLabels),
-			durations: durationOptions,
-		};
-	}
-
-	const topLevelCounts = buildTopLevelGenreCounts({
-		albumPrimaryGenreKeys: albumFilterGenreKeys,
-		topLevelGenreKeys,
-		parentKeysByChild,
-	});
-	const genreOptions = sortRecommendationTagOptionsByCount(
-		[...topLevelCounts.entries()].map(([key, count]) => ({
+	let options = sortRecommendationTagOptionsByCount(
+		[...counts.entries()].map(([key, count]) => ({
 			key,
 			label: readableRecommendationLabelFromKey(key),
 			count,
 		})),
 	);
+
+	if (search.length > 0) {
+		options = options.filter(
+			(option) =>
+				option.key.toLowerCase().includes(search) ||
+				option.label.toLowerCase().includes(search),
+		);
+	}
+
+	options = options.slice(0, DEFAULT_GENRE_BUTTON_LIMIT);
 	const genreLabels = await loadRecommendationGenreLabels(
 		ctx,
-		genreOptions.map((option) => option.key),
+		options.map((option) => option.key),
 	);
 
-	return {
-		genres: applyRecommendationOptionLabels(genreOptions, genreLabels),
-		durations: durationOptions,
-	};
+	return applyRecommendationOptionLabels(options, genreLabels);
 }
 
 async function collectForLaterRecommendationCandidates(
@@ -906,7 +841,8 @@ async function collectForLaterRecommendationCandidates(
 	});
 	const cheapFilterAnswers: ForLaterRecommendationAnswers = {
 		...args.answers,
-		ratingTier: "any",
+		ratingMin: RATING_MIN,
+		ratingMax: RATING_MAX,
 	};
 
 	const candidates: ForLaterRecommendationHydratedCandidate[] = [];
@@ -939,52 +875,58 @@ async function collectForLaterRecommendationCandidates(
 	return candidates;
 }
 
-function normalizeRecommendationAnswers(answers: {
-	addedTimeframe: AddedTimeframeAnswer;
-	genreKey: string;
-	releaseTime: ReleaseTimeAnswer;
-	descriptorKey: string;
-	ratingTier: RatingTierAnswer;
-	durationBucket?: DurationBucketAnswer;
-	durationTier?: DurationTierAnswer;
-	count: number;
-}): ForLaterRecommendationAnswers {
-	return {
-		addedTimeframe: answers.addedTimeframe,
-		genreKey: answers.genreKey.trim() || "any",
-		releaseTime: answers.releaseTime,
-		descriptorKey: answers.descriptorKey.trim() || "any",
-		ratingTier: answers.ratingTier,
-		...resolveNormalizedDurationAnswers(answers),
-		count: normalizeRecommendationCount(answers.count),
-	};
+function clampSwapRange(min: number, max: number): { min: number; max: number } {
+	if (min <= max) {
+		return { min, max };
+	}
+	return { min: max, max: min };
 }
 
-function resolveNormalizedDurationAnswers(answers: {
-	durationBucket?: DurationBucketAnswer;
-	durationTier?: DurationTierAnswer;
-}): Pick<ForLaterRecommendationAnswers, "durationBucket" | "durationTier"> {
-	if (answers.durationBucket !== undefined && answers.durationBucket !== "any") {
-		return {
-			durationBucket: answers.durationBucket,
-			durationTier: undefined,
-		};
+function normalizeRecommendationAnswers(answers: {
+	addedDaysMin: number;
+	addedDaysMax: number;
+	yearMin?: number;
+	yearMax?: number;
+	durationMinMs: number;
+	durationMaxMs: number;
+	ratingMin: number;
+	ratingMax: number;
+	listened: ListenedAnswer;
+	genreKeys: string[];
+	genreMatch: GenreMatchAnswer;
+	count: number;
+}): ForLaterRecommendationAnswers {
+	const added = clampSwapRange(answers.addedDaysMin, answers.addedDaysMax);
+	const duration = clampSwapRange(answers.durationMinMs, answers.durationMaxMs);
+	const rating = clampSwapRange(answers.ratingMin, answers.ratingMax);
+
+	let yearMin = answers.yearMin;
+	let yearMax = answers.yearMax;
+	if (yearMin !== undefined && yearMax !== undefined && yearMin > yearMax) {
+		[yearMin, yearMax] = [yearMax, yearMin];
 	}
 
-	if (
-		answers.durationTier === "short" ||
-		answers.durationTier === "medium" ||
-		answers.durationTier === "long"
-	) {
-		return {
-			durationBucket: "any",
-			durationTier: answers.durationTier,
-		};
-	}
+	const genreKeys = [
+		...new Set(
+			answers.genreKeys
+				.map((key) => key.trim())
+				.filter((key) => key.length > 0),
+		),
+	];
 
 	return {
-		durationBucket: answers.durationBucket ?? "any",
-		durationTier: undefined,
+		addedDaysMin: Math.max(ADDED_DAYS_MIN, Math.min(ADDED_DAYS_MAX, added.min)),
+		addedDaysMax: Math.max(ADDED_DAYS_MIN, Math.min(ADDED_DAYS_MAX, added.max)),
+		...(yearMin !== undefined ? { yearMin } : {}),
+		...(yearMax !== undefined ? { yearMax } : {}),
+		durationMinMs: Math.max(0, duration.min),
+		durationMaxMs: Math.max(0, duration.max),
+		ratingMin: Math.max(RATING_MIN, Math.min(RATING_MAX, rating.min)),
+		ratingMax: Math.max(RATING_MIN, Math.min(RATING_MAX, rating.max)),
+		listened: answers.listened,
+		genreKeys,
+		genreMatch: answers.genreMatch === "all" ? "all" : "any",
+		count: normalizeRecommendationCount(answers.count),
 	};
 }
 
@@ -1751,24 +1693,23 @@ export const getForLaterUiSummary = query({
 export const listForLaterRecommendationOptions = query({
 	args: {
 		userId: v.string(),
-		parentGenreKey: v.optional(v.string()),
+		search: v.optional(v.string()),
 	},
 	returns: v.object({
 		genres: v.array(recommendationOptionValidator),
-		durations: v.array(recommendationOptionValidator),
 	}),
 	handler: async (
 		ctx,
 		args,
 	): Promise<{
 		genres: Array<{ key: string; label: string; count: number }>;
-		durations: Array<{ key: string; label: string; count: number }>;
 	}> => {
 		requireAuth(ctx);
-		return await collectForLaterRecommendationTagOptions(ctx, {
+		const genres = await collectForLaterRecommendationGenreOptions(ctx, {
 			userId: args.userId,
-			parentGenreKey: args.parentGenreKey?.trim() || undefined,
+			search: args.search,
 		});
+		return { genres };
 	},
 });
 
@@ -1796,16 +1737,7 @@ export const getForLaterRecommendations = query({
 	returns: recommendationResultValidator,
 	handler: async (ctx, args): Promise<ForLaterRecommendationResult> => {
 		requireAuth(ctx);
-		const answers = normalizeRecommendationAnswers({
-			addedTimeframe: args.answers.addedTimeframe as AddedTimeframeAnswer,
-			genreKey: args.answers.genreKey,
-			releaseTime: args.answers.releaseTime as ReleaseTimeAnswer,
-			descriptorKey: args.answers.descriptorKey,
-			ratingTier: args.answers.ratingTier as RatingTierAnswer,
-			durationBucket: args.answers.durationBucket as DurationBucketAnswer,
-			durationTier: args.answers.durationTier as DurationTierAnswer | undefined,
-			count: args.answers.count,
-		});
+		const answers = normalizeRecommendationAnswers(args.answers);
 
 		return await buildForLaterRecommendationResult(ctx, {
 			userId: args.userId,
@@ -1833,16 +1765,7 @@ export const createForLaterRecommendation = mutation({
 		}
 	> => {
 		requireAuth(ctx);
-		const answers = normalizeRecommendationAnswers({
-			addedTimeframe: args.answers.addedTimeframe as AddedTimeframeAnswer,
-			genreKey: args.answers.genreKey,
-			releaseTime: args.answers.releaseTime as ReleaseTimeAnswer,
-			descriptorKey: args.answers.descriptorKey,
-			ratingTier: args.answers.ratingTier as RatingTierAnswer,
-			durationBucket: args.answers.durationBucket as DurationBucketAnswer,
-			durationTier: args.answers.durationTier as DurationTierAnswer | undefined,
-			count: args.answers.count,
-		});
+		const answers = normalizeRecommendationAnswers(args.answers);
 		const result = await buildForLaterRecommendationResult(ctx, {
 			userId: args.userId,
 			answers,
