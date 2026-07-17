@@ -1,5 +1,6 @@
 import { ConvexHttpClient } from "convex/browser";
 import { env } from "~/env.js";
+import { backfillMusicFunnelAlbumTypes } from "~/lib/music-funnel-backfill-album-types";
 import {
 	chunkSpotifyUris,
 	computeAlbumRepeatSummaries,
@@ -129,6 +130,14 @@ export async function syncMusicFunnel({
 			artistRepeatsFound,
 			errors,
 		});
+
+		if (status === "success") {
+			try {
+				await backfillMusicFunnelAlbumTypes({ convex, userId, accessToken });
+			} catch (error) {
+				console.error("music-funnel album type backfill failed", error);
+			}
+		}
 
 		return {
 			success: status !== "failed",

@@ -271,6 +271,65 @@ export const getSettings = query({
 	},
 });
 
+export const listAlbumIdsMissingSpotifyAlbumType = query({
+	args: { userId: v.string() },
+	returns: v.array(v.string()),
+	handler: async (ctx, args) => {
+		const rows = await ctx.db
+			.query("musicFunnelTrackEncounters")
+			.withIndex("by_userId_createdAt", (q) => q.eq("userId", args.userId))
+			.collect();
+		const missing = new Set<string>();
+		for (const row of rows) {
+			if (row.spotifyAlbumType === undefined) {
+				missing.add(row.spotifyAlbumId);
+			}
+		}
+		return [...missing];
+	},
+});
+
+export const patchEncountersSpotifyAlbumType = mutation({
+	args: {
+		userId: v.string(),
+		patches: v.array(
+			v.object({
+				spotifyAlbumId: v.string(),
+				spotifyAlbumType: spotifyAlbumTypeValidator,
+			}),
+		),
+	},
+	returns: v.object({
+		patchedEncounters: v.number(),
+		albumsPatched: v.number(),
+	}),
+	handler: async (ctx, args) => {
+		let patchedEncounters = 0;
+		for (const patch of args.patches) {
+			const rows = await ctx.db
+				.query("musicFunnelTrackEncounters")
+				.withIndex("by_userId_spotifyAlbumId", (q) =>
+					q
+						.eq("userId", args.userId)
+						.eq("spotifyAlbumId", patch.spotifyAlbumId),
+				)
+				.collect();
+			for (const row of rows) {
+				if (row.spotifyAlbumType === undefined) {
+					await ctx.db.patch(row._id, {
+						spotifyAlbumType: patch.spotifyAlbumType,
+					});
+					patchedEncounters += 1;
+				}
+			}
+		}
+		return {
+			patchedEncounters,
+			albumsPatched: args.patches.length,
+		};
+	},
+});
+
 export const upsertSettings = mutation({
 	args: {
 		userId: v.string(),
