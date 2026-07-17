@@ -23,7 +23,7 @@ export function BirthdayList({
 	onEdit: (item: Doc<"birthdays">) => void;
 	onDelete: (item: Doc<"birthdays">) => void;
 }) {
-	const today = useMemo(() => todayInMountainTime(Date.now()), []);
+	const today = todayInMountainTime(Date.now());
 	const sortedItems = useMemo(
 		() =>
 			[...items].sort((a, b) =>
