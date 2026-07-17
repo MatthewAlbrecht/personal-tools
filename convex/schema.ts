@@ -988,6 +988,13 @@ export default defineSchema({
 		spotifyAlbumId: v.string(),
 		albumName: v.string(),
 		albumImageUrl: v.optional(v.string()),
+		spotifyAlbumType: v.optional(
+			v.union(
+				v.literal("album"),
+				v.literal("single"),
+				v.literal("compilation"),
+			),
+		),
 		playlistAddedAt: v.optional(v.number()),
 		firstSeenAt: v.number(),
 		createdAt: v.number(),

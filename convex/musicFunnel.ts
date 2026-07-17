@@ -26,6 +26,11 @@ const writeReasonValidator = v.union(
 	v.literal("first_seen"),
 	v.literal("second_source_repeat"),
 );
+const spotifyAlbumTypeValidator = v.union(
+	v.literal("album"),
+	v.literal("single"),
+	v.literal("compilation"),
+);
 
 function normalizeSourceKind(
 	kind: "recurring" | "one_off" | undefined,
@@ -130,6 +135,7 @@ const encounterInputValidator = v.object({
 	spotifyAlbumId: v.string(),
 	albumName: v.string(),
 	albumImageUrl: v.optional(v.string()),
+	spotifyAlbumType: v.optional(spotifyAlbumTypeValidator),
 	playlistAddedAt: v.optional(v.number()),
 });
 
@@ -143,6 +149,7 @@ const encounterLikeValidator = v.object({
 	spotifyAlbumId: v.string(),
 	albumName: v.string(),
 	albumImageUrl: v.optional(v.string()),
+	spotifyAlbumType: v.optional(spotifyAlbumTypeValidator),
 	playlistAddedAt: v.optional(v.number()),
 	firstSeenAt: v.number(),
 });
@@ -242,6 +249,7 @@ type EncounterLike = {
 	spotifyAlbumId: string;
 	albumName: string;
 	albumImageUrl?: string;
+	spotifyAlbumType?: "album" | "single" | "compilation";
 	playlistAddedAt?: number;
 	firstSeenAt: number;
 };
@@ -608,6 +616,9 @@ export const recordTrackEncounters = mutation({
 				spotifyAlbumId: track.spotifyAlbumId,
 				albumName: track.albumName,
 				albumImageUrl: track.albumImageUrl,
+				...(track.spotifyAlbumType !== undefined
+					? { spotifyAlbumType: track.spotifyAlbumType }
+					: {}),
 				playlistAddedAt: track.playlistAddedAt,
 				firstSeenAt: args.seenAt,
 				createdAt: args.seenAt,
@@ -943,7 +954,7 @@ export const listRepeats = query({
 	},
 	returns: v.array(unifiedRepeatValidator),
 	handler: async (ctx, args) => {
-		const limit = clampLimit(args.limit, 60, 100);
+		const limit = clampLimit(args.limit, 100, 100);
 		const encounters = await loadEncounterRows(ctx, args.userId, 5000);
 		const sourceLabels = await loadSourceLabelMap(ctx, args.userId);
 		const repeatAddedAtByTrackId = await loadRepeatPlaylistAddedAtByTrackId(
@@ -1037,6 +1048,9 @@ function encounterDocToLike(
 	};
 	if (row.albumImageUrl) {
 		like.albumImageUrl = row.albumImageUrl;
+	}
+	if (row.spotifyAlbumType !== undefined) {
+		like.spotifyAlbumType = row.spotifyAlbumType;
 	}
 	if (row.playlistAddedAt !== undefined) {
 		like.playlistAddedAt = row.playlistAddedAt;
@@ -1165,6 +1179,15 @@ function buildAlbumRepeats(
 			if (!first) {
 				return null;
 			}
+			const albumType = rows
+				.map((row) => row.spotifyAlbumType)
+				.find(
+					(value): value is "album" | "single" | "compilation" =>
+						value === "album" || value === "single" || value === "compilation",
+				);
+			if (!qualifiesAsMusicFunnelAlbumRepeat(albumType)) {
+				return null;
+			}
 			return {
 				spotifyAlbumId,
 				albumName: first.albumName,
@@ -1187,6 +1210,12 @@ function buildAlbumRepeats(
 			(summary): summary is NonNullable<typeof summary> => summary !== null,
 		)
 		.sort(sortBySourceCountThenLatest);
+}
+
+function qualifiesAsMusicFunnelAlbumRepeat(
+	spotifyAlbumType: "album" | "single" | "compilation" | undefined,
+): boolean {
+	return spotifyAlbumType === "album" || spotifyAlbumType === "compilation";
 }
 
 function buildArtistRepeats(
