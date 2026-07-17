@@ -77,7 +77,7 @@ export function MusicFunnelRepeatLists({
 					repeats.
 				</p>
 			) : (
-				<ul>
+				<ul className="w-full max-w-md">
 					{filteredRepeats.map((repeat) => (
 						<RepeatRow
 							key={getRepeatKey(repeat)}
@@ -106,13 +106,24 @@ function RepeatRow({
 			: repeat.type === "album"
 				? repeat.albumName
 				: repeat.name;
+	const subtitle =
+		repeat.type === "track" || repeat.type === "album"
+			? repeat.primaryArtistName
+			: null;
 
 	return (
 		<li>
 			<MusicFunnelNewChrome isNew={isNew} className="py-1.5">
-				<div className="flex items-center gap-2.5 py-1">
+				<div className="flex w-full items-center gap-2.5 py-1">
 					<RepeatTypeIcon type={repeat.type} />
-					<p className="min-w-0 flex-1 truncate font-medium">{title}</p>
+					<div className="min-w-0 flex-1">
+						<p className="truncate font-medium leading-tight">{title}</p>
+						{subtitle ? (
+							<p className="truncate text-muted-foreground text-xs leading-tight">
+								{subtitle}
+							</p>
+						) : null}
+					</div>
 					{(repeat.type === "album" || repeat.type === "artist") && (
 						<span className="inline-flex shrink-0 items-center gap-1 text-muted-foreground text-xs tabular-nums">
 							<Music2 className="size-3.5" aria-hidden />
@@ -144,10 +155,12 @@ function RepeatTypeIcon({
 }) {
 	const className = cn(
 		"flex size-7 shrink-0 items-center justify-center rounded",
-		type === "track" && "bg-sky-500/15 text-sky-700 dark:text-sky-300",
-		type === "album" && "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+		type === "track" &&
+			"bg-teal-100 text-teal-900 dark:bg-teal-950 dark:text-teal-100",
+		type === "album" &&
+			"bg-yellow-900/15 text-yellow-950 dark:bg-yellow-900/45 dark:text-yellow-50",
 		type === "artist" &&
-			"bg-violet-500/15 text-violet-700 dark:text-violet-300",
+			"bg-rose-200 text-rose-900 dark:bg-rose-950 dark:text-rose-100",
 	);
 	return (
 		<span className={className} aria-label={type}>
