@@ -13,7 +13,9 @@ test("addAlbumToLibrary mutation exists", () => {
 });
 
 test("addAlbumToLibrary upserts Spotify album then library projection", () => {
-	const mutationIndex = source.indexOf("export const addAlbumToLibrary = mutation(");
+	const mutationIndex = source.indexOf(
+		"export const addAlbumToLibrary = mutation(",
+	);
 	assert.ok(mutationIndex >= 0, "addAlbumToLibrary must exist");
 
 	const handlerSlice = source.slice(mutationIndex, mutationIndex + 2500);
@@ -24,7 +26,9 @@ test("addAlbumToLibrary upserts Spotify album then library projection", () => {
 });
 
 test("addAlbumToLibrary does not touch for-later tables", () => {
-	const mutationIndex = source.indexOf("export const addAlbumToLibrary = mutation(");
+	const mutationIndex = source.indexOf(
+		"export const addAlbumToLibrary = mutation(",
+	);
 	const handlerSlice = source.slice(mutationIndex, mutationIndex + 2500);
 	assert.doesNotMatch(handlerSlice, /forLaterAlbumItems/);
 	assert.doesNotMatch(handlerSlice, /upsertForLaterAlbumItem/);
