@@ -17,11 +17,21 @@ const sourceRunStatusValidator = v.union(
 	v.literal("success"),
 	v.literal("failed"),
 );
+const sourceKindValidator = v.union(
+	v.literal("recurring"),
+	v.literal("one_off"),
+);
 const writeKindValidator = v.union(v.literal("main"), v.literal("repeat"));
 const writeReasonValidator = v.union(
 	v.literal("first_seen"),
 	v.literal("second_source_repeat"),
 );
+
+function normalizeSourceKind(
+	kind: "recurring" | "one_off" | undefined,
+): "recurring" | "one_off" {
+	return kind ?? "recurring";
+}
 
 const artistValidator = v.object({
 	spotifyArtistId: v.string(),
@@ -48,6 +58,7 @@ const sourceReturnValidator = v.object({
 	notes: v.optional(v.string()),
 	scheduleHint: v.optional(v.string()),
 	isActive: v.boolean(),
+	kind: sourceKindValidator,
 	spotifyPlaylistName: v.optional(v.string()),
 	spotifyOwnerId: v.optional(v.string()),
 	spotifyOwnerName: v.optional(v.string()),
@@ -58,6 +69,13 @@ const sourceReturnValidator = v.object({
 	createdAt: v.number(),
 	updatedAt: v.number(),
 });
+
+function toSourceReturn(doc: Doc<"musicFunnelSources">) {
+	return {
+		...doc,
+		kind: normalizeSourceKind(doc.kind),
+	};
+}
 
 const runReturnValidator = v.object({
 	_id: v.id("musicFunnelRuns"),
@@ -284,20 +302,20 @@ export const listSources = query({
 		activeOnly: v.optional(v.boolean()),
 	},
 	returns: v.array(sourceReturnValidator),
-	handler: async (ctx, args): Promise<Array<Doc<"musicFunnelSources">>> => {
-		if (args.activeOnly) {
-			return await ctx.db
-				.query("musicFunnelSources")
-				.withIndex("by_userId_active", (q) =>
-					q.eq("userId", args.userId).eq("isActive", true),
-				)
-				.collect();
-		}
+	handler: async (ctx, args) => {
+		const docs = args.activeOnly
+			? await ctx.db
+					.query("musicFunnelSources")
+					.withIndex("by_userId_active", (q) =>
+						q.eq("userId", args.userId).eq("isActive", true),
+					)
+					.collect()
+			: await ctx.db
+					.query("musicFunnelSources")
+					.withIndex("by_userId", (q) => q.eq("userId", args.userId))
+					.collect();
 
-		return await ctx.db
-			.query("musicFunnelSources")
-			.withIndex("by_userId", (q) => q.eq("userId", args.userId))
-			.collect();
+		return docs.map(toSourceReturn);
 	},
 });
 
@@ -311,29 +329,40 @@ export const upsertSource = mutation({
 		notes: v.optional(v.string()),
 		scheduleHint: v.optional(v.string()),
 		isActive: v.boolean(),
+		kind: v.optional(sourceKindValidator),
 	},
 	returns: v.id("musicFunnelSources"),
 	handler: async (ctx, args): Promise<Id<"musicFunnelSources">> => {
 		const now = Date.now();
-		const patch = {
+
+		if (args.sourceId) {
+			const existing = await ctx.db.get(args.sourceId);
+			const kind =
+				args.kind ?? normalizeSourceKind(existing?.kind);
+			await ctx.db.patch(args.sourceId, {
+				spotifyPlaylistId: args.spotifyPlaylistId.trim(),
+				displayName: args.displayName.trim(),
+				curatorName: args.curatorName.trim(),
+				notes: emptyToUndefined(args.notes),
+				scheduleHint: emptyToUndefined(args.scheduleHint),
+				isActive: args.isActive,
+				kind,
+				updatedAt: now,
+			});
+			return args.sourceId;
+		}
+
+		return await ctx.db.insert("musicFunnelSources", {
+			userId: args.userId,
 			spotifyPlaylistId: args.spotifyPlaylistId.trim(),
 			displayName: args.displayName.trim(),
 			curatorName: args.curatorName.trim(),
 			notes: emptyToUndefined(args.notes),
 			scheduleHint: emptyToUndefined(args.scheduleHint),
 			isActive: args.isActive,
-			updatedAt: now,
-		};
-
-		if (args.sourceId) {
-			await ctx.db.patch(args.sourceId, patch);
-			return args.sourceId;
-		}
-
-		return await ctx.db.insert("musicFunnelSources", {
-			userId: args.userId,
-			...patch,
+			kind: args.kind ?? "recurring",
 			createdAt: now,
+			updatedAt: now,
 		});
 	},
 });
@@ -761,6 +790,64 @@ export const listRunSourceRuns = query({
 			.query("musicFunnelSourceRuns")
 			.withIndex("by_runId", (q) => q.eq("runId", args.runId))
 			.collect();
+	},
+});
+
+export const listSourceRunEncounters = query({
+	args: {
+		userId: v.string(),
+		sourceRunId: v.id("musicFunnelSourceRuns"),
+	},
+	returns: v.object({
+		encounters: v.array(
+			v.object({
+				_id: v.id("musicFunnelTrackEncounters"),
+				spotifyTrackId: v.string(),
+				trackName: v.string(),
+				primaryArtistName: v.string(),
+				albumName: v.string(),
+				albumImageUrl: v.optional(v.string()),
+				firstSeenAt: v.number(),
+			}),
+		),
+		repeatWriteTrackIds: v.array(v.string()),
+	}),
+	handler: async (ctx, args) => {
+		const sourceRun = await ctx.db.get(args.sourceRunId);
+		if (!sourceRun || sourceRun.userId !== args.userId) {
+			return { encounters: [], repeatWriteTrackIds: [] };
+		}
+
+		const encounterDocs = await ctx.db
+			.query("musicFunnelTrackEncounters")
+			.withIndex("by_sourceRunId", (q) =>
+				q.eq("sourceRunId", args.sourceRunId),
+			)
+			.collect();
+
+		const writeDocs = await ctx.db
+			.query("musicFunnelPlaylistWrites")
+			.withIndex("by_sourceRunId", (q) =>
+				q.eq("sourceRunId", args.sourceRunId),
+			)
+			.collect();
+
+		const repeatWriteTrackIds = writeDocs
+			.filter((row) => row.kind === "repeat")
+			.map((row) => row.spotifyTrackId);
+
+		return {
+			encounters: encounterDocs.map((row) => ({
+				_id: row._id,
+				spotifyTrackId: row.spotifyTrackId,
+				trackName: row.trackName,
+				primaryArtistName: row.primaryArtistName,
+				albumName: row.albumName,
+				albumImageUrl: row.albumImageUrl,
+				firstSeenAt: row.firstSeenAt,
+			})),
+			repeatWriteTrackIds,
+		};
 	},
 });
 
