@@ -1837,12 +1837,12 @@ export const associateSpotifyAlbumWithRymScrape = mutation({
 			spotifyAlbumId: album.spotifyAlbumId,
 			method: "manual",
 			now,
+			refreshMode: "rym-slice",
 		});
 		await ctx.db.patch(args.albumId, {
 			rymNotOnSite: undefined,
 			updatedAt: now,
 		});
-		await refreshAlbumLibraryProjectionsForAlbum(ctx, args.albumId);
 
 		return null;
 	},
