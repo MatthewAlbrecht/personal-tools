@@ -18,7 +18,34 @@ export const addedWindowValidator = v.union(
 	}),
 );
 
-export const smartPlaylistFiltersValidator = v.object({
+export const genreClauseValidator = v.object({
+	genreKey: v.string(),
+	mode: v.union(v.literal("include"), v.literal("exclude")),
+	role: v.union(
+		v.literal("primary"),
+		v.literal("secondary"),
+		v.literal("either"),
+	),
+});
+
+export const smartPlaylistFiltersV2Validator = v.object({
+	genreClauses: v.array(genreClauseValidator),
+	genreMatch: v.union(v.literal("all"), v.literal("any")),
+	descriptorKeys: v.array(v.string()),
+	descriptorMatch: v.union(v.literal("all"), v.literal("any")),
+	ratingMin: v.number(),
+	ratingMax: v.number(),
+	yearMin: v.optional(v.number()),
+	yearMax: v.optional(v.number()),
+	durationMinMinutes: v.optional(v.number()),
+	durationMaxMinutes: v.optional(v.number()),
+	durationOpenLow: v.optional(v.boolean()),
+	durationOpenHigh: v.optional(v.boolean()),
+	addedWindow: v.optional(addedWindowValidator),
+	excludedAlbumIds: v.array(v.id("spotifyAlbums")),
+});
+
+const legacySmartPlaylistFiltersValidator = v.object({
 	genreKeys: v.array(v.string()),
 	genreMatch: v.union(v.literal("all"), v.literal("any")),
 	primaryGenresOnly: v.boolean(),
@@ -33,6 +60,12 @@ export const smartPlaylistFiltersValidator = v.object({
 	durationBucketKey: v.optional(v.string()),
 	addedWindow: v.optional(addedWindowValidator),
 });
+
+/** Temporary: allow reads/writes of both shapes until migration completes */
+export const smartPlaylistFiltersValidator = v.union(
+	legacySmartPlaylistFiltersValidator,
+	smartPlaylistFiltersV2Validator,
+);
 
 export const trackSelectionValidator = v.object({
 	mode: v.literal("allTracks"),

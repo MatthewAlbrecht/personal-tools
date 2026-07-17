@@ -12,22 +12,43 @@ export type AddedWindow =
 	| { type: "relative"; unit: "days" | "months"; amount: number }
 	| { type: "calendar_month"; year: number; month: number }; // month 1-12
 
+export type GenreRole = "primary" | "secondary" | "either";
+
+export type GenreClause = {
+	genreKey: string;
+	mode: "include" | "exclude";
+	role: GenreRole;
+};
+
 export type SmartPlaylistFilters = {
-	genreKeys: string[];
+	genreClauses: GenreClause[];
 	genreMatch: "all" | "any";
-	/** When true, genre keys must appear in primaryGenres only */
-	primaryGenresOnly: boolean;
 	descriptorKeys: string[];
 	descriptorMatch: "all" | "any";
-	ratingMin?: number;
-	ratingMax?: number;
+	ratingMin: number;
+	ratingMax: number;
 	yearMin?: number;
 	yearMax?: number;
 	durationMinMinutes?: number;
 	durationMaxMinutes?: number;
-	durationBucketKey?: string;
+	durationOpenLow?: boolean;
+	durationOpenHigh?: boolean;
 	/** For Later only; evaluated at resolve/sync time */
 	addedWindow?: AddedWindow;
+	/** Convex Id<"spotifyAlbums"> as string on the client */
+	excludedAlbumIds: string[];
+};
+
+export const EMPTY_SMART_PLAYLIST_FILTERS: SmartPlaylistFilters = {
+	genreClauses: [],
+	genreMatch: "any",
+	descriptorKeys: [],
+	descriptorMatch: "any",
+	ratingMin: 1,
+	ratingMax: 15,
+	durationOpenLow: true,
+	durationOpenHigh: true,
+	excludedAlbumIds: [],
 };
 
 export type RatingSelection =
