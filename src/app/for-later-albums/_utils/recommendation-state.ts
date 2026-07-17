@@ -1,174 +1,205 @@
-import { FOR_LATER_DURATION_BUCKET_DEFINITIONS } from "../../../../convex/_utils/forLaterDurationBuckets";
-
-export type RecommendationQuestionId =
-	| "addedTimeframe"
-	| "genre"
-	| "releaseTime"
-	| "duration"
-	| "rating"
-	| "count";
-
-export type AddedTimeframeAnswer =
-	| "day"
-	| "week"
-	| "month"
-	| "two_months"
-	| "older_than_two_months"
-	| "any";
-
-export type ReleaseTimeAnswer =
-	| "new_release"
-	| "recent"
-	| "modern"
-	| "old"
-	| "any";
-
-export type RatingTierAnswer = "holy_moly" | "really_enjoyed" | "good" | "any";
-
-export type DurationBucketAnswer =
-	| "under_20"
-	| "20_30"
-	| "30_40"
-	| "40_50"
-	| "50_60"
-	| "60_70"
-	| "70_plus"
-	| "any";
+export type ListenedAnswer = "any" | "heard" | "not_yet";
+export type GenreMatchAnswer = "any" | "all";
 
 export type RecommendationAnswers = {
-	addedTimeframe: AddedTimeframeAnswer;
-	genreKey: string | "any";
-	releaseTime: ReleaseTimeAnswer;
-	descriptorKey: string | "any";
-	ratingTier: RatingTierAnswer;
-	durationBucket: DurationBucketAnswer;
+	addedDaysMin: number;
+	addedDaysMax: number;
+	yearMin?: number;
+	yearMax?: number;
+	durationMinMs: number;
+	durationMaxMs: number;
+	ratingMin: number;
+	ratingMax: number;
+	listened: ListenedAnswer;
+	genreKeys: string[];
+	genreMatch: GenreMatchAnswer;
 	count: number;
 };
 
-export type RecommendationOption = {
-	key: string;
-	label: string;
-	count?: number;
+export type RecommendationFormFieldId =
+	| "added"
+	| "year"
+	| "duration"
+	| "rating"
+	| "listened"
+	| "genre"
+	| "count";
+
+export type RecommendationProseClause = {
+	id: RecommendationFormFieldId;
+	text: string;
 };
 
-export type RecommendationSummaryOptions = {
-	genreOptions?: readonly RecommendationOption[];
-	durationOptions?: readonly RecommendationOption[];
-};
-
-export const QUESTION_ORDER = [
-	"addedTimeframe",
-	"genre",
-	"releaseTime",
-	"duration",
-	"rating",
-	"count",
-] as const satisfies readonly RecommendationQuestionId[];
-
-export const QUESTION_LABELS: Record<RecommendationQuestionId, string> = {
-	addedTimeframe: "Added",
-	genre: "Genre",
-	releaseTime: "Release",
-	duration: "Duration",
-	rating: "Rating",
-	count: "# of recs",
-};
-
-export const ADDED_TIMEFRAME_OPTIONS = [
-	{ key: "any", label: "Doesn't matter" },
-	{ key: "day", label: "Day" },
-	{ key: "week", label: "Week" },
-	{ key: "month", label: "Month" },
-	{ key: "two_months", label: "2 months" },
-	{ key: "older_than_two_months", label: "Older than 2 months" },
-] as const satisfies readonly RecommendationOption[];
-
-export const RELEASE_TIME_OPTIONS = [
-	{ key: "any", label: "Doesn't matter" },
-	{ key: "new_release", label: "New release" },
-	{ key: "recent", label: "Recent" },
-	{ key: "modern", label: "Modern" },
-	{ key: "old", label: "Old" },
-] as const satisfies readonly RecommendationOption[];
-
-export const DURATION_BUCKET_OPTIONS = [
-	{ key: "any", label: "Doesn't matter" },
-	...FOR_LATER_DURATION_BUCKET_DEFINITIONS.map((definition) => ({
-		key: definition.key,
-		label: definition.label,
-	})),
-] as const satisfies readonly RecommendationOption[];
-
-export const RATING_TIER_OPTIONS = [
-	{ key: "any", label: "Doesn't matter" },
-	{ key: "holy_moly", label: "Holy Moly" },
-	{ key: "really_enjoyed", label: "Really Enjoyed" },
-	{ key: "good", label: "Good" },
-] as const satisfies readonly RecommendationOption[];
-
+export const ADDED_DAYS_MIN = 0;
+export const ADDED_DAYS_MAX = 365;
+export const DURATION_MINUTES_MIN = 0;
+export const DURATION_MINUTES_MAX = 120;
+export const RATING_MIN = 1;
+export const RATING_MAX = 15;
 export const RECOMMENDATION_COUNT_OPTIONS = [1, 2, 3, 4, 5] as const;
+
+const MINUTE_MS = 60 * 1000;
 
 export function createDefaultRecommendationAnswers(): RecommendationAnswers {
 	return {
-		addedTimeframe: "any",
-		genreKey: "any",
-		releaseTime: "any",
-		descriptorKey: "any",
-		ratingTier: "any",
-		durationBucket: "any",
+		addedDaysMin: ADDED_DAYS_MIN,
+		addedDaysMax: ADDED_DAYS_MAX,
+		durationMinMs: DURATION_MINUTES_MIN * MINUTE_MS,
+		durationMaxMs: DURATION_MINUTES_MAX * MINUTE_MS,
+		ratingMin: RATING_MIN,
+		ratingMax: RATING_MAX,
+		listened: "any",
+		genreKeys: [],
+		genreMatch: "any",
 		count: 1,
 	};
 }
 
-export function nextRecommendationQuestion(
-	current: RecommendationQuestionId,
-): RecommendationQuestionId {
-	const currentIndex = QUESTION_ORDER.indexOf(current);
-	const nextQuestion = QUESTION_ORDER[currentIndex + 1];
-	return nextQuestion ?? "count";
+export function answersToMutationPayload(
+	answers: RecommendationAnswers,
+): RecommendationAnswers {
+	return {
+		addedDaysMin: answers.addedDaysMin,
+		addedDaysMax: answers.addedDaysMax,
+		...(answers.yearMin !== undefined ? { yearMin: answers.yearMin } : {}),
+		...(answers.yearMax !== undefined ? { yearMax: answers.yearMax } : {}),
+		durationMinMs: answers.durationMinMs,
+		durationMaxMs: answers.durationMaxMs,
+		ratingMin: answers.ratingMin,
+		ratingMax: answers.ratingMax,
+		listened: answers.listened,
+		genreKeys: [...answers.genreKeys],
+		genreMatch: answers.genreMatch,
+		count: answers.count,
+	};
 }
 
-export function recommendationAnswerSummary(
+export function isAddedDaysConstrained(answers: RecommendationAnswers): boolean {
+	return !(
+		answers.addedDaysMin === ADDED_DAYS_MIN &&
+		answers.addedDaysMax === ADDED_DAYS_MAX
+	);
+}
+
+export function isYearConstrained(answers: RecommendationAnswers): boolean {
+	return answers.yearMin !== undefined || answers.yearMax !== undefined;
+}
+
+export function isDurationConstrained(answers: RecommendationAnswers): boolean {
+	return !(
+		answers.durationMinMs === DURATION_MINUTES_MIN * MINUTE_MS &&
+		answers.durationMaxMs === DURATION_MINUTES_MAX * MINUTE_MS
+	);
+}
+
+export function isRatingConstrained(answers: RecommendationAnswers): boolean {
+	return !(
+		answers.ratingMin === RATING_MIN && answers.ratingMax === RATING_MAX
+	);
+}
+
+export function isListenedConstrained(answers: RecommendationAnswers): boolean {
+	return answers.listened !== "any";
+}
+
+export function isGenreConstrained(answers: RecommendationAnswers): boolean {
+	return answers.genreKeys.length > 0;
+}
+
+export function minutesFromMs(ms: number): number {
+	return Math.round(ms / MINUTE_MS);
+}
+
+export function msFromMinutes(minutes: number): number {
+	return minutes * MINUTE_MS;
+}
+
+export function buildRecommendationProseClauses(
 	answers: RecommendationAnswers,
 	{
-		genreOptions = [],
-		durationOptions = DURATION_BUCKET_OPTIONS,
-	}: RecommendationSummaryOptions = {},
-): string[] {
-	const summary: string[] = [];
+		genreLabelsByKey,
+	}: {
+		genreLabelsByKey: Record<string, string>;
+	},
+): RecommendationProseClause[] {
+	const clauses: RecommendationProseClause[] = [];
 
-	if (answers.addedTimeframe !== "any") {
-		summary.push(
-			`Added: ${optionLabel(ADDED_TIMEFRAME_OPTIONS, answers.addedTimeframe)}`,
-		);
-	}
-	if (answers.genreKey !== "any") {
-		summary.push(`Genre: ${optionLabel(genreOptions, answers.genreKey)}`);
-	}
-	if (answers.releaseTime !== "any") {
-		summary.push(
-			`Release: ${optionLabel(RELEASE_TIME_OPTIONS, answers.releaseTime)}`,
-		);
-	}
-	if (answers.durationBucket !== "any") {
-		summary.push(
-			`Duration: ${optionLabel(durationOptions, answers.durationBucket)}`,
-		);
-	}
-	if (answers.ratingTier !== "any") {
-		summary.push(
-			`Rating: ${optionLabel(RATING_TIER_OPTIONS, answers.ratingTier)}`,
-		);
+	if (isAddedDaysConstrained(answers)) {
+		clauses.push({
+			id: "added",
+			text: `was added ${answers.addedDaysMin}–${answers.addedDaysMax} days ago`,
+		});
 	}
 
-	summary.push(`${answers.count} ${answers.count === 1 ? "rec" : "recs"}`);
+	if (isYearConstrained(answers)) {
+		const min = answers.yearMin;
+		const max = answers.yearMax;
+		if (min !== undefined && max !== undefined && min === max) {
+			clauses.push({
+				id: "year",
+				text: `was released in ${min}`,
+			});
+		} else if (min !== undefined && max !== undefined) {
+			clauses.push({
+				id: "year",
+				text: `was released between ${min} and ${max}`,
+			});
+		} else if (min !== undefined) {
+			clauses.push({
+				id: "year",
+				text: `was released in ${min} or later`,
+			});
+		} else if (max !== undefined) {
+			clauses.push({
+				id: "year",
+				text: `was released in ${max} or earlier`,
+			});
+		}
+	}
 
-	return summary;
-}
+	if (isDurationConstrained(answers)) {
+		const minMinutes = minutesFromMs(answers.durationMinMs);
+		const maxMinutes = minutesFromMs(answers.durationMaxMs);
+		if (minMinutes === DURATION_MINUTES_MIN) {
+			clauses.push({
+				id: "duration",
+				text: `runs up to ${maxMinutes} minutes`,
+			});
+		} else {
+			clauses.push({
+				id: "duration",
+				text: `runs ${minMinutes}–${maxMinutes} minutes`,
+			});
+		}
+	}
 
-function optionLabel(
-	options: readonly RecommendationOption[],
-	key: string,
-): string {
-	return options.find((option) => option.key === key)?.label ?? key;
+	if (isRatingConstrained(answers)) {
+		clauses.push({
+			id: "rating",
+			text: `is rated ${answers.ratingMin}–${answers.ratingMax}`,
+		});
+	}
+
+	if (isListenedConstrained(answers)) {
+		clauses.push({
+			id: "listened",
+			text:
+				answers.listened === "heard"
+					? "I've already heard"
+					: "I haven't heard yet",
+		});
+	}
+
+	if (isGenreConstrained(answers)) {
+		const labels = answers.genreKeys.map(
+			(key) => genreLabelsByKey[key] ?? key,
+		);
+		const joiner = answers.genreMatch === "all" ? " and " : " or ";
+		clauses.push({
+			id: "genre",
+			text: `is ${labels.join(joiner).toLowerCase()}`,
+		});
+	}
+
+	return clauses;
 }

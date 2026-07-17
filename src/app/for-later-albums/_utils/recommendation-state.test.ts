@@ -1,152 +1,69 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-	ADDED_TIMEFRAME_OPTIONS,
-	DURATION_BUCKET_OPTIONS,
-	QUESTION_LABELS,
-	QUESTION_ORDER,
-	RATING_TIER_OPTIONS,
-	RECOMMENDATION_COUNT_OPTIONS,
-	RELEASE_TIME_OPTIONS,
+	buildRecommendationProseClauses,
 	createDefaultRecommendationAnswers,
-	nextRecommendationQuestion,
-	recommendationAnswerSummary,
 } from "./recommendation-state";
 
-test("createDefaultRecommendationAnswers treats every filter as any and count as one", () => {
-	assert.deepEqual(createDefaultRecommendationAnswers(), {
-		addedTimeframe: "any",
-		genreKey: "any",
-		releaseTime: "any",
-		descriptorKey: "any",
-		ratingTier: "any",
-		durationBucket: "any",
-		count: 1,
-	});
+const MINUTE_MS = 60 * 1000;
+
+test("createDefaultRecommendationAnswers uses full spans and any listened", () => {
+	const answers = createDefaultRecommendationAnswers();
+	assert.equal(answers.addedDaysMin, 0);
+	assert.equal(answers.addedDaysMax, 365);
+	assert.equal(answers.listened, "any");
+	assert.deepEqual(answers.genreKeys, []);
+	assert.equal(answers.count, 1);
 });
 
-test("nextRecommendationQuestion advances until the final question", () => {
-	assert.equal(nextRecommendationQuestion("addedTimeframe"), "genre");
-	assert.equal(nextRecommendationQuestion("genre"), "releaseTime");
-	assert.equal(nextRecommendationQuestion("releaseTime"), "duration");
-	assert.equal(nextRecommendationQuestion("duration"), "rating");
-	assert.equal(nextRecommendationQuestion("rating"), "count");
-	assert.equal(nextRecommendationQuestion("count"), "count");
-});
-
-test("QUESTION_ORDER has the approved question order", () => {
-	assert.deepEqual(QUESTION_ORDER, [
-		"addedTimeframe",
-		"genre",
-		"releaseTime",
-		"duration",
-		"rating",
-		"count",
-	]);
-});
-
-test("QUESTION_LABELS has the approved labels", () => {
-	assert.equal(QUESTION_LABELS.addedTimeframe, "Added");
-	assert.equal(QUESTION_LABELS.genre, "Genre");
-	assert.equal(QUESTION_LABELS.releaseTime, "Release");
-	assert.equal(QUESTION_LABELS.duration, "Duration");
-	assert.equal(QUESTION_LABELS.rating, "Rating");
-	assert.equal(QUESTION_LABELS.count, "# of recs");
-});
-
-test("ADDED_TIMEFRAME_OPTIONS has the approved added timeframe options", () => {
-	assert.deepEqual(ADDED_TIMEFRAME_OPTIONS, [
-		{ key: "any", label: "Doesn't matter" },
-		{ key: "day", label: "Day" },
-		{ key: "week", label: "Week" },
-		{ key: "month", label: "Month" },
-		{ key: "two_months", label: "2 months" },
-		{ key: "older_than_two_months", label: "Older than 2 months" },
-	]);
-});
-
-test("RELEASE_TIME_OPTIONS has the approved release time options", () => {
-	assert.deepEqual(RELEASE_TIME_OPTIONS, [
-		{ key: "any", label: "Doesn't matter" },
-		{ key: "new_release", label: "New release" },
-		{ key: "recent", label: "Recent" },
-		{ key: "modern", label: "Modern" },
-		{ key: "old", label: "Old" },
-	]);
-});
-
-test("DURATION_BUCKET_OPTIONS has the approved duration buckets", () => {
-	assert.deepEqual(DURATION_BUCKET_OPTIONS, [
-		{ key: "any", label: "Doesn't matter" },
-		{ key: "under_20", label: "< 20 min" },
-		{ key: "20_30", label: "20–30 min" },
-		{ key: "30_40", label: "30–40 min" },
-		{ key: "40_50", label: "40–50 min" },
-		{ key: "50_60", label: "50–60 min" },
-		{ key: "60_70", label: "60–70 min" },
-		{ key: "70_plus", label: "70+ min" },
-	]);
-});
-
-test("RATING_TIER_OPTIONS has only the approved recommendation tiers", () => {
-	assert.deepEqual(RATING_TIER_OPTIONS, [
-		{ key: "any", label: "Doesn't matter" },
-		{ key: "holy_moly", label: "Holy Moly" },
-		{ key: "really_enjoyed", label: "Really Enjoyed" },
-		{ key: "good", label: "Good" },
-	]);
-});
-
-test("RECOMMENDATION_COUNT_OPTIONS has the approved recommendation counts", () => {
-	assert.deepEqual(RECOMMENDATION_COUNT_OPTIONS, [1, 2, 3, 4, 5]);
-});
-
-test("recommendationAnswerSummary omits unanswered filters but includes count", () => {
+test("buildRecommendationProseClauses omits unconstrained fields", () => {
 	assert.deepEqual(
-		recommendationAnswerSummary({
-			addedTimeframe: "any",
-			genreKey: "slowcore",
-			releaseTime: "modern",
-			descriptorKey: "any",
-			ratingTier: "good",
-			durationBucket: "any",
-			count: 3,
+		buildRecommendationProseClauses(createDefaultRecommendationAnswers(), {
+			genreLabelsByKey: {},
 		}),
-		["Genre: slowcore", "Release: Modern", "Rating: Good", "3 recs"],
+		[],
 	);
 });
 
-test("recommendationAnswerSummary includes duration when set", () => {
-	assert.deepEqual(
-		recommendationAnswerSummary({
-			addedTimeframe: "any",
-			genreKey: "any",
-			releaseTime: "any",
-			descriptorKey: "any",
-			ratingTier: "any",
-			durationBucket: "40_50",
-			count: 2,
-		}),
-		["Duration: 40–50 min", "2 recs"],
+test("buildRecommendationProseClauses describes constrained fields", () => {
+	const clauses = buildRecommendationProseClauses(
+		{
+			...createDefaultRecommendationAnswers(),
+			yearMin: 2020,
+			yearMax: 2024,
+			genreKeys: ["electronic", "ambient"],
+			genreMatch: "any",
+			listened: "not_yet",
+			durationMinMs: 0,
+			durationMaxMs: 40 * MINUTE_MS,
+			ratingMin: 1,
+			ratingMax: 15,
+		},
+		{
+			genreLabelsByKey: {
+				electronic: "Electronic",
+				ambient: "Ambient",
+			},
+		},
 	);
-});
-
-test("recommendationAnswerSummary uses genre labels when available", () => {
-	assert.deepEqual(
-		recommendationAnswerSummary(
-			{
-				addedTimeframe: "any",
-				genreKey: "hip_hop",
-				releaseTime: "any",
-				descriptorKey: "any",
-				ratingTier: "any",
-				durationBucket: "any",
-				count: 1,
-			},
-			{
-				genreOptions: [{ key: "hip_hop", label: "Hip Hop" }],
-			},
-		),
-		["Genre: Hip Hop", "1 rec"],
+	assert.equal(
+		clauses.some((c) => c.id === "year"),
+		true,
+	);
+	assert.equal(
+		clauses.some((c) => c.id === "genre"),
+		true,
+	);
+	assert.equal(
+		clauses.some((c) => c.id === "listened"),
+		true,
+	);
+	assert.equal(
+		clauses.some((c) => c.id === "duration"),
+		true,
+	);
+	assert.equal(
+		clauses.some((c) => c.id === "rating"),
+		false,
 	);
 });
