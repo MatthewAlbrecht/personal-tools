@@ -1606,6 +1606,58 @@ export const upsertAlbum = mutation({
 	},
 });
 
+export const addAlbumToLibrary = mutation({
+	args: {
+		userId: v.string(),
+		spotifyAlbumId: v.string(),
+		name: v.string(),
+		artistName: v.string(),
+		imageUrl: v.optional(v.string()),
+		releaseDate: v.optional(v.string()),
+		totalTracks: v.number(),
+		genres: v.optional(v.array(v.string())),
+	},
+	returns: v.object({
+		albumId: v.id("spotifyAlbums"),
+		name: v.string(),
+		artistName: v.string(),
+		alreadyInLibrary: v.boolean(),
+	}),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+
+		const albumId = await upsertSpotifyAlbumRecord(ctx, {
+			spotifyAlbumId: args.spotifyAlbumId,
+			name: args.name,
+			artistName: args.artistName,
+			imageUrl: args.imageUrl,
+			releaseDate: args.releaseDate,
+			totalTracks: args.totalTracks,
+			genres: args.genres,
+		});
+
+		const existingLibraryRow = await ctx.db
+			.query("albumLibraryItems")
+			.withIndex("by_userId_albumId", (q) =>
+				q.eq("userId", args.userId).eq("albumId", albumId),
+			)
+			.first();
+		const alreadyInLibrary = existingLibraryRow !== null;
+
+		await upsertAlbumLibraryProjection(ctx, {
+			userId: args.userId,
+			albumId,
+		});
+
+		return {
+			albumId,
+			name: args.name,
+			artistName: args.artistName,
+			alreadyInLibrary,
+		};
+	},
+});
+
 const discographyAlbumUpsertItemValidator = v.object({
 	spotifyAlbumId: v.string(),
 	name: v.string(),
