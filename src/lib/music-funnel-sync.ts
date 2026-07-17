@@ -61,10 +61,13 @@ export async function syncMusicFunnel({
 		const settings = await convex.query(api.musicFunnel.getSettings, {
 			userId,
 		});
-		const sources = await convex.query(api.musicFunnel.listSources, {
+		const activeSources = await convex.query(api.musicFunnel.listSources, {
 			userId,
 			activeOnly: true,
 		});
+		const sources = activeSources.filter(
+			(source) => (source.kind ?? "recurring") !== "one_off",
+		);
 
 		if (sources.length === 0) {
 			errors.push(
@@ -73,10 +76,6 @@ export async function syncMusicFunnel({
 		}
 
 		for (const musicFunnelSource of sources) {
-			const kind = musicFunnelSource.kind ?? "recurring";
-			if (kind === "one_off") {
-				continue;
-			}
 			const result = await syncSourcePlaylist({
 				convex,
 				accessToken,
