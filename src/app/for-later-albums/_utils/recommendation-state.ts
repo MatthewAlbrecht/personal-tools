@@ -61,7 +61,7 @@ export function createDefaultRecommendationAnswers(
 		durationMaxMs: DURATION_MINUTES_MAX * MINUTE_MS,
 		ratingMin: RATING_MIN,
 		ratingMax: RATING_MAX,
-		listened: "any",
+		listened: "not_yet",
 		genreKeys: [],
 		genreMatch: "any",
 		count: 1,
@@ -204,6 +204,30 @@ export function formatAddedDaysRangeLabel(
 	return `${earlier} – ${later}`;
 }
 
+/**
+ * Map days-ago answers onto a chronological slider axis
+ * (left = earlier / more days ago, right = today / 0 days ago).
+ */
+export function addedDaysAnswersToSliderValues(
+	addedDaysMin: number,
+	addedDaysMax: number,
+	boundMax: number,
+): [number, number] {
+	return [boundMax - addedDaysMax, boundMax - addedDaysMin];
+}
+
+/** Inverse of {@link addedDaysAnswersToSliderValues}. */
+export function addedDaysSliderValuesToAnswers(
+	sliderMin: number,
+	sliderMax: number,
+	boundMax: number,
+): { addedDaysMin: number; addedDaysMax: number } {
+	return {
+		addedDaysMin: boundMax - sliderMax,
+		addedDaysMax: boundMax - sliderMin,
+	};
+}
+
 export function buildRecommendationProseClauses(
 	answers: RecommendationAnswers,
 	{
@@ -272,7 +296,7 @@ export function buildRecommendationProseClauses(
 		}
 	}
 
-	if (isRatingConstrained(answers)) {
+	if (answers.listened === "heard" && isRatingConstrained(answers)) {
 		clauses.push({
 			id: "rating",
 			text: `is rated ${formatRatingRangeLabel(answers.ratingMin, answers.ratingMax)}`,

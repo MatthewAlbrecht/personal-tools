@@ -3,6 +3,8 @@ import test from "node:test";
 import {
 	buildRecommendationProseClauses,
 	createDefaultRecommendationAnswers,
+	addedDaysAnswersToSliderValues,
+	addedDaysSliderValuesToAnswers,
 	formatAddedDaysRangeLabel,
 	formatDurationMinutesLabel,
 	formatDurationRangeLabel,
@@ -16,11 +18,11 @@ import {
 const MINUTE_MS = 60 * 1000;
 const NOW = Date.UTC(2026, 5, 22);
 
-test("createDefaultRecommendationAnswers uses full spans and any listened", () => {
+test("createDefaultRecommendationAnswers uses full spans and not-yet listened", () => {
 	const answers = createDefaultRecommendationAnswers(NOW);
 	assert.equal(answers.addedDaysMin, 0);
 	assert.equal(answers.addedDaysMax, getAddedDaysMax(NOW));
-	assert.equal(answers.listened, "any");
+	assert.equal(answers.listened, "not_yet");
 	assert.deepEqual(answers.genreKeys, []);
 	assert.equal(answers.count, 1);
 });
@@ -52,6 +54,26 @@ test("formatAddedDaysRangeLabel uses calendar dates", () => {
 		formatAddedDaysRangeLabel(1, 3, NOW),
 		"Jun 19, 2026 – Jun 21, 2026",
 	);
+});
+
+test("added days slider is chronological: left earlier, right toward today", () => {
+	const bound = getAddedDaysMax(NOW);
+	assert.deepEqual(addedDaysAnswersToSliderValues(0, bound, bound), [
+		0,
+		bound,
+	]);
+	assert.deepEqual(addedDaysAnswersToSliderValues(0, 7, bound), [
+		bound - 7,
+		bound,
+	]);
+	assert.deepEqual(addedDaysSliderValuesToAnswers(0, bound, bound), {
+		addedDaysMin: 0,
+		addedDaysMax: bound,
+	});
+	assert.deepEqual(addedDaysSliderValuesToAnswers(bound - 7, bound, bound), {
+		addedDaysMin: 0,
+		addedDaysMax: 7,
+	});
 });
 
 test("visibleRecommendationRows shows only the requested page size", () => {
@@ -88,7 +110,7 @@ test("buildRecommendationProseClauses omits unconstrained fields", () => {
 			genreLabelsByKey: {},
 			nowMs: NOW,
 		}),
-		[],
+		[{ id: "listened", text: "I haven't heard yet" }],
 	);
 });
 

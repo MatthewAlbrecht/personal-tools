@@ -26,6 +26,8 @@ import {
 	RECOMMENDATION_COUNT_OPTIONS,
 	type RecommendationAnswers,
 	type RecommendationFormFieldId,
+	addedDaysAnswersToSliderValues,
+	addedDaysSliderValuesToAnswers,
 	answersToMutationPayload,
 	buildRecommendationProseClauses,
 	createDefaultRecommendationAnswers,
@@ -326,32 +328,6 @@ function RecommendationForm({
 
 	return (
 		<div className="space-y-6">
-			<section data-field="added" className="space-y-3">
-				<div className="space-y-1">
-					<h3 className="font-semibold text-base">Added</h3>
-					<p className="text-muted-foreground text-sm">
-						{formatAddedDaysRangeLabel(
-							answers.addedDaysMin,
-							answers.addedDaysMax,
-							Date.now(),
-						)}
-					</p>
-				</div>
-				<Slider
-					min={ADDED_DAYS_MIN}
-					max={addedDaysMax}
-					step={1}
-					value={[answers.addedDaysMin, answers.addedDaysMax]}
-					onValueChange={(value) => {
-						const [min, max] = value;
-						if (min === undefined || max === undefined) {
-							return;
-						}
-						onPatchAnswers({ addedDaysMin: min, addedDaysMax: max });
-					}}
-				/>
-			</section>
-
 			<section data-field="year" className="space-y-3">
 				<div className="space-y-1">
 					<h3 className="font-semibold text-base">Release year</h3>
@@ -372,49 +348,38 @@ function RecommendationForm({
 				/>
 			</section>
 
-			<section data-field="duration" className="space-y-3">
+			<section data-field="added" className="space-y-3">
 				<div className="space-y-1">
-					<h3 className="font-semibold text-base">Duration</h3>
+					<h3 className="font-semibold text-base">Added</h3>
 					<p className="text-muted-foreground text-sm">
-						{formatDurationRangeLabel(durationMinMinutes, durationMaxMinutes)}
+						{formatAddedDaysRangeLabel(
+							answers.addedDaysMin,
+							answers.addedDaysMax,
+							Date.now(),
+						)}
 					</p>
 				</div>
 				<Slider
-					min={DURATION_MINUTES_MIN}
-					max={DURATION_MINUTES_MAX}
+					min={ADDED_DAYS_MIN}
+					max={addedDaysMax}
 					step={1}
-					value={[durationMinMinutes, durationMaxMinutes]}
+					value={addedDaysAnswersToSliderValues(
+						answers.addedDaysMin,
+						answers.addedDaysMax,
+						addedDaysMax,
+					)}
 					onValueChange={(value) => {
-						const [min, max] = value;
-						if (min === undefined || max === undefined) {
+						const [sliderMin, sliderMax] = value;
+						if (sliderMin === undefined || sliderMax === undefined) {
 							return;
 						}
-						onPatchAnswers({
-							durationMinMs: msFromMinutes(min),
-							durationMaxMs: msFromMinutes(max),
-						});
-					}}
-				/>
-			</section>
-
-			<section data-field="rating" className="space-y-3">
-				<div className="space-y-1">
-					<h3 className="font-semibold text-base">Rating</h3>
-					<p className="text-muted-foreground text-sm">
-						{formatRatingRangeLabel(answers.ratingMin, answers.ratingMax)}
-					</p>
-				</div>
-				<Slider
-					min={RATING_MIN}
-					max={RATING_MAX}
-					step={1}
-					value={[answers.ratingMin, answers.ratingMax]}
-					onValueChange={(value) => {
-						const [min, max] = value;
-						if (min === undefined || max === undefined) {
-							return;
-						}
-						onPatchAnswers({ ratingMin: min, ratingMax: max });
+						onPatchAnswers(
+							addedDaysSliderValuesToAnswers(
+								sliderMin,
+								sliderMax,
+								addedDaysMax,
+							),
+						);
 					}}
 				/>
 			</section>
@@ -426,7 +391,13 @@ function RecommendationForm({
 				<div className="flex flex-wrap gap-2">
 					<ChoiceButton
 						selected={answers.listened === "any"}
-						onClick={() => onPatchAnswers({ listened: "any" })}
+						onClick={() =>
+							onPatchAnswers({
+								listened: "any",
+								ratingMin: RATING_MIN,
+								ratingMax: RATING_MAX,
+							})
+						}
 					>
 						Any
 					</ChoiceButton>
@@ -438,12 +409,42 @@ function RecommendationForm({
 					</ChoiceButton>
 					<ChoiceButton
 						selected={answers.listened === "not_yet"}
-						onClick={() => onPatchAnswers({ listened: "not_yet" })}
+						onClick={() =>
+							onPatchAnswers({
+								listened: "not_yet",
+								ratingMin: RATING_MIN,
+								ratingMax: RATING_MAX,
+							})
+						}
 					>
 						Not yet
 					</ChoiceButton>
 				</div>
 			</section>
+
+			{answers.listened === "heard" ? (
+				<section data-field="rating" className="space-y-3">
+					<div className="space-y-1">
+						<h3 className="font-semibold text-base">Rating</h3>
+						<p className="text-muted-foreground text-sm">
+							{formatRatingRangeLabel(answers.ratingMin, answers.ratingMax)}
+						</p>
+					</div>
+					<Slider
+						min={RATING_MIN}
+						max={RATING_MAX}
+						step={1}
+						value={[answers.ratingMin, answers.ratingMax]}
+						onValueChange={(value) => {
+							const [min, max] = value;
+							if (min === undefined || max === undefined) {
+								return;
+							}
+							onPatchAnswers({ ratingMin: min, ratingMax: max });
+						}}
+					/>
+				</section>
+			) : null}
 
 			<section data-field="genre" className="space-y-3">
 				<div className="space-y-1">
@@ -511,6 +512,31 @@ function RecommendationForm({
 				</div>
 			</section>
 
+			<section data-field="duration" className="space-y-3">
+				<div className="space-y-1">
+					<h3 className="font-semibold text-base">Duration</h3>
+					<p className="text-muted-foreground text-sm">
+						{formatDurationRangeLabel(durationMinMinutes, durationMaxMinutes)}
+					</p>
+				</div>
+				<Slider
+					min={DURATION_MINUTES_MIN}
+					max={DURATION_MINUTES_MAX}
+					step={1}
+					value={[durationMinMinutes, durationMaxMinutes]}
+					onValueChange={(value) => {
+						const [min, max] = value;
+						if (min === undefined || max === undefined) {
+							return;
+						}
+						onPatchAnswers({
+							durationMinMs: msFromMinutes(min),
+							durationMaxMs: msFromMinutes(max),
+						});
+					}}
+				/>
+			</section>
+
 			<section data-field="count" className="space-y-3">
 				<div className="space-y-1">
 					<h3 className="font-semibold text-base"># of recs</h3>
@@ -551,11 +577,11 @@ function RecommendationProse({
 			<span>Selecting an album that </span>
 			{clauses.map((clause, index) => (
 				<span key={clause.id} className="group/clause relative inline">
-					{index > 0 ? <span>, </span> : null}
+					{index > 0 ? ", " : null}
 					{clause.text}
 					<button
 						type="button"
-						className="ml-1 inline-flex opacity-0 transition-opacity group-hover/clause:opacity-100"
+						className="absolute top-1/2 left-full z-10 ml-1 inline-flex -translate-y-1/2 opacity-0 transition-opacity group-hover/clause:opacity-100"
 						aria-label={`Edit ${clause.id}`}
 						onClick={() => onEditClause(clause.id)}
 					>
@@ -563,7 +589,7 @@ function RecommendationProse({
 					</button>
 				</span>
 			))}
-			<span>.</span>
+			.
 		</p>
 	);
 }

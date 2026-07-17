@@ -149,11 +149,15 @@ test("genreKeysMatch OR and AND against filterGenreKeysSorted", () => {
 	assert.equal(genreKeysMatch(keys, [], "all"), true);
 });
 
-test("constrained rating excludes unrated; listened independent", () => {
+test("constrained rating applies only when listened is heard", () => {
 	assert.equal(
 		candidateMatchesRecommendationAnswers(
 			candidate({ rating: undefined, hasListened: true }),
-			defaultAnswers({ ratingMin: 10, ratingMax: 15 }),
+			defaultAnswers({
+				ratingMin: 10,
+				ratingMax: 15,
+				listened: "heard",
+			}),
 			NOW,
 		),
 		false,
@@ -172,7 +176,7 @@ test("constrained rating excludes unrated; listened independent", () => {
 			defaultAnswers({ ratingMin: 10, ratingMax: 15, listened: "not_yet" }),
 			NOW,
 		),
-		false,
+		true,
 	);
 });
 

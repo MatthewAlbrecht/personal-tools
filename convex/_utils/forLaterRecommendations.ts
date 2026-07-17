@@ -296,6 +296,7 @@ export function candidateMatchesRecommendationAnswers(
 	}
 
 	if (
+		answers.listened === "heard" &&
 		!ratingRangeMatches(candidate.rating, answers.ratingMin, answers.ratingMax)
 	) {
 		return false;
