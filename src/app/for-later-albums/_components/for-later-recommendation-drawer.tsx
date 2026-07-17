@@ -1,9 +1,9 @@
 "use client";
 
 import { useMutation, useQuery } from "convex/react";
-import { ChevronLeft, Disc3, ExternalLink } from "lucide-react";
+import { Disc3, ExternalLink, Pencil, X } from "lucide-react";
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AlbumRatingBadge } from "~/components/album-rating-badge";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -14,31 +14,27 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "~/components/ui/dialog";
-import { cn } from "~/lib/utils";
+import { Input } from "~/components/ui/input";
+import { Slider } from "~/components/ui/slider";
 import { api } from "../../../../convex/_generated/api";
 import {
-	ADDED_TIMEFRAME_OPTIONS,
-	type AddedTimeframeAnswer,
-	type DurationBucketAnswer,
-	QUESTION_LABELS,
-	QUESTION_ORDER,
-	RATING_TIER_OPTIONS,
+	ADDED_DAYS_MAX,
+	ADDED_DAYS_MIN,
+	DURATION_MINUTES_MAX,
+	DURATION_MINUTES_MIN,
+	RATING_MAX,
+	RATING_MIN,
 	RECOMMENDATION_COUNT_OPTIONS,
-	RELEASE_TIME_OPTIONS,
-	type RatingTierAnswer,
 	type RecommendationAnswers,
-	type RecommendationOption,
-	type RecommendationQuestionId,
-	type ReleaseTimeAnswer,
+	type RecommendationFormFieldId,
+	answersToMutationPayload,
+	buildRecommendationProseClauses,
 	createDefaultRecommendationAnswers,
-	nextRecommendationQuestion,
+	minutesFromMs,
+	msFromMinutes,
 } from "../_utils/recommendation-state";
 import type { ForLaterAlbumRowData } from "../_utils/types";
-
-type RecommendationOptionsResult = {
-	genres: RecommendationOption[];
-	durations: RecommendationOption[];
-};
+import { YearRangePicker } from "./year-range-picker";
 
 type RecommendationResult = {
 	recommendationId: string;
@@ -49,6 +45,8 @@ type RecommendationResult = {
 	wasLimitedByPool: boolean;
 };
 
+type ViewMode = "form" | "results";
+
 export function ForLaterRecommendationDrawer({
 	userId,
 	open,
@@ -58,16 +56,11 @@ export function ForLaterRecommendationDrawer({
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 }) {
-	const [activeQuestion, setActiveQuestion] =
-		useState<RecommendationQuestionId>("addedTimeframe");
-	const [furthestQuestionIndex, setFurthestQuestionIndex] = useState(0);
+	const [view, setView] = useState<ViewMode>("form");
 	const [answers, setAnswers] = useState<RecommendationAnswers>(() =>
 		createDefaultRecommendationAnswers(),
 	);
-	const [selectedTopLevelGenre, setSelectedTopLevelGenre] = useState<{
-		key: string;
-		label: string;
-	} | null>(null);
+	const [genreSearch, setGenreSearch] = useState("");
 	const [recommendationResult, setRecommendationResult] =
 		useState<RecommendationResult | null>(null);
 	const [recommendationError, setRecommendationError] = useState<string | null>(
@@ -86,27 +79,33 @@ export function ForLaterRecommendationDrawer({
 		resetRecommendationState();
 	}, [open]);
 
-	useEffect(() => {
-		if (activeQuestion === "genre") {
-			return;
-		}
-
-		setSelectedTopLevelGenre(null);
-	}, [activeQuestion]);
-
-	const recommendationOptions: RecommendationOptionsResult | undefined =
-		useQuery(
-			api.forLaterAlbums.listForLaterRecommendationOptions,
-			open
-				? {
-						userId,
-						parentGenreKey: selectedTopLevelGenre?.key,
-					}
-				: "skip",
-		);
+	const recommendationOptions = useQuery(
+		api.forLaterAlbums.listForLaterRecommendationOptions,
+		open
+			? {
+					userId,
+					search: genreSearch.trim() || undefined,
+				}
+			: "skip",
+	);
 
 	const genreOptions = recommendationOptions?.genres ?? [];
-	const durationOptions = recommendationOptions?.durations ?? [];
+	const genreLabelsByKey = useMemo(() => {
+		const labels: Record<string, string> = {};
+		for (const option of genreOptions) {
+			labels[option.key] = option.label;
+		}
+		for (const key of answers.genreKeys) {
+			if (!(key in labels)) {
+				labels[key] = readableGenreLabelFromKey(key);
+			}
+		}
+		return labels;
+	}, [answers.genreKeys, genreOptions]);
+
+	const proseClauses = buildRecommendationProseClauses(answers, {
+		genreLabelsByKey,
+	});
 
 	async function handleRecommendNow(
 		answersForRecommendation = answers,
@@ -114,11 +113,12 @@ export function ForLaterRecommendationDrawer({
 		setIsRecommending(true);
 		setRecommendationError(null);
 		setRecommendationResult(null);
+		setView("results");
 
 		try {
 			const result = await createRecommendation({
 				userId,
-				answers: answersForRecommendation,
+				answers: answersToMutationPayload(answersForRecommendation),
 				now: Date.now(),
 				seed: createClientSeed(),
 			});
@@ -133,69 +133,61 @@ export function ForLaterRecommendationDrawer({
 
 	function resetRecommendationState(): void {
 		setAnswers(createDefaultRecommendationAnswers());
-		setActiveQuestion("addedTimeframe");
-		setFurthestQuestionIndex(0);
-		setSelectedTopLevelGenre(null);
-		clearRecommendationRequest();
-	}
-
-	function clearRecommendationRequest(): void {
+		setGenreSearch("");
+		setView("form");
 		setRecommendationResult(null);
 		setRecommendationError(null);
 	}
 
-	function handleQuestionAnswered(
-		partialAnswers: Partial<RecommendationAnswers>,
-	): void {
-		const nextAnswers = { ...answers, ...partialAnswers };
-		const nextQuestion = nextRecommendationQuestion(activeQuestion);
-		const nextQuestionIndex = questionIndex(nextQuestion);
+	function patchAnswers(partial: Partial<RecommendationAnswers>): void {
+		setAnswers((current) => {
+			const next: RecommendationAnswers = { ...current, ...partial };
+			const { yearMin: _omitMin, yearMax: _omitMax, ...withoutYears } = next;
+			const clearedMin = "yearMin" in partial && partial.yearMin === undefined;
+			const clearedMax = "yearMax" in partial && partial.yearMax === undefined;
+			if (!clearedMin && !clearedMax) {
+				return next;
+			}
+			return {
+				...withoutYears,
+				...(clearedMin ? {} : { yearMin: next.yearMin }),
+				...(clearedMax ? {} : { yearMax: next.yearMax }),
+			};
+		});
+	}
 
-		setAnswers(nextAnswers);
-		clearRecommendationRequest();
+	function handleEditClause(fieldId: RecommendationFormFieldId): void {
+		setRecommendationResult(null);
+		setRecommendationError(null);
+		setView("form");
+		requestAnimationFrame(() => {
+			document
+				.querySelector(`[data-field="${fieldId}"]`)
+				?.scrollIntoView({ block: "center" });
+		});
+	}
 
-		if (activeQuestion === "count" && partialAnswers.count !== undefined) {
-			void handleRecommendNow(nextAnswers);
+	function handleAddGenre(key: string): void {
+		if (answers.genreKeys.includes(key)) {
 			return;
 		}
-
-		setActiveQuestion(nextQuestion);
-		setFurthestQuestionIndex((current) => Math.max(current, nextQuestionIndex));
+		patchAnswers({ genreKeys: [...answers.genreKeys, key] });
+		setGenreSearch("");
 	}
 
-	function handleGenreSelected(genreKey: string): void {
-		if (genreKey === "any") {
-			setSelectedTopLevelGenre(null);
-			handleQuestionAnswered({ genreKey });
-			return;
-		}
-
-		if (selectedTopLevelGenre === null) {
-			const label =
-				genreOptions.find((option) => option.key === genreKey)?.label ??
-				readableGenreLabelFromKey(genreKey);
-			setSelectedTopLevelGenre({ key: genreKey, label });
-			clearRecommendationRequest();
-			return;
-		}
-
-		setSelectedTopLevelGenre(null);
-		handleQuestionAnswered({ genreKey });
+	function handleRemoveGenre(key: string): void {
+		const nextKeys = answers.genreKeys.filter((genreKey) => genreKey !== key);
+		patchAnswers({
+			genreKeys: nextKeys,
+			...(nextKeys.length === 0 ? { genreMatch: "any" as const } : {}),
+		});
 	}
 
-	function handleGenreBack(): void {
-		setSelectedTopLevelGenre(null);
-		clearRecommendationRequest();
-	}
-
-	function handleActiveQuestionChange(
-		question: RecommendationQuestionId,
-	): void {
-		if (question !== "genre") {
-			setSelectedTopLevelGenre(null);
-		}
-		setActiveQuestion(question);
-	}
+	const showResults =
+		view === "results" ||
+		recommendationResult !== null ||
+		isRecommending ||
+		recommendationError !== null;
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
@@ -203,64 +195,63 @@ export function ForLaterRecommendationDrawer({
 				<DialogHeader className="shrink-0 gap-2 border-b p-6 pr-12 text-left">
 					<DialogTitle>Recommend from For Later</DialogTitle>
 					<DialogDescription>
-						Pick a few preferences, then ask for a random album from your For
-						Later list.
+						Set filters, then ask for a random album from your For Later list.
 					</DialogDescription>
 				</DialogHeader>
 
 				<div className="min-h-0 flex-1 overflow-y-auto p-6">
-					{recommendationResult || isRecommending || recommendationError ? (
-						<RecommendationResults
-							result={recommendationResult}
-							isLoading={isRecommending}
-							error={recommendationError}
-						/>
-					) : (
+					{showResults ? (
 						<div className="space-y-5">
-							<StepNavigation
-								activeQuestion={activeQuestion}
-								furthestQuestionIndex={furthestQuestionIndex}
-								onChange={handleActiveQuestionChange}
-								onReachQuestion={(question) =>
-									setFurthestQuestionIndex((current) =>
-										Math.max(current, questionIndex(question)),
-									)
-								}
+							<RecommendationProse
+								clauses={proseClauses}
+								onEditClause={handleEditClause}
 							/>
-
-							<section className="bg-card p-4">
-								<QuestionBody
-									activeQuestion={activeQuestion}
-									answers={answers}
-									genreOptions={genreOptions}
-									durationOptions={durationOptions}
-									selectedTopLevelGenre={selectedTopLevelGenre}
-									optionsLoading={open && recommendationOptions === undefined}
-									onAnswer={handleQuestionAnswered}
-									onGenreSelected={handleGenreSelected}
-									onGenreBack={handleGenreBack}
-								/>
-							</section>
+							<RecommendationResults
+								result={recommendationResult}
+								isLoading={isRecommending}
+								error={recommendationError}
+							/>
 						</div>
+					) : (
+						<RecommendationForm
+							answers={answers}
+							genreOptions={genreOptions}
+							genreSearch={genreSearch}
+							optionsLoading={open && recommendationOptions === undefined}
+							onGenreSearchChange={setGenreSearch}
+							onPatchAnswers={patchAnswers}
+							onAddGenre={handleAddGenre}
+							onRemoveGenre={handleRemoveGenre}
+						/>
 					)}
 				</div>
 
-				<div className="flex shrink-0 justify-end border-t p-4">
-					{recommendationResult || isRecommending || recommendationError ? (
-						<Button
-							type="button"
-							onClick={resetRecommendationState}
-							disabled={isRecommending}
-						>
-							Another recommendation
-						</Button>
+				<div className="flex shrink-0 justify-end gap-2 border-t p-4">
+					{showResults ? (
+						<>
+							<Button
+								type="button"
+								variant="outline"
+								onClick={resetRecommendationState}
+								disabled={isRecommending}
+							>
+								Start over
+							</Button>
+							<Button
+								type="button"
+								onClick={() => void handleRecommendNow(answers)}
+								disabled={isRecommending}
+							>
+								Re-roll
+							</Button>
+						</>
 					) : (
 						<Button
 							type="button"
 							onClick={() => void handleRecommendNow()}
 							disabled={isRecommending}
 						>
-							Recommend now
+							Recommend
 						</Button>
 					)}
 				</div>
@@ -269,305 +260,266 @@ export function ForLaterRecommendationDrawer({
 	);
 }
 
-function StepNavigation({
-	activeQuestion,
-	furthestQuestionIndex,
-	onChange,
-	onReachQuestion,
-}: {
-	activeQuestion: RecommendationQuestionId;
-	furthestQuestionIndex: number;
-	onChange: (question: RecommendationQuestionId) => void;
-	onReachQuestion: (question: RecommendationQuestionId) => void;
-}) {
-	return (
-		<nav
-			className="grid grid-cols-2 gap-x-0 gap-y-3 sm:flex sm:items-center"
-			aria-label="Recommendation questions"
-		>
-			{QUESTION_ORDER.map((question, index) => {
-				const isActive = activeQuestion === question;
-				const hasReached = index <= furthestQuestionIndex;
-
-				return (
-					<div
-						key={question}
-						className="flex min-w-0 items-center sm:flex-1 sm:last:flex-none"
-					>
-						<button
-							type="button"
-							className={cn(
-								"shrink-0 bg-transparent p-0 text-left font-medium text-xs underline-offset-4 transition-colors hover:text-foreground hover:underline",
-								isActive
-									? "text-foreground"
-									: hasReached
-										? "text-muted-foreground"
-										: "text-muted-foreground/45",
-							)}
-							onClick={() => {
-								onChange(question);
-								onReachQuestion(question);
-							}}
-							aria-current={isActive ? "step" : undefined}
-						>
-							{QUESTION_LABELS[question]}
-						</button>
-						{index < QUESTION_ORDER.length - 1 ? (
-							<span
-								className={cn(
-									"mx-3 hidden h-px flex-1 sm:block",
-									index < furthestQuestionIndex
-										? "bg-muted-foreground/50"
-										: "bg-border",
-								)}
-								aria-hidden="true"
-							/>
-						) : null}
-					</div>
-				);
-			})}
-		</nav>
-	);
-}
-
-function QuestionBody({
-	activeQuestion,
+function RecommendationForm({
 	answers,
 	genreOptions,
-	durationOptions,
-	selectedTopLevelGenre,
+	genreSearch,
 	optionsLoading,
-	onAnswer,
-	onGenreSelected,
-	onGenreBack,
+	onGenreSearchChange,
+	onPatchAnswers,
+	onAddGenre,
+	onRemoveGenre,
 }: {
-	activeQuestion: RecommendationQuestionId;
 	answers: RecommendationAnswers;
-	genreOptions: RecommendationOption[];
-	durationOptions: RecommendationOption[];
-	selectedTopLevelGenre: { key: string; label: string } | null;
+	genreOptions: Array<{ key: string; label: string; count: number }>;
+	genreSearch: string;
 	optionsLoading: boolean;
-	onAnswer: (partialAnswers: Partial<RecommendationAnswers>) => void;
-	onGenreSelected: (genreKey: string) => void;
-	onGenreBack: () => void;
+	onGenreSearchChange: (value: string) => void;
+	onPatchAnswers: (partial: Partial<RecommendationAnswers>) => void;
+	onAddGenre: (key: string) => void;
+	onRemoveGenre: (key: string) => void;
 }) {
-	if (activeQuestion === "addedTimeframe") {
-		return (
-			<QuestionSection title="Added within the last:">
-				{ADDED_TIMEFRAME_OPTIONS.map((option) => (
-					<ChoiceButton
-						key={option.key}
-						selected={answers.addedTimeframe === option.key}
-						onClick={() =>
-							onAnswer({ addedTimeframe: option.key as AddedTimeframeAnswer })
+	return (
+		<div className="space-y-6">
+			<section data-field="added" className="space-y-3">
+				<div className="space-y-1">
+					<h3 className="font-semibold text-base">Added</h3>
+					<p className="text-muted-foreground text-sm">
+						{answers.addedDaysMin}–{answers.addedDaysMax} days ago
+					</p>
+				</div>
+				<Slider
+					min={ADDED_DAYS_MIN}
+					max={ADDED_DAYS_MAX}
+					step={1}
+					value={[answers.addedDaysMin, answers.addedDaysMax]}
+					onValueChange={(value) => {
+						const [min, max] = value;
+						if (min === undefined || max === undefined) {
+							return;
 						}
+						onPatchAnswers({ addedDaysMin: min, addedDaysMax: max });
+					}}
+				/>
+			</section>
+
+			<section data-field="year" className="space-y-3">
+				<div className="space-y-1">
+					<h3 className="font-semibold text-base">Release year</h3>
+				</div>
+				<YearRangePicker
+					yearMin={answers.yearMin}
+					yearMax={answers.yearMax}
+					onCommit={(bounds) => {
+						onPatchAnswers({
+							...(bounds.yearMin === undefined
+								? { yearMin: undefined }
+								: { yearMin: bounds.yearMin }),
+							...(bounds.yearMax === undefined
+								? { yearMax: undefined }
+								: { yearMax: bounds.yearMax }),
+						});
+					}}
+				/>
+			</section>
+
+			<section data-field="duration" className="space-y-3">
+				<div className="space-y-1">
+					<h3 className="font-semibold text-base">Duration</h3>
+					<p className="text-muted-foreground text-sm">
+						{minutesFromMs(answers.durationMinMs)}–
+						{minutesFromMs(answers.durationMaxMs)} minutes
+					</p>
+				</div>
+				<Slider
+					min={DURATION_MINUTES_MIN}
+					max={DURATION_MINUTES_MAX}
+					step={1}
+					value={[
+						minutesFromMs(answers.durationMinMs),
+						minutesFromMs(answers.durationMaxMs),
+					]}
+					onValueChange={(value) => {
+						const [min, max] = value;
+						if (min === undefined || max === undefined) {
+							return;
+						}
+						onPatchAnswers({
+							durationMinMs: msFromMinutes(min),
+							durationMaxMs: msFromMinutes(max),
+						});
+					}}
+				/>
+			</section>
+
+			<section data-field="rating" className="space-y-3">
+				<div className="space-y-1">
+					<h3 className="font-semibold text-base">Rating</h3>
+					<p className="text-muted-foreground text-sm">
+						{answers.ratingMin}–{answers.ratingMax}
+					</p>
+				</div>
+				<Slider
+					min={RATING_MIN}
+					max={RATING_MAX}
+					step={1}
+					value={[answers.ratingMin, answers.ratingMax]}
+					onValueChange={(value) => {
+						const [min, max] = value;
+						if (min === undefined || max === undefined) {
+							return;
+						}
+						onPatchAnswers({ ratingMin: min, ratingMax: max });
+					}}
+				/>
+			</section>
+
+			<section data-field="listened" className="space-y-3">
+				<div className="space-y-1">
+					<h3 className="font-semibold text-base">Listened</h3>
+				</div>
+				<div className="flex flex-wrap gap-2">
+					<ChoiceButton
+						selected={answers.listened === "any"}
+						onClick={() => onPatchAnswers({ listened: "any" })}
 					>
-						{option.label}
+						Any
 					</ChoiceButton>
-				))}
-			</QuestionSection>
-		);
-	}
-
-	if (activeQuestion === "genre") {
-		return (
-			<GenreQuestionSection
-				selectedKey={answers.genreKey}
-				options={genreOptions}
-				selectedTopLevelGenre={selectedTopLevelGenre}
-				optionsLoading={optionsLoading}
-				onSelect={onGenreSelected}
-				onBack={onGenreBack}
-				emptyOptionsMessage="Genre choices appear after RYM data is linked for for-later albums."
-			/>
-		);
-	}
-
-	if (activeQuestion === "releaseTime") {
-		return (
-			<QuestionSection title="Release era:">
-				{RELEASE_TIME_OPTIONS.map((option) => (
 					<ChoiceButton
-						key={option.key}
-						selected={answers.releaseTime === option.key}
-						onClick={() =>
-							onAnswer({ releaseTime: option.key as ReleaseTimeAnswer })
-						}
+						selected={answers.listened === "heard"}
+						onClick={() => onPatchAnswers({ listened: "heard" })}
 					>
-						{option.label}
+						Heard it
 					</ChoiceButton>
-				))}
-			</QuestionSection>
-		);
-	}
-
-	if (activeQuestion === "duration") {
-		return (
-			<QuestionSection title="Playlist duration:">
-				<ChoiceButton
-					selected={answers.durationBucket === "any"}
-					onClick={() => onAnswer({ durationBucket: "any" })}
-				>
-					Doesn't matter
-				</ChoiceButton>
-				{durationOptions.map((option) => (
 					<ChoiceButton
-						key={option.key}
-						selected={answers.durationBucket === option.key}
-						onClick={() =>
-							onAnswer({
-								durationBucket: option.key as DurationBucketAnswer,
-							})
-						}
+						selected={answers.listened === "not_yet"}
+						onClick={() => onPatchAnswers({ listened: "not_yet" })}
 					>
-						<span>{option.label}</span>
-						<span className="text-muted-foreground text-xs">
-							({option.count ?? 0})
+						Not yet
+					</ChoiceButton>
+				</div>
+			</section>
+
+			<section data-field="genre" className="space-y-3">
+				<div className="space-y-1">
+					<h3 className="font-semibold text-base">Genre</h3>
+				</div>
+				<Input
+					value={genreSearch}
+					onChange={(event) => onGenreSearchChange(event.target.value)}
+					placeholder="Search genres..."
+				/>
+				{answers.genreKeys.length > 0 ? (
+					<div className="flex flex-wrap items-center gap-2">
+						{answers.genreKeys.map((key) => (
+							<Badge key={key} variant="secondary" className="gap-1 pr-1">
+								{readableGenreLabelFromKey(key)}
+								<button
+									type="button"
+									className="rounded-full p-0.5 hover:bg-muted"
+									aria-label={`Remove ${key}`}
+									onClick={() => onRemoveGenre(key)}
+								>
+									<X className="size-3" />
+								</button>
+							</Badge>
+						))}
+						<div className="flex gap-1">
+							<ChoiceButton
+								selected={answers.genreMatch === "any"}
+								onClick={() => onPatchAnswers({ genreMatch: "any" })}
+							>
+								Any
+							</ChoiceButton>
+							<ChoiceButton
+								selected={answers.genreMatch === "all"}
+								onClick={() => onPatchAnswers({ genreMatch: "all" })}
+							>
+								All
+							</ChoiceButton>
+						</div>
+					</div>
+				) : null}
+				<div className="flex flex-wrap gap-2">
+					{genreOptions.map((option) => (
+						<ChoiceButton
+							key={option.key}
+							selected={answers.genreKeys.includes(option.key)}
+							onClick={() => onAddGenre(option.key)}
+						>
+							<span>{option.label}</span>
+							<span className="text-muted-foreground text-xs">
+								({option.count})
+							</span>
+						</ChoiceButton>
+					))}
+					{optionsLoading ? (
+						<span className="self-center text-muted-foreground text-xs">
+							Loading options...
 						</span>
-					</ChoiceButton>
-				))}
-				{optionsLoading ? (
-					<span className="self-center text-muted-foreground text-xs">
-						Loading options...
-					</span>
-				) : null}
-			</QuestionSection>
-		);
-	}
+					) : null}
+					{!optionsLoading && genreOptions.length === 0 ? (
+						<p className="basis-full text-muted-foreground text-xs">
+							No genres match that search.
+						</p>
+					) : null}
+				</div>
+			</section>
 
-	if (activeQuestion === "rating") {
-		return (
-			<QuestionSection title="Rating:">
-				{RATING_TIER_OPTIONS.map((option) => (
-					<ChoiceButton
-						key={option.key}
-						selected={answers.ratingTier === option.key}
-						onClick={() =>
-							onAnswer({ ratingTier: option.key as RatingTierAnswer })
-						}
-					>
-						{option.label}
-					</ChoiceButton>
-				))}
-			</QuestionSection>
-		);
-	}
-
-	return (
-		<QuestionSection title="# of recs:">
-			{RECOMMENDATION_COUNT_OPTIONS.map((count) => (
-				<ChoiceButton
-					key={count}
-					selected={answers.count === count}
-					onClick={() => onAnswer({ count })}
-				>
-					{count}
-				</ChoiceButton>
-			))}
-		</QuestionSection>
-	);
-}
-
-function GenreQuestionSection({
-	selectedKey,
-	options,
-	selectedTopLevelGenre,
-	optionsLoading,
-	onSelect,
-	onBack,
-	emptyOptionsMessage,
-}: {
-	selectedKey: string;
-	options: RecommendationOption[];
-	selectedTopLevelGenre: { key: string; label: string } | null;
-	optionsLoading: boolean;
-	onSelect: (key: string) => void;
-	onBack: () => void;
-	emptyOptionsMessage: string;
-}) {
-	const isSubgenreStep = selectedTopLevelGenre !== null;
-
-	return (
-		<QuestionSection
-			title={isSubgenreStep ? "Subgenre:" : "Genre:"}
-			description={
-				isSubgenreStep
-					? `Popular subgenres in ${selectedTopLevelGenre.label}`
-					: "Top-level genres from your For Later library"
-			}
-		>
-			{isSubgenreStep ? (
-				<Button
-					type="button"
-					variant="outline"
-					size="sm"
-					className="rounded-full"
-					onClick={onBack}
-				>
-					<ChevronLeft className="size-3.5" />
-					Back
-				</Button>
-			) : (
-				<ChoiceButton
-					selected={selectedKey === "any"}
-					onClick={() => onSelect("any")}
-				>
-					Doesn't matter
-				</ChoiceButton>
-			)}
-			{isSubgenreStep ? (
-				<ChoiceButton
-					selected={selectedKey === selectedTopLevelGenre.key}
-					onClick={() => onSelect(selectedTopLevelGenre.key)}
-				>
-					<span>Any {selectedTopLevelGenre.label}</span>
-				</ChoiceButton>
-			) : null}
-			{options.map((option) => (
-				<ChoiceButton
-					key={option.key}
-					selected={!isSubgenreStep ? false : selectedKey === option.key}
-					onClick={() => onSelect(option.key)}
-				>
-					<span>{option.label}</span>
-					<span className="text-muted-foreground text-xs">
-						({option.count})
-					</span>
-				</ChoiceButton>
-			))}
-			{optionsLoading ? (
-				<span className="self-center text-muted-foreground text-xs">
-					Loading options...
-				</span>
-			) : null}
-			{!optionsLoading && options.length === 0 ? (
-				<p className="basis-full text-muted-foreground text-xs">
-					{emptyOptionsMessage}
-				</p>
-			) : null}
-		</QuestionSection>
-	);
-}
-
-function QuestionSection({
-	title,
-	description,
-	children,
-}: {
-	title: string;
-	description?: string;
-	children: React.ReactNode;
-}) {
-	return (
-		<div className="space-y-3">
-			<div className="space-y-1">
-				<h3 className="font-semibold text-base">{title}</h3>
-				{description ? (
-					<p className="text-muted-foreground text-sm">{description}</p>
-				) : null}
-			</div>
-			<div className="flex flex-wrap gap-2">{children}</div>
+			<section data-field="count" className="space-y-3">
+				<div className="space-y-1">
+					<h3 className="font-semibold text-base"># of recs</h3>
+				</div>
+				<div className="flex flex-wrap gap-2">
+					{RECOMMENDATION_COUNT_OPTIONS.map((count) => (
+						<ChoiceButton
+							key={count}
+							selected={answers.count === count}
+							onClick={() => onPatchAnswers({ count })}
+						>
+							{count}
+						</ChoiceButton>
+					))}
+				</div>
+			</section>
 		</div>
+	);
+}
+
+function RecommendationProse({
+	clauses,
+	onEditClause,
+}: {
+	clauses: Array<{ id: RecommendationFormFieldId; text: string }>;
+	onEditClause: (fieldId: RecommendationFormFieldId) => void;
+}) {
+	if (clauses.length === 0) {
+		return (
+			<p className="text-sm leading-relaxed">
+				Selecting an album from your For Later list.
+			</p>
+		);
+	}
+
+	return (
+		<p className="text-sm leading-relaxed">
+			<span>Selecting an album that </span>
+			{clauses.map((clause, index) => (
+				<span key={clause.id} className="group/clause relative inline">
+					{index > 0 ? <span>, </span> : null}
+					{clause.text}
+					<button
+						type="button"
+						className="ml-1 inline-flex opacity-0 transition-opacity group-hover/clause:opacity-100"
+						aria-label={`Edit ${clause.id}`}
+						onClick={() => onEditClause(clause.id)}
+					>
+						<Pencil className="size-3 text-muted-foreground" />
+					</button>
+				</span>
+			))}
+			<span>.</span>
+		</p>
 	);
 }
 
@@ -764,8 +716,4 @@ function readableGenreLabelFromKey(key: string): string {
 		.filter(Boolean)
 		.map((part) => part.charAt(0).toUpperCase() + part.slice(1))
 		.join(" ");
-}
-
-function questionIndex(question: RecommendationQuestionId): number {
-	return QUESTION_ORDER.indexOf(question);
 }
