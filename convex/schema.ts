@@ -903,6 +903,9 @@ export default defineSchema({
 		notes: v.optional(v.string()),
 		scheduleHint: v.optional(v.string()),
 		isActive: v.boolean(),
+		kind: v.optional(
+			v.union(v.literal("recurring"), v.literal("one_off")),
+		),
 		spotifyPlaylistName: v.optional(v.string()),
 		spotifyOwnerId: v.optional(v.string()),
 		spotifyOwnerName: v.optional(v.string()),
@@ -997,7 +1000,8 @@ export default defineSchema({
 			"sourceId",
 			"spotifyTrackId",
 		])
-		.index("by_sourceId_createdAt", ["sourceId", "createdAt"]),
+		.index("by_sourceId_createdAt", ["sourceId", "createdAt"])
+		.index("by_sourceRunId", ["sourceRunId"]),
 
 	musicFunnelPlaylistWrites: defineTable({
 		userId: v.string(),
@@ -1017,7 +1021,8 @@ export default defineSchema({
 			"spotifyTrackId",
 		])
 		.index("by_userId_writtenAt", ["userId", "writtenAt"])
-		.index("by_runId", ["runId"]),
+		.index("by_runId", ["runId"])
+		.index("by_sourceRunId", ["sourceRunId"]),
 
 	userAlbums: defineTable({
 		userId: v.string(),
