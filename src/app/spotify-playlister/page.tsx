@@ -169,6 +169,7 @@ export default function SpotifyPlaylisterPage() {
 			album: {
 				id: "",
 				name: t.albumName ?? "",
+				album_type: "album",
 				images: t.albumImageUrl
 					? [{ url: t.albumImageUrl, height: 300, width: 300 }]
 					: [],
@@ -519,6 +520,7 @@ export default function SpotifyPlaylisterPage() {
 			album: {
 				id: "",
 				name: saved.albumName ?? "",
+				album_type: "album",
 				images: saved.albumImageUrl
 					? [{ url: saved.albumImageUrl, height: 300, width: 300 }]
 					: [],
