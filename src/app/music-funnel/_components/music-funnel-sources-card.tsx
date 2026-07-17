@@ -84,6 +84,12 @@ export function MusicFunnelSourcesCard({
 	const sortedSources =
 		sources === undefined ? undefined : sortSources(sources);
 
+	const editingSource = form.sourceId
+		? (sources ?? []).find((source) => source._id === form.sourceId)
+		: undefined;
+	const isEditingLockedOneOff =
+		editingSource !== undefined && sourceKind(editingSource) === "one_off";
+
 	function startCreate(): void {
 		setForm(emptyForm);
 	}
@@ -129,7 +135,8 @@ export function MusicFunnelSourcesCard({
 
 		setIsSaving(true);
 		const normalizedPlaylistId = parseSpotifyPlaylistId(form.spotifyPlaylistId);
-		const isCreatingOneOff = !form.sourceId && form.kind === "one_off";
+		const kind: SourceKind = isEditingLockedOneOff ? "one_off" : form.kind;
+		const isCreatingOneOff = !form.sourceId && kind === "one_off";
 		try {
 			const sourceId = await upsertSource({
 				userId,
@@ -139,8 +146,13 @@ export function MusicFunnelSourcesCard({
 				curatorName: form.curatorName || form.displayName,
 				notes: form.notes,
 				scheduleHint: form.scheduleHint,
-				isActive: isCreatingOneOff ? true : form.isActive,
-				kind: form.kind,
+				// One-offs never use Active for bulk; preserve existing isActive on edit
+				isActive: isCreatingOneOff
+					? true
+					: isEditingLockedOneOff
+						? (editingSource?.isActive ?? form.isActive)
+						: form.isActive,
+				kind,
 			});
 
 			if (isCreatingOneOff) {
@@ -315,30 +327,36 @@ export function MusicFunnelSourcesCard({
 					</div>
 					<div className="space-y-2">
 						<Label>Kind</Label>
-						<div className="flex gap-4">
-							<label className="flex items-center gap-2 text-sm">
-								<input
-									type="radio"
-									name="source-kind"
-									checked={form.kind === "recurring"}
-									onChange={() =>
-										setForm((prev) => ({ ...prev, kind: "recurring" }))
-									}
-								/>
-								Recurring
-							</label>
-							<label className="flex items-center gap-2 text-sm">
-								<input
-									type="radio"
-									name="source-kind"
-									checked={form.kind === "one_off"}
-									onChange={() =>
-										setForm((prev) => ({ ...prev, kind: "one_off" }))
-									}
-								/>
-								One-off
-							</label>
-						</div>
+						{isEditingLockedOneOff ? (
+							<p className="text-muted-foreground text-sm">
+								One-off (cannot change to recurring)
+							</p>
+						) : (
+							<div className="flex gap-4">
+								<label className="flex items-center gap-2 text-sm">
+									<input
+										type="radio"
+										name="source-kind"
+										checked={form.kind === "recurring"}
+										onChange={() =>
+											setForm((prev) => ({ ...prev, kind: "recurring" }))
+										}
+									/>
+									Recurring
+								</label>
+								<label className="flex items-center gap-2 text-sm">
+									<input
+										type="radio"
+										name="source-kind"
+										checked={form.kind === "one_off"}
+										onChange={() =>
+											setForm((prev) => ({ ...prev, kind: "one_off" }))
+										}
+									/>
+									One-off
+								</label>
+							</div>
+						)}
 					</div>
 					<div className="space-y-2">
 						<Label htmlFor="source-playlist-id">Spotify playlist ID</Label>
