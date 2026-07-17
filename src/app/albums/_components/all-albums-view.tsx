@@ -1,7 +1,15 @@
 "use client";
 
 import { useMutation } from "convex/react";
-import { Check, Copy, DatabaseBackup, Disc3, Download, MoreHorizontal } from "lucide-react";
+import {
+	Check,
+	Copy,
+	DatabaseBackup,
+	Disc3,
+	Download,
+	MoreHorizontal,
+	Plus,
+} from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -35,6 +43,7 @@ import type {
 } from "../../../../convex/_utils/albumLibraryRows";
 import { formatRelativeTime } from "../_utils/formatters";
 import type { AlbumLibraryRowData } from "../_utils/types";
+import { AddAlbumToLibraryDialog } from "./add-album-to-library-dialog";
 import { AlbumRymAssociateDrawer } from "./album-rym-associate-drawer";
 
 type CopiedField = "album" | "artist";
@@ -156,6 +165,7 @@ export function AllAlbumsView({
 		!albumLibraryFiltersAreDefault(filterState);
 	const [rymAssociateAlbum, setRymAssociateAlbum] =
 		useState<AlbumLibraryRowData | null>(null);
+	const [addAlbumDialogOpen, setAddAlbumDialogOpen] = useState(false);
 	const [backfillDialogOpen, setBackfillDialogOpen] = useState(false);
 	const [isBackfillingLibraryIndex, setIsBackfillingLibraryIndex] =
 		useState(false);
@@ -387,7 +397,18 @@ export function AllAlbumsView({
 
 	return (
 		<div className="space-y-4">
-			<div className="flex justify-end">
+			<div className="flex items-center justify-end gap-2">
+				{userId ? (
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						onClick={() => setAddAlbumDialogOpen(true)}
+					>
+						<Plus className="mr-1.5 h-4 w-4" />
+						Add album
+					</Button>
+				) : null}
 				<AlbumLibraryAdminMenu
 					userId={userId}
 					isRunningLibraryAction={isRunningLibraryAction}
@@ -605,6 +626,10 @@ export function AllAlbumsView({
 					if (!open) setRymAssociateAlbum(null);
 				}}
 				onAssociate={handleAssociateRymScrape}
+			/>
+			<AddAlbumToLibraryDialog
+				open={addAlbumDialogOpen}
+				onOpenChange={setAddAlbumDialogOpen}
 			/>
 			<AlertDialog
 				open={backfillDialogOpen}
