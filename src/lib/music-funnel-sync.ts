@@ -215,9 +215,7 @@ export async function syncMusicFunnelSource({
 		const sources = await convex.query(api.musicFunnel.listSources, {
 			userId,
 		});
-		const musicFunnelSource = sources.find(
-			(source) => source._id === sourceId,
-		);
+		const musicFunnelSource = sources.find((source) => source._id === sourceId);
 
 		if (!musicFunnelSource) {
 			errors.push("Source playlist not found.");
@@ -260,14 +258,13 @@ export async function syncMusicFunnelSource({
 		const albumRepeatsFound = computeAlbumRepeatSummaries(allEncounters).length;
 		const artistRepeatsFound =
 			computeArtistRepeatSummaries(allEncounters).length;
-		const status =
-			!musicFunnelSource
-				? "failed"
-				: errors.length > 0
-					? sourcesScanned > 0
-						? "partial"
-						: "failed"
-					: "success";
+		const status = !musicFunnelSource
+			? "failed"
+			: errors.length > 0
+				? sourcesScanned > 0
+					? "partial"
+					: "failed"
+				: "success";
 		const completedAt = Date.now();
 
 		await convex.mutation(api.musicFunnel.finishRun, {
@@ -485,8 +482,7 @@ async function syncSourcePlaylist({
 			spotifySnapshotId: playlist.snapshot_id,
 			tracksFetched: normalizedTracks.length,
 			newEncounters: newEncounterCount,
-			alreadySeenFromSource:
-				normalizedTracks.length - newEncounterCount,
+			alreadySeenFromSource: normalizedTracks.length - newEncounterCount,
 			newTracksAddedToMain: mainWrites,
 			repeatTracksAdded: repeatWrites,
 			trackRepeatsFound: plannedWrites.repeatWrites.length,
@@ -559,11 +555,14 @@ async function writeTracksToSpotifyPlaylist({
 		return 0;
 	}
 
-	const alreadyWritten = await convex.query(api.musicFunnel.getWrittenTrackIds, {
-		userId,
-		kind,
-		spotifyTrackIds: writes.map((write) => write.spotifyTrackId),
-	});
+	const alreadyWritten = await convex.query(
+		api.musicFunnel.getWrittenTrackIds,
+		{
+			userId,
+			kind,
+			spotifyTrackIds: writes.map((write) => write.spotifyTrackId),
+		},
+	);
 	const pendingWrites = excludeAlreadyWrittenPlaylistWrites(
 		writes,
 		new Set(alreadyWritten),
