@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import {
 	releaseYearMatchesForLaterFilter,
 	taxonomyKeysPassAgainstSet,
@@ -12,9 +12,12 @@ import {
 } from "./_utils/forLaterFilterProjection";
 import { resolveAddedWindow } from "./_utils/smartPlaylistAddedWindow";
 import {
+	type LegacySmartPlaylistFilters,
 	type SmartPlaylistFiltersV2,
 	albumMatchesDurationFilter,
+	isLegacySmartPlaylistFilters,
 	isRatingFilterActive,
+	migrateLegacySmartPlaylistFilters,
 	normalizeSmartPlaylistFilters,
 } from "./_utils/smartPlaylistFilterModel";
 import { albumMatchesGenreClauses } from "./_utils/smartPlaylistGenreMatch";
@@ -767,5 +770,39 @@ export const listCanonicalTrackUrisByAlbum = query({
 		);
 
 		return tracks.map((track) => `spotify:track:${track.spotifyTrackId}`);
+	},
+});
+
+// Run once from Convex dashboard: internal.smartPlaylists.migrateFiltersToV2
+export const migrateFiltersToV2 = internalMutation({
+	args: {},
+	returns: v.object({
+		scanned: v.number(),
+		migrated: v.number(),
+		skipped: v.number(),
+	}),
+	handler: async (ctx) => {
+		const recipes = await ctx.db.query("smartPlaylists").collect();
+		let migrated = 0;
+		let skipped = 0;
+		for (const recipe of recipes) {
+			const filters = recipe.filters as
+				| LegacySmartPlaylistFilters
+				| SmartPlaylistFiltersV2;
+			if (!isLegacySmartPlaylistFilters(filters)) {
+				skipped += 1;
+				continue;
+			}
+			const next = migrateLegacySmartPlaylistFilters(filters);
+			await ctx.db.patch(recipe._id, {
+				filters: {
+					...next,
+					excludedAlbumIds: [] as Id<"spotifyAlbums">[],
+				},
+				updatedAt: Date.now(),
+			});
+			migrated += 1;
+		}
+		return { scanned: recipes.length, migrated, skipped };
 	},
 });
