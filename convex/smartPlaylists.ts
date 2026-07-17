@@ -3,16 +3,21 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import {
-	durationMsMatchesForLaterFilter,
 	releaseYearMatchesForLaterFilter,
 	taxonomyKeysPassAgainstSet,
 } from "./_utils/forLaterAlbumsUi";
-import { durationBucketKeyFromMinutes } from "./_utils/forLaterDurationBuckets";
 import {
 	buildFilterGenreKeysSortedWithAncestors,
 	loadRymGenreParentKeysByChild,
 } from "./_utils/forLaterFilterProjection";
 import { resolveAddedWindow } from "./_utils/smartPlaylistAddedWindow";
+import {
+	type SmartPlaylistFiltersV2,
+	albumMatchesDurationFilter,
+	isRatingFilterActive,
+	normalizeSmartPlaylistFilters,
+} from "./_utils/smartPlaylistFilterModel";
+import { albumMatchesGenreClauses } from "./_utils/smartPlaylistGenreMatch";
 import {
 	smartPlaylistFiltersValidator,
 	smartPlaylistSourceValidator,
@@ -22,25 +27,6 @@ import {
 } from "./_utils/smartPlaylistValidators";
 
 type DbCtx = QueryCtx | MutationCtx;
-
-type SmartPlaylistFilters = {
-	genreKeys: string[];
-	genreMatch: "all" | "any";
-	primaryGenresOnly: boolean;
-	descriptorKeys: string[];
-	descriptorMatch: "all" | "any";
-	ratingMin?: number;
-	ratingMax?: number;
-	yearMin?: number;
-	yearMax?: number;
-	durationMinMinutes?: number;
-	durationMaxMinutes?: number;
-	durationBucketKey?: string;
-	addedWindow?:
-		| { type: "absolute"; afterMs?: number; beforeMs?: number }
-		| { type: "relative"; unit: "days" | "months"; amount: number }
-		| { type: "calendar_month"; year: number; month: number };
-};
 
 type MatchedAlbum = {
 	spotifyAlbumId: string;
@@ -85,26 +71,16 @@ const recipeValidator = v.object({
 
 function ratingMatchesBounds(
 	rating: number | undefined,
-	filters: Pick<SmartPlaylistFilters, "ratingMin" | "ratingMax">,
+	filters: { ratingMin: number; ratingMax: number },
 ): boolean {
-	if (filters.ratingMin === undefined && filters.ratingMax === undefined) {
-		return true;
-	}
-	if (rating === undefined) {
-		return false;
-	}
-	if (filters.ratingMin !== undefined && rating < filters.ratingMin) {
-		return false;
-	}
-	if (filters.ratingMax !== undefined && rating > filters.ratingMax) {
-		return false;
-	}
-	return true;
+	if (!isRatingFilterActive(filters)) return true;
+	if (rating === undefined) return false;
+	return rating >= filters.ratingMin && rating <= filters.ratingMax;
 }
 
 function yearMatchesFilters(
 	releaseYear: number | undefined,
-	filters: Pick<SmartPlaylistFilters, "yearMin" | "yearMax">,
+	filters: { yearMin?: number; yearMax?: number },
 ): boolean {
 	return releaseYearMatchesForLaterFilter(releaseYear, {
 		genreKeys: [],
@@ -120,22 +96,14 @@ function yearMatchesFilters(
 
 function durationMatchesFilters(
 	durationMs: number | undefined,
-	filters: Pick<
-		SmartPlaylistFilters,
-		"durationMinMinutes" | "durationMaxMinutes" | "durationBucketKey"
-	>,
+	filters: {
+		durationMinMinutes?: number;
+		durationMaxMinutes?: number;
+		durationOpenLow?: boolean;
+		durationOpenHigh?: boolean;
+	},
 ): boolean {
-	return durationMsMatchesForLaterFilter(durationMs, {
-		genreKeys: [],
-		descriptorKeys: [],
-		durationMinMinutes: filters.durationMinMinutes,
-		durationMaxMinutes: filters.durationMaxMinutes,
-		durationBucketKey: durationBucketKeyFromMinutes(filters.durationBucketKey),
-		listened: "all",
-		rymStatus: "all",
-		genreMatch: "all",
-		descriptorMatch: "all",
-	});
+	return albumMatchesDurationFilter(durationMs, filters);
 }
 
 function addedAtMatchesWindow(
@@ -155,43 +123,34 @@ function addedAtMatchesWindow(
 	return true;
 }
 
-function genreKeySetFromTags(
+function genreKeySetsFromTags(
 	primary: Array<{ key: string }>,
 	secondary: Array<{ key: string }>,
-	primaryOnly: boolean,
-): Set<string> {
-	const keys = new Set<string>();
-	for (const tag of primary) {
-		keys.add(tag.key);
-	}
-	if (!primaryOnly) {
-		for (const tag of secondary) {
-			keys.add(tag.key);
-		}
-	}
-	return keys;
+): { primary: Set<string>; secondary: Set<string> } {
+	return {
+		primary: new Set(primary.map((tag) => tag.key)),
+		secondary: new Set(secondary.map((tag) => tag.key)),
+	};
 }
 
-async function loadPrimaryGenreKeysForScrape(
+async function loadGenreRoleKeysForScrape(
 	ctx: DbCtx,
 	scrapeId: Id<"rateYourMusicScrapes">,
-): Promise<Set<string>> {
+): Promise<{ primary: Set<string>; secondary: Set<string> }> {
 	const genreLinks = await ctx.db
 		.query("rateYourMusicReleaseGenres")
 		.withIndex("by_scrapeId", (q) => q.eq("scrapeId", scrapeId))
 		.collect();
 
-	const keys = new Set<string>();
+	const primary = new Set<string>();
+	const secondary = new Set<string>();
 	for (const link of genreLinks) {
-		if (link.role !== "primary") {
-			continue;
-		}
 		const genre = await ctx.db.get(link.genreId);
-		if (genre) {
-			keys.add(genre.key);
-		}
+		if (!genre) continue;
+		if (link.role === "primary") primary.add(genre.key);
+		else if (link.role === "secondary") secondary.add(genre.key);
 	}
-	return keys;
+	return { primary, secondary };
 }
 
 async function loadUserAlbumByAlbumId(
@@ -214,7 +173,7 @@ async function resolveForLaterMatches(
 	ctx: DbCtx,
 	args: {
 		userId: string;
-		filters: SmartPlaylistFilters;
+		filters: SmartPlaylistFiltersV2;
 		now: number;
 	},
 ): Promise<MatchedAlbum[]> {
@@ -225,9 +184,7 @@ async function resolveForLaterMatches(
 		)
 		.collect();
 
-	const needsRating =
-		args.filters.ratingMin !== undefined ||
-		args.filters.ratingMax !== undefined;
+	const needsRating = isRatingFilterActive(args.filters);
 	const userAlbumsByAlbumId = needsRating
 		? await loadUserAlbumByAlbumId(ctx, args.userId)
 		: null;
@@ -236,9 +193,8 @@ async function resolveForLaterMatches(
 		? resolveAddedWindow(args.filters.addedWindow, args.now)
 		: null;
 
-	const needsPrimaryGenreLoad =
-		args.filters.primaryGenresOnly && args.filters.genreKeys.length > 0;
-	const parentKeysByChild = needsPrimaryGenreLoad
+	const needsGenreLoad = args.filters.genreClauses.length > 0;
+	const parentKeysByChild = needsGenreLoad
 		? await loadRymGenreParentKeysByChild(ctx)
 		: null;
 
@@ -285,30 +241,29 @@ async function resolveForLaterMatches(
 			continue;
 		}
 
-		if (args.filters.genreKeys.length > 0) {
-			let genreKeys: Set<string>;
-			if (needsPrimaryGenreLoad) {
-				if (!item.rymScrapeId || !parentKeysByChild) {
-					continue;
-				}
-				const primaryKeys = await loadPrimaryGenreKeysForScrape(
-					ctx,
-					item.rymScrapeId,
-				);
-				genreKeys = new Set(
-					buildFilterGenreKeysSortedWithAncestors(
-						[...primaryKeys],
-						parentKeysByChild,
-					),
-				);
-			} else {
-				genreKeys = new Set(item.filterGenreKeysSorted ?? []);
+		if (args.filters.genreClauses.length > 0) {
+			if (!item.rymScrapeId || !parentKeysByChild) {
+				continue;
 			}
+			const roles = await loadGenreRoleKeysForScrape(ctx, item.rymScrapeId);
+			const primaryKeys = new Set(
+				buildFilterGenreKeysSortedWithAncestors(
+					[...roles.primary],
+					parentKeysByChild,
+				),
+			);
+			const secondaryKeys = new Set(
+				buildFilterGenreKeysSortedWithAncestors(
+					[...roles.secondary],
+					parentKeysByChild,
+				),
+			);
 			if (
-				!taxonomyKeysPassAgainstSet(
-					args.filters.genreKeys,
+				!albumMatchesGenreClauses(
+					primaryKeys,
+					secondaryKeys,
+					args.filters.genreClauses,
 					args.filters.genreMatch,
-					genreKeys,
 				)
 			) {
 				continue;
@@ -342,7 +297,7 @@ async function resolveRankingsMatches(
 	ctx: DbCtx,
 	args: {
 		userId: string;
-		filters: SmartPlaylistFilters;
+		filters: SmartPlaylistFiltersV2;
 	},
 ): Promise<MatchedAlbum[]> {
 	const libraryItems = await ctx.db
@@ -353,9 +308,8 @@ async function resolveRankingsMatches(
 	const rated = libraryItems.filter((item) => item.rating !== undefined);
 
 	const needsDuration =
-		args.filters.durationBucketKey !== undefined ||
-		args.filters.durationMinMinutes !== undefined ||
-		args.filters.durationMaxMinutes !== undefined;
+		args.filters.durationOpenLow !== true ||
+		args.filters.durationOpenHigh !== true;
 
 	const albumByAlbumId = new Map<Id<"spotifyAlbums">, Doc<"spotifyAlbums">>();
 	if (needsDuration) {
@@ -372,7 +326,7 @@ async function resolveRankingsMatches(
 
 	const userAlbumsByAlbumId = await loadUserAlbumByAlbumId(ctx, args.userId);
 	const parentKeysByChild =
-		args.filters.genreKeys.length > 0
+		args.filters.genreClauses.length > 0
 			? await loadRymGenreParentKeysByChild(ctx)
 			: null;
 
@@ -405,25 +359,34 @@ async function resolveRankingsMatches(
 			}
 		}
 
-		const directGenreKeys = genreKeySetFromTags(
+		const directGenreKeys = genreKeySetsFromTags(
 			item.primaryGenres,
 			item.secondaryGenres,
-			args.filters.primaryGenresOnly,
 		);
-		const genreKeys =
+		const primaryKeys =
 			parentKeysByChild !== null
 				? new Set(
 						buildFilterGenreKeysSortedWithAncestors(
-							[...directGenreKeys],
+							[...directGenreKeys.primary],
 							parentKeysByChild,
 						),
 					)
-				: directGenreKeys;
+				: directGenreKeys.primary;
+		const secondaryKeys =
+			parentKeysByChild !== null
+				? new Set(
+						buildFilterGenreKeysSortedWithAncestors(
+							[...directGenreKeys.secondary],
+							parentKeysByChild,
+						),
+					)
+				: directGenreKeys.secondary;
 		if (
-			!taxonomyKeysPassAgainstSet(
-				args.filters.genreKeys,
+			!albumMatchesGenreClauses(
+				primaryKeys,
+				secondaryKeys,
+				args.filters.genreClauses,
 				args.filters.genreMatch,
-				genreKeys,
 			)
 		) {
 			continue;
@@ -486,22 +449,26 @@ async function resolveMatchingAlbums(
 	args: {
 		userId: string;
 		source: "forLater" | "rankings";
-		filters: SmartPlaylistFilters;
+		filters: Doc<"smartPlaylists">["filters"];
 		now: number;
 	},
 ): Promise<MatchedAlbum[]> {
-	if (args.source === "forLater") {
-		return await resolveForLaterMatches(ctx, {
-			userId: args.userId,
-			filters: args.filters,
-			now: args.now,
-		});
-	}
+	const filters = normalizeSmartPlaylistFilters(args.filters);
 
-	return await resolveRankingsMatches(ctx, {
-		userId: args.userId,
-		filters: args.filters,
-	});
+	const matches =
+		args.source === "forLater"
+			? await resolveForLaterMatches(ctx, {
+					userId: args.userId,
+					filters,
+					now: args.now,
+				})
+			: await resolveRankingsMatches(ctx, {
+					userId: args.userId,
+					filters,
+				});
+
+	const excluded = new Set(filters.excludedAlbumIds);
+	return matches.filter((album) => !excluded.has(album.albumId));
 }
 
 async function requireOwnedRecipe(
@@ -646,7 +613,7 @@ export const updateRecipe = mutation({
 
 		const patch: {
 			name?: string;
-			filters?: SmartPlaylistFilters;
+			filters?: Doc<"smartPlaylists">["filters"];
 			syncMode?: "mirror" | "addOnly";
 			isPaused?: boolean;
 			updatedAt: number;
