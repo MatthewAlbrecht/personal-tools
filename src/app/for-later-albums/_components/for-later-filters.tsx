@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "~/components/ui/button";
 import {
 	Combobox,
@@ -15,6 +15,7 @@ import {
 	ComboboxValue,
 	useComboboxAnchor,
 } from "~/components/ui/combobox";
+import { resolveComboboxFilteredItems } from "~/components/ui/combobox-filter";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { useDebouncedState } from "~/lib/hooks/use-debounced-state";
@@ -69,6 +70,14 @@ export function ForLaterFilters({
 		() => (genreOptions ?? []).map((g) => g.key).sort(),
 		[genreOptions],
 	);
+	const topLevelGenreKeysPool = useMemo(
+		() =>
+			(genreOptions ?? [])
+				.filter((g) => g.isTopLevel)
+				.map((g) => g.key)
+				.sort(),
+		[genreOptions],
+	);
 	const descriptorKeysPool = useMemo(
 		() => (descriptorOptions ?? []).map((d) => d.key).sort(),
 		[descriptorOptions],
@@ -93,6 +102,14 @@ export function ForLaterFilters({
 	function patchFilters(patch: Partial<ForLaterFiltersState>): void {
 		onChange({ ...filters, ...patch });
 	}
+
+	const [genreInput, setGenreInput] = useState("");
+	const genreList = resolveComboboxFilteredItems({
+		items: genreKeysPool,
+		browseItems: topLevelGenreKeysPool,
+		filter: genreInput,
+		getItemLabel: formatGenreOption,
+	});
 
 	const filtersRef = useRef(filters);
 	filtersRef.current = filters;
@@ -227,6 +244,9 @@ export function ForLaterFilters({
 						</div>
 						<Combobox
 							items={genreKeysPool}
+							filteredItems={genreList.filteredItems}
+							inputValue={genreInput}
+							onInputValueChange={(next) => setGenreInput(next)}
 							multiple
 							itemToStringLabel={formatGenreOption}
 							value={filters.genreKeys}
@@ -254,7 +274,16 @@ export function ForLaterFilters({
 								<ComboboxList>
 									{(item) => (
 										<ComboboxItem key={item} value={item}>
-											{formatGenreOption(item)}
+											<span className="flex min-w-0 flex-1 items-center justify-between gap-2">
+												<span className="min-w-0 truncate">
+													{formatGenreOption(item)}
+												</span>
+												{genreList.pinnedKeys.has(item) ? (
+													<span className="shrink-0 text-muted-foreground text-xs">
+														Top
+													</span>
+												) : null}
+											</span>
 										</ComboboxItem>
 									)}
 								</ComboboxList>

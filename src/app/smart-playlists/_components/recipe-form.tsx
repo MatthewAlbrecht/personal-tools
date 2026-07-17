@@ -20,6 +20,7 @@ import {
 	ComboboxValue,
 	useComboboxAnchor,
 } from "~/components/ui/combobox";
+import { resolveComboboxFilteredItems } from "~/components/ui/combobox-filter";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import {
@@ -124,6 +125,7 @@ export function RecipeForm({
 	const [previewNow, setPreviewNow] = useState(() => Date.now());
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [isSyncing, setIsSyncing] = useState(false);
+	const [genreInput, setGenreInput] = useState("");
 
 	const genreOptions = useQuery(
 		api.rateYourMusicScrapes.listRateYourMusicGenreKeys,
@@ -145,6 +147,10 @@ export function RecipeForm({
 	const descriptorAnchor = useComboboxAnchor();
 
 	const genreKeysPool = (genreOptions ?? []).map((g) => g.key).sort();
+	const topLevelGenreKeysPool = (genreOptions ?? [])
+		.filter((g) => g.isTopLevel)
+		.map((g) => g.key)
+		.sort();
 	const genreLabelByKey = new Map(
 		(genreOptions ?? []).map((g) => [g.key, g.label] as const),
 	);
@@ -160,6 +166,13 @@ export function RecipeForm({
 	function formatDescriptorOption(key: string): string {
 		return descriptorLabelByKey.get(key) ?? key;
 	}
+
+	const genreList = resolveComboboxFilteredItems({
+		items: genreKeysPool,
+		browseItems: topLevelGenreKeysPool,
+		filter: genreInput,
+		getItemLabel: formatGenreOption,
+	});
 
 	function refreshPreviewNow(): void {
 		setPreviewNow(Date.now());
@@ -438,6 +451,9 @@ export function RecipeForm({
 						</div>
 						<Combobox
 							items={genreKeysPool}
+							filteredItems={genreList.filteredItems}
+							inputValue={genreInput}
+							onInputValueChange={(next) => setGenreInput(next)}
 							multiple
 							itemToStringLabel={formatGenreOption}
 							value={filters.genreKeys}
@@ -465,7 +481,16 @@ export function RecipeForm({
 								<ComboboxList>
 									{(item) => (
 										<ComboboxItem key={item} value={item}>
-											{formatGenreOption(item)}
+											<span className="flex min-w-0 flex-1 items-center justify-between gap-2">
+												<span className="min-w-0 truncate">
+													{formatGenreOption(item)}
+												</span>
+												{genreList.pinnedKeys.has(item) ? (
+													<span className="shrink-0 text-muted-foreground text-xs">
+														Top
+													</span>
+												) : null}
+											</span>
 										</ComboboxItem>
 									)}
 								</ComboboxList>
