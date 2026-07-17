@@ -1,73 +1,108 @@
-# Genre selector: pin matching top-level genres
+# Genre selector: official shadcn Combobox + pin top-level matches
 
 **Date:** 2026-07-16  
-**Status:** Approved design  
+**Status:** Approved design (revised)  
 **Idea:** `docs/ideas/2026-07-16-genre-selector-top-level-matches-first.md`
 
 ## Goal
 
-When searching in a genre Combobox, matching top-level genres always appear at the top of the dropdown, with a clear visual cue that they are top-level. Empty browse behavior stays as today.
+1. Replace the hand-rolled `src/components/ui/combobox.tsx` with the **official shadcn Combobox** (`@base-ui/react`) and migrate every call site to it.
+2. On genre Comboboxes: when searching, pin matching top-level genres to the top and show a muted **Top** badge on those rows. Empty browse stays top-level-only.
+3. Keyboard navigation (scroll highlight into view) comes from Base UI — do not reimplement `scrollIntoView`.
 
 ## Context
 
-Genre pickers in for-later filters and smart-playlists recipes use the shared `Combobox` with:
+### Why replace the hand-rolled control
 
-- `items` — full genre key list
-- `browseItems` — top-level genre keys (`isTopLevel`), shown when the input is empty
+`src/components/ui/combobox.tsx` is a custom Popover + listbox that only *looks* like shadcn’s API. It does not use Base UI / official shadcn. Known gap: ArrowUp/ArrowDown updates highlight styling but never scrolls the active option into the `overflow-y-auto` list — highlight can leave the viewport. Official shadcn Combobox (Base UI) handles this.
 
-Today, a non-empty filter searches all `items` with no ranking, so top-level matches can sit below deep subgenres.
+### Current call sites (all must migrate)
 
-## Behavior
+- `src/app/for-later-albums/_components/for-later-filters.tsx` — genres (`browseItems` = top-level) + descriptors
+- `src/app/smart-playlists/_components/recipe-form.tsx` — genres + descriptors
+- `src/app/concerts/_components/venue-multiselect.tsx` — venues
 
-### Empty filter
+### Dependency note
 
-- Unchanged: show `browseItems` (or `items` if `browseItems` is omitted)
-- No “Top” badge (every browse row is already top-level for genre pickers)
+Official Combobox depends on `@base-ui/react`. The rest of this app’s UI primitives remain Radix. That mix is acceptable for this migration (shadcn ships Combobox on Base UI). Do **not** migrate unrelated Radix components in this work.
 
-### Non-empty filter
+## Part A — Adopt official shadcn Combobox
 
-1. Filter full `items` by existing match rules (label or key contains the query, case-insensitive)
-2. Stable-partition matches: keys present in `browseItems` first, then remaining matches; preserve relative order within each group
-3. Expose `isPinned: true` for rows in the first group so call sites can render a badge
+### Install
 
-### No `browseItems`
+- Run `pnpm dlx shadcn@latest add combobox` (overwrite the hand-rolled file).
+- Pull registry deps as needed: shadcn **`input-group`**, button size updates if required by the registry file (`icon-xs`, etc.).
 
-- Filtering only; no pin partition; `isPinned` always false (descriptor Comboboxes and similar stay unchanged)
+### Naming collision: `InputGroup`
 
-## API
+This repo already has `src/components/ui/input-group.tsx` — a **form field wrapper** (label + children), used by Folio Society config. Official shadcn Combobox needs a different **`InputGroup`** (input chrome with addons).
 
-### `Combobox`
+**Resolution:** Rename the existing form helper to `FieldGroup` (file `field-group.tsx`, export `FieldGroup`) and update its one consumer. Then install shadcn’s `input-group` under the standard name.
 
-- Continue using `browseItems` as both the empty-state pool and the search pin set
-- Extend `ComboboxList` children to:
+### API migration (call sites)
+
+Move from hand-rolled patterns to official ones:
+
+| Hand-rolled | Official shadcn / Base UI |
+|-------------|---------------------------|
+| `getItemLabel` | `itemToStringLabel` (and `itemToStringValue` if needed) |
+| `browseItems` | Not built-in — see Part B (`filteredItems`) |
+| `ComboboxTrigger` wrapping chips | `useComboboxAnchor` + `ComboboxChips ref={anchor}` + `ComboboxContent anchor={anchor}` |
+| `ComboboxChip value={key}` + label children | Official chip API (selected value + display text per docs) |
+| Manual highlight / Enter / Tab | Base UI built-in |
+
+After migration, delete any leftover hand-rolled-only helpers that are unused.
+
+## Part B — Genre top-level pin + badge
+
+### Behavior
+
+**Empty input**
+
+- Show only top-level genre keys (same as today’s `browseItems`).
+- No **Top** badge.
+
+**Non-empty input**
+
+1. Filter full genre list by label/key contains query (case-insensitive).
+2. Stable-partition: matches in the top-level set first, then other matches.
+3. Show muted trailing **Top** text on pinned rows only (no colored row background).
+
+**Descriptors / venues**
+
+- Use default Combobox filtering (no pin, no badge).
+
+### Implementation approach
+
+Keep a small pure helper (unit-tested):
 
 ```ts
-(item: string, index: number, meta: { isPinned: boolean }) => ReactNode
+resolveComboboxFilteredItems({
+  items,
+  browseItems?,
+  filter,
+  getItemLabel,
+}) → { filteredItems, pinnedKeys }
 ```
 
-- `meta.isPinned` is true iff the filter (trimmed) is non-empty **and** the item is in `browseItems`
+Wire genre Comboboxes with Base UI’s **external list control**:
 
-Prefer extracting filter + partition into a small pure helper (unit-testable) used by `Combobox`’s `filteredItems` memo.
+- Controlled `inputValue` / `onInputValueChange` (or equivalent Base UI input API).
+- Pass `filteredItems={...}` from the helper so the list order is ours (pin) and empty browse uses `browseItems`.
+- When rendering genre rows: if `pinnedKeys.has(item)`, show **Top** badge.
 
-### Genre call sites
-
-Update list item rendering in:
-
-- `src/app/for-later-albums/_components/for-later-filters.tsx`
-- `src/app/smart-playlists/_components/recipe-form.tsx`
-
-When `meta.isPinned`, show a small muted trailing **Top** text badge on the row (not a colored background — avoid fighting selected/highlight styles).
+Do **not** fork the shadcn Combobox source for pin logic — keep pin/badge at the genre call sites (+ shared helper).
 
 ## Out of scope
 
-- For-later recommendation drawer stepped genre UI (not this Combobox search pattern)
-- Sorting by full hierarchy depth beyond top-level pin
-- Changing empty-state browse contents or badge-on-browse
+- For-later recommendation drawer stepped genre UI
+- Hierarchy-depth sorting beyond top-level pin
+- Migrating other Radix UI primitives to Base UI
+- Re-adding custom `scrollIntoView` (Base UI owns this)
 
 ## Testing
 
-- Unit tests for the pure filter/partition helper:
-  - empty query → browse list (or full items)
-  - query with top-level + subgenre matches → top-level keys first, stable within groups
-  - no `browseItems` → filter only, original relative order
-- Manual smoke: for-later genre filter and smart-playlists genre field; descriptors unchanged
+- Unit tests for `resolveComboboxFilteredItems` (empty / pin / no browseItems / case-insensitive)
+- After Combobox swap: manual smoke on for-later genres + descriptors, smart-playlists genres + descriptors, concerts venues
+- ArrowDown/ArrowUp through a long list — highlight stays visible (Base UI)
+- Genre search: top-level matches first with **Top** badge; empty browse has no badge

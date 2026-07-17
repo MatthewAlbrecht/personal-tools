@@ -3,16 +3,21 @@ title: Unify lyrics into singular lyric concept
 domain: lyrics
 kind: enhancement
 size: 8
-status: open
+status: planned
 captured: 2026-07-15
 ---
 
 ## Notes
 
+- Planned — spec: `docs/superpowers/specs/2026-07-17-unify-lyrics-singular-concept-design.md`, plan: `docs/superpowers/plans/2026-07-17-unify-lyrics-singular-concept.md`
 - Collapse album lyrics and playlist lyrics into one lyric entity with multiple types
 - One list, one create flow, shared view / edit / print / zine downstream
 - Create asks album vs playlist; Spotify playlist or album link; Genius album link for albums
 - Details of create UI (page/panel/modal/drawer) deferred
+- New standard only — no migration/redirects of legacy stacks
+- Album: Genius track list SoT; Spotify art/year + stored spotifyAlbumId
+- Playlist: Spotify metadata SoT; Genius lyrics/credits after paste; instrumental / not on Genius
+- View ↔ Edit ↔ Zine nav on every lyric page
 
 ## Raw
 

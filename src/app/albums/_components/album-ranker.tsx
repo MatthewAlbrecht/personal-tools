@@ -319,14 +319,14 @@ export function AlbumRanker({
 
 			if (e.key === "ArrowUp") {
 				e.preventDefault();
-				if (e.shiftKey) {
+				if (e.shiftKey || e.altKey) {
 					jumpToTier("up");
 				} else {
 					moveUp();
 				}
 			} else if (e.key === "ArrowDown") {
 				e.preventDefault();
-				if (e.shiftKey) {
+				if (e.shiftKey || e.altKey) {
 					jumpToTier("down");
 				} else {
 					moveDown();
@@ -355,7 +355,7 @@ export function AlbumRanker({
 				<DrawerHeader>
 					<DrawerTitle>Rate Album</DrawerTitle>
 					<DrawerDescription>
-						Use arrow keys to position, Shift+arrows for tier jumps
+						Use arrow keys to position, Shift/Option+arrows for tier jumps
 					</DrawerDescription>
 				</DrawerHeader>
 
@@ -366,7 +366,9 @@ export function AlbumRanker({
 				>
 					{/* Instructions */}
 					<div className="mb-4 flex items-center justify-between text-muted-foreground text-xs">
-						<span>↑↓ Move • Shift+↑↓ Jump tier • Enter Save • Esc Cancel</span>
+						<span>
+							↑↓ Move • Shift/⌥+↑↓ Jump tier • Enter Save • Esc Cancel
+						</span>
 					</div>
 
 					{/* All tiers - always show the template */}
