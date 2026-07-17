@@ -45,7 +45,27 @@ export const smartPlaylistFiltersV2Validator = v.object({
 	excludedAlbumIds: v.array(v.id("spotifyAlbums")),
 });
 
-export const smartPlaylistFiltersValidator = smartPlaylistFiltersV2Validator;
+/** Temporary dual shape so prod can deploy, then migrate legacy docs to V2. */
+const legacySmartPlaylistFiltersValidator = v.object({
+	genreKeys: v.array(v.string()),
+	genreMatch: v.union(v.literal("all"), v.literal("any")),
+	primaryGenresOnly: v.optional(v.boolean()),
+	descriptorKeys: v.array(v.string()),
+	descriptorMatch: v.union(v.literal("all"), v.literal("any")),
+	ratingMin: v.optional(v.number()),
+	ratingMax: v.optional(v.number()),
+	yearMin: v.optional(v.number()),
+	yearMax: v.optional(v.number()),
+	durationMinMinutes: v.optional(v.number()),
+	durationMaxMinutes: v.optional(v.number()),
+	durationBucketKey: v.optional(v.string()),
+	addedWindow: v.optional(addedWindowValidator),
+});
+
+export const smartPlaylistFiltersValidator = v.union(
+	legacySmartPlaylistFiltersValidator,
+	smartPlaylistFiltersV2Validator,
+);
 
 export const trackSelectionValidator = v.object({
 	mode: v.literal("allTracks"),
