@@ -2,8 +2,8 @@ import { Settings } from "lucide-react";
 import { useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { Input } from "~/components/ui/input";
 import { FieldGroup } from "~/components/ui/field-group";
+import { Input } from "~/components/ui/input";
 import type { ConvexConfig } from "../_utils/types";
 
 export function ConfigSection({

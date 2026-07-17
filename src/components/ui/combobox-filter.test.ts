@@ -57,6 +57,17 @@ test("search without browseItems filters only and does not pin", () => {
 	assert.equal(result.pinnedKeys.size, 0);
 });
 
+test("multiple pinned matches preserve items order regardless of browseItems order", () => {
+	const result = resolveComboboxFilteredItems({
+		items: ["jazz", "indie rock", "free jazz", "art rock"],
+		browseItems: ["free jazz", "jazz"],
+		filter: "jazz",
+		getItemLabel,
+	});
+	assert.deepEqual(result.filteredItems, ["jazz", "free jazz"]);
+	assert.deepEqual([...result.pinnedKeys].sort(), ["free jazz", "jazz"]);
+});
+
 test("match is case-insensitive on label or key", () => {
 	const result = resolveComboboxFilteredItems({
 		items: ["free jazz", "jazz"],
