@@ -3,16 +3,20 @@ title: Refactor smart playlist fields
 domain: smart-playlists
 kind: enhancement
 size: 5
-status: started
+status: done
 captured: 2026-07-16
 ---
 
 ## Notes
 
-- Started — rebuilding smart playlist filter fields (ranges, genre clauses, exclusions). Spec: `docs/superpowers/specs/2026-07-16-smart-playlist-fields-refactor-design.md`, plan: `docs/superpowers/plans/2026-07-16-smart-playlist-fields-refactor.md`
+- Done — V2 filters shipped (genre clauses, dual-range rating/duration, year picker, preview exclusions); legacy validator dropped. Spec: `docs/superpowers/specs/2026-07-16-smart-playlist-fields-refactor-design.md`, plan: `docs/superpowers/plans/2026-07-16-smart-playlist-fields-refactor.md`
 - Smart playlist fields need a substantial fix/refactor — many pieces to change, not a single tweak
 - Scope is the field model/UX as a whole rather than a listed set of individual field bugs
 - Outcome: fields that work coherently after the refactor (details deferred to planning)
+
+## Done
+
+- All 12 plan tasks implemented; legacy filter validator/union dropped, `smartPlaylistFiltersValidator` is now `smartPlaylistFiltersV2Validator` only.
 - Spec: `docs/superpowers/specs/2026-07-16-smart-playlist-fields-refactor-design.md`
 - Plan: `docs/superpowers/plans/2026-07-16-smart-playlist-fields-refactor.md`
 

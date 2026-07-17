@@ -10,6 +10,7 @@ import type {
 } from "~/lib/smart-playlists/types";
 import { createPlaylist } from "~/lib/spotify";
 import { api } from "../../../../../convex/_generated/api";
+import type { Id } from "../../../../../convex/_generated/dataModel";
 
 type CreateSmartPlaylistRequest = {
 	userId?: string;
@@ -79,7 +80,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 			name: name.trim(),
 			spotifyPlaylistId: playlist.id,
 			source,
-			filters,
+			filters: {
+				...filters,
+				excludedAlbumIds: filters.excludedAlbumIds as Id<"spotifyAlbums">[],
+			},
 			syncMode,
 			trackSelection,
 		});

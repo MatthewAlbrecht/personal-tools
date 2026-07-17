@@ -1,3 +1,4 @@
+import { getTierLabel } from "~/lib/album-tiers";
 import type { SmartPlaylistFilters, SmartPlaylistSource } from "./types";
 
 const SOURCE_LABELS: Record<SmartPlaylistSource, string> = {
@@ -46,6 +47,10 @@ export function formatRuleSummary({
 	const addedSegment = formatAddedSegment(filters);
 	if (addedSegment) segments.push(addedSegment);
 
+	if (filters.excludedAlbumIds.length > 0) {
+		segments.push(`−${filters.excludedAlbumIds.length} excluded`);
+	}
+
 	return segments.join(" · ");
 }
 
@@ -53,23 +58,28 @@ function formatGenreSegment(
 	filters: SmartPlaylistFilters,
 	genreLabels?: Record<string, string>,
 ): string | undefined {
-	if (filters.genreKeys.length === 0) return undefined;
+	if (filters.genreClauses.length === 0) return undefined;
 
-	const labels = filters.genreKeys.map((key) => genreLabels?.[key] ?? key);
-	const genreStr = labels.join(", ");
-	return filters.primaryGenresOnly ? `${genreStr} (primary)` : genreStr;
+	const parts = filters.genreClauses.map((c) => {
+		const label = genreLabels?.[c.genreKey] ?? c.genreKey;
+		const role = c.role === "either" ? "" : ` (${c.role})`;
+		return c.mode === "exclude" ? `!${label}${role}` : `${label}${role}`;
+	});
+
+	return parts.join(filters.genreMatch === "all" ? " + " : ", ");
 }
 
 function formatRatingSegment(
 	filters: SmartPlaylistFilters,
 ): string | undefined {
 	const { ratingMin, ratingMax } = filters;
-	if (ratingMin !== undefined && ratingMax !== undefined) {
-		return `rating ${ratingMin}–${ratingMax}`;
+	if (ratingMin === 1 && ratingMax === 15) return undefined;
+
+	if (ratingMin === ratingMax) {
+		return getTierLabel(ratingMin);
 	}
-	if (ratingMin !== undefined) return `rating ${ratingMin}+`;
-	if (ratingMax !== undefined) return `rating ≤${ratingMax}`;
-	return undefined;
+
+	return `rating ${ratingMin}–${ratingMax}`;
 }
 
 function formatYearSegment(filters: SmartPlaylistFilters): string | undefined {
@@ -85,12 +95,23 @@ function formatYearSegment(filters: SmartPlaylistFilters): string | undefined {
 function formatDurationSegment(
 	filters: SmartPlaylistFilters,
 ): string | undefined {
-	const { durationMinMinutes, durationMaxMinutes } = filters;
-	if (durationMinMinutes !== undefined && durationMaxMinutes !== undefined) {
-		return `${durationMinMinutes}–${durationMaxMinutes}m`;
+	if (filters.durationOpenLow && filters.durationOpenHigh) return undefined;
+
+	if (filters.durationOpenLow && filters.durationMaxMinutes !== undefined) {
+		return `under ${filters.durationMaxMinutes}m`;
 	}
-	if (durationMaxMinutes !== undefined) return `under ${durationMaxMinutes}m`;
-	if (durationMinMinutes !== undefined) return `${durationMinMinutes}m+`;
+
+	if (filters.durationOpenHigh && filters.durationMinMinutes !== undefined) {
+		return `${filters.durationMinMinutes}m+`;
+	}
+
+	if (
+		filters.durationMinMinutes !== undefined &&
+		filters.durationMaxMinutes !== undefined
+	) {
+		return `${filters.durationMinMinutes}–${filters.durationMaxMinutes}m`;
+	}
+
 	return undefined;
 }
 

@@ -1,13 +1,13 @@
 "use client";
 
 import { useMutation, useQuery } from "convex/react";
-import { Loader2, RefreshCw } from "lucide-react";
+import { Loader2, RefreshCw, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
+import { YearRangePicker } from "~/app/for-later-albums/_components/year-range-picker";
 import { Button } from "~/components/ui/button";
-import { Checkbox } from "~/components/ui/checkbox";
 import {
 	Combobox,
 	ComboboxChip,
@@ -20,7 +20,6 @@ import {
 	ComboboxValue,
 	useComboboxAnchor,
 } from "~/components/ui/combobox";
-import { resolveComboboxFilteredItems } from "~/components/ui/combobox-filter";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import {
@@ -31,31 +30,19 @@ import {
 	SelectValue,
 } from "~/components/ui/select";
 import {
-	type SubTier,
-	TIER_ORDER,
-	type TierName,
-	getRatingsForTier,
-} from "~/lib/album-tiers";
-import { ratingBoundsFromSelection } from "~/lib/smart-playlists/rating-range";
-import type {
-	AddedWindow,
-	SmartPlaylistFilters,
-	SmartPlaylistSource,
-	SmartPlaylistSyncMode,
+	type AddedWindow,
+	EMPTY_SMART_PLAYLIST_FILTERS,
+	type SmartPlaylistFilters,
+	type SmartPlaylistSource,
+	type SmartPlaylistSyncMode,
 } from "~/lib/smart-playlists/types";
 import { cn } from "~/lib/utils";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
+import { DurationRangeSlider } from "./duration-range-slider";
+import { GenreClauseList } from "./genre-clause-list";
+import { RatingRangeSlider } from "./rating-range-slider";
 
-const EMPTY_FILTERS: SmartPlaylistFilters = {
-	genreKeys: [],
-	genreMatch: "any",
-	primaryGenresOnly: false,
-	descriptorKeys: [],
-	descriptorMatch: "any",
-};
-
-const SUB_TIERS: SubTier[] = ["High", "Med", "Low"];
 const MONTHS = [
 	{ value: 1, label: "January" },
 	{ value: 2, label: "February" },
@@ -71,15 +58,9 @@ const MONTHS = [
 	{ value: 12, label: "December" },
 ];
 
-type RatingMode = "none" | "tier" | "minTier";
-type AddedWindowMode = "none" | "relative" | "calendar_month";
+const ADDED_PRESETS = [7, 14, 30, 90] as const;
 
-type RatingUiState = {
-	mode: RatingMode;
-	tier: TierName | "";
-	subTier: SubTier | "";
-	minTier: TierName | "";
-};
+type AddedWindowMode = "none" | "relative" | "calendar_month";
 
 type AddedWindowUiState = {
 	mode: AddedWindowMode;
@@ -96,7 +77,7 @@ export function RecipeForm({
 	recipeId,
 	initialName = "",
 	initialSource = "forLater",
-	initialFilters = EMPTY_FILTERS,
+	initialFilters = EMPTY_SMART_PLAYLIST_FILTERS,
 	initialSyncMode = "mirror",
 }: {
 	mode: "create" | "edit";
@@ -116,16 +97,12 @@ export function RecipeForm({
 	const [syncMode, setSyncMode] =
 		useState<SmartPlaylistSyncMode>(initialSyncMode);
 	const [filters, setFilters] = useState<SmartPlaylistFilters>(initialFilters);
-	const [ratingUi, setRatingUi] = useState<RatingUiState>(() =>
-		ratingUiFromFilters(initialFilters),
-	);
 	const [addedWindowUi, setAddedWindowUi] = useState<AddedWindowUiState>(() =>
 		addedWindowUiFromFilters(initialFilters),
 	);
 	const [previewNow, setPreviewNow] = useState(() => Date.now());
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [isSyncing, setIsSyncing] = useState(false);
-	const [genreInput, setGenreInput] = useState("");
 
 	const genreOptions = useQuery(
 		api.rateYourMusicScrapes.listRateYourMusicGenreKeys,
@@ -139,40 +116,25 @@ export function RecipeForm({
 	const preview = useQuery(api.smartPlaylists.previewMatches, {
 		userId,
 		source,
-		filters,
+		filters: toConvexFilters(filters),
 		now: previewNow,
 	});
 
-	const genreAnchor = useComboboxAnchor();
 	const descriptorAnchor = useComboboxAnchor();
 
-	const genreKeysPool = (genreOptions ?? []).map((g) => g.key).sort();
-	const topLevelGenreKeysPool = (genreOptions ?? [])
-		.filter((g) => g.isTopLevel)
-		.map((g) => g.key)
-		.sort();
-	const genreLabelByKey = new Map(
-		(genreOptions ?? []).map((g) => [g.key, g.label] as const),
-	);
+	const genreOptionsForClauses = (genreOptions ?? []).map((g) => ({
+		key: g.key,
+		label: g.label,
+	}));
+
 	const descriptorKeysPool = (descriptorOptions ?? []).map((d) => d.key).sort();
 	const descriptorLabelByKey = new Map(
 		(descriptorOptions ?? []).map((d) => [d.key, d.label] as const),
 	);
 
-	function formatGenreOption(key: string): string {
-		return genreLabelByKey.get(key) ?? key;
-	}
-
 	function formatDescriptorOption(key: string): string {
 		return descriptorLabelByKey.get(key) ?? key;
 	}
-
-	const genreList = resolveComboboxFilteredItems({
-		items: genreKeysPool,
-		browseItems: topLevelGenreKeysPool,
-		filter: genreInput,
-		getItemLabel: formatGenreOption,
-	});
 
 	function refreshPreviewNow(): void {
 		setPreviewNow(Date.now());
@@ -181,6 +143,19 @@ export function RecipeForm({
 	function patchFilters(patch: Partial<SmartPlaylistFilters>): void {
 		setFilters((current) => ({ ...current, ...patch }));
 		refreshPreviewNow();
+	}
+
+	function excludeAlbum(albumId: Id<"spotifyAlbums">): void {
+		if (filters.excludedAlbumIds.includes(albumId)) return;
+		patchFilters({
+			excludedAlbumIds: [...filters.excludedAlbumIds, albumId],
+		});
+	}
+
+	function removeExclusion(albumId: string): void {
+		patchFilters({
+			excludedAlbumIds: filters.excludedAlbumIds.filter((id) => id !== albumId),
+		});
 	}
 
 	function handleSourceChange(next: SmartPlaylistSource): void {
@@ -195,35 +170,6 @@ export function RecipeForm({
 		refreshPreviewNow();
 	}
 
-	function applyRatingUi(next: RatingUiState): void {
-		setRatingUi(next);
-
-		if (next.mode === "none") {
-			patchFilters({ ratingMin: undefined, ratingMax: undefined });
-			return;
-		}
-
-		if (next.mode === "minTier" && next.minTier) {
-			const bounds = ratingBoundsFromSelection({ minTier: next.minTier });
-			patchFilters({
-				ratingMin: bounds.ratingMin,
-				ratingMax: bounds.ratingMax,
-			});
-			return;
-		}
-
-		if (next.mode === "tier" && next.tier) {
-			const bounds = ratingBoundsFromSelection({
-				tier: next.tier,
-				subTier: next.subTier || undefined,
-			});
-			patchFilters({
-				ratingMin: bounds.ratingMin,
-				ratingMax: bounds.ratingMax,
-			});
-		}
-	}
-
 	function applyAddedWindowUi(next: AddedWindowUiState): void {
 		setAddedWindowUi(next);
 
@@ -234,6 +180,15 @@ export function RecipeForm({
 
 		const window = buildAddedWindow(next);
 		patchFilters({ addedWindow: window });
+	}
+
+	function handleAddedPreset(days: number): void {
+		applyAddedWindowUi({
+			...addedWindowUi,
+			mode: "relative",
+			relativeAmount: String(days),
+			relativeUnit: "days",
+		});
 	}
 
 	async function handleSubmit(
@@ -247,11 +202,7 @@ export function RecipeForm({
 			return;
 		}
 
-		const nextFilters = buildSubmitFilters({
-			filters,
-			source,
-			addedWindowUi,
-		});
+		const nextFilters = normalizeFiltersForSave(filters, source);
 
 		setIsSubmitting(true);
 		try {
@@ -309,7 +260,7 @@ export function RecipeForm({
 				userId,
 				recipeId,
 				name: trimmedName,
-				filters: nextFilters,
+				filters: toConvexFilters(nextFilters),
 				syncMode,
 			});
 			toast.success(`Updated “${trimmedName}”`);
@@ -427,228 +378,250 @@ export function RecipeForm({
 				</div>
 			</div>
 
-			<div className="space-y-4 rounded-lg border bg-card p-4">
+			<div className="space-y-6 rounded-lg border bg-card p-4">
 				<h2 className="font-medium text-sm">Filters</h2>
 
-				<div className="grid gap-4 md:grid-cols-2">
-					<div className="flex flex-col gap-1.5 md:col-span-2">
-						<div className="flex flex-wrap items-center justify-between gap-2">
-							<Label htmlFor="recipe-genres">Genres</Label>
-							<fieldset className="m-0 inline-flex rounded-md border border-border bg-background px-0.5 py-0.5">
-								<SegmentButton
-									active={filters.genreMatch === "any"}
-									onClick={() => patchFilters({ genreMatch: "any" })}
-								>
-									Any
-								</SegmentButton>
-								<SegmentButton
-									active={filters.genreMatch === "all"}
-									onClick={() => patchFilters({ genreMatch: "all" })}
-								>
-									All
-								</SegmentButton>
-							</fieldset>
-						</div>
-						<Combobox
-							items={genreKeysPool}
-							filteredItems={genreList.filteredItems}
-							inputValue={genreInput}
-							onInputValueChange={(next) => setGenreInput(next)}
-							multiple
-							itemToStringLabel={formatGenreOption}
-							value={filters.genreKeys}
-							onValueChange={(genreKeys) => patchFilters({ genreKeys })}
-						>
-							<ComboboxChips ref={genreAnchor}>
-								<ComboboxValue>
-									{(values: string[]) => (
-										<>
-											{values.map((key) => (
-												<ComboboxChip key={key}>
-													{formatGenreOption(key)}
-												</ComboboxChip>
-											))}
-											<ComboboxChipsInput
-												id="recipe-genres"
-												placeholder="Add genre"
-											/>
-										</>
-									)}
-								</ComboboxValue>
-							</ComboboxChips>
-							<ComboboxContent anchor={genreAnchor}>
-								<ComboboxEmpty>No genres found.</ComboboxEmpty>
-								<ComboboxList>
-									{(item) => (
-										<ComboboxItem key={item} value={item}>
-											<span className="flex min-w-0 flex-1 items-center justify-between gap-2">
-												<span className="min-w-0 truncate">
-													{formatGenreOption(item)}
-												</span>
-												{genreList.pinnedKeys.has(item) ? (
-													<span className="shrink-0 text-muted-foreground text-xs">
-														Top
-													</span>
-												) : null}
-											</span>
-										</ComboboxItem>
-									)}
-								</ComboboxList>
-							</ComboboxContent>
-						</Combobox>
-						<div className="flex items-center gap-2 pt-1">
-							<Checkbox
-								id="recipe-primary-genres"
-								checked={filters.primaryGenresOnly}
-								onCheckedChange={(checked) =>
-									patchFilters({ primaryGenresOnly: checked === true })
-								}
-							/>
-							<Label htmlFor="recipe-primary-genres" className="font-normal">
-								Primary genres only
-							</Label>
-						</div>
-					</div>
+				<GenreClauseList
+					genreOptions={genreOptionsForClauses}
+					clauses={filters.genreClauses}
+					genreMatch={filters.genreMatch}
+					onChange={(next) => patchFilters(next)}
+				/>
 
-					<div className="flex flex-col gap-1.5 md:col-span-2">
-						<div className="flex flex-wrap items-center justify-between gap-2">
-							<Label htmlFor="recipe-descriptors">Descriptors</Label>
-							<fieldset className="m-0 inline-flex rounded-md border border-border bg-background px-0.5 py-0.5">
-								<SegmentButton
-									active={filters.descriptorMatch === "any"}
-									onClick={() => patchFilters({ descriptorMatch: "any" })}
-								>
-									Any
-								</SegmentButton>
-								<SegmentButton
-									active={filters.descriptorMatch === "all"}
-									onClick={() => patchFilters({ descriptorMatch: "all" })}
-								>
-									All
-								</SegmentButton>
-							</fieldset>
-						</div>
-						<Combobox
-							items={descriptorKeysPool}
-							multiple
-							itemToStringLabel={formatDescriptorOption}
-							value={filters.descriptorKeys}
-							onValueChange={(descriptorKeys) =>
-								patchFilters({ descriptorKeys })
-							}
-						>
-							<ComboboxChips ref={descriptorAnchor}>
-								<ComboboxValue>
-									{(values: string[]) => (
-										<>
-											{values.map((key) => (
-												<ComboboxChip key={key}>
-													{formatDescriptorOption(key)}
-												</ComboboxChip>
-											))}
-											<ComboboxChipsInput
-												id="recipe-descriptors"
-												placeholder="Add descriptor"
-											/>
-										</>
-									)}
-								</ComboboxValue>
-							</ComboboxChips>
-							<ComboboxContent anchor={descriptorAnchor}>
-								<ComboboxEmpty>No descriptors found.</ComboboxEmpty>
-								<ComboboxList>
-									{(item) => (
-										<ComboboxItem key={item} value={item}>
-											{formatDescriptorOption(item)}
-										</ComboboxItem>
-									)}
-								</ComboboxList>
-							</ComboboxContent>
-						</Combobox>
-					</div>
+				<RatingRangeSlider
+					ratingMin={filters.ratingMin}
+					ratingMax={filters.ratingMax}
+					onChange={(next) => patchFilters(next)}
+				/>
 
-					<div className="flex flex-col gap-1.5 md:col-span-2">
-						<Label>Rating</Label>
-						<div className="flex flex-wrap items-end gap-3">
+				<DurationRangeSlider
+					durationOpenLow={filters.durationOpenLow}
+					durationOpenHigh={filters.durationOpenHigh}
+					durationMinMinutes={filters.durationMinMinutes}
+					durationMaxMinutes={filters.durationMaxMinutes}
+					onChange={(next) => patchFilters(next)}
+				/>
+
+				<div className="space-y-1.5">
+					<Label htmlFor="recipe-year-range">Year</Label>
+					<YearRangePicker
+						yearMin={filters.yearMin}
+						yearMax={filters.yearMax}
+						onCommit={(bounds) => patchFilters(bounds)}
+					/>
+				</div>
+
+				<div className="flex flex-col gap-1.5">
+					<div className="flex flex-wrap items-center justify-between gap-2">
+						<Label htmlFor="recipe-descriptors">Descriptors</Label>
+						<fieldset className="m-0 inline-flex rounded-md border border-border bg-background px-0.5 py-0.5">
+							<SegmentButton
+								active={filters.descriptorMatch === "any"}
+								onClick={() => patchFilters({ descriptorMatch: "any" })}
+							>
+								Any
+							</SegmentButton>
+							<SegmentButton
+								active={filters.descriptorMatch === "all"}
+								onClick={() => patchFilters({ descriptorMatch: "all" })}
+							>
+								All
+							</SegmentButton>
+						</fieldset>
+					</div>
+					<Combobox
+						items={descriptorKeysPool}
+						multiple
+						itemToStringLabel={formatDescriptorOption}
+						value={filters.descriptorKeys}
+						onValueChange={(descriptorKeys) => patchFilters({ descriptorKeys })}
+					>
+						<ComboboxChips ref={descriptorAnchor}>
+							<ComboboxValue>
+								{(values: string[]) => (
+									<>
+										{values.map((key) => (
+											<ComboboxChip key={key}>
+												{formatDescriptorOption(key)}
+											</ComboboxChip>
+										))}
+										<ComboboxChipsInput
+											id="recipe-descriptors"
+											placeholder="Add descriptor"
+										/>
+									</>
+								)}
+							</ComboboxValue>
+						</ComboboxChips>
+						<ComboboxContent anchor={descriptorAnchor}>
+							<ComboboxEmpty>No descriptors found.</ComboboxEmpty>
+							<ComboboxList>
+								{(item) => (
+									<ComboboxItem key={item} value={item}>
+										{formatDescriptorOption(item)}
+									</ComboboxItem>
+								)}
+							</ComboboxList>
+						</ComboboxContent>
+					</Combobox>
+				</div>
+
+				{source === "forLater" ? (
+					<div className="flex flex-col gap-3">
+						<Label>Added window</Label>
+						<div className="flex flex-wrap gap-2">
+							{ADDED_PRESETS.map((days) => (
+								<Button
+									key={days}
+									type="button"
+									size="sm"
+									variant={
+										addedWindowUi.mode === "relative" &&
+										addedWindowUi.relativeUnit === "days" &&
+										addedWindowUi.relativeAmount === String(days)
+											? "default"
+											: "outline"
+									}
+									onClick={() => handleAddedPreset(days)}
+								>
+									Last {days}d
+								</Button>
+							))}
+						</div>
+						<div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-3">
 							<div className="space-y-1.5">
-								<Label className="text-muted-foreground text-xs">Mode</Label>
+								<Label className="text-muted-foreground text-xs">Type</Label>
 								<Select
-									value={ratingUi.mode}
+									value={addedWindowUi.mode}
 									onValueChange={(value) => {
-										const modeValue = value as RatingMode;
-										applyRatingUi({
+										const modeValue = value as AddedWindowMode;
+										applyAddedWindowUi({
+											...addedWindowUi,
 											mode: modeValue,
-											tier:
-												modeValue === "tier"
-													? ratingUi.tier || "Holy Moly"
-													: "",
-											subTier: modeValue === "tier" ? ratingUi.subTier : "",
-											minTier:
-												modeValue === "minTier"
-													? ratingUi.minTier || "Really Enjoyed"
-													: "",
+											relativeAmount:
+												modeValue === "relative"
+													? addedWindowUi.relativeAmount || "30"
+													: addedWindowUi.relativeAmount,
+											calendarYear:
+												modeValue === "calendar_month"
+													? addedWindowUi.calendarYear ||
+														String(new Date().getFullYear())
+													: addedWindowUi.calendarYear,
+											calendarMonth:
+												modeValue === "calendar_month"
+													? addedWindowUi.calendarMonth ||
+														String(new Date().getMonth() + 1)
+													: addedWindowUi.calendarMonth,
 										});
 									}}
 								>
-									<SelectTrigger className="w-[160px]">
+									<SelectTrigger className="h-9 w-full">
 										<SelectValue />
 									</SelectTrigger>
 									<SelectContent>
-										<SelectItem value="none">Any</SelectItem>
-										<SelectItem value="tier">Exact tier</SelectItem>
-										<SelectItem value="minTier">Or above</SelectItem>
+										<SelectItem value="none">Any time</SelectItem>
+										<SelectItem value="relative">Last N days/months</SelectItem>
+										<SelectItem value="calendar_month">
+											Calendar month
+										</SelectItem>
 									</SelectContent>
 								</Select>
 							</div>
 
-							{ratingUi.mode === "tier" ? (
+							{addedWindowUi.mode === "relative" ? (
 								<>
 									<div className="space-y-1.5">
-										<Label className="text-muted-foreground text-xs">
-											Tier
+										<Label
+											htmlFor="recipe-added-amount"
+											className="text-muted-foreground text-xs"
+										>
+											Amount
 										</Label>
-										<Select
-											value={ratingUi.tier || undefined}
-											onValueChange={(value) =>
-												applyRatingUi({
-													...ratingUi,
-													tier: value as TierName,
+										<Input
+											id="recipe-added-amount"
+											type="number"
+											inputMode="numeric"
+											className="h-9 w-full"
+											value={addedWindowUi.relativeAmount}
+											onChange={(event) =>
+												applyAddedWindowUi({
+													...addedWindowUi,
+													relativeAmount: event.target.value,
 												})
 											}
-										>
-											<SelectTrigger className="w-[180px]">
-												<SelectValue placeholder="Tier" />
-											</SelectTrigger>
-											<SelectContent>
-												{TIER_ORDER.map((tier) => (
-													<SelectItem key={tier} value={tier}>
-														{tier}
-													</SelectItem>
-												))}
-											</SelectContent>
-										</Select>
+										/>
 									</div>
 									<div className="space-y-1.5">
 										<Label className="text-muted-foreground text-xs">
-											Sub-tier
+											Unit
 										</Label>
 										<Select
-											value={ratingUi.subTier || "any"}
+											value={addedWindowUi.relativeUnit}
 											onValueChange={(value) =>
-												applyRatingUi({
-													...ratingUi,
-													subTier: value === "any" ? "" : (value as SubTier),
+												applyAddedWindowUi({
+													...addedWindowUi,
+													relativeUnit: value as "days" | "months",
 												})
 											}
 										>
-											<SelectTrigger className="w-[120px]">
+											<SelectTrigger className="h-9 w-full">
 												<SelectValue />
 											</SelectTrigger>
 											<SelectContent>
-												<SelectItem value="any">Any</SelectItem>
-												{SUB_TIERS.map((subTier) => (
-													<SelectItem key={subTier} value={subTier}>
-														{subTier}
+												<SelectItem value="days">Days</SelectItem>
+												<SelectItem value="months">Months</SelectItem>
+											</SelectContent>
+										</Select>
+									</div>
+								</>
+							) : null}
+
+							{addedWindowUi.mode === "calendar_month" ? (
+								<>
+									<div className="space-y-1.5">
+										<Label
+											htmlFor="recipe-added-year"
+											className="text-muted-foreground text-xs"
+										>
+											Year
+										</Label>
+										<Input
+											id="recipe-added-year"
+											type="number"
+											inputMode="numeric"
+											className="h-9 w-full"
+											value={addedWindowUi.calendarYear}
+											onChange={(event) =>
+												applyAddedWindowUi({
+													...addedWindowUi,
+													calendarYear: event.target.value,
+												})
+											}
+										/>
+									</div>
+									<div className="space-y-1.5">
+										<Label className="text-muted-foreground text-xs">
+											Month
+										</Label>
+										<Select
+											value={addedWindowUi.calendarMonth || undefined}
+											onValueChange={(value) =>
+												applyAddedWindowUi({
+													...addedWindowUi,
+													calendarMonth: value,
+												})
+											}
+										>
+											<SelectTrigger className="h-9 w-full">
+												<SelectValue placeholder="Month" />
+											</SelectTrigger>
+											<SelectContent>
+												{MONTHS.map((month) => (
+													<SelectItem
+														key={month.value}
+														value={String(month.value)}
+													>
+														{month.label}
 													</SelectItem>
 												))}
 											</SelectContent>
@@ -656,249 +629,9 @@ export function RecipeForm({
 									</div>
 								</>
 							) : null}
-
-							{ratingUi.mode === "minTier" ? (
-								<div className="space-y-1.5">
-									<Label className="text-muted-foreground text-xs">
-										Min tier
-									</Label>
-									<Select
-										value={ratingUi.minTier || undefined}
-										onValueChange={(value) =>
-											applyRatingUi({
-												...ratingUi,
-												minTier: value as TierName,
-											})
-										}
-									>
-										<SelectTrigger className="w-[180px]">
-											<SelectValue placeholder="Tier" />
-										</SelectTrigger>
-										<SelectContent>
-											{TIER_ORDER.map((tier) => (
-												<SelectItem key={tier} value={tier}>
-													{tier}
-												</SelectItem>
-											))}
-										</SelectContent>
-									</Select>
-								</div>
-							) : null}
 						</div>
 					</div>
-
-					<div className="space-y-1.5">
-						<Label htmlFor="recipe-year-min">Year min</Label>
-						<Input
-							id="recipe-year-min"
-							type="number"
-							inputMode="numeric"
-							value={filters.yearMin ?? ""}
-							onChange={(event) =>
-								patchFilters({
-									yearMin: parseOptionalNumber(event.target.value),
-								})
-							}
-							placeholder="e.g. 1990"
-						/>
-					</div>
-					<div className="space-y-1.5">
-						<Label htmlFor="recipe-year-max">Year max</Label>
-						<Input
-							id="recipe-year-max"
-							type="number"
-							inputMode="numeric"
-							value={filters.yearMax ?? ""}
-							onChange={(event) =>
-								patchFilters({
-									yearMax: parseOptionalNumber(event.target.value),
-								})
-							}
-							placeholder="e.g. 2024"
-						/>
-					</div>
-
-					<div className="space-y-1.5">
-						<Label htmlFor="recipe-duration-min">Duration min (min)</Label>
-						<Input
-							id="recipe-duration-min"
-							type="number"
-							inputMode="numeric"
-							value={filters.durationMinMinutes ?? ""}
-							onChange={(event) =>
-								patchFilters({
-									durationMinMinutes: parseOptionalNumber(event.target.value),
-								})
-							}
-							placeholder="e.g. 30"
-						/>
-					</div>
-					<div className="space-y-1.5">
-						<Label htmlFor="recipe-duration-max">Duration max (min)</Label>
-						<Input
-							id="recipe-duration-max"
-							type="number"
-							inputMode="numeric"
-							value={filters.durationMaxMinutes ?? ""}
-							onChange={(event) =>
-								patchFilters({
-									durationMaxMinutes: parseOptionalNumber(event.target.value),
-								})
-							}
-							placeholder="e.g. 60"
-						/>
-					</div>
-
-					{source === "forLater" ? (
-						<div className="flex flex-col gap-3 md:col-span-2">
-							<Label>Added window</Label>
-							<div className="flex flex-wrap items-end gap-3">
-								<div className="space-y-1.5">
-									<Label className="text-muted-foreground text-xs">Type</Label>
-									<Select
-										value={addedWindowUi.mode}
-										onValueChange={(value) => {
-											const modeValue = value as AddedWindowMode;
-											applyAddedWindowUi({
-												...addedWindowUi,
-												mode: modeValue,
-												relativeAmount:
-													modeValue === "relative"
-														? addedWindowUi.relativeAmount || "30"
-														: addedWindowUi.relativeAmount,
-												calendarYear:
-													modeValue === "calendar_month"
-														? addedWindowUi.calendarYear ||
-															String(new Date().getFullYear())
-														: addedWindowUi.calendarYear,
-												calendarMonth:
-													modeValue === "calendar_month"
-														? addedWindowUi.calendarMonth ||
-															String(new Date().getMonth() + 1)
-														: addedWindowUi.calendarMonth,
-											});
-										}}
-									>
-										<SelectTrigger className="w-[180px]">
-											<SelectValue />
-										</SelectTrigger>
-										<SelectContent>
-											<SelectItem value="none">Any time</SelectItem>
-											<SelectItem value="relative">
-												Last N days/months
-											</SelectItem>
-											<SelectItem value="calendar_month">
-												Calendar month
-											</SelectItem>
-										</SelectContent>
-									</Select>
-								</div>
-
-								{addedWindowUi.mode === "relative" ? (
-									<>
-										<div className="space-y-1.5">
-											<Label
-												htmlFor="recipe-added-amount"
-												className="text-muted-foreground text-xs"
-											>
-												Amount
-											</Label>
-											<Input
-												id="recipe-added-amount"
-												type="number"
-												inputMode="numeric"
-												className="w-[100px]"
-												value={addedWindowUi.relativeAmount}
-												onChange={(event) =>
-													applyAddedWindowUi({
-														...addedWindowUi,
-														relativeAmount: event.target.value,
-													})
-												}
-											/>
-										</div>
-										<div className="space-y-1.5">
-											<Label className="text-muted-foreground text-xs">
-												Unit
-											</Label>
-											<Select
-												value={addedWindowUi.relativeUnit}
-												onValueChange={(value) =>
-													applyAddedWindowUi({
-														...addedWindowUi,
-														relativeUnit: value as "days" | "months",
-													})
-												}
-											>
-												<SelectTrigger className="w-[120px]">
-													<SelectValue />
-												</SelectTrigger>
-												<SelectContent>
-													<SelectItem value="days">Days</SelectItem>
-													<SelectItem value="months">Months</SelectItem>
-												</SelectContent>
-											</Select>
-										</div>
-									</>
-								) : null}
-
-								{addedWindowUi.mode === "calendar_month" ? (
-									<>
-										<div className="space-y-1.5">
-											<Label
-												htmlFor="recipe-added-year"
-												className="text-muted-foreground text-xs"
-											>
-												Year
-											</Label>
-											<Input
-												id="recipe-added-year"
-												type="number"
-												inputMode="numeric"
-												className="w-[100px]"
-												value={addedWindowUi.calendarYear}
-												onChange={(event) =>
-													applyAddedWindowUi({
-														...addedWindowUi,
-														calendarYear: event.target.value,
-													})
-												}
-											/>
-										</div>
-										<div className="space-y-1.5">
-											<Label className="text-muted-foreground text-xs">
-												Month
-											</Label>
-											<Select
-												value={addedWindowUi.calendarMonth || undefined}
-												onValueChange={(value) =>
-													applyAddedWindowUi({
-														...addedWindowUi,
-														calendarMonth: value,
-													})
-												}
-											>
-												<SelectTrigger className="w-[150px]">
-													<SelectValue placeholder="Month" />
-												</SelectTrigger>
-												<SelectContent>
-													{MONTHS.map((month) => (
-														<SelectItem
-															key={month.value}
-															value={String(month.value)}
-														>
-															{month.label}
-														</SelectItem>
-													))}
-												</SelectContent>
-											</Select>
-										</div>
-									</>
-								) : null}
-							</div>
-						</div>
-					) : null}
-				</div>
+				) : null}
 			</div>
 
 			<div className="space-y-3 rounded-lg border bg-card p-4">
@@ -917,12 +650,24 @@ export function RecipeForm({
 				) : (
 					<ul className="space-y-1 text-sm">
 						{preview.albums.slice(0, 12).map((album) => (
-							<li key={album.spotifyAlbumId} className="truncate">
-								<span className="font-medium">{album.name}</span>
-								<span className="text-muted-foreground">
-									{" "}
-									· {album.artistName}
+							<li
+								key={album.spotifyAlbumId}
+								className="flex items-center justify-between gap-2"
+							>
+								<span className="truncate">
+									<span className="font-medium">{album.name}</span>
+									<span className="text-muted-foreground">
+										{" "}
+										· {album.artistName}
+									</span>
 								</span>
+								<button
+									type="button"
+									className="text-muted-foreground text-xs hover:text-foreground"
+									onClick={() => excludeAlbum(album.albumId)}
+								>
+									Exclude
+								</button>
 							</li>
 						))}
 						{preview.albumCount > preview.albums.length ? (
@@ -932,6 +677,36 @@ export function RecipeForm({
 						) : null}
 					</ul>
 				)}
+				{filters.excludedAlbumIds.length > 0 ? (
+					<div className="flex flex-col gap-1.5 border-t pt-3">
+						<Label className="text-muted-foreground text-xs">
+							Excluded albums
+						</Label>
+						<div className="flex flex-wrap gap-1.5">
+							{filters.excludedAlbumIds.map((albumId) => {
+								const known = preview?.albums.find(
+									(album) => album.albumId === albumId,
+								);
+								return (
+									<span
+										key={albumId}
+										className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-xs"
+									>
+										{known ? known.name : "Excluded album"}
+										<button
+											type="button"
+											className="text-muted-foreground hover:text-foreground"
+											aria-label="Remove exclusion"
+											onClick={() => removeExclusion(albumId)}
+										>
+											<X className="size-3" />
+										</button>
+									</span>
+								);
+							})}
+						</div>
+					</div>
+				) : null}
 			</div>
 
 			<div className="flex flex-wrap items-center gap-2">
@@ -998,13 +773,6 @@ function SegmentButton({
 	);
 }
 
-function parseOptionalNumber(value: string): number | undefined {
-	const trimmed = value.trim();
-	if (!trimmed) return undefined;
-	const parsed = Number(trimmed);
-	return Number.isFinite(parsed) ? parsed : undefined;
-}
-
 function emptyAddedWindowUi(): AddedWindowUiState {
 	return {
 		mode: "none",
@@ -1067,74 +835,43 @@ function buildAddedWindow(ui: AddedWindowUiState): AddedWindow | undefined {
 	return { type: "calendar_month", year, month };
 }
 
-function ratingUiFromFilters(filters: SmartPlaylistFilters): RatingUiState {
-	const { ratingMin, ratingMax } = filters;
-
-	if (ratingMin === undefined && ratingMax === undefined) {
-		return { mode: "none", tier: "", subTier: "", minTier: "" };
-	}
-
-	if (ratingMax === undefined && ratingMin !== undefined) {
-		for (const tier of TIER_ORDER) {
-			if (getRatingsForTier(tier).low === ratingMin) {
-				return { mode: "minTier", tier: "", subTier: "", minTier: tier };
-			}
-		}
-	}
-
-	if (ratingMin !== undefined && ratingMax !== undefined) {
-		for (const tier of TIER_ORDER) {
-			const ratings = getRatingsForTier(tier);
-			if (ratingMin === ratings.low && ratingMax === ratings.high) {
-				return { mode: "tier", tier, subTier: "", minTier: "" };
-			}
-			if (ratingMin === ratings.high && ratingMax === ratings.high) {
-				return { mode: "tier", tier, subTier: "High", minTier: "" };
-			}
-			if (ratingMin === ratings.med && ratingMax === ratings.med) {
-				return { mode: "tier", tier, subTier: "Med", minTier: "" };
-			}
-			if (ratingMin === ratings.low && ratingMax === ratings.low) {
-				return { mode: "tier", tier, subTier: "Low", minTier: "" };
-			}
-		}
-	}
-
-	return { mode: "none", tier: "", subTier: "", minTier: "" };
-}
-
-function buildSubmitFilters({
-	filters,
-	source,
-	addedWindowUi,
-}: {
-	filters: SmartPlaylistFilters;
-	source: SmartPlaylistSource;
-	addedWindowUi: AddedWindowUiState;
-}): SmartPlaylistFilters {
+/** Builds the V2 filters payload sent to Convex on create/update. */
+function normalizeFiltersForSave(
+	filters: SmartPlaylistFilters,
+	source: SmartPlaylistSource,
+): SmartPlaylistFilters {
 	const next: SmartPlaylistFilters = {
-		genreKeys: filters.genreKeys,
+		genreClauses: filters.genreClauses,
 		genreMatch: filters.genreMatch,
-		primaryGenresOnly: filters.primaryGenresOnly,
 		descriptorKeys: filters.descriptorKeys,
 		descriptorMatch: filters.descriptorMatch,
+		ratingMin: filters.ratingMin,
+		ratingMax: filters.ratingMax,
+		durationOpenLow: filters.durationOpenLow,
+		durationOpenHigh: filters.durationOpenHigh,
+		excludedAlbumIds: filters.excludedAlbumIds,
 	};
 
-	if (filters.ratingMin !== undefined) next.ratingMin = filters.ratingMin;
-	if (filters.ratingMax !== undefined) next.ratingMax = filters.ratingMax;
 	if (filters.yearMin !== undefined) next.yearMin = filters.yearMin;
 	if (filters.yearMax !== undefined) next.yearMax = filters.yearMax;
-	if (filters.durationMinMinutes !== undefined) {
+	if (!filters.durationOpenLow && filters.durationMinMinutes !== undefined) {
 		next.durationMinMinutes = filters.durationMinMinutes;
 	}
-	if (filters.durationMaxMinutes !== undefined) {
+	if (!filters.durationOpenHigh && filters.durationMaxMinutes !== undefined) {
 		next.durationMaxMinutes = filters.durationMaxMinutes;
 	}
 
-	if (source === "forLater") {
-		const addedWindow = buildAddedWindow(addedWindowUi);
-		if (addedWindow) next.addedWindow = addedWindow;
+	if (source === "forLater" && filters.addedWindow) {
+		next.addedWindow = filters.addedWindow;
 	}
 
 	return next;
+}
+
+/** Client `excludedAlbumIds` are plain strings; Convex expects branded Ids. */
+function toConvexFilters(filters: SmartPlaylistFilters) {
+	return {
+		...filters,
+		excludedAlbumIds: filters.excludedAlbumIds as Id<"spotifyAlbums">[],
+	};
 }
