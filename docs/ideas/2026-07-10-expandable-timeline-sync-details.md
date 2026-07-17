@@ -3,13 +3,13 @@ title: Expandable timeline sync details
 domain: music-funnel
 kind: enhancement
 size: 2
-status: planned
+status: done
 captured: 2026-07-10
 ---
 
 ## Notes
 
-- Planned — spec: `docs/superpowers/specs/2026-07-16-music-funnel-sync-details-and-one-offs-design.md`, plan: `docs/superpowers/plans/2026-07-16-music-funnel-sync-details-and-one-offs.md`
+- Shipped — spec: `docs/superpowers/specs/2026-07-16-music-funnel-sync-details-and-one-offs-design.md`, plan: `docs/superpowers/plans/2026-07-16-music-funnel-sync-details-and-one-offs.md`
 - Click a sync in the timeline to see what that sync added
 - Inline dropdown on the timeline row is a likely shape
 

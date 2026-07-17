@@ -3,13 +3,13 @@ title: One-off playlist sync with related grouping
 domain: music-funnel
 kind: feature
 size: 3
-status: planned
+status: done
 captured: 2026-07-10
 ---
 
 ## Notes
 
-- Planned — spec: `docs/superpowers/specs/2026-07-16-music-funnel-sync-details-and-one-offs-design.md`, plan: `docs/superpowers/plans/2026-07-16-music-funnel-sync-details-and-one-offs.md`
+- Shipped — spec: `docs/superpowers/specs/2026-07-16-music-funnel-sync-details-and-one-offs-design.md`, plan: `docs/superpowers/plans/2026-07-16-music-funnel-sync-details-and-one-offs.md`
 - Support a one-off sync of a playlist (e.g. someone's monthly playlist) without recurring sync
 - Related one-offs should still be connectable/groupable to each other
 
