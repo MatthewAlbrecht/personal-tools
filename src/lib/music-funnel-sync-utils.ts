@@ -176,9 +176,7 @@ export function computeAlbumRepeatSummaries(
 				.map((row) => row.spotifyAlbumType)
 				.find(
 					(value): value is SpotifyAlbumType =>
-						value === "album" ||
-						value === "single" ||
-						value === "compilation",
+						value === "album" || value === "single" || value === "compilation",
 				);
 			if (!qualifiesAsMusicFunnelAlbumRepeat(albumType)) {
 				return null;

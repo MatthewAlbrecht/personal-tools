@@ -1,6 +1,6 @@
 import type { ConvexHttpClient } from "convex/browser";
-import { api } from "../../convex/_generated/api";
 import { getAlbums } from "~/lib/spotify";
+import { api } from "../../convex/_generated/api";
 
 export async function backfillMusicFunnelAlbumTypes({
 	convex,
