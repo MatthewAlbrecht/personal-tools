@@ -46,7 +46,6 @@ import {
 	type ListenedAnswer,
 	RATING_MAX,
 	RATING_MIN,
-	type RecommendationTagInput,
 	type RecommendationTagOption,
 	buildDurationBucketRecommendationOptions,
 	buildSavedRecommendationAlbumRefs,
@@ -689,13 +688,6 @@ function readableRecommendationLabelFromKey(key: string): string {
 		.filter(Boolean)
 		.map((part) => part.charAt(0).toUpperCase() + part.slice(1))
 		.join(" ");
-}
-
-function recommendationTagInputFromKey(key: string): RecommendationTagInput {
-	return {
-		key,
-		label: readableRecommendationLabelFromKey(key),
-	};
 }
 
 function recommendationCandidateFromItem(
