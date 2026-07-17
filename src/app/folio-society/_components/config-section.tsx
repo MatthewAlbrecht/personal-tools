@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
-import { InputGroup } from "~/components/ui/input-group";
+import { FieldGroup } from "~/components/ui/field-group";
 import type { ConvexConfig } from "../_utils/types";
 
 export function ConfigSection({
@@ -94,7 +94,7 @@ export function ConfigSection({
 						</div>
 					)}
 					<div className="flex items-end gap-4">
-						<InputGroup label="Start ID" htmlFor="startId" className="flex-1">
+						<FieldGroup label="Start ID" htmlFor="startId" className="flex-1">
 							<Input
 								id="startId"
 								type="number"
@@ -102,8 +102,8 @@ export function ConfigSection({
 								value={startIdInput}
 								onChange={(e) => setStartIdInput(e.target.value)}
 							/>
-						</InputGroup>
-						<InputGroup label="End ID" htmlFor="endId" className="flex-1">
+						</FieldGroup>
+						<FieldGroup label="End ID" htmlFor="endId" className="flex-1">
 							<Input
 								id="endId"
 								type="number"
@@ -111,7 +111,7 @@ export function ConfigSection({
 								value={endIdInput}
 								onChange={(e) => setEndIdInput(e.target.value)}
 							/>
-						</InputGroup>
+						</FieldGroup>
 						<Button
 							onClick={handleUpdateConfig}
 							disabled={isUpdatingConfig}

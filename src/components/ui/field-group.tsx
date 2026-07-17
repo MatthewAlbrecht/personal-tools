@@ -2,21 +2,19 @@ import type * as React from "react";
 import { cn } from "~/lib/utils";
 import { Label } from "./label";
 
-interface InputGroupProps {
-	label: string;
-	htmlFor?: string;
-	className?: string;
-	labelClassName?: string;
-	children: React.ReactNode;
-}
-
-function InputGroup({
+function FieldGroup({
 	label,
 	htmlFor,
 	className,
 	labelClassName,
 	children,
-}: InputGroupProps) {
+}: {
+	label: string;
+	htmlFor?: string;
+	className?: string;
+	labelClassName?: string;
+	children: React.ReactNode;
+}) {
 	return (
 		<div className={cn("space-y-2", className)}>
 			<Label htmlFor={htmlFor} className={labelClassName}>
@@ -27,4 +25,4 @@ function InputGroup({
 	);
 }
 
-export { InputGroup };
+export { FieldGroup };
