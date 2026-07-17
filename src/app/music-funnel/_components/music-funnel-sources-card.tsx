@@ -1,9 +1,10 @@
 "use client";
 
 import { useMutation } from "convex/react";
-import { Pencil, Plus } from "lucide-react";
+import { Pencil, Plus, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
 	Card,
@@ -19,6 +20,9 @@ import { parseSpotifyPlaylistId } from "~/lib/parse-spotify-playlist-id";
 import { api } from "../../../../convex/_generated/api";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import { spotifyPlaylistIdInputProps } from "../_utils/spotify-playlist-id-input";
+import { MusicFunnelCuratorCombobox } from "./music-funnel-curator-combobox";
+
+type SourceKind = "recurring" | "one_off";
 
 type SourceFormState = {
 	sourceId?: Id<"musicFunnelSources">;
@@ -28,6 +32,7 @@ type SourceFormState = {
 	notes: string;
 	scheduleHint: string;
 	isActive: boolean;
+	kind: SourceKind;
 };
 
 const emptyForm: SourceFormState = {
@@ -37,7 +42,24 @@ const emptyForm: SourceFormState = {
 	notes: "",
 	scheduleHint: "",
 	isActive: true,
+	kind: "recurring",
 };
+
+function sourceKind(source: Doc<"musicFunnelSources">): SourceKind {
+	return source.kind ?? "recurring";
+}
+
+function sortSources(
+	sources: Doc<"musicFunnelSources">[],
+): Doc<"musicFunnelSources">[] {
+	return [...sources].sort((a, b) => {
+		const curatorCmp = a.curatorName.localeCompare(b.curatorName);
+		if (curatorCmp !== 0) {
+			return curatorCmp;
+		}
+		return a.displayName.localeCompare(b.displayName);
+	});
+}
 
 export function MusicFunnelSourcesCard({
 	userId,
@@ -50,6 +72,17 @@ export function MusicFunnelSourcesCard({
 	const setSourceActive = useMutation(api.musicFunnel.setSourceActive);
 	const [form, setForm] = useState<SourceFormState>(emptyForm);
 	const [isSaving, setIsSaving] = useState(false);
+	const [retryingSourceId, setRetryingSourceId] =
+		useState<Id<"musicFunnelSources"> | null>(null);
+
+	const curatorOptions = Array.from(
+		new Set(
+			(sources ?? []).map((source) => source.curatorName).filter(Boolean),
+		),
+	).sort((a, b) => a.localeCompare(b));
+
+	const sortedSources =
+		sources === undefined ? undefined : sortSources(sources);
 
 	function startCreate(): void {
 		setForm(emptyForm);
@@ -64,7 +97,28 @@ export function MusicFunnelSourcesCard({
 			notes: source.notes ?? "",
 			scheduleHint: source.scheduleHint ?? "",
 			isActive: source.isActive,
+			kind: sourceKind(source),
 		});
+	}
+
+	async function syncSourceById(
+		sourceId: Id<"musicFunnelSources">,
+	): Promise<void> {
+		const response = await fetch("/api/music-funnel/sync", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ userId, sourceId }),
+		});
+		const result = (await response.json()) as {
+			errors?: string[];
+			message?: string;
+			error?: string;
+		};
+		if (!response.ok) {
+			throw new Error(
+				result.errors?.[0] ?? result.message ?? result.error ?? "Sync failed",
+			);
+		}
 	}
 
 	async function handleSave(): Promise<void> {
@@ -75,8 +129,9 @@ export function MusicFunnelSourcesCard({
 
 		setIsSaving(true);
 		const normalizedPlaylistId = parseSpotifyPlaylistId(form.spotifyPlaylistId);
+		const isCreatingOneOff = !form.sourceId && form.kind === "one_off";
 		try {
-			await upsertSource({
+			const sourceId = await upsertSource({
 				userId,
 				sourceId: form.sourceId,
 				spotifyPlaylistId: normalizedPlaylistId,
@@ -84,9 +139,25 @@ export function MusicFunnelSourcesCard({
 				curatorName: form.curatorName || form.displayName,
 				notes: form.notes,
 				scheduleHint: form.scheduleHint,
-				isActive: form.isActive,
+				isActive: isCreatingOneOff ? true : form.isActive,
+				kind: form.kind,
 			});
-			toast.success(form.sourceId ? "Source updated" : "Source added");
+
+			if (isCreatingOneOff) {
+				try {
+					await syncSourceById(sourceId);
+					toast.success("One-off source synced");
+				} catch (syncError) {
+					console.error("One-off source sync failed:", syncError);
+					toast.error(
+						syncError instanceof Error
+							? syncError.message
+							: "Source saved but sync failed — use Retry sync",
+					);
+				}
+			} else {
+				toast.success(form.sourceId ? "Source updated" : "Source added");
+			}
 			setForm(emptyForm);
 		} catch (error) {
 			console.error("Failed to save music funnel source:", error);
@@ -113,6 +184,23 @@ export function MusicFunnelSourcesCard({
 		}
 	}
 
+	async function handleRetrySync(
+		source: Doc<"musicFunnelSources">,
+	): Promise<void> {
+		setRetryingSourceId(source._id);
+		try {
+			await syncSourceById(source._id);
+			toast.success("One-off source synced");
+		} catch (error) {
+			console.error("Retry sync failed:", error);
+			toast.error(
+				error instanceof Error ? error.message : "Could not sync source",
+			);
+		} finally {
+			setRetryingSourceId(null);
+		}
+	}
+
 	return (
 		<Card>
 			<CardHeader>
@@ -122,55 +210,89 @@ export function MusicFunnelSourcesCard({
 				</CardDescription>
 			</CardHeader>
 			<CardContent className="space-y-6">
-				{sources === undefined ? (
+				{sortedSources === undefined ? (
 					<p className="text-muted-foreground text-sm">Loading sources...</p>
-				) : sources.length === 0 ? (
+				) : sortedSources.length === 0 ? (
 					<p className="text-muted-foreground text-sm">
 						No sources yet. Add your first recommendation playlist below.
 					</p>
 				) : (
 					<ul className="space-y-3">
-						{sources.map((source) => (
-							<li key={source._id} className="space-y-3 rounded-lg border p-3">
-								<div className="min-w-0">
-									<p className="font-medium">{source.displayName}</p>
-									<p className="text-muted-foreground text-sm">
-										{source.curatorName}
-										{source.scheduleHint ? ` · ${source.scheduleHint}` : ""}
-									</p>
-									<p className="truncate text-muted-foreground text-xs">
-										{source.spotifyPlaylistId}
-										{source.lastTrackCount !== undefined
-											? ` · ${source.lastTrackCount} tracks`
-											: ""}
-									</p>
-									{!source.isActive ? (
-										<p className="text-amber-600 text-xs dark:text-amber-400">
-											Inactive
+						{sortedSources.map((source) => {
+							const kind = sourceKind(source);
+							const isOneOff = kind === "one_off";
+							const isCompletedOneOff = isOneOff && !source.isActive;
+							const canRetryOneOff = isOneOff && source.isActive;
+
+							return (
+								<li
+									key={source._id}
+									className="space-y-3 rounded-lg border p-3"
+								>
+									<div className="min-w-0">
+										<div className="flex flex-wrap items-center gap-2">
+											<p className="font-medium">{source.displayName}</p>
+											{isOneOff ? (
+												<Badge variant="secondary">One-off</Badge>
+											) : null}
+											{isCompletedOneOff ? (
+												<Badge variant="outline">Completed</Badge>
+											) : null}
+										</div>
+										<p className="text-muted-foreground text-sm">
+											{source.curatorName}
+											{source.scheduleHint ? ` · ${source.scheduleHint}` : ""}
 										</p>
-									) : null}
-								</div>
-								<div className="flex gap-2">
-									<Button
-										type="button"
-										variant="outline"
-										size="sm"
-										onClick={() => startEdit(source)}
-									>
-										<Pencil className="size-4" />
-										Edit
-									</Button>
-									<Button
-										type="button"
-										variant="outline"
-										size="sm"
-										onClick={() => void handleToggleActive(source)}
-									>
-										{source.isActive ? "Deactivate" : "Activate"}
-									</Button>
-								</div>
-							</li>
-						))}
+										<p className="truncate text-muted-foreground text-xs">
+											{source.spotifyPlaylistId}
+											{source.lastTrackCount !== undefined
+												? ` · ${source.lastTrackCount} tracks`
+												: ""}
+										</p>
+										{!source.isActive && !isOneOff ? (
+											<p className="text-amber-600 text-xs dark:text-amber-400">
+												Inactive
+											</p>
+										) : null}
+									</div>
+									<div className="flex flex-wrap gap-2">
+										<Button
+											type="button"
+											variant="outline"
+											size="sm"
+											onClick={() => startEdit(source)}
+										>
+											<Pencil className="size-4" />
+											Edit
+										</Button>
+										{canRetryOneOff ? (
+											<Button
+												type="button"
+												variant="outline"
+												size="sm"
+												disabled={retryingSourceId === source._id}
+												onClick={() => void handleRetrySync(source)}
+											>
+												<RefreshCw className="size-4" />
+												{retryingSourceId === source._id
+													? "Retrying..."
+													: "Retry sync"}
+											</Button>
+										) : null}
+										{!isOneOff ? (
+											<Button
+												type="button"
+												variant="outline"
+												size="sm"
+												onClick={() => void handleToggleActive(source)}
+											>
+												{source.isActive ? "Deactivate" : "Activate"}
+											</Button>
+										) : null}
+									</div>
+								</li>
+							);
+						})}
 					</ul>
 				)}
 
@@ -190,6 +312,33 @@ export function MusicFunnelSourcesCard({
 								New
 							</Button>
 						) : null}
+					</div>
+					<div className="space-y-2">
+						<Label>Kind</Label>
+						<div className="flex gap-4">
+							<label className="flex items-center gap-2 text-sm">
+								<input
+									type="radio"
+									name="source-kind"
+									checked={form.kind === "recurring"}
+									onChange={() =>
+										setForm((prev) => ({ ...prev, kind: "recurring" }))
+									}
+								/>
+								Recurring
+							</label>
+							<label className="flex items-center gap-2 text-sm">
+								<input
+									type="radio"
+									name="source-kind"
+									checked={form.kind === "one_off"}
+									onChange={() =>
+										setForm((prev) => ({ ...prev, kind: "one_off" }))
+									}
+								/>
+								One-off
+							</label>
+						</div>
 					</div>
 					<div className="space-y-2">
 						<Label htmlFor="source-playlist-id">Spotify playlist ID</Label>
@@ -222,15 +371,12 @@ export function MusicFunnelSourcesCard({
 						/>
 					</div>
 					<div className="space-y-2">
-						<Label htmlFor="source-curator-name">Curator name</Label>
-						<Input
-							id="source-curator-name"
+						<Label>Curator name</Label>
+						<MusicFunnelCuratorCombobox
+							curators={curatorOptions}
 							value={form.curatorName}
-							onChange={(event) =>
-								setForm((prev) => ({
-									...prev,
-									curatorName: event.target.value,
-								}))
+							onValueChange={(curatorName) =>
+								setForm((prev) => ({ ...prev, curatorName }))
 							}
 						/>
 					</div>
@@ -259,26 +405,35 @@ export function MusicFunnelSourcesCard({
 							rows={2}
 						/>
 					</div>
-					<label className="flex items-center gap-2 text-sm">
-						<input
-							type="checkbox"
-							checked={form.isActive}
-							onChange={(event) =>
-								setForm((prev) => ({ ...prev, isActive: event.target.checked }))
-							}
-						/>
-						Active (included in sync)
-					</label>
+					{form.kind === "recurring" ? (
+						<label className="flex items-center gap-2 text-sm">
+							<input
+								type="checkbox"
+								checked={form.isActive}
+								onChange={(event) =>
+									setForm((prev) => ({
+										...prev,
+										isActive: event.target.checked,
+									}))
+								}
+							/>
+							Active (included in sync)
+						</label>
+					) : null}
 					<Button
 						type="button"
 						onClick={() => void handleSave()}
 						disabled={isSaving}
 					>
 						{isSaving
-							? "Saving..."
+							? form.kind === "one_off" && !form.sourceId
+								? "Syncing..."
+								: "Saving..."
 							: form.sourceId
 								? "Update source"
-								: "Add source"}
+								: form.kind === "one_off"
+									? "Add & sync"
+									: "Add source"}
 					</Button>
 				</div>
 			</CardContent>

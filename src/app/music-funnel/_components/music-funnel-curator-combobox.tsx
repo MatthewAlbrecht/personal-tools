@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
 	Combobox,
 	ComboboxContent,
@@ -22,6 +22,10 @@ export function MusicFunnelCuratorCombobox({
 	onValueChange: (value: string) => void;
 }) {
 	const [filter, setFilter] = useState(value);
+
+	useEffect(() => {
+		setFilter(value);
+	}, [value]);
 
 	const unique = Array.from(
 		new Set([...(value ? [value] : []), ...curators].filter(Boolean)),
