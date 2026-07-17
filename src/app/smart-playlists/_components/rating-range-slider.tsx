@@ -1,8 +1,8 @@
 "use client";
 
-import { getTierLabel } from "~/lib/album-tiers";
-import { Slider } from "~/components/ui/slider";
 import { Label } from "~/components/ui/label";
+import { Slider } from "~/components/ui/slider";
+import { getTierLabel } from "~/lib/album-tiers";
 
 export function RatingRangeSlider({
 	ratingMin,
