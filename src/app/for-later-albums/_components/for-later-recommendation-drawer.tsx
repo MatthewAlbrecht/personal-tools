@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery } from "convex/react";
-import { Disc3, ExternalLink, Pencil, X } from "lucide-react";
+import { Disc3, Pencil, X } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { AlbumRatingBadge } from "~/components/album-rating-badge";
@@ -18,7 +18,6 @@ import { Input } from "~/components/ui/input";
 import { Slider } from "~/components/ui/slider";
 import { api } from "../../../../convex/_generated/api";
 import {
-	ADDED_DAYS_MAX,
 	ADDED_DAYS_MIN,
 	DURATION_MINUTES_MAX,
 	DURATION_MINUTES_MIN,
@@ -30,15 +29,24 @@ import {
 	answersToMutationPayload,
 	buildRecommendationProseClauses,
 	createDefaultRecommendationAnswers,
+	formatAddedDaysRangeLabel,
+	formatDurationRangeLabel,
+	formatRatingRangeLabel,
+	getAddedDaysMax,
 	minutesFromMs,
 	msFromMinutes,
+	nextRecommendationWindow,
+	pickRerollLoadingMs,
+	visibleRecommendationRows,
 } from "../_utils/recommendation-state";
 import type { ForLaterAlbumRowData } from "../_utils/types";
 import { YearRangePicker } from "./year-range-picker";
 
 type RecommendationResult = {
 	recommendationId: string;
+	/** Prefetched pool (up to 10); UI shows a window via `offset`. */
 	rows: ForLaterAlbumRowData[];
+	offset: number;
 	matchingCount: number;
 	requestedCount: number;
 	returnedCount: number;
@@ -122,10 +130,43 @@ export function ForLaterRecommendationDrawer({
 				now: Date.now(),
 				seed: createClientSeed(),
 			});
-			setRecommendationResult(result);
+			setRecommendationResult({
+				...result,
+				offset: 0,
+			});
 		} catch (error) {
 			console.error("Failed to create for-later recommendation", error);
 			setRecommendationError("Could not create a recommendation. Try again.");
+		} finally {
+			setIsRecommending(false);
+		}
+	}
+
+	async function handleReroll(): Promise<void> {
+		if (!recommendationResult) {
+			await handleRecommendNow(answers);
+			return;
+		}
+
+		const next = nextRecommendationWindow(
+			recommendationResult.offset,
+			recommendationResult.requestedCount,
+			recommendationResult.rows.length,
+		);
+
+		if (next.exhausted) {
+			await handleRecommendNow(answers);
+			return;
+		}
+
+		setIsRecommending(true);
+		setRecommendationError(null);
+		try {
+			await wait(pickRerollLoadingMs());
+			setRecommendationResult({
+				...recommendationResult,
+				offset: next.offset,
+			});
 		} finally {
 			setIsRecommending(false);
 		}
@@ -191,7 +232,7 @@ export function ForLaterRecommendationDrawer({
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="flex max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-5xl flex-col gap-0 p-0 sm:max-w-5xl">
+			<DialogContent className="flex max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-lg flex-col gap-0 p-0 sm:max-w-lg">
 				<DialogHeader className="shrink-0 gap-2 border-b p-6 pr-12 text-left">
 					<DialogTitle>Recommend from For Later</DialogTitle>
 					<DialogDescription>
@@ -239,7 +280,7 @@ export function ForLaterRecommendationDrawer({
 							</Button>
 							<Button
 								type="button"
-								onClick={() => void handleRecommendNow(answers)}
+								onClick={() => void handleReroll()}
 								disabled={isRecommending}
 							>
 								Re-roll
@@ -279,18 +320,26 @@ function RecommendationForm({
 	onAddGenre: (key: string) => void;
 	onRemoveGenre: (key: string) => void;
 }) {
+	const addedDaysMax = getAddedDaysMax();
+	const durationMinMinutes = minutesFromMs(answers.durationMinMs);
+	const durationMaxMinutes = minutesFromMs(answers.durationMaxMs);
+
 	return (
 		<div className="space-y-6">
 			<section data-field="added" className="space-y-3">
 				<div className="space-y-1">
 					<h3 className="font-semibold text-base">Added</h3>
 					<p className="text-muted-foreground text-sm">
-						{answers.addedDaysMin}–{answers.addedDaysMax} days ago
+						{formatAddedDaysRangeLabel(
+							answers.addedDaysMin,
+							answers.addedDaysMax,
+							Date.now(),
+						)}
 					</p>
 				</div>
 				<Slider
 					min={ADDED_DAYS_MIN}
-					max={ADDED_DAYS_MAX}
+					max={addedDaysMax}
 					step={1}
 					value={[answers.addedDaysMin, answers.addedDaysMax]}
 					onValueChange={(value) => {
@@ -327,18 +376,14 @@ function RecommendationForm({
 				<div className="space-y-1">
 					<h3 className="font-semibold text-base">Duration</h3>
 					<p className="text-muted-foreground text-sm">
-						{minutesFromMs(answers.durationMinMs)}–
-						{minutesFromMs(answers.durationMaxMs)} minutes
+						{formatDurationRangeLabel(durationMinMinutes, durationMaxMinutes)}
 					</p>
 				</div>
 				<Slider
 					min={DURATION_MINUTES_MIN}
 					max={DURATION_MINUTES_MAX}
 					step={1}
-					value={[
-						minutesFromMs(answers.durationMinMs),
-						minutesFromMs(answers.durationMaxMs),
-					]}
+					value={[durationMinMinutes, durationMaxMinutes]}
 					onValueChange={(value) => {
 						const [min, max] = value;
 						if (min === undefined || max === undefined) {
@@ -356,7 +401,7 @@ function RecommendationForm({
 				<div className="space-y-1">
 					<h3 className="font-semibold text-base">Rating</h3>
 					<p className="text-muted-foreground text-sm">
-						{answers.ratingMin}–{answers.ratingMax}
+						{formatRatingRangeLabel(answers.ratingMin, answers.ratingMax)}
 					</p>
 				</div>
 				<Slider
@@ -575,31 +620,37 @@ function RecommendationResults({
 		return null;
 	}
 
+	const visibleRows = visibleRecommendationRows(
+		result.rows,
+		result.offset,
+		result.requestedCount,
+	);
+	const shownCount = visibleRows.length;
+
 	return (
 		<section className="space-y-4">
 			<div className="flex items-center justify-between gap-3">
 				<div>
 					<h3 className="font-semibold text-base">Recommendations</h3>
 					<p className="text-muted-foreground text-sm">
-						{result.returnedCount} of {result.requestedCount} shown from{" "}
+						{shownCount} of {result.requestedCount} shown from{" "}
 						{result.matchingCount} matching albums.
 					</p>
 				</div>
 			</div>
-			{result.returnedCount === 0 ? (
+			{shownCount === 0 ? (
 				<p className="text-muted-foreground text-xs">
 					No matches for those answers. Try another recommendation after
 					loosening one filter.
 				</p>
 			) : null}
-			{result.returnedCount < result.requestedCount ? (
+			{shownCount < result.requestedCount ? (
 				<p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-amber-700 text-xs dark:text-amber-300">
-					Only {result.returnedCount} matched the requested{" "}
-					{result.requestedCount}.
+					Only {shownCount} matched the requested {result.requestedCount}.
 				</p>
 			) : null}
 			<div className="grid gap-3">
-				{result.rows.map((row) => (
+				{visibleRows.map((row) => (
 					<RecommendationResultCard key={row.id} row={row} />
 				))}
 			</div>
@@ -611,90 +662,132 @@ function RecommendationResultCard({ row }: { row: ForLaterAlbumRowData }) {
 	const spotifyUrl = buildSpotifyAlbumUrl(row.spotifyAlbumId);
 
 	return (
-		<article className="rounded-xl border bg-card p-4">
-			<div className="flex gap-4">
-				<div className="relative size-20 shrink-0 overflow-hidden rounded-lg bg-muted">
+		<article className="rounded-xl border bg-card p-3">
+			<div className="flex items-start gap-3">
+				<div className="relative size-16 shrink-0 overflow-hidden rounded-md bg-muted">
 					{row.imageUrl ? (
 						<Image
 							src={row.imageUrl}
 							alt={row.name}
 							fill
 							className="object-cover"
-							sizes="80px"
+							sizes="64px"
 						/>
 					) : (
 						<div className="flex h-full w-full items-center justify-center">
-							<Disc3 className="size-6 text-muted-foreground/60" />
+							<Disc3 className="size-5 text-muted-foreground/60" />
 						</div>
 					)}
 				</div>
-				<div className="min-w-0 flex-1 space-y-3">
-					<div className="flex items-start justify-between gap-3">
-						<div className="min-w-0">
-							<h4 className="truncate font-semibold text-base">{row.name}</h4>
-							<p className="truncate text-muted-foreground text-sm">
+				<div className="min-w-0 flex-1">
+					<div className="flex items-start gap-4">
+						<div className="min-w-0 flex-1">
+							<h4 className="truncate font-semibold text-sm leading-tight">
+								{row.name}
+							</h4>
+							<p className="truncate text-muted-foreground text-xs leading-tight">
 								{row.artistName}
 							</p>
-							<div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-muted-foreground text-xs">
-								{row.releaseYear ? <span>{row.releaseYear}</span> : null}
-								<span>{row.hasListened ? "Listened" : "Not listened"}</span>
-								<span>
-									{row.rymStatus === "matched" ? "RYM matched" : "No RYM match"}
-								</span>
-							</div>
+							<p className="mt-0.5 text-muted-foreground text-xs leading-tight">
+								{[
+									row.releaseYear,
+									row.hasListened ? "Listened" : "Not listened",
+								]
+									.filter(Boolean)
+									.join(" · ")}
+							</p>
 						</div>
-						<div className="flex shrink-0 items-center gap-2">
-							{row.rating !== undefined ? (
-								<AlbumRatingBadge rating={row.rating} />
-							) : null}
+						<div className="flex shrink-0 flex-col items-end gap-1.5">
 							{spotifyUrl ? (
 								<a
 									href={spotifyUrl}
 									target="_blank"
 									rel="noopener noreferrer"
-									className="text-muted-foreground transition-colors hover:text-foreground"
+									className="text-[#1DB954] transition-opacity hover:opacity-80"
 									aria-label={`Open ${row.name} on Spotify`}
 								>
-									<ExternalLink className="size-4" />
+									<SpotifyLogoIcon className="size-5" />
 								</a>
+							) : null}
+							{row.rating !== undefined ? (
+								<AlbumRatingBadge rating={row.rating} />
 							) : null}
 						</div>
 					</div>
-					<RecommendationTagGroup label="Genres" tags={row.primaryGenres} />
-					<RecommendationTagGroup
-						label="Secondary"
-						tags={row.secondaryGenres}
-					/>
-					<RecommendationTagGroup label="Descriptors" tags={row.descriptors} />
+					<div className="mt-2">
+						<RecommendationTaxonomyLines
+							primaryGenres={row.primaryGenres}
+							secondaryGenres={row.secondaryGenres}
+							descriptors={row.descriptors}
+						/>
+					</div>
 				</div>
 			</div>
 		</article>
 	);
 }
 
-function RecommendationTagGroup({
-	label,
-	tags,
+function SpotifyLogoIcon({ className }: { className?: string }) {
+	return (
+		<svg
+			className={className}
+			viewBox="0 0 24 24"
+			role="img"
+			aria-hidden="true"
+			fill="currentColor"
+		>
+			<path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+		</svg>
+	);
+}
+
+function RecommendationTaxonomyLines({
+	primaryGenres,
+	secondaryGenres,
+	descriptors,
 }: {
-	label: string;
-	tags: Array<{ key: string; label: string }>;
+	primaryGenres: Array<{ key: string; label: string }>;
+	secondaryGenres: Array<{ key: string; label: string }>;
+	descriptors: Array<{ key: string; label: string }>;
 }) {
-	if (tags.length === 0) {
+	const primary = joinTagLabels(primaryGenres);
+	const secondary = joinTagLabels(secondaryGenres);
+	const descriptorLine = joinTagLabels(descriptors);
+
+	if (!primary && !secondary && !descriptorLine) {
 		return null;
 	}
 
 	return (
-		<div className="space-y-1">
-			<p className="font-medium text-muted-foreground text-xs">{label}</p>
-			<div className="flex flex-wrap gap-1">
-				{tags.slice(0, 8).map((tag) => (
-					<Badge key={tag.key} variant="secondary" className="text-[10px]">
-						{tag.label}
-					</Badge>
-				))}
-			</div>
+		<div>
+			{(primary || secondary) && (
+				<div className="space-y-0.5">
+					{primary ? (
+						<p className="font-medium text-sm text-foreground leading-snug">
+							{primary}
+						</p>
+					) : null}
+					{secondary ? (
+						<p className="text-foreground/80 text-xs leading-snug font-normal">
+							{secondary}
+						</p>
+					) : null}
+				</div>
+			)}
+			{descriptorLine ? (
+				<p className="mt-2 text-muted-foreground text-[11px] leading-snug">
+					{descriptorLine}
+				</p>
+			) : null}
 		</div>
 	);
+}
+
+function joinTagLabels(tags: Array<{ key: string; label: string }>): string {
+	return tags
+		.map((tag) => tag.label.trim())
+		.filter(Boolean)
+		.join(", ");
 }
 
 function buildSpotifyAlbumUrl(spotifyAlbumId: string): string | null {
@@ -708,6 +801,12 @@ function buildSpotifyAlbumUrl(spotifyAlbumId: string): string | null {
 
 function createClientSeed(): string {
 	return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+
+function wait(ms: number): Promise<void> {
+	return new Promise((resolve) => {
+		window.setTimeout(resolve, ms);
+	});
 }
 
 function readableGenreLabelFromKey(key: string): string {

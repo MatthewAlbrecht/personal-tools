@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalMutation, mutation, query } from "./_generated/server";
+import { upsertAlbumLibraryProjection } from "./_utils/albumLibraryProjection";
 import {
 	type RymMatchResult,
 	buildArtistKeys,
@@ -10,7 +11,6 @@ import {
 	matchRymForForLaterAlbum,
 	normalizeAlbumTitle,
 } from "./_utils/albumMatching";
-import { upsertAlbumLibraryProjection } from "./_utils/albumLibraryProjection";
 import {
 	type ForLaterAlbumRowFilterInput,
 	type ForLaterFiltersNormalizeInput,
@@ -38,7 +38,6 @@ import {
 import { chooseIndexedForLaterListScan } from "./_utils/forLaterIndexedList";
 import { projectionMatchesFilters } from "./_utils/forLaterProjectionPredicate";
 import {
-	ADDED_DAYS_MAX,
 	ADDED_DAYS_MIN,
 	type ForLaterRecommendationAnswers,
 	type ForLaterRecommendationCandidate,
@@ -51,7 +50,9 @@ import {
 	buildSavedRecommendationAlbumRefs,
 	candidateMatchesRecommendationAnswers,
 	chooseRecommendationRows,
+	getAddedDaysMax,
 	normalizeRecommendationCount,
+	RECOMMENDATION_POOL_SIZE,
 	sortRecommendationTagOptionsByCount,
 } from "./_utils/forLaterRecommendations";
 import { buildOpenableGoogleRymSearchLinks } from "./_utils/google_rym_lucky_search";
@@ -115,11 +116,7 @@ const recommendationAnswersValidator = v.object({
 	durationMaxMs: v.number(),
 	ratingMin: v.number(),
 	ratingMax: v.number(),
-	listened: v.union(
-		v.literal("any"),
-		v.literal("heard"),
-		v.literal("not_yet"),
-	),
+	listened: v.union(v.literal("any"), v.literal("heard"), v.literal("not_yet")),
 	genreKeys: v.array(v.string()),
 	genreMatch: v.union(v.literal("any"), v.literal("all")),
 	count: v.number(),
@@ -867,30 +864,37 @@ async function collectForLaterRecommendationCandidates(
 	return candidates;
 }
 
-function clampSwapRange(min: number, max: number): { min: number; max: number } {
+function clampSwapRange(
+	min: number,
+	max: number,
+): { min: number; max: number } {
 	if (min <= max) {
 		return { min, max };
 	}
 	return { min: max, max: min };
 }
 
-function normalizeRecommendationAnswers(answers: {
-	addedDaysMin: number;
-	addedDaysMax: number;
-	yearMin?: number;
-	yearMax?: number;
-	durationMinMs: number;
-	durationMaxMs: number;
-	ratingMin: number;
-	ratingMax: number;
-	listened: ListenedAnswer;
-	genreKeys: string[];
-	genreMatch: GenreMatchAnswer;
-	count: number;
-}): ForLaterRecommendationAnswers {
+function normalizeRecommendationAnswers(
+	answers: {
+		addedDaysMin: number;
+		addedDaysMax: number;
+		yearMin?: number;
+		yearMax?: number;
+		durationMinMs: number;
+		durationMaxMs: number;
+		ratingMin: number;
+		ratingMax: number;
+		listened: ListenedAnswer;
+		genreKeys: string[];
+		genreMatch: GenreMatchAnswer;
+		count: number;
+	},
+	now: number,
+): ForLaterRecommendationAnswers {
 	const added = clampSwapRange(answers.addedDaysMin, answers.addedDaysMax);
 	const duration = clampSwapRange(answers.durationMinMs, answers.durationMaxMs);
 	const rating = clampSwapRange(answers.ratingMin, answers.ratingMax);
+	const addedDaysMaxBound = getAddedDaysMax(now);
 
 	let yearMin = answers.yearMin;
 	let yearMax = answers.yearMax;
@@ -907,8 +911,14 @@ function normalizeRecommendationAnswers(answers: {
 	];
 
 	return {
-		addedDaysMin: Math.max(ADDED_DAYS_MIN, Math.min(ADDED_DAYS_MAX, added.min)),
-		addedDaysMax: Math.max(ADDED_DAYS_MIN, Math.min(ADDED_DAYS_MAX, added.max)),
+		addedDaysMin: Math.max(
+			ADDED_DAYS_MIN,
+			Math.min(addedDaysMaxBound, added.min),
+		),
+		addedDaysMax: Math.max(
+			ADDED_DAYS_MIN,
+			Math.min(addedDaysMaxBound, added.max),
+		),
 		...(yearMin !== undefined ? { yearMin } : {}),
 		...(yearMax !== undefined ? { yearMax } : {}),
 		durationMinMs: Math.max(0, duration.min),
@@ -944,7 +954,7 @@ async function buildForLaterRecommendationResult(
 	);
 	const selectedCandidates = chooseRecommendationRows(
 		matching.map(({ candidate }) => candidate),
-		args.answers.count,
+		RECOMMENDATION_POOL_SIZE,
 		args.seed,
 	);
 	const rows = selectedCandidates.flatMap((candidate) => {
@@ -1332,9 +1342,7 @@ async function loadForLaterAlbumRows(
 		const facetBatch = await ctx.db
 			.query("forLaterAlbumDurationFacets")
 			.withIndex("by_userId_durationBucketKey_lastSeenAt", (q) =>
-				q
-					.eq("userId", args.userId)
-					.eq("durationBucketKey", durationBucketKey),
+				q.eq("userId", args.userId).eq("durationBucketKey", durationBucketKey),
 			)
 			.order("desc")
 			.paginate({
@@ -1729,7 +1737,7 @@ export const getForLaterRecommendations = query({
 	returns: recommendationResultValidator,
 	handler: async (ctx, args): Promise<ForLaterRecommendationResult> => {
 		requireAuth(ctx);
-		const answers = normalizeRecommendationAnswers(args.answers);
+		const answers = normalizeRecommendationAnswers(args.answers, args.now);
 
 		return await buildForLaterRecommendationResult(ctx, {
 			userId: args.userId,
@@ -1757,7 +1765,7 @@ export const createForLaterRecommendation = mutation({
 		}
 	> => {
 		requireAuth(ctx);
-		const answers = normalizeRecommendationAnswers(args.answers);
+		const answers = normalizeRecommendationAnswers(args.answers, args.now);
 		const result = await buildForLaterRecommendationResult(ctx, {
 			userId: args.userId,
 			answers,

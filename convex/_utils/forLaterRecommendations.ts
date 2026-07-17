@@ -1,5 +1,5 @@
-import { resolveTopLevelGenreKey } from "./rymGenreHierarchy";
 import { buildDurationBucketCounts } from "./forLaterDurationBuckets";
+import { resolveTopLevelGenreKey } from "./rymGenreHierarchy";
 
 export type ListenedAnswer = "any" | "heard" | "not_yet";
 export type GenreMatchAnswer = "any" | "all";
@@ -46,22 +46,32 @@ export type RecommendationTagOption = RecommendationTagInput & {
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MINUTE_MS = 60 * 1000;
 const ADDED_DAYS_MIN = 0;
-const ADDED_DAYS_MAX = 365;
+/** Earliest for-later `playlistAddedAt` observed on production (2026-05-02T21:13:32.000Z). */
+export const FOR_LATER_EARLIEST_PLAYLIST_ADDED_AT_MS = 1_777_756_412_000;
 const DURATION_MINUTES_MIN = 0;
 const DURATION_MINUTES_MAX = 120;
 const RATING_MIN = 1;
 const RATING_MAX = 15;
 const MIN_RECOMMENDATION_COUNT = 1;
 const MAX_RECOMMENDATION_COUNT = 5;
+/** How many matching albums to shuffle/select per fetch for client-side re-roll. */
+export const RECOMMENDATION_POOL_SIZE = 10;
 
 export {
 	ADDED_DAYS_MIN,
-	ADDED_DAYS_MAX,
 	DURATION_MINUTES_MIN,
 	DURATION_MINUTES_MAX,
 	RATING_MIN,
 	RATING_MAX,
 };
+
+/** Days from the earliest prod For Later add through `now` (slider upper bound). */
+export function getAddedDaysMax(now: number): number {
+	return Math.max(
+		ADDED_DAYS_MIN,
+		Math.floor((now - FOR_LATER_EARLIEST_PLAYLIST_ADDED_AT_MS) / DAY_MS),
+	);
+}
 
 export function normalizeRecommendationCount(count?: number): number {
 	if (count === undefined) {
@@ -87,6 +97,31 @@ export function normalizeRecommendationCount(count?: number): number {
 	return integerCount;
 }
 
+/** Clamp a fetch pool size to 1..RECOMMENDATION_POOL_SIZE (not the UI page size). */
+export function normalizeRecommendationPoolSize(count?: number): number {
+	if (count === undefined) {
+		return RECOMMENDATION_POOL_SIZE;
+	}
+
+	if (!Number.isFinite(count)) {
+		return count > RECOMMENDATION_POOL_SIZE
+			? RECOMMENDATION_POOL_SIZE
+			: MIN_RECOMMENDATION_COUNT;
+	}
+
+	const integerCount = Math.trunc(count);
+
+	if (integerCount < MIN_RECOMMENDATION_COUNT) {
+		return MIN_RECOMMENDATION_COUNT;
+	}
+
+	if (integerCount > RECOMMENDATION_POOL_SIZE) {
+		return RECOMMENDATION_POOL_SIZE;
+	}
+
+	return integerCount;
+}
+
 export function recommendationAddedAt(
 	candidate: ForLaterRecommendationCandidate,
 ): number {
@@ -98,8 +133,9 @@ export function recommendationAddedAt(
 export function isAddedDaysRangeUnconstrained(
 	min: number,
 	max: number,
+	now: number,
 ): boolean {
-	return min === ADDED_DAYS_MIN && max === ADDED_DAYS_MAX;
+	return min === ADDED_DAYS_MIN && max === getAddedDaysMax(now);
 }
 
 export function isDurationRangeUnconstrained(
@@ -122,7 +158,7 @@ export function addedDaysRangeMatches(
 	max: number,
 	now: number,
 ): boolean {
-	if (isAddedDaysRangeUnconstrained(min, max)) {
+	if (isAddedDaysRangeUnconstrained(min, max, now)) {
 		return true;
 	}
 
@@ -302,7 +338,7 @@ export function chooseRecommendationRows<
 >(rows: readonly T[], count: number, seed: string): T[] {
 	return seededShuffle(rows, seed).slice(
 		0,
-		normalizeRecommendationCount(count),
+		normalizeRecommendationPoolSize(count),
 	);
 }
 

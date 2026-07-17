@@ -10,8 +10,10 @@ import {
 	candidateMatchesRecommendationAnswers,
 	chooseRecommendationRows,
 	genreKeysMatch,
+	getAddedDaysMax,
 	listenedMatches,
 	normalizeRecommendationCount,
+	normalizeRecommendationPoolSize,
 	selectRandomTagOptions,
 	sortRecommendationTagOptionsByCount,
 	yearRangeMatches,
@@ -46,7 +48,7 @@ function defaultAnswers(
 ): ForLaterRecommendationAnswers {
 	return {
 		addedDaysMin: 0,
-		addedDaysMax: 365,
+		addedDaysMax: getAddedDaysMax(NOW),
 		durationMinMs: 0,
 		durationMaxMs: 120 * MINUTE_MS,
 		ratingMin: 1,
@@ -68,6 +70,13 @@ test("normalizeRecommendationCount defaults and clamps to 1 through 5", () => {
 	assert.equal(normalizeRecommendationCount(1), 1);
 	assert.equal(normalizeRecommendationCount(5), 5);
 	assert.equal(normalizeRecommendationCount(6), 5);
+});
+
+test("normalizeRecommendationPoolSize defaults and clamps to 1 through 10", () => {
+	assert.equal(normalizeRecommendationPoolSize(undefined), 10);
+	assert.equal(normalizeRecommendationPoolSize(0), 1);
+	assert.equal(normalizeRecommendationPoolSize(10), 10);
+	assert.equal(normalizeRecommendationPoolSize(11), 10);
 });
 
 test("full-span ranges and empty genres do not filter", () => {
@@ -198,6 +207,15 @@ test("chooseRecommendationRows returns seeded results without duplicates", () =>
 	);
 	assert.equal(new Set(first.map((row) => row.id)).size, 3);
 	assert.equal(first.length, 3);
+});
+
+test("chooseRecommendationRows can return a pool of up to 10", () => {
+	const rows = Array.from({ length: 20 }, (_, index) =>
+		candidate({ id: `row-${index + 1}` }),
+	);
+	const pool = chooseRecommendationRows(rows, 10, "seed-pool");
+	assert.equal(pool.length, 10);
+	assert.equal(new Set(pool.map((row) => row.id)).size, 10);
 });
 
 test("selectRandomTagOptions dedupes keys and keeps counts", () => {
