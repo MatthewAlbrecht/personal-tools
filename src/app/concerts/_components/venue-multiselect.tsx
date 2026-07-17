@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import {
 	Combobox,
 	ComboboxChip,
@@ -25,9 +26,10 @@ export function VenueMultiSelect({
 	venues: SelectedConcertVenueRow[];
 }) {
 	const anchor = useComboboxAnchor();
-	const items = venues.map((row) => row.venueId);
-	const venueLabels = new Map(
-		venues.map((row) => [row.venueId, getVenueDisplayName(row)]),
+	const items = useMemo(() => venues.map((row) => row.venueId), [venues]);
+	const venueLabels = useMemo(
+		() => new Map(venues.map((row) => [row.venueId, getVenueDisplayName(row)])),
+		[venues],
 	);
 
 	function handleValueChange(nextValue: string[]) {
