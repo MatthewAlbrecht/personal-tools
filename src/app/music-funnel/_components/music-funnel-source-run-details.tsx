@@ -50,10 +50,12 @@ export function MusicFunnelSourceRunDetails({
 							<div className="size-7 shrink-0 rounded border border-border/60 bg-muted" />
 						)}
 						<div className="min-w-0 flex-1">
-							<p className="flex flex-wrap items-baseline gap-x-2 truncate text-sm">
-								<span className="font-medium">{encounter.trackName}</span>
+							<p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+								<span className="truncate font-medium">
+									{encounter.trackName}
+								</span>
 								{isRepeat ? (
-									<span className="font-medium text-muted-foreground text-xs">
+									<span className="inline-flex shrink-0 items-center rounded-full border border-violet-500/25 bg-violet-500/10 px-1.5 py-px font-medium text-[10px] leading-none text-violet-700 dark:text-violet-300">
 										Repeat
 									</span>
 								) : null}

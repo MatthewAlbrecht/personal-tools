@@ -1,7 +1,6 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import { ChevronDown, ChevronRight } from "lucide-react";
 import Image from "next/image";
 import { useState } from "react";
 import { sourceRunHasActivity } from "~/lib/music-funnel-visit";
@@ -95,11 +94,6 @@ export function MusicFunnelTimeline({
 										onClick={() => toggleExpanded(sourceRun._id)}
 										className="flex w-full items-start gap-3 text-left"
 									>
-										{isExpanded ? (
-											<ChevronDown className="mt-2.5 size-4 shrink-0 text-muted-foreground" />
-										) : (
-											<ChevronRight className="mt-2.5 size-4 shrink-0 text-muted-foreground" />
-										)}
 										{source?.imageUrl ? (
 											<Image
 												src={source.imageUrl}
@@ -130,7 +124,7 @@ export function MusicFunnelTimeline({
 										</div>
 									</button>
 									{isExpanded ? (
-										<div className="mt-3 ml-7 pl-0.5">
+										<div className="mt-3">
 											<MusicFunnelSourceRunDetails
 												userId={userId}
 												sourceRunId={sourceRun._id}
