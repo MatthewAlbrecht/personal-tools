@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation } from "convex/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
 import {
@@ -18,6 +18,29 @@ import { parseSpotifyAlbumId } from "~/lib/parse-spotify-album-id";
 import { api } from "../../../../convex/_generated/api";
 import { useAlbums } from "../_context/albums-context";
 
+const SPOTIFY_ALBUM_ID_PATTERN = /^[a-zA-Z0-9]{22}$/;
+
+function canAutoAddSpotifyAlbumInput(value: string): string | null {
+	const trimmed = value.trim();
+	if (!trimmed) {
+		return null;
+	}
+
+	const parsed = parseSpotifyAlbumId(trimmed);
+	if (!parsed) {
+		return null;
+	}
+
+	const fromLink =
+		/album\/[a-zA-Z0-9]+/.test(trimmed) ||
+		/spotify:album:[a-zA-Z0-9]+/.test(trimmed);
+	if (fromLink || SPOTIFY_ALBUM_ID_PATTERN.test(parsed)) {
+		return parsed;
+	}
+
+	return null;
+}
+
 export function AddAlbumToLibraryDialog({
 	open,
 	onOpenChange,
@@ -29,20 +52,18 @@ export function AddAlbumToLibraryDialog({
 	const addAlbumToLibrary = useMutation(api.spotify.addAlbumToLibrary);
 	const [input, setInput] = useState("");
 	const [isSubmitting, setIsSubmitting] = useState(false);
+	const autoSubmittedIdRef = useRef<string | null>(null);
 
 	useEffect(() => {
 		if (!open) {
 			setInput("");
 			setIsSubmitting(false);
+			autoSubmittedIdRef.current = null;
 		}
 	}, [open]);
 
-	function normalizeInput(value: string): void {
-		setInput(parseSpotifyAlbumId(value));
-	}
-
-	async function handleAdd(): Promise<void> {
-		const spotifyAlbumId = parseSpotifyAlbumId(input);
+	async function handleAdd(rawInput?: string): Promise<void> {
+		const spotifyAlbumId = parseSpotifyAlbumId(rawInput ?? input);
 		if (!spotifyAlbumId) {
 			toast.error("Paste a Spotify album URL or ID.");
 			return;
@@ -51,12 +72,16 @@ export function AddAlbumToLibraryDialog({
 			toast.error("Sign in to add albums.");
 			return;
 		}
+		if (isSubmitting) {
+			return;
+		}
 
 		setIsSubmitting(true);
 		try {
 			const accessToken = await getValidAccessToken();
 			if (!accessToken) {
 				toast.error("Not connected to Spotify");
+				autoSubmittedIdRef.current = null;
 				return;
 			}
 
@@ -66,6 +91,7 @@ export function AddAlbumToLibraryDialog({
 			);
 			if (!albumResponse.ok) {
 				toast.error("Failed to fetch album from Spotify");
+				autoSubmittedIdRef.current = null;
 				return;
 			}
 
@@ -101,9 +127,23 @@ export function AddAlbumToLibraryDialog({
 		} catch (error) {
 			console.error("Failed to add album to library:", error);
 			toast.error("Failed to add album");
+			autoSubmittedIdRef.current = null;
 		} finally {
 			setIsSubmitting(false);
 		}
+	}
+
+	function tryAutoAdd(value: string): void {
+		const spotifyAlbumId = canAutoAddSpotifyAlbumInput(value);
+		if (!spotifyAlbumId) {
+			return;
+		}
+		if (autoSubmittedIdRef.current === spotifyAlbumId) {
+			return;
+		}
+		autoSubmittedIdRef.current = spotifyAlbumId;
+		setInput(spotifyAlbumId);
+		void handleAdd(spotifyAlbumId);
 	}
 
 	return (
@@ -112,7 +152,7 @@ export function AddAlbumToLibraryDialog({
 				<DialogHeader>
 					<DialogTitle>Add album</DialogTitle>
 					<DialogDescription>
-						Paste a Spotify album link, URI, or ID to add it to your library.
+						Paste a Spotify album link, URI, or ID — it adds automatically.
 					</DialogDescription>
 				</DialogHeader>
 				<div className="space-y-2">
@@ -122,12 +162,19 @@ export function AddAlbumToLibraryDialog({
 						value={input}
 						disabled={isSubmitting}
 						placeholder="https://open.spotify.com/album/..."
-						onChange={(event) => setInput(event.target.value)}
+						autoFocus
+						onChange={(event) => {
+							const next = event.target.value;
+							setInput(next);
+							tryAutoAdd(next);
+						}}
 						onPaste={(event) => {
 							event.preventDefault();
-							normalizeInput(event.clipboardData.getData("text"));
+							const pasted = event.clipboardData.getData("text");
+							const parsed = parseSpotifyAlbumId(pasted);
+							setInput(parsed || pasted);
+							tryAutoAdd(pasted);
 						}}
-						onBlur={(event) => normalizeInput(event.target.value)}
 						onKeyDown={(event) => {
 							if (event.key === "Enter") {
 								event.preventDefault();
@@ -143,14 +190,7 @@ export function AddAlbumToLibraryDialog({
 						disabled={isSubmitting}
 						onClick={() => onOpenChange(false)}
 					>
-						Cancel
-					</Button>
-					<Button
-						type="button"
-						disabled={isSubmitting}
-						onClick={() => void handleAdd()}
-					>
-						{isSubmitting ? "Adding…" : "Add"}
+						{isSubmitting ? "Adding…" : "Cancel"}
 					</Button>
 				</DialogFooter>
 			</DialogContent>
