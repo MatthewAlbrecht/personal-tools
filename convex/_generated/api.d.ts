@@ -48,6 +48,7 @@ import type * as _utils_zineInsideBackLayout from "../_utils/zineInsideBackLayou
 import type * as _utils_zineInsideBackSections from "../_utils/zineInsideBackSections.js";
 import type * as articles from "../articles.js";
 import type * as auth from "../auth.js";
+import type * as birthdays from "../birthdays.js";
 import type * as bookSearch from "../bookSearch.js";
 import type * as concertActions from "../concertActions.js";
 import type * as concerts from "../concerts.js";
@@ -118,6 +119,7 @@ declare const fullApi: ApiFromModules<{
   "_utils/zineInsideBackSections": typeof _utils_zineInsideBackSections;
   articles: typeof articles;
   auth: typeof auth;
+  birthdays: typeof birthdays;
   bookSearch: typeof bookSearch;
   concertActions: typeof concertActions;
   concerts: typeof concerts;

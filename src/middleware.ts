@@ -14,6 +14,7 @@ export function middleware(request: NextRequest) {
 	const isFolioSociety = request.nextUrl.pathname.startsWith("/folio-society");
 	const isArticles = request.nextUrl.pathname.startsWith("/articles");
 	const isConcerts = request.nextUrl.pathname.startsWith("/concerts");
+	const isBirthdays = request.nextUrl.pathname.startsWith("/birthdays");
 	const isPlaylistLyrics =
 		request.nextUrl.pathname.startsWith("/playlist-lyrics") ||
 		request.nextUrl.pathname.startsWith("/lyrics/playlists");
@@ -29,6 +30,7 @@ export function middleware(request: NextRequest) {
 			isFolioSociety ||
 			isArticles ||
 			isConcerts ||
+			isBirthdays ||
 			isPlaylistLyrics ||
 			isPlaylistLyricsApi ||
 			isLyricsMigrateApi) &&
@@ -52,6 +54,8 @@ export const config = {
 		"/articles/:path*",
 		"/concerts",
 		"/concerts/:path*",
+		"/birthdays",
+		"/birthdays/:path*",
 		"/playlist-lyrics",
 		"/playlist-lyrics/:path*",
 		"/lyrics/playlists",

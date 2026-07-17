@@ -1414,4 +1414,37 @@ export default defineSchema({
 	})
 		.index("by_userId", ["userId"])
 		.index("by_token", ["token"]),
+
+	birthdays: defineTable({
+		userId: v.string(),
+		name: v.string(),
+		month: v.number(),
+		day: v.number(),
+		birthYear: v.optional(v.number()),
+		entryPoint: v.union(
+			v.literal("month"),
+			v.literal("week"),
+			v.literal("day_before"),
+			v.literal("day_of"),
+		),
+		createdAt: v.number(),
+		updatedAt: v.number(),
+	}).index("by_userId", ["userId"]),
+
+	birthdayReminderDeliveries: defineTable({
+		userId: v.string(),
+		birthdayId: v.id("birthdays"),
+		occurrenceYear: v.number(),
+		step: v.union(
+			v.literal("month"),
+			v.literal("week"),
+			v.literal("day_before"),
+			v.literal("day_of"),
+		),
+		sentAt: v.number(),
+	}).index("by_birthday_year_step", [
+		"birthdayId",
+		"occurrenceYear",
+		"step",
+	]),
 });
