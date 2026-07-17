@@ -1,14 +1,24 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import Image from "next/image";
+import { Disc3, Music2, User } from "lucide-react";
+import { useState } from "react";
 import { isNewSince } from "~/lib/music-funnel-visit";
-import { formatRelativeTime } from "~/lib/utils";
+import { cn } from "~/lib/utils";
 import { api } from "../../../../convex/_generated/api";
 import {
 	MusicFunnelNewBadge,
 	MusicFunnelNewChrome,
 } from "./music-funnel-new-chrome";
+
+type RepeatTypeFilter = "all" | "track" | "album" | "artist";
+
+const FILTERS: Array<{ id: RepeatTypeFilter; label: string }> = [
+	{ id: "all", label: "All" },
+	{ id: "track", label: "Tracks" },
+	{ id: "album", label: "Albums" },
+	{ id: "artist", label: "Artists" },
+];
 
 export function MusicFunnelRepeatLists({
 	userId,
@@ -17,10 +27,18 @@ export function MusicFunnelRepeatLists({
 	userId: string;
 	visitSince: number | null;
 }) {
+	const [typeFilter, setTypeFilter] = useState<RepeatTypeFilter>("all");
 	const repeats = useQuery(api.musicFunnel.listRepeats, {
 		userId,
-		limit: 60,
+		limit: 100,
 	});
+	const filtered =
+		repeats === undefined
+			? undefined
+			: typeFilter === "all"
+				? repeats
+				: repeats.filter((repeat) => repeat.type === typeFilter);
+	const filteredRepeats = filtered ?? [];
 
 	return (
 		<section className="space-y-4">
@@ -30,15 +48,37 @@ export function MusicFunnelRepeatLists({
 					Cross-source tracks, albums, and artists — most recently active first.
 				</p>
 			</div>
+			<div className="flex flex-wrap gap-2">
+				{FILTERS.map((filter) => (
+					<button
+						key={filter.id}
+						type="button"
+						onClick={() => setTypeFilter(filter.id)}
+						className={cn(
+							"rounded-md px-2.5 py-1 text-sm",
+							typeFilter === filter.id
+								? "bg-foreground text-background"
+								: "bg-muted text-muted-foreground hover:text-foreground",
+						)}
+					>
+						{filter.label}
+					</button>
+				))}
+			</div>
 			{repeats === undefined ? (
 				<p className="text-muted-foreground text-sm">Loading...</p>
 			) : repeats.length === 0 ? (
 				<p className="text-muted-foreground text-sm">
 					No cross-source repeats yet.
 				</p>
+			) : filteredRepeats.length === 0 ? (
+				<p className="text-muted-foreground text-sm">
+					No {FILTERS.find((filter) => filter.id === typeFilter)?.label}{" "}
+					repeats.
+				</p>
 			) : (
 				<ul>
-					{repeats.map((repeat) => (
+					{filteredRepeats.map((repeat) => (
 						<RepeatRow
 							key={getRepeatKey(repeat)}
 							repeat={repeat}
@@ -58,47 +98,31 @@ function RepeatRow({
 	repeat: NonNullable<typeof api.musicFunnel.listRepeats._returnType>[number];
 	visitSince: number | null;
 }) {
-	const { title, subtitle, typeLabel, imageUrl, imageAlt } =
-		getRepeatDisplay(repeat);
-	const sources = repeat.sources.map((source) => source.displayName).join(", ");
 	const isNew =
 		visitSince !== null && isNewSince(repeat.becameRepeatAt, visitSince);
+	const title =
+		repeat.type === "track"
+			? repeat.trackName
+			: repeat.type === "album"
+				? repeat.albumName
+				: repeat.name;
 
 	return (
 		<li>
-			<MusicFunnelNewChrome isNew={isNew}>
-				<div className="flex items-start gap-3">
-					{imageUrl ? (
-						<Image
-							src={imageUrl}
-							alt={imageAlt}
-							width={40}
-							height={40}
-							className="size-10 shrink-0 rounded border border-border/60 bg-background object-cover"
-						/>
-					) : (
-						<div className="size-10 shrink-0 rounded border border-border/60 bg-muted" />
+			<MusicFunnelNewChrome isNew={isNew} className="py-1.5">
+				<div className="flex items-center gap-2.5 py-1">
+					<RepeatTypeIcon type={repeat.type} />
+					<p className="min-w-0 flex-1 truncate font-medium">{title}</p>
+					{(repeat.type === "album" || repeat.type === "artist") && (
+						<span className="inline-flex shrink-0 items-center gap-1 text-muted-foreground text-xs tabular-nums">
+							<Music2 className="size-3.5" aria-hidden />
+							{repeat.contributingTrackCount}
+						</span>
 					)}
-					<div className="min-w-0 flex-1">
-						<div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-							<p className="font-medium">{title}</p>
-							<span className="font-semibold tabular-nums">
-								{repeat.sourceCount}×
-							</span>
-							<span className="text-muted-foreground text-xs">{typeLabel}</span>
-							{isNew ? <MusicFunnelNewBadge /> : null}
-						</div>
-						<p className="text-muted-foreground text-sm">{subtitle}</p>
-						<p className="text-muted-foreground text-xs">{sources}</p>
-						<p className="text-muted-foreground text-xs">
-							First seen {formatRelativeTime(repeat.firstSeenAt)} · Last seen{" "}
-							{formatRelativeTime(repeat.latestSeenAt)}
-							{repeat.type === "track" &&
-							repeat.addedToRepeatPlaylistAt !== undefined
-								? ` · Added to repeats ${formatRelativeTime(repeat.addedToRepeatPlaylistAt)}`
-								: null}
-						</p>
-					</div>
+					<span className="shrink-0 font-semibold text-sm tabular-nums">
+						{repeat.sourceCount}×
+					</span>
+					{isNew ? <MusicFunnelNewBadge /> : null}
 				</div>
 			</MusicFunnelNewChrome>
 		</li>
@@ -113,39 +137,27 @@ function getRepeatKey(
 	return repeat.spotifyArtistId;
 }
 
-function getRepeatDisplay(
-	repeat: NonNullable<typeof api.musicFunnel.listRepeats._returnType>[number],
-): {
-	title: string;
-	subtitle: string;
-	typeLabel: string;
-	imageUrl?: string;
-	imageAlt: string;
-} {
-	if (repeat.type === "track") {
-		return {
-			title: repeat.trackName,
-			subtitle: `${repeat.primaryArtistName} · ${repeat.albumName}`,
-			typeLabel: "Track",
-			imageUrl: repeat.albumImageUrl,
-			imageAlt: repeat.albumName,
-		};
-	}
-
-	if (repeat.type === "album") {
-		return {
-			title: repeat.albumName,
-			subtitle: `${repeat.primaryArtistName} · ${repeat.contributingTrackCount} tracks`,
-			typeLabel: "Album",
-			imageUrl: repeat.albumImageUrl,
-			imageAlt: repeat.albumName,
-		};
-	}
-
-	return {
-		title: repeat.name,
-		subtitle: `${repeat.contributingTrackCount} contributing tracks`,
-		typeLabel: "Artist",
-		imageAlt: repeat.name,
-	};
+function RepeatTypeIcon({
+	type,
+}: {
+	type: "track" | "album" | "artist";
+}) {
+	const className = cn(
+		"flex size-7 shrink-0 items-center justify-center rounded",
+		type === "track" && "bg-sky-500/15 text-sky-700 dark:text-sky-300",
+		type === "album" && "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+		type === "artist" &&
+			"bg-violet-500/15 text-violet-700 dark:text-violet-300",
+	);
+	return (
+		<span className={className} aria-label={type}>
+			{type === "track" ? (
+				<Music2 className="size-3.5" />
+			) : type === "album" ? (
+				<Disc3 className="size-3.5" />
+			) : (
+				<User className="size-3.5" />
+			)}
+		</span>
+	);
 }

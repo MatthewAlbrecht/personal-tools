@@ -22,7 +22,7 @@ export function MusicFunnelMissedBanner({
 	});
 	const repeats = useQuery(api.musicFunnel.listRepeats, {
 		userId,
-		limit: 60,
+		limit: 100,
 	});
 
 	const summary = useMemo(() => {
