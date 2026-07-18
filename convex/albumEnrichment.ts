@@ -8,6 +8,7 @@ import {
 	missingEnrichmentSlices,
 	normalizeEnrichmentTags,
 } from "./_utils/albumEnrichmentSlices";
+import { buildAlbumLibraryProjectionForAlbum } from "./_utils/albumLibraryProjection";
 
 type EnrichmentDbCtx = QueryCtx | MutationCtx;
 
@@ -58,6 +59,140 @@ const albumSnapshotFields = {
 	missingSlices: v.array(enrichmentSliceKeyValidator),
 	existingSlices: slicePresenceValidator,
 };
+
+const rymLinkMethodValidator = v.union(
+	v.literal("spotify_id"),
+	v.literal("title_artist"),
+	v.literal("manual"),
+);
+
+const albumDetailsTagValidator = v.object({
+	key: v.string(),
+	label: v.string(),
+});
+
+const albumDetailsForLaterValidator = v.object({
+	inForLater: v.boolean(),
+	itemId: v.optional(v.id("forLaterAlbumItems")),
+	isActive: v.optional(v.boolean()),
+	markedAsSingle: v.optional(v.boolean()),
+	removedFromForLater: v.optional(v.boolean()),
+	firstSeenAt: v.optional(v.number()),
+	lastSeenAt: v.optional(v.number()),
+	playlistAddedAt: v.optional(v.number()),
+});
+
+const albumDetailsValidator = v.object({
+	hero: v.object({
+		albumId: v.id("spotifyAlbums"),
+		spotifyAlbumId: v.string(),
+		...albumSnapshotFields,
+	}),
+	whyListen: v.object({
+		whyListenPitch: v.optional(v.string()),
+	}),
+	artistContext: v.object({
+		origin: v.optional(v.string()),
+		activeSince: v.optional(v.string()),
+		instagramUrl: v.optional(v.string()),
+		artistWriteup: v.optional(v.string()),
+		listenIfYouLike: v.optional(v.array(v.string())),
+	}),
+	coverDescriptors: v.array(albumDetailsTagValidator),
+	occasions: v.array(albumDetailsTagValidator),
+	library: v.object({
+		inLibrary: v.boolean(),
+		libraryItemId: v.optional(v.id("albumLibraryItems")),
+		forLater: albumDetailsForLaterValidator,
+	}),
+	rym: v.object({
+		status: v.union(v.literal("linked"), v.literal("unlinked")),
+		rymNotOnSite: v.optional(v.boolean()),
+		rymUrl: v.optional(v.string()),
+		rymScrapeId: v.optional(v.id("rateYourMusicScrapes")),
+		rymLinkMethod: v.optional(rymLinkMethodValidator),
+		primaryGenres: v.array(albumDetailsTagValidator),
+		secondaryGenres: v.array(albumDetailsTagValidator),
+		descriptors: v.array(albumDetailsTagValidator),
+	}),
+	listens: v.object({
+		hasListened: v.boolean(),
+		listenCount: v.number(),
+		firstListenedAt: v.optional(v.number()),
+		lastListenedAt: v.optional(v.number()),
+		rating: v.optional(v.number()),
+	}),
+	ids: v.object({
+		albumId: v.id("spotifyAlbums"),
+		spotifyAlbumId: v.string(),
+		enrichmentId: v.optional(v.id("albumEnrichments")),
+		forLaterItemId: v.optional(v.id("forLaterAlbumItems")),
+		libraryItemId: v.optional(v.id("albumLibraryItems")),
+	}),
+});
+
+type AlbumDetailsTag = { key: string; label: string };
+
+type AlbumDetails = {
+	hero: AlbumEnrichmentSnapshot & {
+		albumId: Id<"spotifyAlbums">;
+		spotifyAlbumId: string;
+	};
+	whyListen: { whyListenPitch?: string };
+	artistContext: {
+		origin?: string;
+		activeSince?: string;
+		instagramUrl?: string;
+		artistWriteup?: string;
+		listenIfYouLike?: string[];
+	};
+	coverDescriptors: AlbumDetailsTag[];
+	occasions: AlbumDetailsTag[];
+	library: {
+		inLibrary: boolean;
+		libraryItemId?: Id<"albumLibraryItems">;
+		forLater: {
+			inForLater: boolean;
+			itemId?: Id<"forLaterAlbumItems">;
+			isActive?: boolean;
+			markedAsSingle?: boolean;
+			removedFromForLater?: boolean;
+			firstSeenAt?: number;
+			lastSeenAt?: number;
+			playlistAddedAt?: number;
+		};
+	};
+	rym: {
+		status: "linked" | "unlinked";
+		rymNotOnSite?: boolean;
+		rymUrl?: string;
+		rymScrapeId?: Id<"rateYourMusicScrapes">;
+		rymLinkMethod?: "spotify_id" | "title_artist" | "manual";
+		primaryGenres: AlbumDetailsTag[];
+		secondaryGenres: AlbumDetailsTag[];
+		descriptors: AlbumDetailsTag[];
+	};
+	listens: {
+		hasListened: boolean;
+		listenCount: number;
+		firstListenedAt?: number;
+		lastListenedAt?: number;
+		rating?: number;
+	};
+	ids: {
+		albumId: Id<"spotifyAlbums">;
+		spotifyAlbumId: string;
+		enrichmentId?: Id<"albumEnrichments">;
+		forLaterItemId?: Id<"forLaterAlbumItems">;
+		libraryItemId?: Id<"albumLibraryItems">;
+	};
+};
+
+/** Live-computed fallback when no `albumLibraryItems` row was ever persisted for this user/album. */
+type AlbumLibraryProjectionLike = Omit<
+	Doc<"albumLibraryItems">,
+	"_id" | "_creationTime"
+>;
 
 /** Scan bound for claim/candidate search; large enough for the v1 backlog. */
 const FOR_LATER_SCAN_LIMIT = 1000;
@@ -501,5 +636,189 @@ export const resolveAlbum = query({
 		}
 
 		return { kind: "candidates" as const, candidates };
+	},
+});
+
+async function loadForLaterMembershipForAlbum(
+	ctx: EnrichmentDbCtx,
+	args: { userId: string; albumId: Id<"spotifyAlbums"> },
+): Promise<Doc<"forLaterAlbumItems"> | null> {
+	return await ctx.db
+		.query("forLaterAlbumItems")
+		.withIndex("by_userId_albumId", (q) =>
+			q.eq("userId", args.userId).eq("albumId", args.albumId),
+		)
+		.first();
+}
+
+/**
+ * Prefers the persisted per-user library projection row (real "added to library"
+ * signal); falls back to a live-computed projection so RYM/genre/listen data still
+ * renders honestly for albums the user hasn't explicitly added to their library.
+ */
+async function loadLibraryProjectionForDetails(
+	ctx: EnrichmentDbCtx,
+	args: { userId: string; albumId: Id<"spotifyAlbums"> },
+): Promise<{
+	projection: AlbumLibraryProjectionLike | null;
+	libraryItemId?: Id<"albumLibraryItems">;
+	inLibrary: boolean;
+}> {
+	const existingRow = await ctx.db
+		.query("albumLibraryItems")
+		.withIndex("by_userId_albumId", (q) =>
+			q.eq("userId", args.userId).eq("albumId", args.albumId),
+		)
+		.first();
+	if (existingRow) {
+		return {
+			projection: existingRow,
+			libraryItemId: existingRow._id,
+			inLibrary: true,
+		};
+	}
+
+	const computed = await buildAlbumLibraryProjectionForAlbum(ctx, args);
+	return { projection: computed, inLibrary: false };
+}
+
+export const getAlbumDetails = query({
+	args: {
+		userId: v.string(),
+		albumId: v.id("spotifyAlbums"),
+	},
+	returns: v.union(v.null(), albumDetailsValidator),
+	handler: async (ctx, args): Promise<AlbumDetails | null> => {
+		const album = await ctx.db.get(args.albumId);
+		if (!album) {
+			return null;
+		}
+
+		const enrichment = await ctx.db
+			.query("albumEnrichments")
+			.withIndex("by_albumId", (q) => q.eq("albumId", args.albumId))
+			.unique();
+
+		const coverDescriptorRows = await ctx.db
+			.query("albumCoverDescriptorFacets")
+			.withIndex("by_albumId", (q) => q.eq("albumId", args.albumId))
+			.collect();
+
+		const occasionRows = await ctx.db
+			.query("albumOccasionFacets")
+			.withIndex("by_albumId", (q) => q.eq("albumId", args.albumId))
+			.collect();
+
+		const heroSnapshot = await buildAlbumEnrichmentSnapshot(ctx, album);
+
+		const forLaterItem = await loadForLaterMembershipForAlbum(ctx, {
+			userId: args.userId,
+			albumId: args.albumId,
+		});
+
+		const {
+			projection: libraryProjection,
+			libraryItemId,
+			inLibrary,
+		} = await loadLibraryProjectionForDetails(ctx, {
+			userId: args.userId,
+			albumId: args.albumId,
+		});
+
+		return {
+			hero: {
+				albumId: album._id,
+				spotifyAlbumId: album.spotifyAlbumId,
+				...heroSnapshot,
+			},
+			whyListen: {
+				...(enrichment?.whyListenPitch
+					? { whyListenPitch: enrichment.whyListenPitch }
+					: {}),
+			},
+			artistContext: {
+				...(enrichment?.origin ? { origin: enrichment.origin } : {}),
+				...(enrichment?.activeSince
+					? { activeSince: enrichment.activeSince }
+					: {}),
+				...(enrichment?.instagramUrl
+					? { instagramUrl: enrichment.instagramUrl }
+					: {}),
+				...(enrichment?.artistWriteup
+					? { artistWriteup: enrichment.artistWriteup }
+					: {}),
+				...(enrichment?.listenIfYouLike
+					? { listenIfYouLike: enrichment.listenIfYouLike }
+					: {}),
+			},
+			coverDescriptors: coverDescriptorRows.map((row) => ({
+				key: row.coverDescriptorKey,
+				label: row.label,
+			})),
+			occasions: occasionRows.map((row) => ({
+				key: row.occasionKey,
+				label: row.label,
+			})),
+			library: {
+				inLibrary,
+				...(libraryItemId ? { libraryItemId } : {}),
+				forLater: {
+					inForLater: forLaterItem !== null,
+					...(forLaterItem
+						? {
+								itemId: forLaterItem._id,
+								isActive: forLaterItem.isActive,
+								...(forLaterItem.markedAsSingle
+									? { markedAsSingle: true }
+									: {}),
+								...(forLaterItem.removedFromForLater
+									? { removedFromForLater: true }
+									: {}),
+								firstSeenAt: forLaterItem.firstSeenAt,
+								lastSeenAt: forLaterItem.lastSeenAt,
+								...(forLaterItem.playlistAddedAt
+									? { playlistAddedAt: forLaterItem.playlistAddedAt }
+									: {}),
+							}
+						: {}),
+				},
+			},
+			rym: {
+				status: libraryProjection?.rymStatus ?? "unlinked",
+				...(libraryProjection?.rymNotOnSite ? { rymNotOnSite: true } : {}),
+				...(libraryProjection?.rymUrl
+					? { rymUrl: libraryProjection.rymUrl }
+					: {}),
+				...(libraryProjection?.rymScrapeId
+					? { rymScrapeId: libraryProjection.rymScrapeId }
+					: {}),
+				...(libraryProjection?.rymLinkMethod
+					? { rymLinkMethod: libraryProjection.rymLinkMethod }
+					: {}),
+				primaryGenres: libraryProjection?.primaryGenres ?? [],
+				secondaryGenres: libraryProjection?.secondaryGenres ?? [],
+				descriptors: libraryProjection?.descriptors ?? [],
+			},
+			listens: {
+				hasListened: (libraryProjection?.listenCount ?? 0) > 0,
+				listenCount: libraryProjection?.listenCount ?? 0,
+				...(libraryProjection?.firstListenedAt
+					? { firstListenedAt: libraryProjection.firstListenedAt }
+					: {}),
+				...(libraryProjection?.lastListenedAt
+					? { lastListenedAt: libraryProjection.lastListenedAt }
+					: {}),
+				...(libraryProjection?.rating !== undefined
+					? { rating: libraryProjection.rating }
+					: {}),
+			},
+			ids: {
+				albumId: album._id,
+				spotifyAlbumId: album.spotifyAlbumId,
+				...(enrichment ? { enrichmentId: enrichment._id } : {}),
+				...(forLaterItem ? { forLaterItemId: forLaterItem._id } : {}),
+				...(libraryItemId ? { libraryItemId } : {}),
+			},
+		};
 	},
 });
