@@ -3,12 +3,13 @@ title: AI album/artist research enrichment
 domain: albums
 kind: feature
 size: 5
-status: started
+status: done
 captured: 2026-07-15
 ---
 
 ## Notes
 
+- Done — shipped on `feat/ai-album-research-enrichment` (enrich pipeline + details dossier + prompt-eval trials/promote). Spec/plan updated with Prompt eval section.
 - In progress on `feat/ai-album-research-enrichment` — spec: `docs/superpowers/specs/2026-07-17-ai-album-research-enrichment-design.md`, plan: `docs/superpowers/plans/2026-07-17-ai-album-research-enrichment.md`
 - Tasks 10–12 (prompt eval: trial routes, variant agents, compare/promote UI) still remaining
 - Cursor Automation not yet created — operator checklist in `.cursor/skills/enrich-for-later-album/SKILL.md`
