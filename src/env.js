@@ -42,6 +42,8 @@ export const env = createEnv({
 			.default(200),
 		/** Bearer token for Chrome extension → `/api/rate-your-music/scrape` (omit or use 8+ chars locally). */
 		RYM_EXTENSION_INGEST_SECRET: z.string().min(8).optional(),
+		/** Bearer token for the AI album research enrichment HTTP API. */
+		ALBUM_ENRICHMENT_SECRET: z.string().min(16),
 	},
 
 	/**
@@ -81,6 +83,7 @@ export const env = createEnv({
 		FOR_LATER_INCREMENTAL_TAIL_TRACKS:
 			process.env.FOR_LATER_INCREMENTAL_TAIL_TRACKS,
 		RYM_EXTENSION_INGEST_SECRET: process.env.RYM_EXTENSION_INGEST_SECRET,
+		ALBUM_ENRICHMENT_SECRET: process.env.ALBUM_ENRICHMENT_SECRET,
 	},
 	/**
 	 * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially
