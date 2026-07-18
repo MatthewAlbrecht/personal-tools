@@ -26,7 +26,8 @@ Full design: `docs/superpowers/specs/2026-07-17-ai-album-research-enrichment-des
   - `POST claim` — scheduled mode: claim the next incomplete for-later album
   - `GET resolve?q=...` — manual/eval mode: resolve an album by Convex id, Spotify id, or name
   - `POST save` — persist succeeded slices (`mode: "gaps" | "overwrite"`)
-  - `POST trial` / `POST promote-trial` — eval mode only; **not implemented yet** (Task 11). If these routes 404, tell the user eval mode isn't wired up yet and stop; do not fall back to `save`.
+  - `POST trial` — eval mode only: persists one variant's payload into trial storage (never touches live data). Body: `{ trialRunId, albumId, slice, variantId, promptPath, payload, model? }`. Response includes `judgeKind` (`"auto" | "human" | "mixed"`) and, for `artistContext`/`coverDescriptors`, an `autoEval` (`{ passed, checks, notes }`) — auto-judging happens server-side on save, not in the skill.
+  - `POST promote-trial` — eval mode / trials UI only: copies a winning trial's payload into the live enrichment for that slice (`{ trialId }`). The skill itself never calls this — it's for the human reviewing trials afterward (Task 12 UI or a manual call).
 
 ## Identity lock (do this before any research, every mode)
 
@@ -82,17 +83,17 @@ Build a **frozen identity packet** from the claim/resolve response — never fro
 
 ## Mode: Eval (prompt A/B into trial storage)
 
-Requires Task 11 (`POST trial` route + seeded `.cursor/agents/variants/{slice}/*.md`). If either is missing, stop and say so.
+Live. Uses `POST trial` plus the variant files under `.cursor/agents/variants/{slice}/*.md`.
 
 1. Resolve the target album exactly like manual mode (stop on candidates/404).
 2. Identity lock as above.
 3. Determine which slice(s) to eval from the user's request (one or more of `artistContext`, `whyListen`, `coverDescriptors`, `occasions`).
-4. For each chosen slice, list `.cursor/agents/variants/{slice}/` and require **at least 2** variant files. If fewer than 2 exist, tell the user and skip that slice (don't fabricate a second variant).
+4. For each chosen slice, list `.cursor/agents/variants/{slice}/` and require **at least 2** variant files. If fewer than 2 exist, tell the user and skip that slice (don't fabricate a second variant). Variant filenames are `v1.md`, `v2.md`, etc. — `v1.md` is always a verbatim copy of the corresponding production agent (`.cursor/agents/{slice}.md`), serving as the baseline candidate; `v2.md`+ are alternate prompt angles to test against it.
 5. Generate one `trialRunId` for this turn (e.g. a short timestamp-based id) shared across every variant/slice run in this turn.
-6. For each variant file, launch it as a subagent (same identity packet + gap context as production, same output contract as its slice) — read the variant file's own frontmatter (`name`, `description`, optional `model`) to decide how to invoke it; do not blend variant instructions together.
-7. For each result, `POST trial` with `{ trialRunId, albumId, slice, variantId, promptPath, payload, model? }` where `payload` is the stripped slice JSON (same shape `save` would take for that slice) and `variantId`/`promptPath` identify the specific variant file used.
+6. For each variant file, launch it as a subagent (same identity packet + gap context as production, same output contract as its slice) — read the variant file's own frontmatter (`name`, `description`, optional `model`) to decide how to invoke it; do not blend variant instructions together. Use the variant's filename (e.g. `v1`, `v2`) as `variantId` and its path (e.g. `.cursor/agents/variants/why-listen/v2.md`) as `promptPath`.
+7. For each result, `POST trial` with `{ trialRunId, albumId, slice, variantId, promptPath, payload, model? }` where `payload` is the stripped slice JSON (same shape `save` would take for that slice). The response returns `{ trialId, judgeKind, autoEval? }` — `artistContext` and `coverDescriptors` get server-side `autoEval` (pass/fail checks) immediately; `whyListen` and `occasions` are `judgeKind: "human"` and stay `undecided` until a person reviews them. Note each `trialId` for your report.
 8. Never call `save` in this mode, regardless of outcome.
-9. Print the `trialRunId` and the details-page URL (`$BASE/albums/details/<albumId>`) so the user can open the trials comparison UI. Stop — do not auto-pick a winner or promote.
+9. Report the `trialRunId`, each `trialId` with its `judgeKind`/`autoEval` result (if any), and the details-page URL (`$BASE/albums/details/<albumId>`) so the user can open the trials comparison UI. Stop — do not call `promote-trial` yourself; that's for the human reviewer (or the trials UI) after comparing results.
 
 ## Gap-fill context for subagents
 
@@ -191,4 +192,4 @@ For local smoke tests, use `.env.local` instead. Never hardcode or commit secret
 
 ### Not yet automated
 
-Eval mode (`POST trial`, variant agents under `.cursor/agents/variants/`) is Tasks 10–12 and is **out of scope** for this cron automation.
+Eval mode (`POST trial`/`POST promote-trial`, variant agents under `.cursor/agents/variants/`) is interactive-only and **out of scope** for this cron automation — it requires a human to review trials and pick a winner. The trials comparison UI (Task 12) is not built yet; until then, review trial rows via the Convex dashboard or `listTrialsForAlbum`/`setTrialVerdict`, then call `promote-trial` manually.
