@@ -13,6 +13,7 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
+import type * as _utils_albumEnrichmentSlices from "../_utils/albumEnrichmentSlices.js";
 import type * as _utils_albumLibraryIndexedList from "../_utils/albumLibraryIndexedList.js";
 import type * as _utils_albumLibraryProjection from "../_utils/albumLibraryProjection.js";
 import type * as _utils_albumLibraryRows from "../_utils/albumLibraryRows.js";
@@ -48,6 +49,7 @@ import type * as _utils_upsertSpotifyAlbumRecord from "../_utils/upsertSpotifyAl
 import type * as _utils_zineCoverTextLayout from "../_utils/zineCoverTextLayout.js";
 import type * as _utils_zineInsideBackLayout from "../_utils/zineInsideBackLayout.js";
 import type * as _utils_zineInsideBackSections from "../_utils/zineInsideBackSections.js";
+import type * as albumEnrichment from "../albumEnrichment.js";
 import type * as articles from "../articles.js";
 import type * as auth from "../auth.js";
 import type * as birthdays from "../birthdays.js";
@@ -86,6 +88,7 @@ import type * as spotify from "../spotify.js";
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  "_utils/albumEnrichmentSlices": typeof _utils_albumEnrichmentSlices;
   "_utils/albumLibraryIndexedList": typeof _utils_albumLibraryIndexedList;
   "_utils/albumLibraryProjection": typeof _utils_albumLibraryProjection;
   "_utils/albumLibraryRows": typeof _utils_albumLibraryRows;
@@ -121,6 +124,7 @@ declare const fullApi: ApiFromModules<{
   "_utils/zineCoverTextLayout": typeof _utils_zineCoverTextLayout;
   "_utils/zineInsideBackLayout": typeof _utils_zineInsideBackLayout;
   "_utils/zineInsideBackSections": typeof _utils_zineInsideBackSections;
+  albumEnrichment: typeof albumEnrichment;
   articles: typeof articles;
   auth: typeof auth;
   birthdays: typeof birthdays;
