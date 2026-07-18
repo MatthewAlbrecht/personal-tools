@@ -112,8 +112,8 @@ function RepeatRow({
 			: null;
 
 	return (
-		<li>
-			<MusicFunnelNewChrome isNew={isNew} className="py-1.5">
+		<li className="w-full">
+			<MusicFunnelNewChrome isNew={isNew} className="w-full py-1.5 pr-3">
 				<div className="flex w-full items-center gap-2.5 py-1">
 					<RepeatTypeIcon type={repeat.type} />
 					<div className="min-w-0 flex-1">

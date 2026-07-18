@@ -26,12 +26,10 @@ export function MusicFunnelNewChrome({
 	return (
 		<div
 			className={cn(
-				"py-3",
+				"w-full py-3",
 				accent === "rail" && "border-l-2 pl-3",
 				accent === "rail" &&
-					(isNew
-						? "border-amber-500 bg-amber-500/10"
-						: "border-transparent"),
+					(isNew ? "border-amber-500 bg-amber-500/10" : "border-transparent"),
 				accent === "none" && isNew && "bg-amber-500/10",
 				className,
 			)}
