@@ -279,40 +279,49 @@ function TrialPayloadPreview({
 
 function AutoEvalChips({ autoEval }: { autoEval: AutoEval }) {
 	return (
-		<div className="space-y-1">
-			<div className="flex flex-wrap gap-1.5">
-				<Badge
-					variant="outline"
-					className={
-						autoEval.passed
-							? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-							: "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300"
-					}
-				>
-					{autoEval.passed ? "Auto-check passed" : "Auto-check failed"}
-				</Badge>
-				{autoEval.checks.map((check) => (
-					<Badge
-						key={check.id}
-						variant="outline"
-						title={check.note}
-						className={
-							check.passed
-								? "text-emerald-700 dark:text-emerald-300"
-								: "text-red-700 dark:text-red-300"
-						}
-					>
-						{check.passed ? (
-							<Check className="h-3 w-3" />
-						) : (
-							<X className="h-3 w-3" />
-						)}
-						{check.id}
-					</Badge>
-				))}
-			</div>
+		<div className="space-y-2">
+			<Badge
+				variant="outline"
+				className={
+					autoEval.passed
+						? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+						: "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300"
+				}
+			>
+				{autoEval.passed ? "Auto-check passed" : "Auto-check failed"}
+			</Badge>
+			{autoEval.checks.length > 0 ? (
+				<ul className="space-y-1.5">
+					{autoEval.checks.map((check) => (
+						<li key={check.id} className="space-y-0.5">
+							<Badge
+								variant="outline"
+								className={
+									check.passed
+										? "text-emerald-700 dark:text-emerald-300"
+										: "text-red-700 dark:text-red-300"
+								}
+							>
+								{check.passed ? (
+									<Check className="h-3 w-3" />
+								) : (
+									<X className="h-3 w-3" />
+								)}
+								{check.id}
+							</Badge>
+							{check.note ? (
+								<p className="text-muted-foreground text-xs leading-relaxed">
+									{check.note}
+								</p>
+							) : null}
+						</li>
+					))}
+				</ul>
+			) : null}
 			{autoEval.notes ? (
-				<p className="text-muted-foreground text-xs">{autoEval.notes}</p>
+				<p className="text-muted-foreground text-xs leading-relaxed">
+					{autoEval.notes}
+				</p>
 			) : null}
 		</div>
 	);
