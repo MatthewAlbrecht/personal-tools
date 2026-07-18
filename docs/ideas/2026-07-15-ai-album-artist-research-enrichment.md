@@ -9,10 +9,8 @@ captured: 2026-07-15
 
 ## Notes
 
-- Done — shipped on `feat/ai-album-research-enrichment` (enrich pipeline + details dossier + prompt-eval trials/promote). Spec/plan updated with Prompt eval section.
-- In progress on `feat/ai-album-research-enrichment` — spec: `docs/superpowers/specs/2026-07-17-ai-album-research-enrichment-design.md`, plan: `docs/superpowers/plans/2026-07-17-ai-album-research-enrichment.md`
-- Tasks 10–12 (prompt eval: trial routes, variant agents, compare/promote UI) still remaining
-- Cursor Automation not yet created — operator checklist in `.cursor/skills/enrich-for-later-album/SKILL.md`
+- Done — shipped on `feat/ai-album-research-enrichment` (enrich pipeline + details dossier + prompt-eval trials/promote). Spec: `docs/superpowers/specs/2026-07-17-ai-album-research-enrichment-design.md`, plan: `docs/superpowers/plans/2026-07-17-ai-album-research-enrichment.md`
+- Cursor Automation still operator-owned — checklist in `.cursor/skills/enrich-for-later-album/SKILL.md`
 - Run each album through an AI researcher to collect hard-to-scrape artist/album context (origin, how long they've been making music, Instagram links, band writeup, "listen if you like…")
 - Also generate a short "Why you should listen to this album" pitch — a persuasive, specific reason to put it on, not just a plot summary
 - Also generate a list of descriptors for the album artwork (colors, subjects, settings, style — e.g. green, flower, live show) so covers can be looked up by keyword from whatever you remember about them
