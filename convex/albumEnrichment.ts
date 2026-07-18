@@ -26,6 +26,26 @@ const slicePresenceValidator = v.object({
 	occasions: v.optional(v.object({ updatedAt: v.number() })),
 });
 
+const existingContentTagValidator = v.object({
+	key: v.string(),
+	label: v.string(),
+});
+
+const existingEnrichmentContentValidator = v.object({
+	artistContext: v.optional(
+		v.object({
+			origin: v.optional(v.string()),
+			activeSince: v.optional(v.string()),
+			instagramUrl: v.optional(v.string()),
+			artistWriteup: v.optional(v.string()),
+			listenIfYouLike: v.optional(v.array(v.string())),
+		}),
+	),
+	whyListen: v.optional(v.object({ whyListenPitch: v.string() })),
+	coverDescriptors: v.optional(v.array(existingContentTagValidator)),
+	occasions: v.optional(v.array(existingContentTagValidator)),
+});
+
 const identityPacketValidator = v.object({
 	title: v.string(),
 	artists: v.array(v.string()),
@@ -209,6 +229,20 @@ type AlbumEnrichmentSnapshot = {
 	existingSlices: SlicePresence;
 };
 
+/** Actual saved values (not just presence) for slices that already exist — used as grounding context for missing-slice research. */
+type ExistingEnrichmentContent = {
+	artistContext?: {
+		origin?: string;
+		activeSince?: string;
+		instagramUrl?: string;
+		artistWriteup?: string;
+		listenIfYouLike?: string[];
+	};
+	whyListen?: { whyListenPitch: string };
+	coverDescriptors?: AlbumDetailsTag[];
+	occasions?: AlbumDetailsTag[];
+};
+
 function splitArtistNames(artistName: string): string[] {
 	const segments = artistName
 		.split(", ")
@@ -272,6 +306,74 @@ async function buildAlbumEnrichmentSnapshot(
 	};
 }
 
+/**
+ * Loads the actual saved values for whichever slices `existingSlices` marks
+ * present, so gap-fill runs can pass real grounding content (not just an
+ * `updatedAt` presence flag) into the missing-slice research subagents.
+ */
+async function buildExistingEnrichmentContent(
+	ctx: EnrichmentDbCtx,
+	albumId: Id<"spotifyAlbums">,
+	existingSlices: SlicePresence,
+): Promise<ExistingEnrichmentContent> {
+	const content: ExistingEnrichmentContent = {};
+
+	const needsEnrichmentDoc =
+		existingSlices.artistContext != null || existingSlices.whyListen != null;
+	const enrichment = needsEnrichmentDoc
+		? await ctx.db
+				.query("albumEnrichments")
+				.withIndex("by_albumId", (q) => q.eq("albumId", albumId))
+				.first()
+		: null;
+
+	if (existingSlices.artistContext != null && enrichment) {
+		content.artistContext = {
+			...(enrichment.origin ? { origin: enrichment.origin } : {}),
+			...(enrichment.activeSince
+				? { activeSince: enrichment.activeSince }
+				: {}),
+			...(enrichment.instagramUrl
+				? { instagramUrl: enrichment.instagramUrl }
+				: {}),
+			...(enrichment.artistWriteup
+				? { artistWriteup: enrichment.artistWriteup }
+				: {}),
+			...(enrichment.listenIfYouLike
+				? { listenIfYouLike: enrichment.listenIfYouLike }
+				: {}),
+		};
+	}
+
+	if (existingSlices.whyListen != null && enrichment?.whyListenPitch) {
+		content.whyListen = { whyListenPitch: enrichment.whyListenPitch };
+	}
+
+	if (existingSlices.coverDescriptors != null) {
+		const rows = await ctx.db
+			.query("albumCoverDescriptorFacets")
+			.withIndex("by_albumId", (q) => q.eq("albumId", albumId))
+			.collect();
+		content.coverDescriptors = rows.map((row) => ({
+			key: row.coverDescriptorKey,
+			label: row.label,
+		}));
+	}
+
+	if (existingSlices.occasions != null) {
+		const rows = await ctx.db
+			.query("albumOccasionFacets")
+			.withIndex("by_albumId", (q) => q.eq("albumId", albumId))
+			.collect();
+		content.occasions = rows.map((row) => ({
+			key: row.occasionKey,
+			label: row.label,
+		}));
+	}
+
+	return content;
+}
+
 export const claimNextForLater = mutation({
 	args: { userId: v.string() },
 	returns: v.union(
@@ -284,6 +386,7 @@ export const claimNextForLater = mutation({
 			spotifyAlbumId: v.string(),
 			forLaterItemId: v.id("forLaterAlbumItems"),
 			...albumSnapshotFields,
+			existingContent: existingEnrichmentContentValidator,
 		}),
 	),
 	handler: async (ctx, args) => {
@@ -307,12 +410,18 @@ export const claimNextForLater = mutation({
 			if (snapshot.missingSlices.length === 0) {
 				continue;
 			}
+			const existingContent = await buildExistingEnrichmentContent(
+				ctx,
+				item.albumId,
+				snapshot.existingSlices,
+			);
 			return {
 				empty: false as const,
 				albumId: item.albumId,
 				spotifyAlbumId: item.spotifyAlbumId,
 				forLaterItemId: item._id,
 				...snapshot,
+				existingContent,
 			};
 		}
 

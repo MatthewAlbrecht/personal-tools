@@ -53,16 +53,18 @@ Build a **frozen identity packet** from the claim/resolve response — never fro
 - Cover descriptors (`cover-descriptors` subagent) describe the **artwork image** only — color, subject, setting, visual style. They are a different concept from RYM's musical genre/descriptor tags; never let audio-genre language leak into `coverDescriptors` tags.
 - A subagent's final message must be pure JSON matching its slice's contract (see below). Strip any extra keys (e.g. `notes`) before building the `save`/`trial` body — the Convex validators reject unknown fields.
 - If a subagent fails or returns unusable JSON, drop only that slice; still save/report the slices that succeeded.
+- Never call `save` (or `trial`) with **zero** succeeded slice payloads — the API rejects an empty save. If every launched subagent failed, stop, report the failure (which slices, why if known), and exit without calling `save`.
 
 ## Mode: Schedule (one claim, gaps only)
 
 1. `POST claim` with no body (server fills `userId` from `SPOTIFY_SYNC_USER_ID`).
 2. If `{ "empty": true }` → done, report success, stop. This is the normal steady-state outcome — not an error.
-3. Otherwise the response is the identity + `missingSlices` (`EnrichmentSliceKey[]`) + `existingSlices`. Build the identity packet from `title`/`artists`/`releaseYear`/`coverImageUrl`/`rymUrl`.
-4. Launch **only** the subagents whose slice key appears in `missingSlices`, in parallel. Pass each the identity packet. If `existingSlices` has data for *other* slices, you may include it as light context (e.g. so `why-listen` knows the artist writeup already on file) but it is never required.
+3. Otherwise the response is the identity + `missingSlices` (`EnrichmentSliceKey[]`) + `existingSlices` (presence map) + `existingContent` (the **actual saved values** for whichever slices already exist — see "Gap-fill context for subagents" below). Build the identity packet from `title`/`artists`/`releaseYear`/`coverImageUrl`/`rymUrl`.
+4. Launch **only** the subagents whose slice key appears in `missingSlices`, in parallel. Pass each the identity packet plus whichever fields are present in `existingContent` as light background grounding (e.g. so `why-listen` knows the artist writeup already on file and can stay consistent with it) — this is never required, and a subagent should never receive grounding content for its *own* slice (it's missing by definition, so there is none).
 5. Collect each subagent's JSON. Drop slices that failed to return valid JSON.
-6. `POST save` with `{ albumId, identityPacket, mode: "gaps", <succeeded slice payloads> }`. Only include slice keys you actually have payloads for.
-7. Report `savedSlices` from the response. Stop — do not loop to claim another album.
+6. If **zero** slices succeeded, report the failure and stop — do not call `save`.
+7. `POST save` with `{ albumId, identityPacket, mode: "gaps", <succeeded slice payloads> }`. Only include slice keys you actually have payloads for.
+8. Report `savedSlices` from the response. Stop — do not loop to claim another album.
 
 ## Mode: Manual (by id or name, full overwrite)
 
@@ -74,8 +76,9 @@ Build a **frozen identity packet** from the claim/resolve response — never fro
 3. Build the identity packet from the exact match's identity fields.
 4. Launch **all four** subagents in parallel (`artist-context`, `why-listen`, `cover-descriptors`, `occasions`), each with the identity packet. Manual mode always does a full pass, regardless of `existingSlices`/`missingSlices`.
 5. Collect JSON from each; drop any that failed.
-6. `POST save` with `{ albumId, identityPacket, mode: "overwrite", <slice payloads for every slice that returned valid JSON> }`.
-7. Report `savedSlices` and any slice that failed research (so the user knows to retry just that one).
+6. If **zero** slices succeeded, report the failure and stop — do not call `save`.
+7. `POST save` with `{ albumId, identityPacket, mode: "overwrite", <slice payloads for every slice that returned valid JSON> }`.
+8. Report `savedSlices` and any slice that failed research (so the user knows to retry just that one).
 
 ## Mode: Eval (prompt A/B into trial storage)
 
@@ -93,10 +96,18 @@ Requires Task 11 (`POST trial` route + seeded `.cursor/agents/variants/{slice}/*
 
 ## Gap-fill context for subagents
 
-When only some slices are missing (schedule mode, or a future manual "gaps only" flag), pass each launched subagent:
+When only some slices are missing (schedule mode), `claim`'s response includes `existingContent` — the **actual saved values**, not just presence — for whichever slices already exist:
 
-- The frozen identity packet (always).
-- Any **already-saved** narrative fields relevant to its own slice, if present in `existingSlices`/the claim response — e.g. give `artist-context` the existing `artistWriteup`/`listenIfYouLike` so it refines rather than starts blind. Do not give a subagent another slice's saved data (e.g. don't feed `whyListenPitch` into `cover-descriptors`).
+```json
+{
+  "artistContext": { "origin": "...", "activeSince": "...", "instagramUrl": "...", "artistWriteup": "...", "listenIfYouLike": ["..."] },
+  "whyListen": { "whyListenPitch": "..." },
+  "coverDescriptors": [{ "key": "...", "label": "..." }],
+  "occasions": [{ "key": "...", "label": "..." }]
+}
+```
+
+Each top-level key is present only if that slice is already saved (never for a slice in `missingSlices`). Pass whichever keys exist into **every** launched (missing-slice) subagent as light background context — e.g. give `why-listen` the existing `artistContext.artistWriteup` so its pitch stays consistent with established facts, or give `cover-descriptors` the existing `occasions` tags for scene-setting. This is cross-slice grounding, not refinement: a subagent never receives grounding for its *own* slice (it's missing by definition, so `existingContent` never has that key), and grounding context should inform tone/continuity, not be copied verbatim into an unrelated slice's output.
 
 ## Subagent output contracts (reference)
 
