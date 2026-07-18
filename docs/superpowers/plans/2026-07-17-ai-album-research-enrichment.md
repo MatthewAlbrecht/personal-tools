@@ -21,7 +21,9 @@
 - HTTP fail-closed on missing/invalid `Authorization: Bearer <ALBUM_ENRICHMENT_SECRET>`
 - `userId` for claim scope is `SPOTIFY_SYNC_USER_ID` (string AUTH username), same as other crons
 - Classic function declarations; `type` aliases; kebab-case filenames; env via `~/env.js`
-- No in-app LLM researcher; no product filters for cover/occasions in v1; no plugin packaging
+- No in-app LLM researcher for production enrich; no product filters for cover/occasions in v1; no plugin packaging
+- Prompt eval is explicit skill path only; schedule never writes trials; trials never become live without promote
+- Judge kinds: `artistContext` mixed, `whyListen`/`occasions` human, `coverDescriptors` auto
 
 ---
 
@@ -40,12 +42,18 @@
 | Create | `src/app/api/album-enrichment/save/route.ts` | Partial/full save |
 | Create | `src/app/api/album-enrichment/resolve/route.ts` | Manual lookup |
 | Create | `.cursor/skills/enrich-for-later-album/SKILL.md` | Orchestrator playbook |
-| Create | `.cursor/agents/artist-context.md` | Artist/context researcher |
-| Create | `.cursor/agents/why-listen.md` | Pitch researcher |
-| Create | `.cursor/agents/cover-descriptors.md` | Cover tag researcher |
-| Create | `.cursor/agents/occasions.md` | Occasion tag researcher |
+| Create | `.cursor/agents/artist-context.md` | Artist/context researcher (production) |
+| Create | `.cursor/agents/why-listen.md` | Pitch researcher (production) |
+| Create | `.cursor/agents/cover-descriptors.md` | Cover tag researcher (production) |
+| Create | `.cursor/agents/occasions.md` | Occasion tag researcher (production) |
+| Create | `.cursor/agents/variants/**` | Prompt candidate files for eval (`{slice}/{variantId}.md`) |
 | Create | `src/app/albums/details/[albumId]/page.tsx` | Details route |
 | Create | `src/app/albums/details/[albumId]/_components/album-details-view.tsx` | Dossier UI |
+| Create | `src/app/albums/details/[albumId]/_components/enrichment-trials.tsx` | Side-by-side trials + promote |
+| Create | `src/app/api/album-enrichment/trial/route.ts` | Persist trial (+ optional auto-judge) |
+| Create | `src/app/api/album-enrichment/promote-trial/route.ts` | Promote trial → live slice |
+| Create | `src/lib/album-enrichment/judge-kinds.ts` | Per-slice judge kind map |
+| Create | `convex/albumEnrichmentTrials.ts` (or extend `albumEnrichment.ts`) | Trials CRUD + promote + list |
 | Modify | for-later row + all-albums row components | Details entry links |
 | Modify | `docs/ideas/2026-07-15-ai-album-artist-research-enrichment.md` | `status: planned` + links |
 
@@ -609,18 +617,19 @@ git commit -m "feat(album-enrichment): add authed claim/save/resolve HTTP API"
 
 `SKILL.md` must include:
 
-- Frontmatter `name: enrich-for-later-album` and description covering schedule + manual
+- Frontmatter `name: enrich-for-later-album` and description covering schedule + manual + **eval**
 - Base URL from env/docs note (deployment URL); `Authorization: Bearer` from secrets
 - **Scheduled path:** POST claim → if empty exit success → build identity packet from claim → launch only subagents for `missingSlices` → merge → POST save with `mode: "gaps"` → stop (one album)
 - **Manual path:** parse user target (id/name) → GET resolve → if candidates, stop and list → identity lock → launch **all four** subagents → POST save with `mode: "overwrite"`
-- Hard rules: never research without frozen packet; never save on ambiguous resolve; never enrich a second album in the same run
+- **Eval path:** resolve album → identity lock → for chosen slice(s), load ≥2 variants from `.cursor/agents/variants/{slice}/` → run each variant (same packet) → POST trial per result (not live save) → print `trialRunId` + details URL → stop
+- Hard rules: never research without frozen packet; never save on ambiguous resolve; never enrich a second album in the same run; eval never writes live enrichment; schedule never writes trials
 - Gap-fill: pass existing enrichment fields into subagent prompts when only some slices missing
 
-- [ ] **Step 2: Write four agent files**
+- [ ] **Step 2: Write four production agent files**
 
 Each agent `.md`:
 
-- Frontmatter `name` + `description` (when to delegate)
+- Frontmatter `name` + `description` (when to delegate); optional `model` per slice if desired
 - System prompt: research only inside the provided identity packet; return structured JSON for its slice only; cite sources briefly in notes if useful but JSON is the contract
 
 Expected JSON shapes:
@@ -772,6 +781,80 @@ git commit -m "docs: mark album enrichment idea planned"
 
 ---
 
+### Task 10: Trial storage + judge kinds + auto-judge
+
+**Files:**
+- Modify: `convex/schema.ts` — add `albumEnrichmentTrials`
+- Create: `src/lib/album-enrichment/judge-kinds.ts` (+ tests)
+- Create: `src/lib/album-enrichment/auto-judge.ts` (+ tests) — pure checks where possible; optional model call only for cover grounding / source consistency notes
+- Extend: `convex/albumEnrichment.ts` (or `albumEnrichmentTrials.ts`) — `saveTrial`, `listTrialsForAlbum`, `setTrialVerdict`, `promoteTrial`
+
+**Interfaces:**
+- `judgeKindForSlice(slice)` → `auto` | `human` | `mixed` per spec table
+- `saveTrial` appends row; does **not** touch `albumEnrichments`
+- `promoteTrial` reuses live single-slice save semantics; sets `promotedAt` on the trial; marks sibling trials in the same `trialRunId`+slice as `reject` if they were `undecided` (optional but preferred)
+
+- [ ] **Step 1: Schema + judge-kind helpers (TDD)**
+- [ ] **Step 2: Convex trial mutations/queries**
+- [ ] **Step 3: Auto-judge for `artistContext` factual fields + `coverDescriptors`**
+- [ ] **Step 4: Commit**
+
+```bash
+git commit -m "feat(album-enrichment): trial storage and auto-judge"
+```
+
+---
+
+### Task 11: Eval HTTP routes + skill eval path + seed variants
+
+**Files:**
+- Create: `src/app/api/album-enrichment/trial/route.ts`
+- Create: `src/app/api/album-enrichment/promote-trial/route.ts`
+- Modify: `.cursor/skills/enrich-for-later-album/SKILL.md` — document eval path
+- Create: `.cursor/agents/variants/{slice}/v1.md` — copy of each production prompt as baseline candidate (four slices)
+- Create: at least one alternate variant for `why-listen` and `artist-context` to exercise the loop
+
+**Interfaces:**
+- Trial POST body: `trialRunId`, `albumId`, `slice`, `variantId`, `promptPath`, `payload`, optional `model`
+- Promote POST body: `trialId`
+- Skill eval: one album, one or more slices, ≥2 variants each; never live save
+
+- [ ] **Step 1: HTTP routes (fail closed on auth)**
+- [ ] **Step 2: Skill eval path + variant folder convention**
+- [ ] **Step 3: Seed baseline + one alternate writing variant**
+- [ ] **Step 4: Commit**
+
+```bash
+git commit -m "feat(album-enrichment): eval HTTP and prompt variants"
+```
+
+---
+
+### Task 12: Details trials UI (compare + promote)
+
+**Files:**
+- Create: `src/app/albums/details/[albumId]/_components/enrichment-trials.tsx`
+- Modify: `album-details-view.tsx` — mount trials section when trials exist
+- Wire promote + verdict via Convex client mutations (authed app user) **or** bearer HTTP from a small server action — prefer Convex mutations for UI (same auth as rest of app); keep HTTP promote for skill/automation use
+
+**UI:**
+- Group by `trialRunId` then slice
+- Side-by-side for human/mixed writing fields
+- Show auto-check chips/notes for auto/mixed factual
+- Win / reject / Promote to live
+- After promote, live dossier sections refresh; trial retained
+
+- [ ] **Step 1: List + compare UI**
+- [ ] **Step 2: Verdict + promote actions**
+- [ ] **Step 3: Manual smoke — eval two why-listen variants, promote winner, confirm live pitch**
+- [ ] **Step 4: Commit**
+
+```bash
+git commit -m "feat(album-enrichment): trials compare and promote UI"
+```
+
+---
+
 ## Spec coverage (self-review)
 
 | Spec requirement | Task |
@@ -788,6 +871,9 @@ git commit -m "docs: mark album enrichment idea planned"
 | Entry from for-later + `/albums/all` | 8 |
 | No product filters v1 | (explicit non-goal; facets only) |
 | Idea → planned | 9 |
+| Prompt eval trials + per-slice judge | 10–12 |
+| Eval never writes live until promote | 10, 11 |
+| Human compare + promote UI | 12 |
 
 ## Placeholder / consistency check
 

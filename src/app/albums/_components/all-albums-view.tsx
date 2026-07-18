@@ -10,6 +10,7 @@ import {
 	MoreHorizontal,
 	Plus,
 } from "lucide-react";
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -1113,6 +1114,9 @@ function AlbumRymActionsMenu({
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end" className="w-52">
 				<DropdownMenuLabel>RYM Actions</DropdownMenuLabel>
+				<DropdownMenuItem asChild>
+					<Link href={`/albums/details/${album._id}`}>Album details</Link>
+				</DropdownMenuItem>
 				{!isLinked && !album.rymNotOnSite ? (
 					<DropdownMenuItem onSelect={onLinkRym}>
 						Link RYM scrape

@@ -3,6 +3,7 @@
 import { useMutation } from "convex/react";
 import { Check, Disc3, MoreHorizontal } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AlbumRatingBadge } from "~/components/album-rating-badge";
@@ -375,6 +376,9 @@ function ForLaterRowActionsMenu({
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end" className="w-52">
 				<DropdownMenuLabel>Actions</DropdownMenuLabel>
+				<DropdownMenuItem asChild>
+					<Link href={`/albums/details/${row.albumId}`}>Album details</Link>
+				</DropdownMenuItem>
 				{onLinkRym && !row.rymUrl && !row.rymNotOnSite ? (
 					<DropdownMenuItem onSelect={onLinkRym}>
 						Link RYM scrape

@@ -23,15 +23,17 @@ Cursor is better at this kind of open-web research than a thin in-app LLM call. 
 - `albumEnrichments` (1:1) + cover/occasion facet tables
 - `/albums/details/:spotifyAlbumsId` kitchen-sink dossier (designed, not a JSON dump)
 - Entry points from for-later, `/albums/all`, and direct URL
+- **Prompt eval / A-B:** run prompt variants into trial storage (not live), judge per slice kind, thin in-app compare + promote-to-live
 
 ### Out of scope (v1)
 
 - Filtering/browsing by cover descriptors or occasions in for-later or elsewhere (schema ready only)
 - Claiming enrichment for albums not on for-later
 - Cursor plugin packaging
-- In-app LLM researcher replacing Cursor
-- More than one album per automation run
+- In-app LLM researcher replacing Cursor (eval auto-judge may call a model; production research stays in Cursor)
+- More than one album per automation run (eval may run multiple **variants** of one album/slice in one turn)
 - Migrating enrichment onto for-later rows
+- Large-batch offline eval harness / leaderboard across hundreds of albums
 
 ## Approaches Considered
 
@@ -199,6 +201,79 @@ Read-only **album dossier** using existing design system — curated sections, s
 
 Unknown id → not-found. Missing enrichment must not break the page.
 
+## Prompt eval (A/B)
+
+Goal: iterate on slice subagent system prompts with confidence before promoting a winner into the production agent files used by schedule/manual enrich.
+
+### Hybrid loop
+
+```
+Skill eval mode
+  → same identity lock as production
+  → run N prompt variants for chosen slice(s) (same album)
+  → HTTP save-trial (never touches live albumEnrichments)
+  → auto-judge runs for auto/mixed factual fields
+  → Details page ?trials=… side-by-side compare
+  → Human picks winner on writing slices
+  → Promote copies winning trial → live save for that slice
+  → Operator updates production .cursor/agents/*.md to the winning variant text
+```
+
+Scheduled enrich **never** writes trials or auto-promotes. Eval is an explicit skill path.
+
+### Variant files
+
+- Production agents stay at `.cursor/agents/{slice}.md` (what schedule/manual use).
+- Candidates live under `.cursor/agents/variants/{slice}/{variantId}.md` with the same frontmatter shape (`name`, `description`, optional `model`).
+- Each trial records `slice`, `variantId`, `promptPath`, and optional `model` so results stay attributable.
+
+### Per-slice judge kind
+
+| Slice | Judge | Notes |
+|-------|-------|--------|
+| `artistContext` | **mixed** | Auto-check factual fields (`origin`, `activeSince`, `instagramUrl`) against identity + cited/public sources. Human ranks `artistWriteup` + `listenIfYouLike` (and overall taste). |
+| `whyListen` | **human** | Side-by-side; pick the pitch you’d actually want on the dossier. |
+| `coverDescriptors` | **auto** | Tags must be grounded in the cover image / identity packet; reject RYM-musical bleed and empty/generic noise. |
+| `occasions` | **human** | Subjective vibe fit — human pick. |
+
+Auto-judge is a **verifier** (pass/fail + short notes per check), not a replacement for research. It does not overwrite trial payloads.
+
+### Data: `albumEnrichmentTrials`
+
+Append-only trial rows (not 1:1 with albums):
+
+- `trialRunId` — groups variants compared in one eval turn
+- `albumId`, `spotifyAlbumId`
+- `slice`, `variantId`, `promptPath`, optional `model`
+- `payload` — same shape as that slice’s live save body
+- `judgeKind`: `auto` \| `human` \| `mixed`
+- `autoEval` (optional): `{ passed, checks: [{ id, passed, note }], notes }`
+- `humanVerdict` (optional): `win` \| `reject` \| `undecided`
+- `promotedAt` (optional)
+- `createdAt`
+
+Indexes: `by_albumId`, `by_trialRunId`, `by_albumId_and_slice`.
+
+### HTTP (eval)
+
+Same bearer auth as claim/save.
+
+| Route | Role |
+|-------|------|
+| `POST .../trial` | Persist one variant result (+ optional trigger auto-judge for auto/mixed) |
+| `POST .../promote-trial` | Copy a winning trial’s payload into live enrichment for that slice only (`mode`-equivalent of a single-slice save) |
+
+### UI
+
+On `/albums/details/:albumId`, an **Enrichment trials** section (or subview) when trials exist:
+
+- Group by `trialRunId` + slice
+- Side-by-side payloads (writing slices emphasized)
+- Show auto-check results for factual/cover slices
+- Actions: mark win / reject; **Promote to live** (calls promote API or Convex mutation)
+
+Live dossier sections remain the source of truth after promote; trials stay for history.
+
 ## Errors & ops
 
 | Case | Behavior |
@@ -220,6 +295,9 @@ Unknown id → not-found. Missing enrichment must not break the page.
 - Adding a fifth required slice causes automatic gap-fill without a separate automation
 - Details page is a credible dossier reachable from for-later and `/albums/all`
 - Cover descriptors never collide with RYM musical descriptor storage/UI naming
+- Eval mode can run ≥2 variants of one writing slice on one album into trials without changing live enrichment until promote
+- Auto-judge attaches pass/fail checks for `artistContext` factual fields and `coverDescriptors`
+- Human can mark a winner and promote it to live from the details trials UI
 
 ## Future widen (non-v1)
 
@@ -227,3 +305,5 @@ Unknown id → not-found. Missing enrichment must not break the page.
 - Product filters on cover descriptors and occasions
 - Optional manual “gaps-only” flag (schedule already gap-fills)
 - Webhook trigger (“enrich this album now”) reusing the same skill path
+- Cross-album prompt leaderboards / batch eval suites
+- Auto-sync winning variant file into production agent path (today: manual copy after promote)
