@@ -19,6 +19,7 @@ import {
 	REQUIRED_ENRICHMENT_SLICES,
 } from "../../../../../../convex/_utils/albumEnrichmentSlices";
 import { formatRelativeTime } from "../../../_utils/formatters";
+import { EnrichmentTrials } from "./enrichment-trials";
 
 type AlbumDetails = NonNullable<
 	FunctionReturnType<typeof api.albumEnrichment.getAlbumDetails>
@@ -64,6 +65,7 @@ export function AlbumDetailsView({ details }: { details: AlbumDetails }) {
 			<RymSection rym={details.rym} />
 			<Separator />
 			<ListensSection listens={details.listens} />
+			<EnrichmentTrials albumId={details.ids.albumId} />
 			<Separator />
 			<RawIdentityFooter ids={details.ids} />
 		</div>
