@@ -1,6 +1,10 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import {
+	albumEnrichmentTrialPayloadValidator,
+	enrichmentSliceKeyValidator,
+} from "./_utils/albumEnrichmentTrialValidators";
+import {
 	smartPlaylistFiltersValidator,
 	smartPlaylistSourceValidator,
 	smartPlaylistSyncModeValidator,
@@ -667,6 +671,46 @@ export default defineSchema({
 	})
 		.index("by_albumId", ["albumId"])
 		.index("by_occasionKey_albumId", ["occasionKey", "albumId"]),
+
+	/** Append-only prompt-eval trial rows (not 1:1 with albums) — see "Prompt eval" design section. */
+	albumEnrichmentTrials: defineTable({
+		/** Groups variants compared in one eval turn. */
+		trialRunId: v.string(),
+		albumId: v.id("spotifyAlbums"),
+		spotifyAlbumId: v.string(),
+		slice: enrichmentSliceKeyValidator,
+		variantId: v.string(),
+		promptPath: v.string(),
+		model: v.optional(v.string()),
+		/** Same shape as that slice's live save body. */
+		payload: albumEnrichmentTrialPayloadValidator,
+		judgeKind: v.union(
+			v.literal("auto"),
+			v.literal("human"),
+			v.literal("mixed"),
+		),
+		autoEval: v.optional(
+			v.object({
+				passed: v.boolean(),
+				checks: v.array(
+					v.object({
+						id: v.string(),
+						passed: v.boolean(),
+						note: v.string(),
+					}),
+				),
+				notes: v.string(),
+			}),
+		),
+		humanVerdict: v.optional(
+			v.union(v.literal("win"), v.literal("reject"), v.literal("undecided")),
+		),
+		promotedAt: v.optional(v.number()),
+		createdAt: v.number(),
+	})
+		.index("by_albumId", ["albumId"])
+		.index("by_trialRunId", ["trialRunId"])
+		.index("by_albumId_and_slice", ["albumId", "slice"]),
 
 	forLaterAlbumItems: defineTable({
 		userId: v.string(),

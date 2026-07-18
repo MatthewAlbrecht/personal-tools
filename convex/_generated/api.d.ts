@@ -13,7 +13,10 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
+import type * as _utils_albumEnrichmentAutoJudge from "../_utils/albumEnrichmentAutoJudge.js";
+import type * as _utils_albumEnrichmentJudgeKinds from "../_utils/albumEnrichmentJudgeKinds.js";
 import type * as _utils_albumEnrichmentSlices from "../_utils/albumEnrichmentSlices.js";
+import type * as _utils_albumEnrichmentTrialValidators from "../_utils/albumEnrichmentTrialValidators.js";
 import type * as _utils_albumLibraryIndexedList from "../_utils/albumLibraryIndexedList.js";
 import type * as _utils_albumLibraryProjection from "../_utils/albumLibraryProjection.js";
 import type * as _utils_albumLibraryRows from "../_utils/albumLibraryRows.js";
@@ -50,6 +53,7 @@ import type * as _utils_zineCoverTextLayout from "../_utils/zineCoverTextLayout.
 import type * as _utils_zineInsideBackLayout from "../_utils/zineInsideBackLayout.js";
 import type * as _utils_zineInsideBackSections from "../_utils/zineInsideBackSections.js";
 import type * as albumEnrichment from "../albumEnrichment.js";
+import type * as albumEnrichmentTrials from "../albumEnrichmentTrials.js";
 import type * as articles from "../articles.js";
 import type * as auth from "../auth.js";
 import type * as birthdays from "../birthdays.js";
@@ -88,7 +92,10 @@ import type * as spotify from "../spotify.js";
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  "_utils/albumEnrichmentAutoJudge": typeof _utils_albumEnrichmentAutoJudge;
+  "_utils/albumEnrichmentJudgeKinds": typeof _utils_albumEnrichmentJudgeKinds;
   "_utils/albumEnrichmentSlices": typeof _utils_albumEnrichmentSlices;
+  "_utils/albumEnrichmentTrialValidators": typeof _utils_albumEnrichmentTrialValidators;
   "_utils/albumLibraryIndexedList": typeof _utils_albumLibraryIndexedList;
   "_utils/albumLibraryProjection": typeof _utils_albumLibraryProjection;
   "_utils/albumLibraryRows": typeof _utils_albumLibraryRows;
@@ -125,6 +132,7 @@ declare const fullApi: ApiFromModules<{
   "_utils/zineInsideBackLayout": typeof _utils_zineInsideBackLayout;
   "_utils/zineInsideBackSections": typeof _utils_zineInsideBackSections;
   albumEnrichment: typeof albumEnrichment;
+  albumEnrichmentTrials: typeof albumEnrichmentTrials;
   articles: typeof articles;
   auth: typeof auth;
   birthdays: typeof birthdays;

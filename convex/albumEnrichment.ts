@@ -243,7 +243,7 @@ type ExistingEnrichmentContent = {
 	occasions?: AlbumDetailsTag[];
 };
 
-function splitArtistNames(artistName: string): string[] {
+export function splitArtistNames(artistName: string): string[] {
 	const segments = artistName
 		.split(", ")
 		.map((segment) => segment.trim())
@@ -251,7 +251,9 @@ function splitArtistNames(artistName: string): string[] {
 	return segments.length > 0 ? segments : [artistName];
 }
 
-function parseReleaseYear(releaseDate: string | undefined): number | undefined {
+export function parseReleaseYear(
+	releaseDate: string | undefined,
+): number | undefined {
 	if (!releaseDate) {
 		return undefined;
 	}
@@ -471,6 +473,129 @@ async function replaceOccasionFacets(
 	}
 }
 
+export type SaveSlicesArgs = {
+	albumId: Id<"spotifyAlbums">;
+	identityPacket: {
+		title: string;
+		artists: string[];
+		releaseYear?: number;
+		coverImageUrl?: string;
+		rymUrl?: string;
+	};
+	artistContext?: {
+		origin?: string;
+		activeSince?: string;
+		instagramUrl?: string;
+		artistWriteup?: string;
+		listenIfYouLike?: string[];
+	};
+	whyListen?: { whyListenPitch: string };
+	coverDescriptors?: { tags: Array<{ label: string }> };
+	occasions?: { tags: Array<{ label: string }> };
+	mode: "gaps" | "overwrite";
+};
+
+/**
+ * Shared single-slice-or-more live save logic. Extracted so `promoteTrial`
+ * (in `albumEnrichmentTrials.ts`) can reuse the exact same write semantics
+ * for a single-slice promote instead of duplicating them.
+ */
+export async function saveSlicesHandler(
+	ctx: MutationCtx,
+	args: SaveSlicesArgs,
+): Promise<{
+	albumId: Id<"spotifyAlbums">;
+	savedSlices: EnrichmentSliceKey[];
+}> {
+	const album = await ctx.db.get(args.albumId);
+	if (!album) {
+		throw new Error("Album not found");
+	}
+
+	let enrichment = await ctx.db
+		.query("albumEnrichments")
+		.withIndex("by_albumId", (q) => q.eq("albumId", args.albumId))
+		.first();
+
+	const now = Date.now();
+
+	if (!enrichment) {
+		const insertedId = await ctx.db.insert("albumEnrichments", {
+			albumId: args.albumId,
+			spotifyAlbumId: album.spotifyAlbumId,
+			slices: {},
+			createdAt: now,
+			updatedAt: now,
+		});
+		enrichment = await ctx.db.get(insertedId);
+	}
+	if (!enrichment) {
+		throw new Error("Failed to create album enrichment row");
+	}
+
+	const shouldWrite = (key: EnrichmentSliceKey, hasPayload: boolean): boolean =>
+		hasPayload && (args.mode === "overwrite" || enrichment.slices[key] == null);
+
+	const savedSlices: EnrichmentSliceKey[] = [];
+	const nextSlices: SlicePresence = { ...enrichment.slices };
+
+	const patch: Partial<Doc<"albumEnrichments">> = {
+		identityPacket: args.identityPacket,
+		lastEnrichedAt: now,
+		updatedAt: now,
+	};
+
+	if (
+		shouldWrite("artistContext", args.artistContext !== undefined) &&
+		args.artistContext
+	) {
+		patch.origin = args.artistContext.origin;
+		patch.activeSince = args.artistContext.activeSince;
+		patch.instagramUrl = args.artistContext.instagramUrl;
+		patch.artistWriteup = args.artistContext.artistWriteup;
+		patch.listenIfYouLike = args.artistContext.listenIfYouLike;
+		nextSlices.artistContext = { updatedAt: now };
+		savedSlices.push("artistContext");
+	}
+
+	if (
+		shouldWrite("whyListen", args.whyListen !== undefined) &&
+		args.whyListen
+	) {
+		patch.whyListenPitch = args.whyListen.whyListenPitch;
+		nextSlices.whyListen = { updatedAt: now };
+		savedSlices.push("whyListen");
+	}
+
+	if (
+		shouldWrite("coverDescriptors", args.coverDescriptors !== undefined) &&
+		args.coverDescriptors
+	) {
+		await replaceCoverDescriptorFacets(
+			ctx,
+			args.albumId,
+			args.coverDescriptors.tags,
+		);
+		nextSlices.coverDescriptors = { updatedAt: now };
+		savedSlices.push("coverDescriptors");
+	}
+
+	if (
+		shouldWrite("occasions", args.occasions !== undefined) &&
+		args.occasions
+	) {
+		await replaceOccasionFacets(ctx, args.albumId, args.occasions.tags);
+		nextSlices.occasions = { updatedAt: now };
+		savedSlices.push("occasions");
+	}
+
+	patch.slices = nextSlices;
+
+	await ctx.db.patch(enrichment._id, patch);
+
+	return { albumId: args.albumId, savedSlices };
+}
+
 export const saveSlices = mutation({
 	args: {
 		albumId: v.id("spotifyAlbums"),
@@ -485,99 +610,7 @@ export const saveSlices = mutation({
 		albumId: v.id("spotifyAlbums"),
 		savedSlices: v.array(enrichmentSliceKeyValidator),
 	}),
-	handler: async (ctx, args) => {
-		const album = await ctx.db.get(args.albumId);
-		if (!album) {
-			throw new Error("Album not found");
-		}
-
-		let enrichment = await ctx.db
-			.query("albumEnrichments")
-			.withIndex("by_albumId", (q) => q.eq("albumId", args.albumId))
-			.first();
-
-		const now = Date.now();
-
-		if (!enrichment) {
-			const insertedId = await ctx.db.insert("albumEnrichments", {
-				albumId: args.albumId,
-				spotifyAlbumId: album.spotifyAlbumId,
-				slices: {},
-				createdAt: now,
-				updatedAt: now,
-			});
-			enrichment = await ctx.db.get(insertedId);
-		}
-		if (!enrichment) {
-			throw new Error("Failed to create album enrichment row");
-		}
-
-		const shouldWrite = (
-			key: EnrichmentSliceKey,
-			hasPayload: boolean,
-		): boolean =>
-			hasPayload &&
-			(args.mode === "overwrite" || enrichment.slices[key] == null);
-
-		const savedSlices: EnrichmentSliceKey[] = [];
-		const nextSlices: SlicePresence = { ...enrichment.slices };
-
-		const patch: Partial<Doc<"albumEnrichments">> = {
-			identityPacket: args.identityPacket,
-			lastEnrichedAt: now,
-			updatedAt: now,
-		};
-
-		if (
-			shouldWrite("artistContext", args.artistContext !== undefined) &&
-			args.artistContext
-		) {
-			patch.origin = args.artistContext.origin;
-			patch.activeSince = args.artistContext.activeSince;
-			patch.instagramUrl = args.artistContext.instagramUrl;
-			patch.artistWriteup = args.artistContext.artistWriteup;
-			patch.listenIfYouLike = args.artistContext.listenIfYouLike;
-			nextSlices.artistContext = { updatedAt: now };
-			savedSlices.push("artistContext");
-		}
-
-		if (
-			shouldWrite("whyListen", args.whyListen !== undefined) &&
-			args.whyListen
-		) {
-			patch.whyListenPitch = args.whyListen.whyListenPitch;
-			nextSlices.whyListen = { updatedAt: now };
-			savedSlices.push("whyListen");
-		}
-
-		if (
-			shouldWrite("coverDescriptors", args.coverDescriptors !== undefined) &&
-			args.coverDescriptors
-		) {
-			await replaceCoverDescriptorFacets(
-				ctx,
-				args.albumId,
-				args.coverDescriptors.tags,
-			);
-			nextSlices.coverDescriptors = { updatedAt: now };
-			savedSlices.push("coverDescriptors");
-		}
-
-		if (
-			shouldWrite("occasions", args.occasions !== undefined) &&
-			args.occasions
-		) {
-			await replaceOccasionFacets(ctx, args.albumId, args.occasions.tags);
-			nextSlices.occasions = { updatedAt: now };
-			savedSlices.push("occasions");
-		}
-
-		patch.slices = nextSlices;
-
-		await ctx.db.patch(enrichment._id, patch);
-
-		return { albumId: args.albumId, savedSlices };
-	},
+	handler: async (ctx, args) => saveSlicesHandler(ctx, args),
 });
 
 function albumMatchesSearchTerm(
