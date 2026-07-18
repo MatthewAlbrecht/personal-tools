@@ -344,21 +344,33 @@ export const upsertSettings = mutation({
 			.withIndex("by_userId", (q) => q.eq("userId", args.userId))
 			.first();
 
-		const patch = {
-			mainPlaylistId: emptyToUndefined(args.mainPlaylistId),
-			repeatsPlaylistId: emptyToUndefined(args.repeatsPlaylistId),
-			updatedAt: now,
-		};
+		// undefined arg = leave unchanged; empty string = clear the link
+		const mainPlaylistId =
+			args.mainPlaylistId === undefined
+				? existing?.mainPlaylistId
+				: emptyToUndefined(args.mainPlaylistId);
+		const repeatsPlaylistId =
+			args.repeatsPlaylistId === undefined
+				? existing?.repeatsPlaylistId
+				: emptyToUndefined(args.repeatsPlaylistId);
 
 		if (existing) {
-			await ctx.db.patch(existing._id, patch);
+			await ctx.db.replace(existing._id, {
+				userId: existing.userId,
+				...(mainPlaylistId !== undefined ? { mainPlaylistId } : {}),
+				...(repeatsPlaylistId !== undefined ? { repeatsPlaylistId } : {}),
+				createdAt: existing.createdAt,
+				updatedAt: now,
+			});
 			return existing._id;
 		}
 
 		return await ctx.db.insert("musicFunnelSettings", {
 			userId: args.userId,
-			...patch,
+			...(mainPlaylistId !== undefined ? { mainPlaylistId } : {}),
+			...(repeatsPlaylistId !== undefined ? { repeatsPlaylistId } : {}),
 			createdAt: now,
+			updatedAt: now,
 		});
 	},
 });
@@ -404,8 +416,7 @@ export const upsertSource = mutation({
 
 		if (args.sourceId) {
 			const existing = await ctx.db.get(args.sourceId);
-			const kind =
-				args.kind ?? normalizeSourceKind(existing?.kind);
+			const kind = args.kind ?? normalizeSourceKind(existing?.kind);
 			await ctx.db.patch(args.sourceId, {
 				spotifyPlaylistId: args.spotifyPlaylistId.trim(),
 				displayName: args.displayName.trim(),
@@ -890,16 +901,12 @@ export const listSourceRunEncounters = query({
 
 		const encounterDocs = await ctx.db
 			.query("musicFunnelTrackEncounters")
-			.withIndex("by_sourceRunId", (q) =>
-				q.eq("sourceRunId", args.sourceRunId),
-			)
+			.withIndex("by_sourceRunId", (q) => q.eq("sourceRunId", args.sourceRunId))
 			.collect();
 
 		const writeDocs = await ctx.db
 			.query("musicFunnelPlaylistWrites")
-			.withIndex("by_sourceRunId", (q) =>
-				q.eq("sourceRunId", args.sourceRunId),
-			)
+			.withIndex("by_sourceRunId", (q) => q.eq("sourceRunId", args.sourceRunId))
 			.collect();
 
 		const repeatWriteTrackIds = writeDocs
