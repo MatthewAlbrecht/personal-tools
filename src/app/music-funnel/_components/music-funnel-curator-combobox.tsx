@@ -9,8 +9,11 @@ import {
 	ComboboxItem,
 	ComboboxList,
 } from "~/components/ui/combobox";
-
-const CREATE_PREFIX = "__create__:";
+import {
+	getCuratorComboboxItemLabel,
+	resolveCuratorComboboxItems,
+	resolveCuratorComboboxValueChange,
+} from "../_utils/music-funnel-curator-combobox-state";
 
 export function MusicFunnelCuratorCombobox({
 	curators,
@@ -27,35 +30,14 @@ export function MusicFunnelCuratorCombobox({
 		setFilter(value);
 	}, [value]);
 
-	const unique = Array.from(
-		new Set([...(value ? [value] : []), ...curators].filter(Boolean)),
-	);
-	const trimmed = filter.trim();
-	const canCreate =
-		trimmed.length > 0 &&
-		!unique.some((name) => name.toLowerCase() === trimmed.toLowerCase());
-	const items = [
-		...unique,
-		...(canCreate ? [`${CREATE_PREFIX}${trimmed}`] : []),
-	];
-
-	function getItemLabel(item: string): string {
-		if (item.startsWith(CREATE_PREFIX)) {
-			return `Create “${item.slice(CREATE_PREFIX.length)}”`;
-		}
-		return item;
-	}
+	const { items, createItem } = resolveCuratorComboboxItems({
+		curators,
+		value,
+		filter,
+	});
 
 	function handleValueChange(next: string | null): void {
-		if (next == null) {
-			onValueChange("");
-			return;
-		}
-		if (next.startsWith(CREATE_PREFIX)) {
-			onValueChange(next.slice(CREATE_PREFIX.length));
-			return;
-		}
-		onValueChange(next);
+		onValueChange(resolveCuratorComboboxValueChange(next));
 	}
 
 	return (
@@ -66,7 +48,6 @@ export function MusicFunnelCuratorCombobox({
 			onValueChange={handleValueChange}
 			inputValue={filter}
 			onInputValueChange={setFilter}
-			itemToStringLabel={getItemLabel}
 		>
 			<ComboboxInput
 				placeholder="Curator name"
@@ -78,7 +59,7 @@ export function MusicFunnelCuratorCombobox({
 				<ComboboxList>
 					{(item) => (
 						<ComboboxItem key={item} value={item}>
-							{getItemLabel(item)}
+							{getCuratorComboboxItemLabel({ item, createItem })}
 						</ComboboxItem>
 					)}
 				</ComboboxList>
