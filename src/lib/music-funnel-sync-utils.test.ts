@@ -7,6 +7,7 @@ import {
 	computeTrackRepeatSummaries,
 	excludeAlreadyWrittenPlaylistWrites,
 	normalizePlaylistTrack,
+	pendingPlaylistWritesAfterPresenceCheck,
 	planPlaylistWrites,
 	qualifiesAsMusicFunnelAlbumRepeat,
 } from "./music-funnel-sync-utils";
@@ -399,6 +400,41 @@ test("excludeAlreadyWrittenPlaylistWrites drops tracks already in the write ledg
 
 	assert.deepEqual(
 		pending.map((write) => write.spotifyTrackId),
+		["track-2"],
+	);
+});
+
+test("pendingPlaylistWritesAfterPresenceCheck skips tracks already on the Spotify playlist even if ledger is empty", () => {
+	const writes = [
+		{
+			spotifyTrackId: "track-1",
+			trackUri: "spotify:track:track-1",
+			reason: "second_source_repeat" as const,
+		},
+		{
+			spotifyTrackId: "track-2",
+			trackUri: "spotify:track:track-2",
+			reason: "second_source_repeat" as const,
+		},
+		{
+			spotifyTrackId: "track-3",
+			trackUri: "spotify:track:track-3",
+			reason: "second_source_repeat" as const,
+		},
+	];
+
+	const result = pendingPlaylistWritesAfterPresenceCheck({
+		writes,
+		ledgerTrackIds: new Set(["track-1"]),
+		destinationPlaylistTrackIds: new Set(["track-2"]),
+	});
+
+	assert.deepEqual(
+		result.toWrite.map((write) => write.spotifyTrackId),
+		["track-3"],
+	);
+	assert.deepEqual(
+		result.alreadyOnPlaylist.map((write) => write.spotifyTrackId),
 		["track-2"],
 	);
 });

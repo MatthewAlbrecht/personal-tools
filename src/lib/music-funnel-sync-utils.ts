@@ -249,6 +249,35 @@ export function excludeAlreadyWrittenPlaylistWrites(
 	);
 }
 
+export function pendingPlaylistWritesAfterPresenceCheck({
+	writes,
+	ledgerTrackIds,
+	destinationPlaylistTrackIds,
+}: {
+	writes: PlannedPlaylistWrite[];
+	ledgerTrackIds: ReadonlySet<string>;
+	destinationPlaylistTrackIds: ReadonlySet<string>;
+}): {
+	toWrite: PlannedPlaylistWrite[];
+	alreadyOnPlaylist: PlannedPlaylistWrite[];
+} {
+	const toWrite: PlannedPlaylistWrite[] = [];
+	const alreadyOnPlaylist: PlannedPlaylistWrite[] = [];
+
+	for (const write of writes) {
+		if (ledgerTrackIds.has(write.spotifyTrackId)) {
+			continue;
+		}
+		if (destinationPlaylistTrackIds.has(write.spotifyTrackId)) {
+			alreadyOnPlaylist.push(write);
+			continue;
+		}
+		toWrite.push(write);
+	}
+
+	return { toWrite, alreadyOnPlaylist };
+}
+
 export function planPlaylistWrites({
 	candidateEncounters,
 	totalSourceCountsByTrackId,

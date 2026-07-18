@@ -6,8 +6,8 @@ import {
 	computeAlbumRepeatSummaries,
 	computeArtistRepeatSummaries,
 	computeTrackRepeatSummaries,
-	excludeAlreadyWrittenPlaylistWrites,
 	normalizePlaylistTrack,
+	pendingPlaylistWritesAfterPresenceCheck,
 	planPlaylistWrites,
 } from "~/lib/music-funnel-sync-utils";
 import {
@@ -572,17 +572,47 @@ async function writeTracksToSpotifyPlaylist({
 			spotifyTrackIds: writes.map((write) => write.spotifyTrackId),
 		},
 	);
-	const pendingWrites = excludeAlreadyWrittenPlaylistWrites(
-		writes,
-		new Set(alreadyWritten),
+
+	// Destination playlist is the source of truth for "already present" — the
+	// Convex write ledger alone is not enough when multiple environments share
+	// the same Spotify playlist.
+	const playlistTracks = await getAllPlaylistTrackItems(
+		accessToken,
+		playlistId,
 	);
+	const destinationPlaylistTrackIds = new Set<string>();
+	for (const item of playlistTracks.items) {
+		const trackId = item.track?.id;
+		if (trackId) {
+			destinationPlaylistTrackIds.add(trackId);
+		}
+	}
+
+	const { toWrite, alreadyOnPlaylist } =
+		pendingPlaylistWritesAfterPresenceCheck({
+			writes,
+			ledgerTrackIds: new Set(alreadyWritten),
+			destinationPlaylistTrackIds,
+		});
+
+	if (alreadyOnPlaylist.length > 0) {
+		await convex.mutation(api.musicFunnel.recordPlaylistWrites, {
+			userId,
+			runId,
+			sourceRunId,
+			kind,
+			spotifyPlaylistId: playlistId,
+			writes: alreadyOnPlaylist,
+			writtenAt: Date.now(),
+		});
+	}
 
 	let written = 0;
 	for (const chunk of chunkSpotifyUris(
-		pendingWrites.map((write) => write.trackUri),
+		toWrite.map((write) => write.trackUri),
 	)) {
 		const response = await addTracksToPlaylist(accessToken, playlistId, chunk);
-		const chunkWrites = pendingWrites.filter((write) =>
+		const chunkWrites = toWrite.filter((write) =>
 			chunk.includes(write.trackUri),
 		);
 		const insertedCount = await convex.mutation(
