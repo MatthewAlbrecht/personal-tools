@@ -146,9 +146,49 @@ curl -s "$BASE/api/album-enrichment/resolve?q=some+album+name" \
   -H "Authorization: Bearer $ALBUM_ENRICHMENT_SECRET"
 ```
 
-## Automation notes
+## Automation operator checklist
 
-- Trigger: cron, run in scheduled mode. Stop condition is `{ empty: true }` from `claim` — that's a clean success, not a failure.
-- Required secrets: `ALBUM_ENRICHMENT_SECRET`, base URL.
-- Repo: this repository, on the branch that has the routes deployed.
-- See Task 9 for the full automation setup checklist.
+Use this when creating a Cursor Cloud Automation to drain the for-later enrichment queue. **Do not assume an automation already exists** — it must be created manually in Cursor.
+
+### Trigger
+
+- **Type:** cron
+- **Cadence:** daily for steady state; every few hours during initial backfill
+- **Scope:** one album per run — the skill never loops
+
+### Prompt
+
+In scheduled mode, each run should invoke this skill exactly once:
+
+```
+/enrich-for-later-album
+```
+
+The agent follows **Mode: Schedule** above: `POST claim` → research only `missingSlices` → `POST save` with `mode: "gaps"`. Do not pass an album name or id — the server picks the next incomplete for-later album.
+
+### Secrets
+
+Configure in the Cursor Automation / cloud agent environment:
+
+| Secret | Purpose |
+|--------|---------|
+| `ALBUM_ENRICHMENT_SECRET` | Bearer token for all `/api/album-enrichment/*` routes |
+| `BASE_URL` (or equivalent) | Deployed app origin, e.g. `https://your-app.vercel.app` — no trailing slash |
+
+For local smoke tests, use `.env.local` instead. Never hardcode or commit secrets.
+
+### Repository
+
+- **Repo:** this repository (`personal-tools`), checked out on the branch whose deployment exposes the enrichment routes
+- **Skill path:** `.cursor/skills/enrich-for-later-album/SKILL.md` (must be present on the checked-out branch)
+- **Deploy dependency:** the target `BASE_URL` must have Tasks 1–9 (HTTP routes + skill) deployed before the automation will succeed
+
+### Stop condition
+
+- **Success, queue empty:** `POST claim` returns `{ "empty": true }` — report success and exit. This is normal steady state, not an error.
+- **Success, album enriched:** `POST save` returns `savedSlices` — report and exit. Do not claim a second album in the same run.
+- **Failure:** zero slices succeeded, auth error, or ambiguous resolve — report and exit without retrying in-loop (next cron run will retry).
+
+### Not yet automated
+
+Eval mode (`POST trial`, variant agents under `.cursor/agents/variants/`) is Tasks 10–12 and is **out of scope** for this cron automation.

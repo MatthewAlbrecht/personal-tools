@@ -3,18 +3,21 @@ title: AI album/artist research enrichment
 domain: albums
 kind: feature
 size: 5
-status: planned
+status: started
 captured: 2026-07-15
 ---
 
 ## Notes
 
-- Planned — spec: `docs/superpowers/specs/2026-07-17-ai-album-research-enrichment-design.md`, plan: `docs/superpowers/plans/2026-07-17-ai-album-research-enrichment.md`
+- In progress on `feat/ai-album-research-enrichment` — spec: `docs/superpowers/specs/2026-07-17-ai-album-research-enrichment-design.md`, plan: `docs/superpowers/plans/2026-07-17-ai-album-research-enrichment.md`
+- Tasks 10–12 (prompt eval: trial routes, variant agents, compare/promote UI) still remaining
+- Cursor Automation not yet created — operator checklist in `.cursor/skills/enrich-for-later-album/SKILL.md`
 - Run each album through an AI researcher to collect hard-to-scrape artist/album context (origin, how long they've been making music, Instagram links, band writeup, "listen if you like…")
 - Also generate a short "Why you should listen to this album" pitch — a persuasive, specific reason to put it on, not just a plot summary
 - Also generate a list of descriptors for the album artwork (colors, subjects, settings, style — e.g. green, flower, live show) so covers can be looked up by keyword from whatever you remember about them
 - Also generate situations / contexts the album as a whole is good for (e.g. dinner party, late night, road trip, beach, mountain house, Airbnb breakfast) so albums can be browsed or filtered by vibe/occasion
 - Preference for this to be a Cursor automation, since that workflow already does this kind of research well
+- Prompt eval: A/B variants under `.cursor/agents/variants/`; trials table + hybrid compare/promote; auto-judge for factual/cover slices, human pick for writing (`whyListen`, occasions, writeups)
 
 ## Raw
 
