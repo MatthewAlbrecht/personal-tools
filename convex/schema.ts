@@ -618,6 +618,56 @@ export default defineSchema({
 			],
 		}),
 
+	albumEnrichments: defineTable({
+		albumId: v.id("spotifyAlbums"),
+		spotifyAlbumId: v.string(),
+		slices: v.object({
+			artistContext: v.optional(v.object({ updatedAt: v.number() })),
+			whyListen: v.optional(v.object({ updatedAt: v.number() })),
+			coverDescriptors: v.optional(v.object({ updatedAt: v.number() })),
+			occasions: v.optional(v.object({ updatedAt: v.number() })),
+		}),
+		origin: v.optional(v.string()),
+		activeSince: v.optional(v.string()),
+		instagramUrl: v.optional(v.string()),
+		artistWriteup: v.optional(v.string()),
+		listenIfYouLike: v.optional(v.array(v.string())),
+		whyListenPitch: v.optional(v.string()),
+		identityPacket: v.optional(
+			v.object({
+				title: v.string(),
+				artists: v.array(v.string()),
+				releaseYear: v.optional(v.number()),
+				coverImageUrl: v.optional(v.string()),
+				rymUrl: v.optional(v.string()),
+			}),
+		),
+		lastEnrichedAt: v.optional(v.number()),
+		createdAt: v.number(),
+		updatedAt: v.number(),
+	})
+		.index("by_albumId", ["albumId"])
+		.index("by_spotifyAlbumId", ["spotifyAlbumId"]),
+
+	albumCoverDescriptorFacets: defineTable({
+		albumId: v.id("spotifyAlbums"),
+		coverDescriptorKey: v.string(),
+		label: v.string(),
+	})
+		.index("by_albumId", ["albumId"])
+		.index("by_coverDescriptorKey_albumId", [
+			"coverDescriptorKey",
+			"albumId",
+		]),
+
+	albumOccasionFacets: defineTable({
+		albumId: v.id("spotifyAlbums"),
+		occasionKey: v.string(),
+		label: v.string(),
+	})
+		.index("by_albumId", ["albumId"])
+		.index("by_occasionKey_albumId", ["occasionKey", "albumId"]),
+
 	forLaterAlbumItems: defineTable({
 		userId: v.string(),
 		albumId: v.id("spotifyAlbums"),
