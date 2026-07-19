@@ -158,9 +158,7 @@ export async function syncSpotifyHistory(
 		stats.playEventsInserted = upsertResult.inserted;
 		stats.playEventsDuplicates = upsertResult.duplicates;
 		stats.historyGapWarning =
-			recentlyPlayed.length === 50 &&
-			upsertResult.duplicates === 0 &&
-			hadPrior;
+			recentlyPlayed.length === 50 && upsertResult.duplicates === 0 && hadPrior;
 
 		// Detect album listens
 		await detectAlbumListens(

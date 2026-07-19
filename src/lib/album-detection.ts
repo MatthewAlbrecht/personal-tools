@@ -93,12 +93,16 @@ function splitIntoAttempts(
 ): PlayEvent[][] {
 	if (sorted.length === 0) return [];
 
+	const first = sorted[0];
+	if (!first) return [];
+
 	const attempts: PlayEvent[][] = [];
-	let current: PlayEvent[] = [sorted[0]!];
+	let current: PlayEvent[] = [first];
 
 	for (let i = 1; i < sorted.length; i++) {
-		const prev = sorted[i - 1]!;
-		const curr = sorted[i]!;
+		const prev = sorted[i - 1];
+		const curr = sorted[i];
+		if (!prev || !curr) continue;
 
 		if (isEarlyRestart(prev, curr, totalTracks)) {
 			attempts.push(current);
@@ -116,18 +120,27 @@ function splitIntoAttempts(
  * Computes coverage and ascending ratio for a contiguous window of plays.
  */
 function scoreWindow(plays: PlayEvent[], totalTracks: number): Window {
+	const first = plays[0];
+	const last = plays.at(-1);
+	if (!first || !last) {
+		return { plays, coverage: 0, ascendingRatio: 0, span: 0 };
+	}
+
 	const uniqueTrackIds = new Set(plays.map((p) => p.trackId));
 	const coverage = uniqueTrackIds.size / totalTracks;
 
 	let ascendingPairs = 0;
 	const totalPairs = plays.length - 1;
 	for (let i = 1; i < plays.length; i++) {
-		if (isAscendingPair(plays[i - 1]!, plays[i]!)) {
+		const prev = plays[i - 1];
+		const curr = plays[i];
+		if (!prev || !curr) continue;
+		if (isAscendingPair(prev, curr)) {
 			ascendingPairs++;
 		}
 	}
 	const ascendingRatio = totalPairs === 0 ? 1 : ascendingPairs / totalPairs;
-	const span = plays.at(-1)!.playedAt - plays[0]!.playedAt;
+	const span = last.playedAt - first.playedAt;
 
 	return { plays, coverage, ascendingRatio, span };
 }
@@ -163,7 +176,10 @@ function findBestWindow(
 
 	for (let i = 0; i < attempt.length; i++) {
 		for (let j = i; j < attempt.length; j++) {
-			const span = attempt[j]!.playedAt - attempt[i]!.playedAt;
+			const start = attempt[i];
+			const end = attempt[j];
+			if (!start || !end) continue;
+			const span = end.playedAt - start.playedAt;
 			if (span > MAX_SESSION_DURATION_MS) break;
 
 			const candidate = scoreWindow(attempt.slice(i, j + 1), totalTracks);
@@ -184,12 +200,18 @@ function findBestWindow(
 }
 
 function toListenSession(window: Window): ListenSession {
+	const first = window.plays[0];
+	const last = window.plays.at(-1);
+	if (!first || !last) {
+		throw new Error("Invalid listen window: no plays");
+	}
+
 	const trackIds = [...new Set(window.plays.map((p) => p.trackId))];
-	const earliestPlayedAt = window.plays[0]!.playedAt;
-	const latestPlayedAt = window.plays.at(-1)!.playedAt;
+	const earliestPlayedAt = first.playedAt;
+	const latestPlayedAt = last.playedAt;
 
 	return {
-		albumId: window.plays[0]!.albumId,
+		albumId: first.albumId,
 		trackIds,
 		earliestPlayedAt,
 		latestPlayedAt,
