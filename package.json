@@ -18,7 +18,8 @@
 		"infra:destroy": "pulumi destroy",
 		"migrate:lyrics": "node scripts/migrate-lyrics-to-prod.js",
 		"backfill:for-later-projection": "node scripts/backfill-for-later-filter-projection.mjs",
-		"import:rym-genres": "tsx scripts/import-rym-genre-hierarchy.ts genresfromrym.hml"
+		"import:rym-genres": "tsx scripts/import-rym-genre-hierarchy.ts genresfromrym.hml",
+		"repair:spotify-album-listens": "tsx scripts/repair-spotify-album-listens.ts"
 	},
 	"dependencies": {
 		"@ai-sdk/openai": "^2.0.80",
