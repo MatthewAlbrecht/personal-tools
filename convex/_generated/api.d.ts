@@ -82,6 +82,7 @@ import type * as rymGenreHierarchy from "../rymGenreHierarchy.js";
 import type * as s3Helper from "../s3Helper.js";
 import type * as smartPlaylists from "../smartPlaylists.js";
 import type * as spotify from "../spotify.js";
+import type * as spotifyPlayEvents from "../spotifyPlayEvents.js";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -161,6 +162,7 @@ declare const fullApi: ApiFromModules<{
   s3Helper: typeof s3Helper;
   smartPlaylists: typeof smartPlaylists;
   spotify: typeof spotify;
+  spotifyPlayEvents: typeof spotifyPlayEvents;
 }>;
 export declare const api: FilterApi<
   typeof fullApi,

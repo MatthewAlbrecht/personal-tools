@@ -1208,9 +1208,35 @@ export default defineSchema({
 		// Details for debugging
 		newAlbumNames: v.optional(v.array(v.string())), // Names of newly discovered albums
 		recordedListenAlbumNames: v.optional(v.array(v.string())), // Albums where listens were recorded
+
+		// Play-event ledger diagnostics (optional; added for durable listen capture)
+		playEventsInserted: v.optional(v.number()),
+		playEventsDuplicates: v.optional(v.number()),
+		listenCandidates: v.optional(v.number()),
+		listensDeduped: v.optional(v.number()),
+		historyGapWarning: v.optional(v.boolean()),
 	})
 		.index("by_userId", ["userId"])
 		.index("by_userId_startedAt", ["userId", "startedAt"]),
+
+	spotifyPlayEvents: defineTable({
+		userId: v.string(),
+		spotifyTrackId: v.string(),
+		spotifyAlbumId: v.string(),
+		trackNumber: v.number(),
+		discNumber: v.number(),
+		playedAt: v.number(),
+		eventKey: v.string(),
+		ingestedAt: v.number(),
+		syncRunId: v.optional(v.id("spotifySyncRuns")),
+	})
+		.index("by_userId_playedAt", ["userId", "playedAt"])
+		.index("by_userId_albumId_playedAt", [
+			"userId",
+			"spotifyAlbumId",
+			"playedAt",
+		])
+		.index("by_userId_eventKey", ["userId", "eventKey"]),
 
 	// Rob's Rankings - yearly top 50 album lists
 	robRankingYears: defineTable({

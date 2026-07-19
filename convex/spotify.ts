@@ -2928,8 +2928,6 @@ export const recordAlbumListen = mutation({
 		source: v.string(),
 	},
 	handler: async (ctx, args) => {
-		const now = Date.now();
-
 		// Check for overlapping listens (dedup)
 		// Get all listens for this user+album and check for time overlap
 		const existingListens = await ctx.db
@@ -2956,7 +2954,7 @@ export const recordAlbumListen = mutation({
 		await ctx.db.insert("userAlbumListens", {
 			userId: args.userId,
 			albumId: args.albumId,
-			listenedAt: now,
+			listenedAt: args.latestPlayedAt,
 			earliestPlayedAt: args.earliestPlayedAt,
 			latestPlayedAt: args.latestPlayedAt,
 			trackIds: args.trackIds,
@@ -2973,15 +2971,15 @@ export const recordAlbumListen = mutation({
 
 		if (existingUserAlbum) {
 			await ctx.db.patch(existingUserAlbum._id, {
-				lastListenedAt: now,
+				lastListenedAt: args.latestPlayedAt,
 				listenCount: existingUserAlbum.listenCount + 1,
 			});
 		} else {
 			await ctx.db.insert("userAlbums", {
 				userId: args.userId,
 				albumId: args.albumId,
-				firstListenedAt: now,
-				lastListenedAt: now,
+				firstListenedAt: args.latestPlayedAt,
+				lastListenedAt: args.latestPlayedAt,
 				listenCount: 1,
 			});
 		}
