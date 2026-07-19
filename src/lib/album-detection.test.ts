@@ -58,13 +58,36 @@ test("rejects shuffle below 70% ascending", () => {
 	assert.equal(detectAlbumListenSessions(plays, 10).length, 0);
 });
 
-test("rejects sessions longer than 4 hours", () => {
+test("rejects sessions longer than 4 hours (no contiguous 70% window fits)", () => {
 	const t0 = Date.parse("2026-07-19T10:00:00.000Z");
-	const plays = Array.from({ length: 10 }, (_, i) =>
-		play(i + 1, t0 + i * (HOUR / 2)),
-	);
-	assert.ok(plays.at(-1)!.playedAt - plays[0]!.playedAt > 4 * HOUR);
+	// Uniform 41-minute gaps: the minimum coverage-satisfying window on a
+	// 10-track album is 7 consecutive tracks (70%), which spans
+	// 6 * 41min = 246min > 240min (4h) no matter where it starts. Every
+	// larger window spans even more, so no valid window exists anywhere
+	// in this attempt.
+	const gap = 41 * 60_000;
+	const plays = Array.from({ length: 10 }, (_, i) => play(i + 1, t0 + i * gap));
+	assert.ok(6 * gap > 4 * HOUR);
 	assert.equal(detectAlbumListenSessions(plays, 10).length, 0);
+});
+
+test("long overall attempt still yields a valid <=4h window inside it", () => {
+	const t0 = Date.parse("2026-07-19T10:00:00.000Z");
+	const plays: PlayEvent[] = [
+		play(1, t0),
+		play(2, t0 + 4.5 * HOUR),
+		...Array.from({ length: 8 }, (_, i) =>
+			play(i + 3, t0 + 4.5 * HOUR + (i + 1) * 60_000),
+		),
+	];
+	// Whole attempt (track1 -> track10) spans > 4h, but the sub-window
+	// [track2..track10] (9 tracks, 90% coverage) fits comfortably inside 4h.
+	assert.ok(plays.at(-1)!.playedAt - plays[0]!.playedAt > 4 * HOUR);
+
+	const sessions = detectAlbumListenSessions(plays, 10);
+	assert.equal(sessions.length, 1);
+	assert.equal(sessions[0]?.trackIds.length, 9);
+	assert.equal(sessions[0]?.earliestPlayedAt, t0 + 4.5 * HOUR);
 });
 
 test("accepts exactly 70% coverage on 10-track album", () => {

@@ -36,6 +36,7 @@ type Window = {
 	plays: PlayEvent[];
 	coverage: number;
 	ascendingRatio: number;
+	span: number;
 };
 
 /**
@@ -126,39 +127,60 @@ function scoreWindow(plays: PlayEvent[], totalTracks: number): Window {
 		}
 	}
 	const ascendingRatio = totalPairs === 0 ? 1 : ascendingPairs / totalPairs;
+	const span = plays.at(-1)!.playedAt - plays[0]!.playedAt;
 
-	return { plays, coverage, ascendingRatio };
+	return { plays, coverage, ascendingRatio, span };
 }
 
 /**
- * Validates a single attempt as a whole: coverage >= 70%, ascending ratio
- * >= 70%, span <= 4 hours. Returns the scored window if valid, else null.
+ * Compares two valid windows per the spec's scoring order: higher coverage
+ * wins, then higher ascending ratio, then shorter span.
+ */
+function isBetterWindow(candidate: Window, current: Window): boolean {
+	if (candidate.coverage !== current.coverage) {
+		return candidate.coverage > current.coverage;
+	}
+	if (candidate.ascendingRatio !== current.ascendingRatio) {
+		return candidate.ascendingRatio > current.ascendingRatio;
+	}
+	return candidate.span < current.span;
+}
+
+/**
+ * Searches every contiguous sub-window `[i..j]` within an attempt and
+ * returns the best-scoring one that satisfies coverage >= 70%, ascending
+ * ratio >= 70%, and span <= 4 hours. Returns null if no window qualifies.
  *
- * Attempts are already split on early restarts (see `splitIntoAttempts`),
- * so each attempt is treated as one candidate rather than searching every
- * [i..j] sub-range. Trimming a duration-violating attempt down to a shorter
- * sub-range would let a 90%-coverage slice sneak in right at the 4h
- * boundary, silently recovering a listen that should be rejected outright.
+ * Attempts are time-sorted, so span grows monotonically as `j` advances for
+ * a fixed `i` — once a window's span exceeds the 4h cap, every larger `j`
+ * for that `i` will too, so the inner loop can stop early.
  */
 function findBestWindow(
 	attempt: PlayEvent[],
 	totalTracks: number,
 ): Window | null {
-	if (attempt.length === 0) return null;
+	let best: Window | null = null;
 
-	const earliest = attempt[0]!.playedAt;
-	const latest = attempt.at(-1)!.playedAt;
-	if (latest - earliest > MAX_SESSION_DURATION_MS) return null;
+	for (let i = 0; i < attempt.length; i++) {
+		for (let j = i; j < attempt.length; j++) {
+			const span = attempt[j]!.playedAt - attempt[i]!.playedAt;
+			if (span > MAX_SESSION_DURATION_MS) break;
 
-	const candidate = scoreWindow(attempt, totalTracks);
-	if (
-		candidate.coverage < COVERAGE_THRESHOLD ||
-		candidate.ascendingRatio < ASCENDING_THRESHOLD
-	) {
-		return null;
+			const candidate = scoreWindow(attempt.slice(i, j + 1), totalTracks);
+			if (
+				candidate.coverage < COVERAGE_THRESHOLD ||
+				candidate.ascendingRatio < ASCENDING_THRESHOLD
+			) {
+				continue;
+			}
+
+			if (!best || isBetterWindow(candidate, best)) {
+				best = candidate;
+			}
+		}
 	}
 
-	return candidate;
+	return best;
 }
 
 function toListenSession(window: Window): ListenSession {
