@@ -134,15 +134,12 @@ export async function syncSpotifyHistory(
 			items: trackItems,
 		});
 
-		// Check whether the ledger already has entries for these albums before
-		// ingesting this batch, so we can flag a possible history gap below.
-		const priorEventsForBatchAlbums = uniqueAlbumIds.length
-			? await convex.query(api.spotifyPlayEvents.listPlayEventsForAlbumsSince, {
-					userId,
-					spotifyAlbumIds: uniqueAlbumIds,
-					sinceMs: 0,
-				})
-			: [];
+		// Check whether the user already had any ledger entries before this batch
+		// (ledger-wide, not album-scoped) so cold start doesn't warn.
+		const hadPrior = await convex.query(
+			api.spotifyPlayEvents.hasAnyPlayEvents,
+			{ userId },
+		);
 
 		// Ingest into the durable play-event ledger before detection so this
 		// batch's own plays are visible to the lookback query in detectAlbumListens.
@@ -163,7 +160,7 @@ export async function syncSpotifyHistory(
 		stats.historyGapWarning =
 			recentlyPlayed.length === 50 &&
 			upsertResult.duplicates === 0 &&
-			priorEventsForBatchAlbums.length > 0;
+			hadPrior;
 
 		// Detect album listens
 		await detectAlbumListens(

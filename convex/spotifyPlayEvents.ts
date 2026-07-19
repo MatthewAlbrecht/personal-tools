@@ -60,6 +60,18 @@ export const upsertPlayEvents = mutation({
 	},
 });
 
+export const hasAnyPlayEvents = query({
+	args: { userId: v.string() },
+	returns: v.boolean(),
+	handler: async (ctx, args) => {
+		const row = await ctx.db
+			.query("spotifyPlayEvents")
+			.withIndex("by_userId_playedAt", (q) => q.eq("userId", args.userId))
+			.first();
+		return !!row;
+	},
+});
+
 export const listPlayEventsForAlbumsSince = query({
 	args: {
 		userId: v.string(),
