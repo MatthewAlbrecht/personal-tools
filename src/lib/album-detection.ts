@@ -2,13 +2,18 @@
  * Album Listen Detection Utility
  *
  * Detects valid "straight through" album listens from play events.
- * Handles back-to-back listens by detecting track number restarts.
- * Rejects shuffled/scattered plays by requiring ascending track order.
+ * Splits raw play history into "attempts" whenever the track order jumps
+ * backward to near the start of the album (an early restart), then finds
+ * the strongest contiguous, mostly-ascending, time-bounded window within
+ * each attempt. This keeps stale plays from an earlier session (e.g. a
+ * lone track played hours before a clean morning listen) from poisoning
+ * or merging with a valid straight-through listen.
  */
 
 export type PlayEvent = {
 	trackId: string;
 	trackNumber: number;
+	discNumber: number;
 	playedAt: number; // Unix timestamp
 	albumId: string;
 };
@@ -21,12 +26,17 @@ export type ListenSession = {
 };
 
 // Constants for detection thresholds
-const MAJORITY_THRESHOLD = 0.7; // 70% of album tracks required
+const COVERAGE_THRESHOLD = 0.7; // 70% of album tracks required
 const ASCENDING_THRESHOLD = 0.7; // 70% of consecutive pairs must be ascending
 const MAX_SESSION_DURATION_MS = 4 * 60 * 60 * 1000; // 4 hours
-const RESTART_FROM_TRACK = 3; // Consider restart if going to track 1-3
-const RESTART_AFTER_TRACK_PERCENT = 0.7; // Consider restart if coming from track > 70% through album
+const EARLY_RESTART_PERCENT = 0.3; // Landing track must be <= 30% into the album to count as a restart
 const MIN_ALBUM_TRACKS = 4; // Skip singles/EPs - only count albums with 4+ tracks
+
+type Window = {
+	plays: PlayEvent[];
+	coverage: number;
+	ascendingRatio: number;
+};
 
 /**
  * Groups play events by album ID
@@ -46,108 +56,122 @@ export function groupPlaysByAlbum(
 }
 
 /**
- * Detects if a track number sequence indicates an album restart
- * Returns true if going from a late track to an early track
+ * Disc-aware ascending check: a later disc is always "ascending" relative
+ * to an earlier disc; within the same disc, track numbers must not decrease.
  */
-function isRestart(
-	prevTrackNumber: number,
-	currTrackNumber: number,
-	totalTracks: number,
-): boolean {
-	const restartAfterTrack = Math.ceil(
-		totalTracks * RESTART_AFTER_TRACK_PERCENT,
-	);
-	return (
-		prevTrackNumber >= restartAfterTrack &&
-		currTrackNumber <= RESTART_FROM_TRACK
-	);
+function isAscendingPair(prev: PlayEvent, curr: PlayEvent): boolean {
+	if (curr.discNumber !== prev.discNumber) {
+		return curr.discNumber > prev.discNumber;
+	}
+	return curr.trackNumber >= prev.trackNumber;
 }
 
 /**
- * Splits plays into listen sessions based on track number restarts
+ * Detects an early restart: (discNumber, trackNumber) goes lexicographically
+ * backward and the landing track is on disc 1, within the first 30% of the
+ * album. This is what separates a genuine new attempt (someone restarting
+ * the album from the top) from an out-of-order shuffle blip.
  */
-function splitIntoSessions(
-	plays: PlayEvent[],
+function isEarlyRestart(
+	prev: PlayEvent,
+	curr: PlayEvent,
+	totalTracks: number,
+): boolean {
+	if (isAscendingPair(prev, curr)) return false;
+
+	const earlyRestartCutoff = Math.ceil(totalTracks * EARLY_RESTART_PERCENT);
+	return curr.discNumber === 1 && curr.trackNumber <= earlyRestartCutoff;
+}
+
+/**
+ * Splits time-sorted plays into "attempts" on early restarts.
+ */
+function splitIntoAttempts(
+	sorted: PlayEvent[],
 	totalTracks: number,
 ): PlayEvent[][] {
-	if (plays.length === 0) return [];
+	if (sorted.length === 0) return [];
 
-	// Sort by played_at time
-	const sorted = [...plays].sort((a, b) => a.playedAt - b.playedAt);
-
-	const sessions: PlayEvent[][] = [];
-	const firstPlay = sorted[0];
-	if (!firstPlay) return [];
-
-	let currentSession: PlayEvent[] = [firstPlay];
+	const attempts: PlayEvent[][] = [];
+	let current: PlayEvent[] = [sorted[0]!];
 
 	for (let i = 1; i < sorted.length; i++) {
 		const prev = sorted[i - 1]!;
 		const curr = sorted[i]!;
 
-		if (isRestart(prev.trackNumber, curr.trackNumber, totalTracks)) {
-			// Start new session
-			sessions.push(currentSession);
-			currentSession = [curr];
+		if (isEarlyRestart(prev, curr, totalTracks)) {
+			attempts.push(current);
+			current = [curr];
 		} else {
-			currentSession.push(curr);
+			current.push(curr);
 		}
 	}
+	attempts.push(current);
 
-	// Don't forget the last session
-	if (currentSession.length > 0) {
-		sessions.push(currentSession);
-	}
-
-	return sessions;
+	return attempts;
 }
 
 /**
- * Checks if track numbers are mostly ascending (70%+ of consecutive pairs)
+ * Computes coverage and ascending ratio for a contiguous window of plays.
  */
-function isMostlyAscending(plays: PlayEvent[]): boolean {
-	if (plays.length <= 1) return true;
+function scoreWindow(plays: PlayEvent[], totalTracks: number): Window {
+	const uniqueTrackIds = new Set(plays.map((p) => p.trackId));
+	const coverage = uniqueTrackIds.size / totalTracks;
 
 	let ascendingPairs = 0;
-	let totalPairs = 0;
-
+	const totalPairs = plays.length - 1;
 	for (let i = 1; i < plays.length; i++) {
-		const curr = plays[i]!;
-		const prev = plays[i - 1]!;
-		totalPairs++;
-		if (curr.trackNumber >= prev.trackNumber) {
+		if (isAscendingPair(plays[i - 1]!, plays[i]!)) {
 			ascendingPairs++;
 		}
 	}
+	const ascendingRatio = totalPairs === 0 ? 1 : ascendingPairs / totalPairs;
 
-	return ascendingPairs / totalPairs >= ASCENDING_THRESHOLD;
+	return { plays, coverage, ascendingRatio };
 }
 
 /**
- * Validates a session against all criteria
+ * Validates a single attempt as a whole: coverage >= 70%, ascending ratio
+ * >= 70%, span <= 4 hours. Returns the scored window if valid, else null.
+ *
+ * Attempts are already split on early restarts (see `splitIntoAttempts`),
+ * so each attempt is treated as one candidate rather than searching every
+ * [i..j] sub-range. Trimming a duration-violating attempt down to a shorter
+ * sub-range would let a 90%-coverage slice sneak in right at the 4h
+ * boundary, silently recovering a listen that should be rejected outright.
  */
-function isValidSession(session: PlayEvent[], totalTracks: number): boolean {
-	if (session.length === 0) return false;
+function findBestWindow(
+	attempt: PlayEvent[],
+	totalTracks: number,
+): Window | null {
+	if (attempt.length === 0) return null;
 
-	// Check majority threshold (70% of unique tracks)
-	const uniqueTrackIds = new Set(session.map((p) => p.trackId));
-	if (uniqueTrackIds.size < totalTracks * MAJORITY_THRESHOLD) {
-		return false;
+	const earliest = attempt[0]!.playedAt;
+	const latest = attempt.at(-1)!.playedAt;
+	if (latest - earliest > MAX_SESSION_DURATION_MS) return null;
+
+	const candidate = scoreWindow(attempt, totalTracks);
+	if (
+		candidate.coverage < COVERAGE_THRESHOLD ||
+		candidate.ascendingRatio < ASCENDING_THRESHOLD
+	) {
+		return null;
 	}
 
-	// Check duration (within 4 hours)
-	const earliest = Math.min(...session.map((p) => p.playedAt));
-	const latest = Math.max(...session.map((p) => p.playedAt));
-	if (latest - earliest > MAX_SESSION_DURATION_MS) {
-		return false;
-	}
+	return candidate;
+}
 
-	// Check ascending order (70% of pairs)
-	if (!isMostlyAscending(session)) {
-		return false;
-	}
+function toListenSession(window: Window): ListenSession {
+	const trackIds = [...new Set(window.plays.map((p) => p.trackId))];
+	const earliestPlayedAt = window.plays[0]!.playedAt;
+	const latestPlayedAt = window.plays.at(-1)!.playedAt;
 
-	return true;
+	return {
+		albumId: window.plays[0]!.albumId,
+		trackIds,
+		earliestPlayedAt,
+		latestPlayedAt,
+	};
 }
 
 /**
@@ -155,7 +179,7 @@ function isValidSession(session: PlayEvent[], totalTracks: number): boolean {
  *
  * @param plays - All play events for a single album
  * @param totalTracks - Total number of tracks in the album
- * @returns Array of valid listen sessions
+ * @returns Array of valid listen sessions, in chronological order
  */
 export function detectAlbumListenSessions(
 	plays: PlayEvent[],
@@ -165,28 +189,23 @@ export function detectAlbumListenSessions(
 	if (plays.length === 0 || totalTracks === 0 || totalTracks < MIN_ALBUM_TRACKS)
 		return [];
 
-	// Split into sessions based on track restarts
-	const sessions = splitIntoSessions(plays, totalTracks);
+	const sorted = [...plays].sort((a, b) => {
+		if (a.playedAt !== b.playedAt) return a.playedAt - b.playedAt;
+		if (a.discNumber !== b.discNumber) return a.discNumber - b.discNumber;
+		return a.trackNumber - b.trackNumber;
+	});
 
-	// Validate each session and convert to ListenSession format
-	const validSessions: ListenSession[] = [];
+	const attempts = splitIntoAttempts(sorted, totalTracks);
 
-	for (const session of sessions) {
-		if (isValidSession(session, totalTracks) && session[0]) {
-			const trackIds = [...new Set(session.map((p) => p.trackId))];
-			const earliestPlayedAt = Math.min(...session.map((p) => p.playedAt));
-			const latestPlayedAt = Math.max(...session.map((p) => p.playedAt));
-
-			validSessions.push({
-				albumId: session[0].albumId,
-				trackIds,
-				earliestPlayedAt,
-				latestPlayedAt,
-			});
+	const sessions: ListenSession[] = [];
+	for (const attempt of attempts) {
+		const best = findBestWindow(attempt, totalTracks);
+		if (best) {
+			sessions.push(toListenSession(best));
 		}
 	}
 
-	return validSessions;
+	return sessions.sort((a, b) => a.earliestPlayedAt - b.earliestPlayedAt);
 }
 
 /**

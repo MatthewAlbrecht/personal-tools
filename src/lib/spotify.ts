@@ -21,6 +21,7 @@ export type SpotifyTrack = {
 	external_urls: { spotify: string };
 	preview_url: string | null;
 	track_number: number;
+	disc_number?: number; // Missing on some payloads; treat as 1
 };
 
 export type RecentlyPlayedItem = {
@@ -66,6 +67,7 @@ export type SpotifyAlbum = {
 			id: string;
 			name: string;
 			track_number: number;
+			disc_number?: number; // Missing on some payloads; treat as 1
 			duration_ms: number;
 			artists: Array<{ id: string; name: string }>;
 			external_urls: { spotify: string };
