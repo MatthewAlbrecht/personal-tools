@@ -1632,6 +1632,10 @@ export const markForLaterAlbumsRemoved = mutation({
 				removedAt: args.removedAt,
 				updatedAt: args.removedAt,
 			});
+			await upsertAlbumLibraryProjection(ctx, {
+				userId: args.userId,
+				albumId: item.albumId,
+			});
 			removedSpotifyAlbumIds.push(item.spotifyAlbumId);
 		}
 
@@ -2013,6 +2017,10 @@ export const setForLaterAlbumMarkedAsSingle = mutation({
 			updatedAt: now,
 		});
 		await syncForLaterItemFilterProjection(ctx, args.itemId);
+		await upsertAlbumLibraryProjection(ctx, {
+			userId: args.userId,
+			albumId: item.albumId,
+		});
 		return null;
 	},
 });
@@ -2036,6 +2044,10 @@ export const setForLaterAlbumRemovedFromForLater = mutation({
 			updatedAt: now,
 		});
 		await syncForLaterItemFilterProjection(ctx, args.itemId);
+		await upsertAlbumLibraryProjection(ctx, {
+			userId: args.userId,
+			albumId: item.albumId,
+		});
 		return null;
 	},
 });
