@@ -1,5 +1,6 @@
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
+import { computeAppearsInForLater } from "./albumLibraryForLaterMembership";
 import {
 	buildAlbumLibraryReleaseYearSortKey,
 	buildAlbumLibrarySearchText,
@@ -49,6 +50,13 @@ export async function buildAlbumLibraryProjectionForAlbum(
 		? await loadRymTaxonomyForScrape(ctx, latestRymLink.scrapeId)
 		: getEmptyAlbumLibraryTaxonomy();
 	const robRankings = await loadRobRankingYearsForAlbum(ctx, args);
+	const forLaterItem = await ctx.db
+		.query("forLaterAlbumItems")
+		.withIndex("by_userId_albumId", (q) =>
+			q.eq("userId", args.userId).eq("albumId", args.albumId),
+		)
+		.first();
+	const appearsInForLater = computeAppearsInForLater(forLaterItem);
 
 	const listenCount = userAlbum?.listenCount ?? 0;
 	const releaseYear = parseAlbumReleaseYear(album.releaseDate);
@@ -87,6 +95,7 @@ export async function buildAlbumLibraryProjectionForAlbum(
 		rymLinkMethod: latestRymLink?.method,
 		rymUrl: scrape?.rymUrl,
 		rymLinkedAt: latestRymLink?.updatedAt,
+		appearsInForLater: appearsInForLater,
 		appearsInRobRankings: robRankings.years.length > 0,
 		robRankingYears: robRankings.years,
 		primaryGenres: taxonomy.primaryGenres,

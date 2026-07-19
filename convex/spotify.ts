@@ -4,6 +4,7 @@ import { api, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { action, mutation, query } from "./_generated/server";
+import { computeAppearsInForLater } from "./_utils/albumLibraryForLaterMembership";
 import {
 	refreshAlbumLibraryProjectionsForAlbum,
 	upsertAlbumLibraryProjection,
@@ -2436,6 +2437,7 @@ const albumLibraryRowValidator = v.object({
 			updatedAt: v.number(),
 		}),
 	),
+	appearsInForLater: v.boolean(),
 	appearsInRobRankings: v.boolean(),
 	robRankingYears: v.array(v.number()),
 	primaryGenres: v.array(albumLibraryTaxonomyTagValidator),
@@ -2488,6 +2490,7 @@ type AlbumLibraryRow = {
 		rymUrl?: string;
 		updatedAt: number;
 	};
+	appearsInForLater: boolean;
 	appearsInRobRankings: boolean;
 	robRankingYears: number[];
 	primaryGenres: AlbumLibraryTaxonomyTag[];
@@ -2523,6 +2526,7 @@ function mapAlbumLibraryProjectionRow(
 					updatedAt: row.rymLinkedAt ?? row.updatedAt,
 				}
 			: undefined,
+		appearsInForLater: row.appearsInForLater,
 		appearsInRobRankings: row.appearsInRobRankings,
 		robRankingYears: row.robRankingYears,
 		primaryGenres: row.primaryGenres,
@@ -2580,6 +2584,14 @@ export const listAlbumLibraryRows = query({
 		for (const years of robRankingYearsByAlbumId.values()) {
 			years.sort((a, b) => b - a);
 		}
+
+		const forLaterItems = await ctx.db
+			.query("forLaterAlbumItems")
+			.withIndex("by_userId", (q) => q.eq("userId", args.userId))
+			.collect();
+		const forLaterItemByAlbumId = new Map(
+			forLaterItems.map((forLaterItem) => [forLaterItem.albumId, forLaterItem]),
+		);
 
 		const albumIds = new Set(albums.map((album) => album._id));
 		const rymLinks = await ctx.db
@@ -2676,6 +2688,9 @@ export const listAlbumLibraryRows = query({
 							updatedAt: latestLink.updatedAt,
 						}
 					: undefined,
+				appearsInForLater: computeAppearsInForLater(
+					forLaterItemByAlbumId.get(album._id),
+				),
 				appearsInRobRankings: robRankingYearsForAlbum.length > 0,
 				robRankingYears: robRankingYearsForAlbum,
 				primaryGenres: taxonomy.primaryGenres,

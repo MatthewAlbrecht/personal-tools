@@ -569,6 +569,7 @@ export default defineSchema({
 		),
 		rymUrl: v.optional(v.string()),
 		rymLinkedAt: v.optional(v.number()),
+		appearsInForLater: v.boolean(),
 		appearsInRobRankings: v.boolean(),
 		robRankingYears: v.array(v.number()),
 		primaryGenres: v.array(v.object({ key: v.string(), label: v.string() })),
@@ -603,6 +604,11 @@ export default defineSchema({
 		.index("by_userId_albumType_createdAt", [
 			"userId",
 			"albumType",
+			"createdAt",
+		])
+		.index("by_userId_appearsInForLater_createdAt", [
+			"userId",
+			"appearsInForLater",
 			"createdAt",
 		])
 		.index("by_userId_appearsInRobRankings_createdAt", [
