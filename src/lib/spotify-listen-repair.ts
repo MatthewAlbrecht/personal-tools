@@ -175,14 +175,7 @@ export function buildRepairCandidates(input: {
 		const plays = dedupedPlays.map((d) => d.play);
 		const sessions = detectAlbumListenSessions(plays, totalTracks);
 
-		const logIdsByTrackAndTime = new Map<string, Set<string>>();
 		const albumName = dedupedPlays.find((d) => d.albumName)?.albumName;
-		for (const d of dedupedPlays) {
-			logIdsByTrackAndTime.set(
-				`${d.play.trackId}:${d.play.playedAt}`,
-				d.logIds,
-			);
-		}
 
 		for (const session of sessions) {
 			if (
