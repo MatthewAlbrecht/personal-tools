@@ -2375,3 +2375,24 @@ export const runBackfillFilterProjectionBatch = mutation({
 		});
 	},
 });
+
+export const backfillMyAppearsInForLater = mutation({
+	args: { userId: v.string() },
+	returns: v.object({ processed: v.number() }),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+		const rows = await ctx.db
+			.query("albumLibraryItems")
+			.withIndex("by_userId_createdAt", (q) =>
+				q.eq("userId", args.userId),
+			)
+			.collect();
+		for (const row of rows) {
+			await upsertAlbumLibraryProjection(ctx, {
+				userId: args.userId,
+				albumId: row.albumId,
+			});
+		}
+		return { processed: rows.length };
+	},
+});

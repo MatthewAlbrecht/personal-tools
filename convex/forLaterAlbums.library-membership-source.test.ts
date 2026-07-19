@@ -29,3 +29,8 @@ test("markForLaterAlbumsRemoved refreshes library projection per removed item", 
 	const body = sliceHandler("markForLaterAlbumsRemoved");
 	assert.match(body, /upsertAlbumLibraryProjection/);
 });
+
+test("backfillMyAppearsInForLater refreshes library projections", () => {
+	const body = sliceHandler("backfillMyAppearsInForLater");
+	assert.match(body, /upsertAlbumLibraryProjection/);
+});
