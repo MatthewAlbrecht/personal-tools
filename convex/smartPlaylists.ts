@@ -136,26 +136,6 @@ function genreKeySetsFromTags(
 	};
 }
 
-async function loadGenreRoleKeysForScrape(
-	ctx: DbCtx,
-	scrapeId: Id<"rateYourMusicScrapes">,
-): Promise<{ primary: Set<string>; secondary: Set<string> }> {
-	const genreLinks = await ctx.db
-		.query("rateYourMusicReleaseGenres")
-		.withIndex("by_scrapeId", (q) => q.eq("scrapeId", scrapeId))
-		.collect();
-
-	const primary = new Set<string>();
-	const secondary = new Set<string>();
-	for (const link of genreLinks) {
-		const genre = await ctx.db.get(link.genreId);
-		if (!genre) continue;
-		if (link.role === "primary") primary.add(genre.key);
-		else if (link.role === "secondary") secondary.add(genre.key);
-	}
-	return { primary, secondary };
-}
-
 async function loadUserAlbumByAlbumId(
 	ctx: DbCtx,
 	userId: string,
@@ -180,97 +160,116 @@ async function resolveForLaterMatches(
 		now: number;
 	},
 ): Promise<MatchedAlbum[]> {
-	const items = await ctx.db
-		.query("forLaterAlbumItems")
-		.withIndex("by_userId_active", (q) =>
-			q.eq("userId", args.userId).eq("isActive", true),
+	const libraryItems = await ctx.db
+		.query("albumLibraryItems")
+		.withIndex("by_userId_appearsInForLater_createdAt", (q) =>
+			q.eq("userId", args.userId).eq("appearsInForLater", true),
 		)
 		.collect();
-
-	const needsRating = isRatingFilterActive(args.filters);
-	const userAlbumsByAlbumId = needsRating
-		? await loadUserAlbumByAlbumId(ctx, args.userId)
-		: null;
 
 	const addedRange = args.filters.addedWindow
 		? resolveAddedWindow(args.filters.addedWindow, args.now)
 		: null;
 
-	const needsGenreLoad = args.filters.genreClauses.length > 0;
-	const parentKeysByChild = needsGenreLoad
-		? await loadRymGenreParentKeysByChild(ctx)
-		: null;
+	const needsDuration =
+		args.filters.durationOpenLow !== true ||
+		args.filters.durationOpenHigh !== true;
+
+	const parentKeysByChild =
+		args.filters.genreClauses.length > 0
+			? await loadRymGenreParentKeysByChild(ctx)
+			: null;
+
+	// Map albumId → for-later addedAt only when addedWindow active
+	const forLaterAddedAtByAlbumId = new Map<Id<"spotifyAlbums">, number>();
+	if (addedRange) {
+		const forLaterItems = await ctx.db
+			.query("forLaterAlbumItems")
+			.withIndex("by_userId_active", (q) =>
+				q.eq("userId", args.userId).eq("isActive", true),
+			)
+			.collect();
+		for (const item of forLaterItems) {
+			if (item.markedAsSingle === true || item.removedFromForLater === true) {
+				continue;
+			}
+			forLaterAddedAtByAlbumId.set(
+				item.albumId,
+				item.playlistAddedAt ?? item.firstSeenAt ?? item.createdAt,
+			);
+		}
+	}
 
 	type Candidate = {
-		item: Doc<"forLaterAlbumItems">;
+		item: Doc<"albumLibraryItems">;
 		album: Doc<"spotifyAlbums">;
 		sortAt: number;
 	};
-
 	const candidates: Candidate[] = [];
 
-	for (const item of items) {
-		if (item.markedAsSingle === true || item.removedFromForLater === true) {
+	for (const item of libraryItems) {
+		if (!yearMatchesFilters(item.releaseYear, args.filters)) {
 			continue;
 		}
 
-		if (!yearMatchesFilters(item.filterReleaseYear, args.filters)) {
+		if (!ratingMatchesBounds(item.rating, args.filters)) {
 			continue;
-		}
-
-		if (!durationMatchesFilters(item.filterDurationMs, args.filters)) {
-			continue;
-		}
-
-		const addedAt = item.playlistAddedAt ?? item.firstSeenAt ?? item.createdAt;
-		if (!addedAtMatchesWindow(addedAt, addedRange)) {
-			continue;
-		}
-
-		if (needsRating) {
-			const userAlbum = userAlbumsByAlbumId?.get(item.albumId);
-			if (!ratingMatchesBounds(userAlbum?.rating, args.filters)) {
-				continue;
-			}
 		}
 
 		if (
 			!taxonomyKeysPassAgainstSet(
 				args.filters.descriptorKeys,
 				args.filters.descriptorMatch,
-				new Set(item.filterDescriptorKeysSorted ?? []),
+				new Set(item.descriptors.map((d) => d.key)),
 			)
 		) {
 			continue;
 		}
 
-		if (args.filters.genreClauses.length > 0) {
-			if (!item.rymScrapeId || !parentKeysByChild) {
+		const directGenreKeys = genreKeySetsFromTags(
+			item.primaryGenres,
+			item.secondaryGenres,
+		);
+		const primaryKeys =
+			parentKeysByChild !== null
+				? new Set(
+						buildFilterGenreKeysSortedWithAncestors(
+							[...directGenreKeys.primary],
+							parentKeysByChild,
+						),
+					)
+				: directGenreKeys.primary;
+		const secondaryKeys =
+			parentKeysByChild !== null
+				? new Set(
+						buildFilterGenreKeysSortedWithAncestors(
+							[...directGenreKeys.secondary],
+							parentKeysByChild,
+						),
+					)
+				: directGenreKeys.secondary;
+
+		if (
+			!albumMatchesGenreClauses(
+				primaryKeys,
+				secondaryKeys,
+				args.filters.genreClauses,
+				args.filters.genreMatch,
+			)
+		) {
+			continue;
+		}
+
+		let sortAt = item.createdAt;
+		if (addedRange) {
+			const addedAt = forLaterAddedAtByAlbumId.get(item.albumId);
+			if (addedAt === undefined) {
 				continue;
 			}
-			const roles = await loadGenreRoleKeysForScrape(ctx, item.rymScrapeId);
-			const primaryKeys = new Set(
-				buildFilterGenreKeysSortedWithAncestors(
-					[...roles.primary],
-					parentKeysByChild,
-				),
-			);
-			const secondaryKeys = new Set(
-				buildFilterGenreKeysSortedWithAncestors(
-					[...roles.secondary],
-					parentKeysByChild,
-				),
-			);
-			if (
-				!albumMatchesGenreClauses(
-					primaryKeys,
-					secondaryKeys,
-					args.filters.genreClauses,
-					args.filters.genreMatch,
-				)
-			) {
+			if (!addedAtMatchesWindow(addedAt, addedRange)) {
 				continue;
 			}
+			sortAt = addedAt;
 		}
 
 		const album = await ctx.db.get(item.albumId);
@@ -278,11 +277,13 @@ async function resolveForLaterMatches(
 			continue;
 		}
 
-		candidates.push({
-			item,
-			album,
-			sortAt: addedAt,
-		});
+		if (needsDuration) {
+			if (!durationMatchesFilters(album.totalDurationMs, args.filters)) {
+				continue;
+			}
+		}
+
+		candidates.push({ item, album, sortAt });
 	}
 
 	candidates.sort((a, b) => b.sortAt - a.sortAt);
@@ -290,8 +291,8 @@ async function resolveForLaterMatches(
 	return candidates.map((c) => ({
 		spotifyAlbumId: c.item.spotifyAlbumId,
 		albumId: c.item.albumId,
-		name: c.album.name,
-		artistName: c.album.artistName,
+		name: c.item.name,
+		artistName: c.item.artistName,
 		totalTracks: c.album.totalTracks,
 	}));
 }
