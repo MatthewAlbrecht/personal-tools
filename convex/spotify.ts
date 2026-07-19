@@ -1543,6 +1543,11 @@ export const saveSyncRun = mutation({
 		tracksBackfilledFromAlbums: v.number(),
 		newAlbumNames: v.optional(v.array(v.string())),
 		recordedListenAlbumNames: v.optional(v.array(v.string())),
+		playEventsInserted: v.optional(v.number()),
+		playEventsDuplicates: v.optional(v.number()),
+		listenCandidates: v.optional(v.number()),
+		listensDeduped: v.optional(v.number()),
+		historyGapWarning: v.optional(v.boolean()),
 	},
 	handler: async (ctx, args) => {
 		return await ctx.db.insert("spotifySyncRuns", args);

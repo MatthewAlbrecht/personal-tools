@@ -18,6 +18,8 @@ import {
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 
+const LOOKBACK_WINDOW_MS = 24 * 60 * 60 * 1000; // 24 hours
+
 export type SyncStats = {
 	tracksFromApi: number;
 	uniqueTracksFromApi: number;
@@ -32,6 +34,11 @@ export type SyncStats = {
 	tracksBackfilledFromAlbums: number;
 	newAlbumNames: string[];
 	recordedListenAlbumNames: string[];
+	playEventsInserted: number;
+	playEventsDuplicates: number;
+	listenCandidates: number;
+	listensDeduped: number;
+	historyGapWarning: boolean;
 };
 
 export type SyncResult = {
@@ -67,6 +74,11 @@ export async function syncSpotifyHistory(
 		tracksBackfilledFromAlbums: 0,
 		newAlbumNames: [],
 		recordedListenAlbumNames: [],
+		playEventsInserted: 0,
+		playEventsDuplicates: 0,
+		listenCandidates: 0,
+		listensDeduped: 0,
+		historyGapWarning: false,
 	};
 
 	try {
@@ -76,11 +88,11 @@ export async function syncSpotifyHistory(
 
 		// Calculate unique tracks and albums
 		const uniqueTrackIds = new Set(recentlyPlayed.map((item) => item.track.id));
-		const uniqueAlbumIds = new Set(
-			recentlyPlayed.map((item) => item.track.album.id),
-		);
+		const uniqueAlbumIds = [
+			...new Set(recentlyPlayed.map((item) => item.track.album.id)),
+		];
 		stats.uniqueTracksFromApi = uniqueTrackIds.size;
-		stats.uniqueAlbumsFromApi = uniqueAlbumIds.size;
+		stats.uniqueAlbumsFromApi = uniqueAlbumIds.length;
 
 		// Store raw response in sync log
 		syncLogId = await convex.mutation(api.spotify.createSyncLog, {
@@ -122,6 +134,37 @@ export async function syncSpotifyHistory(
 			items: trackItems,
 		});
 
+		// Check whether the ledger already has entries for these albums before
+		// ingesting this batch, so we can flag a possible history gap below.
+		const priorEventsForBatchAlbums = uniqueAlbumIds.length
+			? await convex.query(api.spotifyPlayEvents.listPlayEventsForAlbumsSince, {
+					userId,
+					spotifyAlbumIds: uniqueAlbumIds,
+					sinceMs: 0,
+				})
+			: [];
+
+		// Ingest into the durable play-event ledger before detection so this
+		// batch's own plays are visible to the lookback query in detectAlbumListens.
+		const playEventItems = recentlyPlayed.map((item) => ({
+			spotifyTrackId: item.track.id,
+			spotifyAlbumId: item.track.album.id,
+			trackNumber: item.track.track_number,
+			discNumber: item.track.disc_number ?? 1,
+			playedAt: Date.parse(item.played_at),
+		}));
+
+		const upsertResult = await convex.mutation(
+			api.spotifyPlayEvents.upsertPlayEvents,
+			{ userId, events: playEventItems },
+		);
+		stats.playEventsInserted = upsertResult.inserted;
+		stats.playEventsDuplicates = upsertResult.duplicates;
+		stats.historyGapWarning =
+			recentlyPlayed.length === 50 &&
+			upsertResult.duplicates === 0 &&
+			priorEventsForBatchAlbums.length > 0;
+
 		// Detect album listens
 		await detectAlbumListens(
 			convex,
@@ -129,6 +172,7 @@ export async function syncSpotifyHistory(
 			userId,
 			recentlyPlayed,
 			stats,
+			source,
 		);
 
 		// Mark sync as processed
@@ -203,26 +247,22 @@ async function detectAlbumListens(
 	userId: string,
 	recentlyPlayed: RecentlyPlayedItem[],
 	stats: SyncStats,
+	source: "manual" | "cron",
 ): Promise<void> {
-	// Convert to PlayEvent format for session detection
-	const playEvents: PlayEvent[] = recentlyPlayed.map((item) => ({
-		trackId: item.track.id,
-		trackNumber: item.track.track_number,
-		playedAt: Date.parse(item.played_at),
-		albumId: item.track.album.id,
-	}));
+	if (recentlyPlayed.length === 0) return;
 
-	// Group by album to get album metadata and ensure albums exist in DB
-	const albumsById = groupPlaysByAlbum(playEvents);
+	const albumIdsInBatch = [
+		...new Set(recentlyPlayed.map((item) => item.track.album.id)),
+	];
 	const albumMetadata = new Map<
 		string,
 		{ name: string; totalTracks: number; dbId: Id<"spotifyAlbums"> }
 	>();
 
-	stats.albumsCheckedForListens = albumsById.size;
+	stats.albumsCheckedForListens = albumIdsInBatch.length;
 
 	// First pass: ensure all albums exist in DB and get their totalTracks
-	for (const [spotifyAlbumId] of albumsById) {
+	for (const spotifyAlbumId of albumIdsInBatch) {
 		// Get album name from recentlyPlayed data
 		const albumName =
 			recentlyPlayed.find((item) => item.track.album.id === spotifyAlbumId)
@@ -300,13 +340,41 @@ async function detectAlbumListens(
 		}
 	}
 
-	// Second pass: detect listen sessions for each album
+	// Second pass: pull a 24h lookback window from the durable ledger (which
+	// now includes this batch's own plays) so sessions that cross sync
+	// boundaries are still detected, then evaluate each touched album.
+	const newestPlayedAtInBatch = Math.max(
+		...recentlyPlayed.map((item) => Date.parse(item.played_at)),
+	);
+	const sinceMs = newestPlayedAtInBatch - LOOKBACK_WINDOW_MS;
+
+	const lookbackRows = await convex.query(
+		api.spotifyPlayEvents.listPlayEventsForAlbumsSince,
+		{
+			userId,
+			spotifyAlbumIds: albumIdsInBatch,
+			sinceMs,
+		},
+	);
+
+	const playEvents: PlayEvent[] = lookbackRows.map((row) => ({
+		trackId: row.spotifyTrackId,
+		trackNumber: row.trackNumber,
+		discNumber: row.discNumber,
+		playedAt: row.playedAt,
+		albumId: row.spotifyAlbumId,
+	}));
+
+	const albumsById = groupPlaysByAlbum(playEvents);
+	const recordSource = source === "cron" ? "cron_sync" : "manual_sync";
+
 	for (const [spotifyAlbumId, plays] of albumsById) {
 		const metadata = albumMetadata.get(spotifyAlbumId);
 		if (!metadata) continue; // Album fetch failed, skip
 
 		// Detect valid listen sessions using the new algorithm
 		const sessions = detectAlbumListenSessions(plays, metadata.totalTracks);
+		stats.listenCandidates += sessions.length;
 
 		// Record each valid session
 		for (const session of sessions) {
@@ -316,13 +384,14 @@ async function detectAlbumListens(
 				trackIds: session.trackIds,
 				earliestPlayedAt: session.earliestPlayedAt,
 				latestPlayedAt: session.latestPlayedAt,
-				source: "manual_sync",
+				source: recordSource,
 			});
 
-			// Only count as recorded if not deduplicated
 			if (result.recorded) {
 				stats.albumListensRecorded++;
 				stats.recordedListenAlbumNames.push(metadata.name);
+			} else {
+				stats.listensDeduped++;
 			}
 		}
 	}
