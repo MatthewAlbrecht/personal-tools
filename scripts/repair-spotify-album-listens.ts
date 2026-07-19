@@ -19,6 +19,7 @@ import { mkdtempSync, openSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseConvexRunStdout } from "../src/lib/convex-run-stdout";
 import {
 	type ExistingListenInterval,
 	type RepairCandidate,
@@ -115,8 +116,8 @@ function runConvex(
 			stdio: ["ignore", openSync(outPath, "w"), "inherit"],
 		});
 
-		const stdout = readFileSync(outPath, "utf8").trim();
-		return stdout ? JSON.parse(stdout) : null;
+		const stdout = readFileSync(outPath, "utf8");
+		return parseConvexRunStdout(stdout);
 	} finally {
 		rmSync(tmpDir, { recursive: true, force: true });
 	}
@@ -129,9 +130,11 @@ function fetchAllSyncLogs(userId: string, prod: boolean): SyncLog[] {
 	let cursor: string | undefined;
 
 	for (;;) {
+		// Raw recently-played payloads are ~200KB each; keep pages small so
+		// Convex stays under the 16MB return limit and avoids CLI WARN banners.
 		const page = runConvex(
 			"internal.spotifyListenRepair.listSyncLogsPage",
-			{ userId, cursor },
+			{ userId, cursor, numItems: 5 },
 			prod,
 		) as { logs: SyncLog[]; continueCursor: string; isDone: boolean };
 

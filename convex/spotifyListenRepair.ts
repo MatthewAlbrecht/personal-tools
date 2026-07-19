@@ -35,7 +35,7 @@ export const listSyncLogsPage = internalQuery({
 		isDone: v.boolean(),
 	}),
 	handler: async (ctx, args) => {
-		const numItems = Math.min(Math.max(args.numItems ?? 100, 1), 200);
+		const numItems = Math.min(Math.max(args.numItems ?? 5, 1), 25);
 		const page = await ctx.db
 			.query("spotifySyncLogs")
 			.withIndex("by_userId_createdAt", (q) => q.eq("userId", args.userId))
