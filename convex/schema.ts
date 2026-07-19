@@ -569,7 +569,10 @@ export default defineSchema({
 		),
 		rymUrl: v.optional(v.string()),
 		rymLinkedAt: v.optional(v.number()),
-		appearsInForLater: v.boolean(),
+		// Optional until prod backfill completes for pre-existing rows; projection build
+		// always writes a real boolean via computeAppearsInForLater. Tighten to required
+		// once prod has run backfillMyAppearsInForLater for all users.
+		appearsInForLater: v.optional(v.boolean()),
 		appearsInRobRankings: v.boolean(),
 		robRankingYears: v.array(v.number()),
 		primaryGenres: v.array(v.object({ key: v.string(), label: v.string() })),

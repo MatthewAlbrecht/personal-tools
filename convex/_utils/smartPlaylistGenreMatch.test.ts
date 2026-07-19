@@ -90,6 +90,24 @@ test("exclude vetoes even when includes would pass", () => {
 	);
 });
 
+test("for-later/rankings parity: library primary genre 'ambient americana' matches include+either clause", () => {
+	// Mirrors the RYM genre-key format (space-separated, not slugified) that library
+	// projections denormalize onto primaryGenres/secondaryGenres for both the for-later
+	// and rankings smart playlist sources.
+	const libraryPrimaryKeys = new Set(["ambient americana"]);
+	const librarySecondaryKeys = new Set<string>();
+
+	assert.equal(
+		albumMatchesGenreClauses(
+			libraryPrimaryKeys,
+			librarySecondaryKeys,
+			[{ genreKey: "ambient americana", mode: "include", role: "either" }],
+			"any",
+		),
+		true,
+	);
+});
+
 test("exclude alone filters without includes", () => {
 	assert.equal(
 		albumMatchesGenreClauses(

@@ -13,7 +13,11 @@ const schemaSource = readFileSync(
 );
 
 test("schema defines appearsInForLater on albumLibraryItems", () => {
-	assert.match(schemaSource, /appearsInForLater:\s*v\.boolean\(\)/);
+	// Optional until prod backfill completes; see comment near the field in schema.ts.
+	assert.match(
+		schemaSource,
+		/appearsInForLater:\s*v\.optional\(v\.boolean\(\)\)/,
+	);
 	assert.match(
 		schemaSource,
 		/by_userId_appearsInForLater_createdAt/,

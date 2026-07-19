@@ -2526,7 +2526,7 @@ function mapAlbumLibraryProjectionRow(
 					updatedAt: row.rymLinkedAt ?? row.updatedAt,
 				}
 			: undefined,
-		appearsInForLater: row.appearsInForLater,
+		appearsInForLater: row.appearsInForLater === true,
 		appearsInRobRankings: row.appearsInRobRankings,
 		robRankingYears: row.robRankingYears,
 		primaryGenres: row.primaryGenres,

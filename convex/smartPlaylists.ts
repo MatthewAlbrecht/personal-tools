@@ -180,9 +180,9 @@ async function resolveForLaterMatches(
 			? await loadRymGenreParentKeysByChild(ctx)
 			: null;
 
-	// Map albumId → for-later addedAt only when addedWindow active
+	// Map albumId → for-later addedAt, used for sortAt always and for addedWindow filtering when active.
 	const forLaterAddedAtByAlbumId = new Map<Id<"spotifyAlbums">, number>();
-	if (addedRange) {
+	{
 		const forLaterItems = await ctx.db
 			.query("forLaterAlbumItems")
 			.withIndex("by_userId_active", (q) =>
@@ -260,16 +260,16 @@ async function resolveForLaterMatches(
 			continue;
 		}
 
-		let sortAt = item.createdAt;
+		const forLaterAddedAt = forLaterAddedAtByAlbumId.get(item.albumId);
+		let sortAt = forLaterAddedAt ?? item.createdAt;
 		if (addedRange) {
-			const addedAt = forLaterAddedAtByAlbumId.get(item.albumId);
-			if (addedAt === undefined) {
+			if (forLaterAddedAt === undefined) {
 				continue;
 			}
-			if (!addedAtMatchesWindow(addedAt, addedRange)) {
+			if (!addedAtMatchesWindow(forLaterAddedAt, addedRange)) {
 				continue;
 			}
-			sortAt = addedAt;
+			sortAt = forLaterAddedAt;
 		}
 
 		const album = await ctx.db.get(item.albumId);
