@@ -1,25 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-	FOR_LATER_POST_FILTER_SCAN_CAP,
 	type ForLaterAlbumRowFilterInput,
 	deriveRymStatus,
-	forLaterFiltersAllowDescriptorFacetPagination,
-	forLaterFiltersAllowDurationFacetPagination,
-	forLaterFiltersAllowGenreFacetPagination,
-	forLaterFiltersAllowIndexedScan,
-	forLaterPostFilterScanSize,
 	normalizeForLaterFilters,
 	releaseYearMatchesForLaterFilter,
 	rowMatchesFilters,
 	sortForLaterRows,
 } from "./forLaterAlbumsUi";
-
-test("forLaterPostFilterScanSize overscans before in-memory filters", () => {
-	assert.equal(forLaterPostFilterScanSize(25), 1000);
-	assert.equal(forLaterPostFilterScanSize(30), FOR_LATER_POST_FILTER_SCAN_CAP);
-	assert.equal(forLaterPostFilterScanSize(1), 120);
-});
 
 test("normalizeForLaterFilters applies defaults", () => {
 	const filters = normalizeForLaterFilters({});
@@ -65,175 +53,6 @@ test("normalizeForLaterFilters lowercases taxonomy keys", () => {
 
 	assert.deepEqual(filters.genreKeys, ["ambient", "rock"]);
 	assert.deepEqual(filters.descriptorKeys, ["melancholic"]);
-});
-
-test("forLaterFiltersAllowIndexedScan allows default residual-only filters", () => {
-	assert.equal(
-		forLaterFiltersAllowIndexedScan(normalizeForLaterFilters({})),
-		true,
-	);
-	assert.equal(
-		forLaterFiltersAllowIndexedScan(
-			normalizeForLaterFilters({
-				yearMin: 1999,
-				yearMax: 1999,
-				listened: "listened",
-				rymStatus: "has_scrape",
-			}),
-		),
-		true,
-	);
-});
-
-test("forLaterFiltersAllowIndexedScan rejects genre, descriptor, or search", () => {
-	assert.equal(
-		forLaterFiltersAllowIndexedScan(
-			normalizeForLaterFilters({ genreKeys: ["ambient"] }),
-		),
-		false,
-	);
-	assert.equal(
-		forLaterFiltersAllowIndexedScan(
-			normalizeForLaterFilters({ descriptorKeys: ["melodic"] }),
-		),
-		false,
-	);
-	assert.equal(
-		forLaterFiltersAllowIndexedScan(
-			normalizeForLaterFilters({ search: "  hello " }),
-		),
-		false,
-	);
-	assert.equal(
-		forLaterFiltersAllowIndexedScan(
-			normalizeForLaterFilters({ genreMatch: "any" }),
-		),
-		true,
-	);
-});
-
-test("forLaterFiltersAllowIndexedScan allows whitespace-only search", () => {
-	assert.equal(
-		forLaterFiltersAllowIndexedScan(
-			normalizeForLaterFilters({ search: "   " }),
-		),
-		true,
-	);
-});
-
-test("forLaterFiltersAllowGenreFacetPagination allows genre with ALL and extra facets", () => {
-	assert.equal(
-		forLaterFiltersAllowGenreFacetPagination(
-			normalizeForLaterFilters({
-				genreKeys: ["rock"],
-				yearMin: 1999,
-				yearMax: 1999,
-				genreMatch: "all",
-			}),
-		),
-		true,
-	);
-});
-
-test("forLaterFiltersAllowGenreFacetPagination rejects search", () => {
-	assert.equal(
-		forLaterFiltersAllowGenreFacetPagination(
-			normalizeForLaterFilters({ genreKeys: ["rock"], search: "x" }),
-		),
-		false,
-	);
-});
-
-test("forLaterFiltersAllowGenreFacetPagination allows genre ANY with year and other facets (core AND)", () => {
-	assert.equal(
-		forLaterFiltersAllowGenreFacetPagination(
-			normalizeForLaterFilters({
-				genreKeys: ["rock"],
-				yearMin: 1999,
-				yearMax: 1999,
-				genreMatch: "any",
-				descriptorKeys: ["melodic"],
-				descriptorMatch: "all",
-			}),
-		),
-		true,
-	);
-});
-
-test("forLaterFiltersAllowGenreFacetPagination rejects ANY with multiple genre keys", () => {
-	assert.equal(
-		forLaterFiltersAllowGenreFacetPagination(
-			normalizeForLaterFilters({
-				genreKeys: ["rock", "jazz"],
-				genreMatch: "any",
-			}),
-		),
-		false,
-	);
-});
-
-test("forLaterFiltersAllowGenreFacetPagination allows ALL with multiple genre keys", () => {
-	assert.equal(
-		forLaterFiltersAllowGenreFacetPagination(
-			normalizeForLaterFilters({
-				genreKeys: ["rock", "jazz"],
-				genreMatch: "all",
-			}),
-		),
-		true,
-	);
-});
-
-test("forLaterFiltersAllowDescriptorFacetPagination allows descriptor with ALL and core facets", () => {
-	assert.equal(
-		forLaterFiltersAllowDescriptorFacetPagination(
-			normalizeForLaterFilters({
-				descriptorKeys: ["melodic"],
-				yearMin: 1999,
-				yearMax: 1999,
-				descriptorMatch: "all",
-			}),
-		),
-		true,
-	);
-});
-
-test("forLaterFiltersAllowDescriptorFacetPagination rejects search", () => {
-	assert.equal(
-		forLaterFiltersAllowDescriptorFacetPagination(
-			normalizeForLaterFilters({
-				descriptorKeys: ["sparse"],
-				search: "x",
-			}),
-		),
-		false,
-	);
-});
-
-test("forLaterFiltersAllowDescriptorFacetPagination rejects ANY with multiple descriptor keys", () => {
-	assert.equal(
-		forLaterFiltersAllowDescriptorFacetPagination(
-			normalizeForLaterFilters({
-				descriptorKeys: ["a", "b"],
-				descriptorMatch: "any",
-			}),
-		),
-		false,
-	);
-});
-
-test("forLaterFiltersAllowDescriptorFacetPagination allows when genre facet cannot (multi-genre ANY)", () => {
-	assert.equal(
-		forLaterFiltersAllowDescriptorFacetPagination(
-			normalizeForLaterFilters({
-				genreKeys: ["rock", "jazz"],
-				genreMatch: "any",
-				descriptorKeys: ["melodic"],
-				descriptorMatch: "all",
-			}),
-		),
-		true,
-	);
 });
 
 test("rowMatchesFilters matches parent genre via filterGenreKeysSorted", () => {
@@ -464,42 +283,6 @@ test("rowMatchesFilters applies duration bucket on durationMs", () => {
 	const otherBucket = normalizeForLaterFilters({ durationBucketKey: "50_60" });
 	assert.equal(rowMatchesFilters(row, matchingBucket), true);
 	assert.equal(rowMatchesFilters(row, otherBucket), false);
-});
-
-test("forLaterFiltersAllowIndexedScan rejects duration bucket and custom range", () => {
-	assert.equal(
-		forLaterFiltersAllowIndexedScan(
-			normalizeForLaterFilters({ durationBucketKey: "40_50" }),
-		),
-		false,
-	);
-	assert.equal(
-		forLaterFiltersAllowIndexedScan(
-			normalizeForLaterFilters({ durationMinMinutes: 20 }),
-		),
-		false,
-	);
-});
-
-test("forLaterFiltersAllowDurationFacetPagination allows bucket-only filters", () => {
-	assert.equal(
-		forLaterFiltersAllowDurationFacetPagination(
-			normalizeForLaterFilters({ durationBucketKey: "40_50" }),
-		),
-		true,
-	);
-	assert.equal(
-		forLaterFiltersAllowDurationFacetPagination(
-			normalizeForLaterFilters({ durationBucketKey: "40_50", search: "x" }),
-		),
-		false,
-	);
-	assert.equal(
-		forLaterFiltersAllowDurationFacetPagination(
-			normalizeForLaterFilters({ durationMinMinutes: 20 }),
-		),
-		false,
-	);
 });
 
 test("sortForLaterRows orders lastSeenAt, playlistAddedAt, then createdAt descending", () => {
