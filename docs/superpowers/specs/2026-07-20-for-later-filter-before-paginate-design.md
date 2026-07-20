@@ -23,26 +23,28 @@ The last pattern can paginate a fixed number of candidates and then discard nonm
 Use one ordered candidate stream from `forLaterAlbumItems`:
 
 1. Select the active user's rows with the existing index that preserves current `lastSeenAt` ordering.
-2. Apply scalar predicates with native Convex `OrderedQuery.filter()`.
-3. Apply multi-value predicates with `convex-helpers/server/filter`.
+2. Wrap that index scan with `convex-helpers/server/stream`.
+3. Apply all predicates with `filterWith()` before pagination.
 4. Paginate the filtered stream.
 5. Hydrate only the matching rows returned in the page.
 
-Native filters run in Convex's database query pipeline. The helper predicate runs as TypeScript in the hosted Convex function, not in Next.js, Vercel, or the browser. Neither path filters client-side.
+`filterWith()` runs as TypeScript in the hosted Convex function, not in Next.js, Vercel, or the browser. Candidate documents are materialized in the Convex runtime and count toward rows and bytes read, but no filtering occurs client-side.
+
+Do not use `convex-helpers/server/filter` for this path: its `.paginate()` filters the returned page after pagination. `server/stream` is required because its `filterWith()` predicate is applied before pagination.
 
 ## Query pipeline
 
 ```text
 forLaterAlbumItems ordered by lastSeenAt
-  → native Convex scalar predicates
-  → Convex-hosted multi-value predicate
+  → Convex-hosted filterWith predicate
+      (search + scalars + multi-value fields)
   → paginate matching stream
   → hydrate returned matches
 ```
 
-### Native scalar predicates
+### Unified projection predicate
 
-Use native query filters for fields representable by Convex filter expressions:
+Reuse `projectionMatchesFilters` against the denormalized projection fields on `forLaterAlbumItems`. It covers:
 
 - `filterReleaseYear >= yearMin`
 - `filterReleaseYear <= yearMax`
@@ -50,21 +52,15 @@ Use native query filters for fields representable by Convex filter expressions:
 - RYM state
 - marked-as-single exclusion
 - removed-from-For-Later exclusion
-- other scalar predicates already stored on `forLaterAlbumItems`
-
-These predicates execute before pagination. Nonmatching documents count toward rows and bytes scanned, but they do not consume positions in the returned page.
-
-### Multi-value predicates
-
-Use one `convex-helpers/server/filter` predicate for:
-
+- duration buckets and ranges
+- search against `filterSearchText`
 - genre membership;
 - descriptor membership;
 - genre `any` / `all`;
 - descriptor `any` / `all`;
 - combinations of these predicates.
 
-The predicate reads the existing denormalized filter arrays on `forLaterAlbumItems`. It may execute arbitrary TypeScript, which is needed because native Convex filters do not provide array-membership expressions.
+Nonmatching documents count toward rows and bytes scanned, but they do not consume positions in the returned page. One predicate avoids separate paths whose semantics can drift.
 
 ### Ordering
 
@@ -80,7 +76,7 @@ Preserve the current user-visible ordering by scanning the existing user-scoped 
 - End-of-stream may legitimately return fewer than `page_size` items.
 - Reactive updates may also affect the exact count, consistent with Convex pagination semantics.
 
-Use a generous `maximumRowsRead` to bound one Convex execution. If that boundary is reached before the requested page is full, return the partial matching page and a continuation cursor. The caller continues from that cursor until it has filled the visible page or reached the true end.
+Use a generous `maximumRowsRead` to bound one Convex execution. Return `pageStatus` and `splitCursor` from the stream pagination result alongside `page`, `isDone`, and `continueCursor`. When the limit is reached, Convex marks the result `SplitRequired`; `usePaginatedQuery` can split and continue the bounded page instead of treating it as the end.
 
 This separates two guarantees:
 
