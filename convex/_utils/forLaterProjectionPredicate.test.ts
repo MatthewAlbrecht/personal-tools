@@ -205,3 +205,39 @@ test("projectionMatchesFilters not_on_rym shows only not-on-RYM rows", () => {
 	assert.equal(projectionMatchesFilters(notOnRym, filters), true);
 	assert.equal(projectionMatchesFilters(onRym, filters), false);
 });
+
+test("projectionMatchesFilters combines search, scalar, and multi-value filters", () => {
+	const doc = stubDoc({
+		_id: "combined" as Id<"forLaterAlbumItems">,
+		_creationTime: 0,
+		filterSearchText: "Stars of the Lid The Tired Sounds",
+		filterReleaseYear: 2001,
+		filterHasListened: false,
+		filterRymMatched: true,
+		filterRymNotOnSite: false,
+		filterDurationMs: 121 * 60 * 1000,
+		filterGenreKeysSorted: ["ambient", "drone"],
+		filterDescriptorKeysSorted: ["atmospheric", "meditative"],
+	});
+	const filters = normalizeForLaterFilters({
+		search: "tired sounds",
+		yearMin: 2000,
+		yearMax: 2005,
+		listened: "not_listened",
+		rymStatus: "has_scrape",
+		durationMinMinutes: 120,
+		genreKeys: ["ambient", "drone"],
+		genreMatch: "all",
+		descriptorKeys: ["meditative", "warm"],
+		descriptorMatch: "any",
+	});
+
+	assert.equal(projectionMatchesFilters(doc, filters), true);
+	assert.equal(
+		projectionMatchesFilters(
+			doc,
+			normalizeForLaterFilters({ ...filters, yearMin: 2010 }),
+		),
+		false,
+	);
+});
