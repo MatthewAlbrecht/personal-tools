@@ -41,10 +41,13 @@ test("For Later primary list does not select facet or overscan strategies", () =
 });
 
 test("For Later list exposes split pagination metadata", () => {
+	const loadBody = loadRowsBody();
 	const queryStart = source.indexOf("export const listForLaterAlbumRows");
 	const queryEnd = source.indexOf("export const listOpenableRymLinks", queryStart);
 	const queryBody = source.slice(queryStart, queryEnd);
 
+	assert.match(loadBody, /result\.pageStatus/);
+	assert.match(loadBody, /result\.splitCursor/);
 	assert.match(queryBody, /pageStatus/);
 	assert.match(queryBody, /splitCursor/);
 });

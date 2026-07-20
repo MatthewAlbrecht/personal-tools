@@ -14,7 +14,6 @@ import {
 	normalizeAlbumTitle,
 } from "./_utils/albumMatching";
 import {
-	type ForLaterAlbumRowFilterInput,
 	type ForLaterFiltersNormalizeInput,
 	type ForLaterUiFilters,
 	deriveRymStatus,
@@ -1079,6 +1078,8 @@ async function loadForLaterAlbumRows(
 		page: sortForLaterRows(result.page),
 		isDone: result.isDone,
 		continueCursor: result.continueCursor,
+		...(result.pageStatus ? { pageStatus: result.pageStatus } : {}),
+		...(result.splitCursor ? { splitCursor: result.splitCursor } : {}),
 	};
 }
 

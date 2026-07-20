@@ -8,10 +8,10 @@ import {
 
 /**
  * Cheap filter check using denormalized projection fields on `forLaterAlbumItems`.
- * Mirrors {@link rowMatchesFilters} semantics when projections are in sync.
+ * This is the canonical predicate for the filtered For Later stream.
  *
- * When `skipSearchPredicate` is true (FTS already narrowed the candidate set), the
- * substring search predicate is skipped — hydrate still runs {@link rowMatchesFilters}.
+ * When `skipSearchPredicate` is true, the substring search predicate is skipped
+ * because another query stage has already narrowed the candidate set.
  */
 /** Soft-deleted rows are hidden from for-later list UIs but remain in the table. */
 export function forLaterItemExcludedFromLists(
