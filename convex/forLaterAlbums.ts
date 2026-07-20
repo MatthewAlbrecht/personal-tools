@@ -1,8 +1,10 @@
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
+import { stream } from "convex-helpers/server/stream";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalMutation, mutation, query } from "./_generated/server";
+import schema from "./schema";
 import { upsertAlbumLibraryProjection } from "./_utils/albumLibraryProjection";
 import {
 	type RymMatchResult,
@@ -16,14 +18,7 @@ import {
 	type ForLaterFiltersNormalizeInput,
 	type ForLaterUiFilters,
 	deriveRymStatus,
-	forLaterFiltersAllowDescriptorFacetPagination,
-	forLaterFiltersAllowDurationFacetPagination,
-	forLaterFiltersAllowGenreFacetPagination,
-	forLaterFiltersAllowIndexedScan,
-	forLaterPostFilterScanSize,
-	forLaterSingleIndexedReleaseYear,
 	normalizeForLaterFilters,
-	rowMatchesFilters,
 	sortForLaterRows,
 } from "./_utils/forLaterAlbumsUi";
 import { durationMsToBucketKey } from "./_utils/forLaterDurationBuckets";
@@ -35,7 +30,6 @@ import {
 	loadRymGenreParentKeysByChild,
 	parseReleaseYearFromIsoDate,
 } from "./_utils/forLaterFilterProjection";
-import { chooseIndexedForLaterListScan } from "./_utils/forLaterIndexedList";
 import { projectionMatchesFilters } from "./_utils/forLaterProjectionPredicate";
 import {
 	ADDED_DAYS_MIN,
@@ -222,29 +216,11 @@ type LoadForLaterAlbumRowsResult = {
 	page: ForLaterAlbumRow[];
 	isDone: boolean;
 	continueCursor: string;
+	pageStatus?: "SplitRecommended" | "SplitRequired";
+	splitCursor?: string;
 };
 
-function forLaterRowFilterInput(
-	row: ForLaterAlbumRow,
-	item: Doc<"forLaterAlbumItems">,
-): ForLaterAlbumRowFilterInput {
-	return {
-		name: row.name,
-		artistName: row.artistName,
-		releaseYear: row.releaseYear,
-		hasListened: row.hasListened,
-		rymStatus: row.rymStatus,
-		rymUrl: row.rymUrl,
-		rymNotOnSite: row.rymNotOnSite,
-		markedAsSingle: row.markedAsSingle,
-		removedFromForLater: row.removedFromForLater,
-		primaryGenres: row.primaryGenres,
-		secondaryGenres: row.secondaryGenres,
-		descriptors: row.descriptors,
-		filterGenreKeysSorted: item.filterGenreKeysSorted,
-		durationMs: item.filterDurationMs,
-	};
-}
+const FOR_LATER_FILTER_MAXIMUM_ROWS_READ = 2_000;
 
 function spotifyAlbumArtistKeys(doc: Doc<"spotifyAlbums">): string[] {
 	if (doc.rawData) {
@@ -1066,197 +1042,6 @@ async function buildForLaterRecommendationResult(
 	};
 }
 
-function appendForLaterListExclusionFilters(
-	// biome-ignore lint/suspicious/noExplicitAny: Convex indexed `.filter` chains lack one exported builder type across indexes.
-	q: any,
-	// biome-ignore lint/suspicious/noExplicitAny: same
-): any {
-	return q
-		.filter(
-			(fb: {
-				neq: (a: unknown, b: unknown) => unknown;
-				field: (name: string) => unknown;
-			}) => fb.neq(fb.field("filterMarkedAsSingle"), true),
-		)
-		.filter(
-			(fb: {
-				neq: (a: unknown, b: unknown) => unknown;
-				field: (name: string) => unknown;
-			}) => fb.neq(fb.field("filterRemovedFromForLater"), true),
-		);
-}
-
-function appendForLaterProjectionFilters(
-	filters: ForLaterUiFilters,
-	options: {
-		skipYear?: boolean;
-		skipListened?: boolean;
-		skipRym?: boolean;
-	},
-	// biome-ignore lint/suspicious/noExplicitAny: Convex indexed `.filter` chains lack one exported builder type across indexes.
-	q: any,
-	// biome-ignore lint/suspicious/noExplicitAny: same
-): any {
-	let out = appendForLaterListExclusionFilters(q);
-	if (!options.skipYear && filters.yearMin !== undefined) {
-		out = out.filter(
-			(fb: {
-				gte: (a: unknown, b: unknown) => unknown;
-				field: (name: string) => unknown;
-			}) => fb.gte(fb.field("filterReleaseYear"), filters.yearMin),
-		);
-	}
-	if (!options.skipYear && filters.yearMax !== undefined) {
-		out = out.filter(
-			(fb: {
-				lte: (a: unknown, b: unknown) => unknown;
-				field: (name: string) => unknown;
-			}) => fb.lte(fb.field("filterReleaseYear"), filters.yearMax),
-		);
-	}
-	if (!options.skipListened && filters.listened === "listened") {
-		out = out.filter(
-			(fb: {
-				eq: (a: unknown, b: unknown) => unknown;
-				field: (name: string) => unknown;
-			}) => fb.eq(fb.field("filterHasListened"), true),
-		);
-	} else if (!options.skipListened && filters.listened === "not_listened") {
-		out = out.filter(
-			(fb: {
-				eq: (a: unknown, b: unknown) => unknown;
-				field: (name: string) => unknown;
-			}) => fb.eq(fb.field("filterHasListened"), false),
-		);
-	}
-	if (!options.skipRym && filters.rymStatus === "not_on_rym") {
-		out = out.filter(
-			(fb: {
-				eq: (a: unknown, b: unknown) => unknown;
-				field: (name: string) => unknown;
-			}) => fb.eq(fb.field("filterRymNotOnSite"), true),
-		);
-	} else if (!options.skipRym && filters.rymStatus !== "all") {
-		out = out.filter(
-			(fb: {
-				eq: (a: unknown, b: unknown) => unknown;
-				neq: (a: unknown, b: unknown) => unknown;
-				field: (name: string) => unknown;
-			}) => fb.neq(fb.field("filterRymNotOnSite"), true),
-		);
-		if (filters.rymStatus === "has_scrape") {
-			out = out.filter(
-				(fb: {
-					eq: (a: unknown, b: unknown) => unknown;
-					field: (name: string) => unknown;
-				}) => fb.eq(fb.field("filterRymMatched"), true),
-			);
-		} else if (filters.rymStatus === "no_scrape") {
-			out = out.filter(
-				(fb: {
-					eq: (a: unknown, b: unknown) => unknown;
-					field: (name: string) => unknown;
-				}) => fb.eq(fb.field("filterRymMatched"), false),
-			);
-		}
-	}
-	return out;
-}
-
-async function paginateForLaterAlbumItemsIndexed(
-	ctx: QueryCtx,
-	args: {
-		userId: string;
-		filters: ForLaterUiFilters;
-		requested: number;
-		cursor: string | null;
-	},
-): Promise<{
-	page: Doc<"forLaterAlbumItems">[];
-	isDone: boolean;
-	continueCursor: string;
-}> {
-	const { userId, filters, requested, cursor } = args;
-	const choice = chooseIndexedForLaterListScan(filters);
-
-	// biome-ignore lint/suspicious/noImplicitAnyLet: reassigned on every branch before paginate
-	let base;
-
-	if (choice.kind === "year") {
-		base = ctx.db
-			.query("forLaterAlbumItems")
-			.withIndex("by_userId_filterReleaseYear_lastSeenAt", (iq) =>
-				iq.eq("userId", userId).eq("filterReleaseYear", choice.year),
-			);
-		base = appendForLaterProjectionFilters(filters, { skipYear: true }, base);
-	} else if (choice.kind === "listened") {
-		base = ctx.db
-			.query("forLaterAlbumItems")
-			.withIndex("by_userId_filterHasListened_lastSeenAt", (iq) =>
-				iq.eq("userId", userId).eq("filterHasListened", choice.value),
-			);
-		base = appendForLaterProjectionFilters(
-			filters,
-			{ skipListened: true },
-			base,
-		);
-	} else if (choice.kind === "rymMatched") {
-		base = ctx.db
-			.query("forLaterAlbumItems")
-			.withIndex("by_userId_filterRymMatched_lastSeenAt", (iq) =>
-				iq.eq("userId", userId).eq("filterRymMatched", choice.value),
-			);
-		base = appendForLaterProjectionFilters(filters, { skipRym: true }, base);
-	} else {
-		base = ctx.db
-			.query("forLaterAlbumItems")
-			.withIndex("by_userId_lastSeenAt", (iq) => iq.eq("userId", userId));
-		base = appendForLaterProjectionFilters(filters, {}, base);
-	}
-
-	const result = await base.order("desc").paginate({
-		numItems: requested,
-		cursor,
-	});
-
-	return {
-		page: result.page,
-		isDone: result.isDone,
-		continueCursor: result.continueCursor,
-	};
-}
-
-async function hydrateMatchingRowsFromFacetItemRefs(
-	ctx: QueryCtx,
-	args: {
-		userId: string;
-		filters: ForLaterUiFilters;
-		facetRows: Array<{ itemId: Id<"forLaterAlbumItems"> }>;
-	},
-): Promise<ForLaterAlbumRow[]> {
-	const matches: ForLaterAlbumRow[] = [];
-	for (const facet of args.facetRows) {
-		const item = await ctx.db.get(facet.itemId);
-		if (!item || item.userId !== args.userId) {
-			continue;
-		}
-		if (!projectionMatchesFilters(item, args.filters)) {
-			continue;
-		}
-		const row = await hydrateForLaterAlbumRow(ctx, {
-			userId: args.userId,
-			item,
-		});
-		if (!row) {
-			continue;
-		}
-		if (rowMatchesFilters(forLaterRowFilterInput(row, item), args.filters)) {
-			matches.push(row);
-		}
-	}
-	return matches;
-}
-
 async function loadForLaterAlbumRows(
 	ctx: QueryCtx,
 	args: {
@@ -1266,232 +1051,34 @@ async function loadForLaterAlbumRows(
 	},
 ): Promise<LoadForLaterAlbumRowsResult> {
 	const filters = normalizeForLaterFilters(args.filters);
-	const requested = args.paginationOpts.numItems;
-
-	/** Convex FTS narrows candidates; genre/descriptor ANY/ALL + leftovers enforced below. */
-	if (filters.search?.trim()) {
-		const scanSize = forLaterPostFilterScanSize(requested);
-		const term = filters.search.trim();
-
-		const batch = await ctx.db
-			.query("forLaterAlbumItems")
-			.withSearchIndex("search_forLaterAlbumItems", (q) => {
-				let qb = q.search("filterSearchText", term).eq("userId", args.userId);
-				const singleYear = forLaterSingleIndexedReleaseYear(filters);
-				if (singleYear !== undefined) {
-					qb = qb.eq("filterReleaseYear", singleYear);
-				}
-				if (filters.listened === "listened") {
-					qb = qb.eq("filterHasListened", true);
-				} else if (filters.listened === "not_listened") {
-					qb = qb.eq("filterHasListened", false);
-				}
-				const rym = filters.rymStatus;
-				if (rym === "has_scrape") {
-					qb = qb.eq("filterRymMatched", true);
-				} else if (rym === "no_scrape") {
-					qb = qb.eq("filterRymMatched", false);
-				}
-				return qb;
-			})
-			.paginate({
-				numItems: scanSize,
-				cursor: args.paginationOpts.cursor,
-			});
-
-		const page: ForLaterAlbumRow[] = [];
-		for (const item of batch.page) {
-			if (
-				!projectionMatchesFilters(item, filters, {
-					skipSearchPredicate: true,
-				})
-			) {
-				continue;
-			}
-			const row = await hydrateForLaterAlbumRow(ctx, {
-				userId: args.userId,
-				item,
-			});
-			if (!row) {
-				continue;
-			}
-			if (rowMatchesFilters(forLaterRowFilterInput(row, item), filters)) {
-				page.push(row);
-			}
-		}
-
-		return {
-			page: sortForLaterRows(page),
-			isDone: batch.isDone,
-			continueCursor: batch.continueCursor,
-		};
-	}
-
-	if (forLaterFiltersAllowIndexedScan(filters)) {
-		const indexedPage = await paginateForLaterAlbumItemsIndexed(ctx, {
-			userId: args.userId,
-			filters,
-			requested,
-			cursor: args.paginationOpts.cursor,
-		});
-
-		const page: ForLaterAlbumRow[] = [];
-		for (const item of indexedPage.page) {
-			if (!projectionMatchesFilters(item, filters)) {
-				continue;
-			}
-			const row = await hydrateForLaterAlbumRow(ctx, {
-				userId: args.userId,
-				item,
-			});
-			if (!row) {
-				continue;
-			}
-			if (rowMatchesFilters(forLaterRowFilterInput(row, item), filters)) {
-				page.push(row);
-			}
-		}
-
-		return {
-			page: sortForLaterRows(page),
-			isDone: indexedPage.isDone,
-			continueCursor: indexedPage.continueCursor,
-		};
-	}
-
-	if (forLaterFiltersAllowGenreFacetPagination(filters)) {
-		const [primaryGenreKey] = filters.genreKeys;
-		if (primaryGenreKey === undefined) {
-			throw new Error(
-				"forLaterFiltersAllowGenreFacetPagination requires genre keys",
-			);
-		}
-		const scanSize = forLaterPostFilterScanSize(requested);
-
-		const facetBatch = await ctx.db
-			.query("forLaterAlbumGenreFacets")
-			.withIndex("by_userId_genreKey_lastSeenAt", (q) =>
-				q.eq("userId", args.userId).eq("genreKey", primaryGenreKey),
-			)
-			.order("desc")
-			.paginate({
-				numItems: scanSize,
-				cursor: args.paginationOpts.cursor,
-			});
-
-		const matches = await hydrateMatchingRowsFromFacetItemRefs(ctx, {
-			userId: args.userId,
-			filters,
-			facetRows: facetBatch.page,
-		});
-
-		return {
-			page: sortForLaterRows(matches),
-			isDone: facetBatch.isDone,
-			continueCursor: facetBatch.continueCursor,
-		};
-	}
-
-	if (forLaterFiltersAllowDescriptorFacetPagination(filters)) {
-		const [primaryDescriptorKey] = filters.descriptorKeys;
-		if (primaryDescriptorKey === undefined) {
-			throw new Error(
-				"forLaterFiltersAllowDescriptorFacetPagination requires descriptor keys",
-			);
-		}
-		const scanSize = forLaterPostFilterScanSize(requested);
-
-		const facetBatch = await ctx.db
-			.query("forLaterAlbumDescriptorFacets")
-			.withIndex("by_userId_descriptorKey_lastSeenAt", (q) =>
-				q.eq("userId", args.userId).eq("descriptorKey", primaryDescriptorKey),
-			)
-			.order("desc")
-			.paginate({
-				numItems: scanSize,
-				cursor: args.paginationOpts.cursor,
-			});
-
-		const matches = await hydrateMatchingRowsFromFacetItemRefs(ctx, {
-			userId: args.userId,
-			filters,
-			facetRows: facetBatch.page,
-		});
-
-		return {
-			page: sortForLaterRows(matches),
-			isDone: facetBatch.isDone,
-			continueCursor: facetBatch.continueCursor,
-		};
-	}
-
-	if (forLaterFiltersAllowDurationFacetPagination(filters)) {
-		const durationBucketKey = filters.durationBucketKey;
-		if (durationBucketKey === undefined) {
-			throw new Error(
-				"forLaterFiltersAllowDurationFacetPagination requires durationBucketKey",
-			);
-		}
-		const scanSize = forLaterPostFilterScanSize(requested);
-
-		const facetBatch = await ctx.db
-			.query("forLaterAlbumDurationFacets")
-			.withIndex("by_userId_durationBucketKey_lastSeenAt", (q) =>
-				q.eq("userId", args.userId).eq("durationBucketKey", durationBucketKey),
-			)
-			.order("desc")
-			.paginate({
-				numItems: scanSize,
-				cursor: args.paginationOpts.cursor,
-			});
-
-		const matches = await hydrateMatchingRowsFromFacetItemRefs(ctx, {
-			userId: args.userId,
-			filters,
-			facetRows: facetBatch.page,
-		});
-
-		return {
-			page: sortForLaterRows(matches),
-			isDone: facetBatch.isDone,
-			continueCursor: facetBatch.continueCursor,
-		};
-	}
-
-	const scanSize = forLaterPostFilterScanSize(requested);
-	const matches: ForLaterAlbumRow[] = [];
-
-	const batch = await ctx.db
+	const matchingRows = stream(ctx.db, schema)
 		.query("forLaterAlbumItems")
 		.withIndex("by_userId_lastSeenAt", (q) => q.eq("userId", args.userId))
 		.order("desc")
-		.paginate({
-			numItems: scanSize,
-			cursor: args.paginationOpts.cursor,
+		.filterWith(async (item) => projectionMatchesFilters(item, filters))
+		.map(async (item) => ({
+			row: await hydrateForLaterAlbumRow(ctx, {
+				userId: args.userId,
+				item,
+			}),
+		}))
+		.filterWith(async ({ row }) => row !== null)
+		.map(async ({ row }) => {
+			if (!row) {
+				throw new Error("Filtered For Later row unexpectedly missing");
+			}
+			return row;
 		});
 
-	// Scan the full raw page so we don't pair `continueCursor` (end of batch) with an early break,
-	// which previously hid matches and left `isDone` false while the user already saw every match.
-	for (const item of batch.page) {
-		if (!projectionMatchesFilters(item, filters)) {
-			continue;
-		}
-		const row = await hydrateForLaterAlbumRow(ctx, {
-			userId: args.userId,
-			item,
-		});
-		if (!row) {
-			continue;
-		}
-		if (rowMatchesFilters(forLaterRowFilterInput(row, item), filters)) {
-			matches.push(row);
-		}
-	}
+	const result = await matchingRows.paginate({
+		...args.paginationOpts,
+		maximumRowsRead: FOR_LATER_FILTER_MAXIMUM_ROWS_READ,
+	});
 
 	return {
-		page: sortForLaterRows(matches),
-		isDone: batch.isDone,
-		continueCursor: batch.continueCursor,
+		page: sortForLaterRows(result.page),
+		isDone: result.isDone,
+		continueCursor: result.continueCursor,
 	};
 }
 
@@ -1906,6 +1493,10 @@ export const listForLaterAlbumRows = query({
 		page: v.array(forLaterAlbumRowValidator),
 		isDone: v.boolean(),
 		continueCursor: v.string(),
+		pageStatus: v.optional(
+			v.union(v.literal("SplitRecommended"), v.literal("SplitRequired")),
+		),
+		splitCursor: v.optional(v.string()),
 	}),
 	handler: async (ctx, args) => {
 		requireAuth(ctx);
@@ -1931,7 +1522,7 @@ export const listOpenableRymLinks = query({
 			userId: args.userId,
 			filters: args.filters,
 			paginationOpts: {
-				numItems: forLaterPostFilterScanSize(args.limit),
+				numItems: Math.max(1, Math.floor(args.limit)),
 				cursor: null,
 			},
 		});
