@@ -2377,22 +2377,39 @@ export const runBackfillFilterProjectionBatch = mutation({
 });
 
 export const backfillMyAppearsInForLater = mutation({
-	args: { userId: v.string() },
-	returns: v.object({ processed: v.number() }),
+	args: {
+		userId: v.string(),
+		cursor: v.optional(v.union(v.string(), v.null())),
+		limit: v.optional(v.number()),
+	},
+	returns: v.object({
+		processed: v.number(),
+		isDone: v.boolean(),
+		continueCursor: v.union(v.string(), v.null()),
+	}),
 	handler: async (ctx, args) => {
 		requireAuth(ctx);
-		const rows = await ctx.db
+		// Each upsert does many reads; keep batches small for the 4096-read limit.
+		const limit = Math.min(Math.max(args.limit ?? 15, 1), 40);
+		const page = await ctx.db
 			.query("albumLibraryItems")
 			.withIndex("by_userId_createdAt", (q) =>
 				q.eq("userId", args.userId),
 			)
-			.collect();
-		for (const row of rows) {
+			.paginate({
+				numItems: limit,
+				cursor: args.cursor ?? null,
+			});
+		for (const row of page.page) {
 			await upsertAlbumLibraryProjection(ctx, {
 				userId: args.userId,
 				albumId: row.albumId,
 			});
 		}
-		return { processed: rows.length };
+		return {
+			processed: page.page.length,
+			isDone: page.isDone,
+			continueCursor: page.isDone ? null : page.continueCursor,
+		};
 	},
 });
