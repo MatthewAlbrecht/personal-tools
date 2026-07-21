@@ -36,16 +36,18 @@ export function applyLibraryForLaterEvent(
 	event: LibraryForLaterEvent,
 ): LibraryForLaterPatch {
 	if (event.type === "observed") {
+		const playlistAddedAt =
+			event.playlistAddedAt ?? existing?.playlistAddedAt;
 		const forLater: LibraryForLaterState = existing
 			? {
 					...existing,
 					lastSeenAt: Math.max(existing.lastSeenAt, event.seenAt),
-					playlistAddedAt: event.playlistAddedAt ?? existing.playlistAddedAt,
+					...(playlistAddedAt === undefined ? {} : { playlistAddedAt }),
 				}
 			: {
 					firstSeenAt: event.seenAt,
 					lastSeenAt: event.seenAt,
-					playlistAddedAt: event.playlistAddedAt,
+					...(playlistAddedAt === undefined ? {} : { playlistAddedAt }),
 				};
 		return { forLater, isActiveForLater: deriveIsActiveForLater(forLater) };
 	}
@@ -102,8 +104,8 @@ export function legacyRowsToLibraryForLater(
 	const forLater: LibraryForLaterState = {
 		firstSeenAt,
 		lastSeenAt: canonical.lastSeenAt,
-		playlistAddedAt,
-		dismissedAt,
+		...(playlistAddedAt === undefined ? {} : { playlistAddedAt }),
+		...(dismissedAt === undefined ? {} : { dismissedAt }),
 	};
 	return { forLater, isActiveForLater: deriveIsActiveForLater(forLater) };
 }

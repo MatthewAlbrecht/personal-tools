@@ -24,6 +24,22 @@ test("first observation creates active append-only state", () => {
 	);
 });
 
+test("first observation omits absent playlist timestamp", () => {
+	assert.deepEqual(
+		applyLibraryForLaterEvent(undefined, {
+			type: "observed",
+			seenAt: 100,
+		}),
+		{
+			forLater: {
+				firstSeenAt: 100,
+				lastSeenAt: 100,
+			},
+			isActiveForLater: true,
+		},
+	);
+});
+
 test("reobservation updates last seen without restoring dismissal", () => {
 	const existing = {
 		firstSeenAt: 100,
@@ -88,6 +104,28 @@ test("legacy marked-as-single migrates as dismissed", () => {
 	]);
 	assert.equal(patch.forLater.dismissedAt, 25);
 	assert.equal(patch.isActiveForLater, false);
+});
+
+test("active legacy migration omits absent optional timestamps", () => {
+	assert.deepEqual(
+		legacyRowsToLibraryForLater([
+			{
+				firstSeenAt: 10,
+				lastSeenAt: 20,
+				removedFromForLater: false,
+				markedAsSingle: false,
+				updatedAt: 25,
+				creationTime: 1,
+			},
+		]),
+		{
+			forLater: {
+				firstSeenAt: 10,
+				lastSeenAt: 20,
+			},
+			isActiveForLater: true,
+		},
+	);
 });
 
 test("legacy duplicate reconciliation uses newest observation deterministically", () => {
