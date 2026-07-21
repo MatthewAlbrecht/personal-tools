@@ -549,6 +549,7 @@ export default defineSchema({
 		releaseDate: v.optional(v.string()),
 		releaseYear: v.optional(v.number()),
 		totalTracks: v.number(),
+		totalDurationMs: v.optional(v.number()),
 		albumType: v.union(v.literal("album"), v.literal("single")),
 		createdAt: v.number(),
 		updatedAt: v.number(),

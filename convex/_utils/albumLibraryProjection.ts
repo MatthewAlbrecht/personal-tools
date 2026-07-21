@@ -73,6 +73,7 @@ export async function buildAlbumLibraryProjectionForAlbum(
 		releaseDate: album.releaseDate,
 		releaseYear,
 		totalTracks: album.totalTracks,
+		totalDurationMs: album.totalDurationMs,
 		albumType: getAlbumLibraryAlbumType(album.totalTracks),
 		createdAt: album.createdAt,
 		updatedAt,

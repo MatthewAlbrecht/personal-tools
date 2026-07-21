@@ -29,7 +29,7 @@ export type ForLaterFilters = {
 
 export type ForLaterAlbumRowData = {
 	id: string;
-	albumItemId: Id<"forLaterAlbumItems">;
+	libraryItemId: Id<"albumLibraryItems">;
 	albumId: Id<"spotifyAlbums">;
 	spotifyAlbumId: string;
 	name: string;

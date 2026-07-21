@@ -42,12 +42,12 @@ export function useForLaterRymAssociateDrawer({
 				return;
 			}
 
-			const itemId = row.albumItemId;
+			const albumId = row.albumId;
 			const albumName = row.name;
 
 			setOptimisticRymLinks((current) => {
 				const next = new Map(current);
-				next.set(itemId, {
+				next.set(albumId, {
 					rymStatus: "matched",
 					rymUrl: selection.rymUrl,
 				});
@@ -58,14 +58,14 @@ export function useForLaterRymAssociateDrawer({
 			try {
 				await associateMutation({
 					userId,
-					itemId,
+					albumId,
 					scrapeId: selection.scrapeId,
 				});
 				toast.success(`Linked RYM page for "${albumName}"`);
 			} catch (error) {
 				setOptimisticRymLinks((current) => {
 					const next = new Map(current);
-					next.delete(itemId);
+					next.delete(albumId);
 					return next;
 				});
 				console.error("Failed to associate RYM scrape:", error);

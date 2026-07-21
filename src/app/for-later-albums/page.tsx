@@ -201,7 +201,7 @@ function withOptimisticRym(
 	row: ForLaterAlbumRowData,
 	overlays: Map<string, { rymStatus: "matched"; rymUrl: string }>,
 ): ForLaterAlbumRowData {
-	const overlay = overlays.get(row.albumItemId);
+	const overlay = overlays.get(row.albumId);
 	if (!overlay) return row;
 	return { ...row, ...overlay, rymNotOnSite: undefined };
 }

@@ -1,12 +1,12 @@
 import { ConvexHttpClient } from "convex/browser";
 import { type NextRequest, NextResponse } from "next/server";
+import { env } from "~/env.js";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
-import { env } from "~/env.js";
 
 type FindRymLinksBody = {
 	userId?: string;
-	forLaterAlbumItemIds?: string[];
+	albumIds?: string[];
 };
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
@@ -18,9 +18,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 	}
 
 	const userId = typeof body.userId === "string" ? body.userId.trim() : "";
-	const ids = Array.isArray(body.forLaterAlbumItemIds)
-		? body.forLaterAlbumItemIds
-		: [];
+	const ids = Array.isArray(body.albumIds) ? body.albumIds : [];
 
 	if (!userId) {
 		return NextResponse.json({ error: "userId is required" }, { status: 400 });
@@ -28,20 +26,25 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
 	if (ids.length === 0) {
 		return NextResponse.json(
-			{ error: "forLaterAlbumItemIds must be non-empty" },
+			{ error: "albumIds must be non-empty" },
 			{ status: 400 },
 		);
 	}
 
-	const capped = ids.slice(0, 25).filter((id): id is string => typeof id === "string");
+	const capped = ids
+		.slice(0, 25)
+		.filter((id): id is string => typeof id === "string");
 
 	const convex = new ConvexHttpClient(env.NEXT_PUBLIC_CONVEX_URL);
 
 	try {
-		const result = await convex.mutation(api.forLaterAlbums.queueForLaterRymDiscovery, {
-			userId,
-			forLaterAlbumItemIds: capped as Id<"forLaterAlbumItems">[],
-		});
+		const result = await convex.mutation(
+			api.forLaterAlbums.queueForLaterRymDiscovery,
+			{
+				userId,
+				albumIds: capped as Id<"spotifyAlbums">[],
+			},
+		);
 
 		return NextResponse.json({
 			ok: true,

@@ -54,6 +54,7 @@ import {
 } from "./_utils/forLaterRecommendations";
 import { buildOpenableGoogleRymSearchLinks } from "./_utils/google_rym_lucky_search";
 import { duplicateGroupStartsOnPage } from "./_utils/library-for-later-migration";
+import { libraryRowMatchesForLaterFilters } from "./_utils/library-for-later-predicate";
 import {
 	type LibraryForLaterEvent,
 	applyLibraryForLaterEvent,
@@ -140,7 +141,7 @@ const tagValidator = v.object({
 
 const forLaterAlbumRowValidator = v.object({
 	id: v.string(),
-	albumItemId: v.id("forLaterAlbumItems"),
+	libraryItemId: v.id("albumLibraryItems"),
 	albumId: v.id("spotifyAlbums"),
 	spotifyAlbumId: v.string(),
 	name: v.string(),
@@ -193,7 +194,7 @@ const savedRecommendationResultValidator = v.object({
 
 type ForLaterAlbumRow = {
 	id: string;
-	albumItemId: Id<"forLaterAlbumItems">;
+	libraryItemId: Id<"albumLibraryItems">;
 	albumId: Id<"spotifyAlbums">;
 	spotifyAlbumId: string;
 	name: string;
@@ -259,6 +260,22 @@ async function patchLibraryForLaterState(
 		...patch,
 		appearsInForLater: patch.isActiveForLater,
 	});
+}
+
+async function requireLegacyForLaterItemByAlbum(
+	ctx: QueryCtx | MutationCtx,
+	args: { userId: string; albumId: Id<"spotifyAlbums"> },
+): Promise<Doc<"forLaterAlbumItems">> {
+	const item = await ctx.db
+		.query("forLaterAlbumItems")
+		.withIndex("by_userId_albumId", (q) =>
+			q.eq("userId", args.userId).eq("albumId", args.albumId),
+		)
+		.first();
+	if (!item) {
+		throw new Error("For Later album not found");
+	}
+	return item;
 }
 
 function spotifyAlbumArtistKeys(doc: Doc<"spotifyAlbums">): string[] {
@@ -702,6 +719,15 @@ async function hydrateForLaterAlbumRow(
 	if (!album) {
 		return null;
 	}
+	const libraryItem = await ctx.db
+		.query("albumLibraryItems")
+		.withIndex("by_userId_albumId", (q) =>
+			q.eq("userId", args.userId).eq("albumId", args.item.albumId),
+		)
+		.first();
+	if (!libraryItem) {
+		return null;
+	}
 
 	const { resolvedScrapeId, scrape, linkMethod } =
 		await resolveRymContextForAlbum(ctx, {
@@ -730,8 +756,8 @@ async function hydrateForLaterAlbumRow(
 	const rymMatchMethodOut = args.item.rymMatchMethod ?? linkMethod;
 
 	const row: ForLaterAlbumRow = {
-		id: String(args.item._id),
-		albumItemId: args.item._id,
+		id: String(libraryItem._id),
+		libraryItemId: libraryItem._id,
 		albumId: args.item.albumId,
 		spotifyAlbumId: args.item.spotifyAlbumId,
 		name: album.name,
@@ -1081,6 +1107,58 @@ async function buildForLaterRecommendationResult(
 	};
 }
 
+async function hydrateLibraryForLaterAlbumRow(
+	ctx: QueryCtx,
+	item: Doc<"albumLibraryItems">,
+): Promise<ForLaterAlbumRow | null> {
+	const forLater = item.forLater;
+	if (item.isActiveForLater !== true || !forLater) {
+		return null;
+	}
+
+	const userAlbum = await ctx.db
+		.query("userAlbums")
+		.withIndex("by_userId_albumId", (q) =>
+			q.eq("userId", item.userId).eq("albumId", item.albumId),
+		)
+		.first();
+
+	return {
+		id: String(item._id),
+		libraryItemId: item._id,
+		albumId: item.albumId,
+		spotifyAlbumId: item.spotifyAlbumId,
+		name: item.name,
+		artistName: item.artistName,
+		...(item.imageUrl ? { imageUrl: item.imageUrl } : {}),
+		...(item.releaseDate ? { releaseDate: item.releaseDate } : {}),
+		...(item.releaseYear !== undefined
+			? { releaseYear: item.releaseYear }
+			: {}),
+		...(forLater.playlistAddedAt !== undefined
+			? { playlistAddedAt: forLater.playlistAddedAt }
+			: {}),
+		firstSeenAt: forLater.firstSeenAt,
+		createdAt: forLater.firstSeenAt,
+		lastSeenAt: forLater.lastSeenAt,
+		isActive: true,
+		hasListened: item.filterHasListened,
+		...(userAlbum ? { userAlbumId: userAlbum._id } : {}),
+		listenCount: item.listenCount,
+		...(item.lastListenedAt !== undefined
+			? { lastListenedAt: item.lastListenedAt }
+			: {}),
+		...(item.rating !== undefined ? { rating: item.rating } : {}),
+		rymStatus: item.rymStatus === "linked" ? "matched" : "unmatched",
+		...(item.rymUrl ? { rymUrl: item.rymUrl } : {}),
+		...(item.rymLinkMethod ? { rymMatchMethod: item.rymLinkMethod } : {}),
+		...(item.rymNotOnSite === true ? { rymNotOnSite: true } : {}),
+		primaryGenres: item.primaryGenres,
+		secondaryGenres: item.secondaryGenres,
+		descriptors: item.descriptors,
+	};
+}
+
 async function loadForLaterAlbumRows(
 	ctx: QueryCtx,
 	args: {
@@ -1091,15 +1169,14 @@ async function loadForLaterAlbumRows(
 ): Promise<LoadForLaterAlbumRowsResult> {
 	const filters = normalizeForLaterFilters(args.filters);
 	const matchingRows = stream(ctx.db, schema)
-		.query("forLaterAlbumItems")
-		.withIndex("by_userId_lastSeenAt", (q) => q.eq("userId", args.userId))
+		.query("albumLibraryItems")
+		.withIndex("by_userId_isActiveForLater_createdAt", (q) =>
+			q.eq("userId", args.userId).eq("isActiveForLater", true),
+		)
 		.order("desc")
-		.filterWith(async (item) => projectionMatchesFilters(item, filters))
+		.filterWith(async (item) => libraryRowMatchesForLaterFilters(item, filters))
 		.map(async (item) => ({
-			row: await hydrateForLaterAlbumRow(ctx, {
-				userId: args.userId,
-				item,
-			}),
+			row: await hydrateLibraryForLaterAlbumRow(ctx, item),
 		}))
 		.filterWith(async ({ row }) => row !== null)
 		.map(async ({ row }) => {
@@ -1461,7 +1538,18 @@ export const createForLaterRecommendation = mutation({
 			now: args.now,
 			seed: args.seed,
 		});
-		const albumRefs = buildSavedRecommendationAlbumRefs(result.rows);
+		const recommendationRowsWithLegacyIds = await Promise.all(
+			result.rows.map(async (row) => {
+				const legacyItem = await requireLegacyForLaterItemByAlbum(ctx, {
+					userId: args.userId,
+					albumId: row.albumId,
+				});
+				return { ...row, albumItemId: legacyItem._id };
+			}),
+		);
+		const albumRefs = buildSavedRecommendationAlbumRefs(
+			recommendationRowsWithLegacyIds,
+		);
 		const recommendationId = await ctx.db.insert(
 			"forLaterAlbumRecommendations",
 			{
@@ -1545,24 +1633,29 @@ export const listOpenableRymLinks = query({
 export const queueForLaterRymDiscovery = mutation({
 	args: {
 		userId: v.string(),
-		forLaterAlbumItemIds: v.array(v.id("forLaterAlbumItems")),
+		albumIds: v.array(v.id("spotifyAlbums")),
 	},
 	returns: v.object({ queued: v.number() }),
 	handler: async (ctx, args): Promise<{ queued: number }> => {
 		requireAuth(ctx);
 		const now = Date.now();
 		let queued = 0;
-		for (const id of args.forLaterAlbumItemIds) {
-			const doc = await ctx.db.get(id);
-			if (!doc || doc.userId !== args.userId) {
+		for (const albumId of args.albumIds) {
+			const doc = await ctx.db
+				.query("forLaterAlbumItems")
+				.withIndex("by_userId_albumId", (q) =>
+					q.eq("userId", args.userId).eq("albumId", albumId),
+				)
+				.first();
+			if (!doc) {
 				continue;
 			}
-			await ctx.db.patch(id, {
+			await ctx.db.patch(doc._id, {
 				rymDiscoveryStatus: "queued",
 				rymDiscoveryUpdatedAt: now,
 				updatedAt: now,
 			});
-			await syncForLaterItemFilterProjection(ctx, id);
+			await syncForLaterItemFilterProjection(ctx, doc._id);
 			queued++;
 		}
 		return { queued };
@@ -1572,52 +1665,19 @@ export const queueForLaterRymDiscovery = mutation({
 export const setForLaterAlbumRymNotOnSite = mutation({
 	args: {
 		userId: v.string(),
-		itemId: v.id("forLaterAlbumItems"),
+		albumId: v.id("spotifyAlbums"),
 		notOnSite: v.boolean(),
 	},
 	returns: v.null(),
 	handler: async (ctx, args): Promise<null> => {
 		requireAuth(ctx);
-		const item = await ctx.db.get(args.itemId);
-		if (!item || item.userId !== args.userId) {
-			throw new Error("For Later album not found");
-		}
+		const item = await requireLegacyForLaterItemByAlbum(ctx, args);
 		const now = Date.now();
-		await ctx.db.patch(args.itemId, {
+		await ctx.db.patch(item._id, {
 			rymNotOnSite: args.notOnSite ? true : undefined,
 			updatedAt: now,
 		});
-		await syncForLaterItemFilterProjection(ctx, args.itemId);
-		return null;
-	},
-});
-
-export const setForLaterAlbumMarkedAsSingle = mutation({
-	args: {
-		userId: v.string(),
-		itemId: v.id("forLaterAlbumItems"),
-		markedAsSingle: v.boolean(),
-	},
-	returns: v.null(),
-	handler: async (ctx, args): Promise<null> => {
-		requireAuth(ctx);
-		const item = await ctx.db.get(args.itemId);
-		if (!item || item.userId !== args.userId) {
-			throw new Error("For Later album not found");
-		}
-		const now = Date.now();
-		await ctx.db.patch(args.itemId, {
-			markedAsSingle: args.markedAsSingle ? true : undefined,
-			updatedAt: now,
-		});
-		await syncForLaterItemFilterProjection(ctx, args.itemId);
-		await patchLibraryForLaterState(ctx, {
-			userId: args.userId,
-			albumId: item.albumId,
-			event: args.markedAsSingle
-				? { type: "dismissed", dismissedAt: now }
-				: { type: "restored" },
-		});
+		await syncForLaterItemFilterProjection(ctx, item._id);
 		return null;
 	},
 });
@@ -1625,22 +1685,19 @@ export const setForLaterAlbumMarkedAsSingle = mutation({
 export const setForLaterAlbumRemovedFromForLater = mutation({
 	args: {
 		userId: v.string(),
-		itemId: v.id("forLaterAlbumItems"),
+		albumId: v.id("spotifyAlbums"),
 		removedFromForLater: v.boolean(),
 	},
 	returns: v.null(),
 	handler: async (ctx, args): Promise<null> => {
 		requireAuth(ctx);
-		const item = await ctx.db.get(args.itemId);
-		if (!item || item.userId !== args.userId) {
-			throw new Error("For Later album not found");
-		}
+		const item = await requireLegacyForLaterItemByAlbum(ctx, args);
 		const now = Date.now();
-		await ctx.db.patch(args.itemId, {
+		await ctx.db.patch(item._id, {
 			removedFromForLater: args.removedFromForLater ? true : undefined,
 			updatedAt: now,
 		});
-		await syncForLaterItemFilterProjection(ctx, args.itemId);
+		await syncForLaterItemFilterProjection(ctx, item._id);
 		await patchLibraryForLaterState(ctx, {
 			userId: args.userId,
 			albumId: item.albumId,
@@ -1736,17 +1793,14 @@ export const searchUnmappedRymScrapes = query({
 export const associateForLaterAlbumWithRymScrape = mutation({
 	args: {
 		userId: v.string(),
-		itemId: v.id("forLaterAlbumItems"),
+		albumId: v.id("spotifyAlbums"),
 		scrapeId: v.id("rateYourMusicScrapes"),
 	},
 	returns: v.null(),
 	handler: async (ctx, args): Promise<null> => {
 		requireAuth(ctx);
 
-		const item = await ctx.db.get(args.itemId);
-		if (!item || item.userId !== args.userId) {
-			throw new Error("For Later album not found");
-		}
+		const item = await requireLegacyForLaterItemByAlbum(ctx, args);
 
 		const scrape = await ctx.db.get(args.scrapeId);
 		if (!scrape) {
@@ -1755,7 +1809,7 @@ export const associateForLaterAlbumWithRymScrape = mutation({
 
 		const mappedElsewhere = await isRymScrapeMappedElsewhere(ctx, {
 			scrapeId: args.scrapeId,
-			allowedItemId: args.itemId,
+			allowedItemId: item._id,
 			allowedAlbumId: item.albumId,
 		});
 		if (mappedElsewhere) {
@@ -1776,7 +1830,7 @@ export const associateForLaterAlbumWithRymScrape = mutation({
 			refreshMode: "rym-slice",
 		});
 
-		await ctx.db.patch(args.itemId, {
+		await ctx.db.patch(item._id, {
 			rymScrapeId: args.scrapeId,
 			rymMatchMethod: "manual",
 			rymMatchedAt: now,

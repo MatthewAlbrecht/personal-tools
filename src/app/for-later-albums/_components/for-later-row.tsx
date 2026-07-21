@@ -55,9 +55,6 @@ export function ForLaterRow({
 	const setRymNotOnSite = useMutation(
 		api.forLaterAlbums.setForLaterAlbumRymNotOnSite,
 	);
-	const setMarkedAsSingle = useMutation(
-		api.forLaterAlbums.setForLaterAlbumMarkedAsSingle,
-	);
 	const setRemovedFromForLater = useMutation(
 		api.forLaterAlbums.setForLaterAlbumRemovedFromForLater,
 	);
@@ -96,7 +93,7 @@ export function ForLaterRow({
 		try {
 			await setRymNotOnSite({
 				userId,
-				itemId: row.albumItemId,
+				albumId: row.albumId,
 				notOnSite,
 			});
 			toast.success(
@@ -108,27 +105,11 @@ export function ForLaterRow({
 		}
 	}
 
-	async function handleSetMarkedAsSingle(marked: boolean): Promise<void> {
-		try {
-			await setMarkedAsSingle({
-				userId,
-				itemId: row.albumItemId,
-				markedAsSingle: marked,
-			});
-			toast.success(
-				marked ? "Marked as single (hidden from list)" : "Cleared single mark",
-			);
-		} catch (error) {
-			console.error("Failed to update single mark:", error);
-			toast.error("Could not update single mark");
-		}
-	}
-
 	async function handleRemoveFromList(removed: boolean): Promise<void> {
 		try {
 			await setRemovedFromForLater({
 				userId,
-				itemId: row.albumItemId,
+				albumId: row.albumId,
 				removedFromForLater: removed,
 			});
 			toast.success(
@@ -263,7 +244,6 @@ export function ForLaterRow({
 					row={row}
 					onLinkRym={onLinkRym}
 					onSetRymNotOnSite={handleSetRymNotOnSite}
-					onSetMarkedAsSingle={handleSetMarkedAsSingle}
 					onRemoveFromList={handleRemoveFromList}
 				/>
 			</div>
@@ -352,13 +332,11 @@ function ForLaterRowActionsMenu({
 	row,
 	onLinkRym,
 	onSetRymNotOnSite,
-	onSetMarkedAsSingle,
 	onRemoveFromList,
 }: {
 	row: ForLaterAlbumRowData;
 	onLinkRym?: () => void;
 	onSetRymNotOnSite: (notOnSite: boolean) => Promise<void>;
-	onSetMarkedAsSingle: (marked: boolean) => Promise<void>;
 	onRemoveFromList: (removed: boolean) => Promise<void>;
 }) {
 	return (
@@ -384,15 +362,6 @@ function ForLaterRowActionsMenu({
 						Link RYM scrape
 					</DropdownMenuItem>
 				) : null}
-				{row.markedAsSingle ? (
-					<DropdownMenuItem onSelect={() => void onSetMarkedAsSingle(false)}>
-						Clear single mark
-					</DropdownMenuItem>
-				) : (
-					<DropdownMenuItem onSelect={() => void onSetMarkedAsSingle(true)}>
-						Mark as single
-					</DropdownMenuItem>
-				)}
 				{row.rymNotOnSite ? (
 					<DropdownMenuItem onSelect={() => void onSetRymNotOnSite(false)}>
 						Clear not-on-RYM mark
