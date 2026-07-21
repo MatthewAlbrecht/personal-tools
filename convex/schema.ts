@@ -569,6 +569,15 @@ export default defineSchema({
 		),
 		rymUrl: v.optional(v.string()),
 		rymLinkedAt: v.optional(v.number()),
+		forLater: v.optional(
+			v.object({
+				firstSeenAt: v.number(),
+				lastSeenAt: v.number(),
+				playlistAddedAt: v.optional(v.number()),
+				dismissedAt: v.optional(v.number()),
+			}),
+		),
+		isActiveForLater: v.optional(v.boolean()),
 		// Optional until prod backfill completes for pre-existing rows; projection build
 		// always writes a real boolean via computeAppearsInForLater. Tighten to required
 		// once prod has run backfillMyAppearsInForLater for all users.
@@ -612,6 +621,11 @@ export default defineSchema({
 		.index("by_userId_appearsInForLater_createdAt", [
 			"userId",
 			"appearsInForLater",
+			"createdAt",
+		])
+		.index("by_userId_isActiveForLater_createdAt", [
+			"userId",
+			"isActiveForLater",
 			"createdAt",
 		])
 		.index("by_userId_appearsInRobRankings_createdAt", [
