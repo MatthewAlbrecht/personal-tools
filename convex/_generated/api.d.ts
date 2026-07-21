@@ -27,7 +27,6 @@ import type * as _utils_forLaterAlbums from "../_utils/forLaterAlbums.js";
 import type * as _utils_forLaterAlbumsUi from "../_utils/forLaterAlbumsUi.js";
 import type * as _utils_forLaterDurationBuckets from "../_utils/forLaterDurationBuckets.js";
 import type * as _utils_forLaterFilterProjection from "../_utils/forLaterFilterProjection.js";
-import type * as _utils_forLaterIndexedList from "../_utils/forLaterIndexedList.js";
 import type * as _utils_forLaterProjectionPredicate from "../_utils/forLaterProjectionPredicate.js";
 import type * as _utils_forLaterRecommendations from "../_utils/forLaterRecommendations.js";
 import type * as _utils_geniusAlbumLyrics from "../_utils/geniusAlbumLyrics.js";
@@ -108,7 +107,6 @@ declare const fullApi: ApiFromModules<{
   "_utils/forLaterAlbumsUi": typeof _utils_forLaterAlbumsUi;
   "_utils/forLaterDurationBuckets": typeof _utils_forLaterDurationBuckets;
   "_utils/forLaterFilterProjection": typeof _utils_forLaterFilterProjection;
-  "_utils/forLaterIndexedList": typeof _utils_forLaterIndexedList;
   "_utils/forLaterProjectionPredicate": typeof _utils_forLaterProjectionPredicate;
   "_utils/forLaterRecommendations": typeof _utils_forLaterRecommendations;
   "_utils/geniusAlbumLyrics": typeof _utils_geniusAlbumLyrics;
