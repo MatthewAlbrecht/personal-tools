@@ -1,61 +1,45 @@
 #!/usr/bin/env node
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { ConvexHttpClient } from "convex/browser";
-import { makeFunctionReference } from "convex/server";
+import { execFileSync } from "node:child_process";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-function loadEnvFile() {
-	try {
-		const envFile = readFileSync(join(process.cwd(), ".env.local"), "utf8");
-		for (const line of envFile.split("\n")) {
-			const match = line.match(/^([^#=]+)=(.*)$/);
-			if (!match?.[1] || match[2] === undefined) {
-				continue;
-			}
-			let value = match[2].trim();
-			if (
-				(value.startsWith('"') && value.endsWith('"')) ||
-				(value.startsWith("'") && value.endsWith("'"))
-			) {
-				value = value.slice(1, -1);
-			}
-			process.env[match[1].trim()] ??= value;
-		}
-	} catch {
-		// Environment variables may already be supplied by the caller.
-	}
-}
-
-loadEnvFile();
-
-const userId = process.argv[2] ?? process.env.USER_ID;
-const convexUrl = process.env.CONVEX_URL;
+const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+const prod = process.argv.includes("--prod");
+const positionalArgs = process.argv.slice(2).filter((arg) => arg !== "--prod");
+const userId = positionalArgs[0] ?? process.env.USER_ID;
 const limitValue = Number(process.env.BACKFILL_LIMIT ?? "25");
 const limit = Number.isFinite(limitValue) ? limitValue : 25;
 
-if (!convexUrl || !userId) {
-	console.error(
-		"Usage: CONVEX_URL=<url> pnpm backfill:library-for-later -- <userId>",
-	);
+if (!userId) {
+	console.error("Usage: pnpm backfill:library-for-later -- <userId> [--prod]");
 	process.exit(1);
 }
 
-const client = new ConvexHttpClient(convexUrl);
-const backfillLibraryForLaterBatch = makeFunctionReference(
-	"forLaterAlbums:backfillLibraryForLaterBatch",
-);
-const verifyLibraryForLaterMigration = makeFunctionReference(
-	"forLaterAlbums:verifyLibraryForLaterMigration",
-);
+function runFunction(functionName, payload) {
+	const args = ["exec", "convex", "run"];
+	if (prod) {
+		args.push("--prod");
+	}
+	args.push(functionName, JSON.stringify(payload));
+	const stdout = execFileSync("pnpm", args, {
+		cwd: root,
+		encoding: "utf8",
+		stdio: ["ignore", "pipe", "inherit"],
+	}).trim();
+	return JSON.parse(stdout);
+}
 
 let cursor = null;
 let processed = 0;
 do {
-	const result = await client.mutation(backfillLibraryForLaterBatch, {
-		userId,
-		cursor,
-		limit,
-	});
+	const result = runFunction(
+		"internal.forLaterAlbums.backfillLibraryForLaterBatch",
+		{
+			userId,
+			cursor,
+			limit,
+		},
+	);
 	processed += result.processed;
 	cursor = result.continueCursor;
 } while (cursor !== null);
@@ -68,11 +52,14 @@ const verification = {
 };
 cursor = null;
 do {
-	const result = await client.query(verifyLibraryForLaterMigration, {
-		userId,
-		cursor,
-		limit,
-	});
+	const result = runFunction(
+		"internal.forLaterAlbums.verifyLibraryForLaterMigration",
+		{
+			userId,
+			cursor,
+			limit,
+		},
+	);
 	verification.legacyActive += result.legacyActive;
 	verification.libraryActive += result.libraryActive;
 	verification.missingLibraryState += result.missingLibraryState;

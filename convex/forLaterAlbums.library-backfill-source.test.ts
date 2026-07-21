@@ -7,6 +7,10 @@ const source = readFileSync(
 	join(process.cwd(), "convex", "forLaterAlbums.ts"),
 	"utf8",
 );
+const script = readFileSync(
+	join(process.cwd(), "scripts", "backfill-library-for-later.mjs"),
+	"utf8",
+);
 
 function sliceExport(exportName: string): string {
 	const start = source.indexOf(`export const ${exportName}`);
@@ -18,6 +22,14 @@ function sliceExport(exportName: string): string {
 test("backfill batch paginates legacy rows and reconciles duplicate albums", () => {
 	const body = sliceExport("backfillLibraryForLaterBatch");
 
+	assert.match(
+		body,
+		/^export const backfillLibraryForLaterBatch = internalMutation/,
+	);
+	assert.doesNotMatch(
+		body,
+		/^export const backfillLibraryForLaterBatch = mutation/,
+	);
 	assert.match(body, /withIndex\("by_userId"/);
 	assert.match(body, /\.paginate\(/);
 	assert.match(body, /new Set/);
@@ -36,6 +48,14 @@ test("backfill batch paginates legacy rows and reconciles duplicate albums", () 
 test("verification is cursor-based and returns parity counts", () => {
 	const body = sliceExport("verifyLibraryForLaterMigration");
 
+	assert.match(
+		body,
+		/^export const verifyLibraryForLaterMigration = internalQuery/,
+	);
+	assert.doesNotMatch(
+		body,
+		/^export const verifyLibraryForLaterMigration = query/,
+	);
 	assert.match(body, /\.paginate\(/);
 	assert.match(body, /legacyActive:/);
 	assert.match(body, /libraryActive:/);
@@ -44,4 +64,18 @@ test("verification is cursor-based and returns parity counts", () => {
 	assert.match(body, /isDone:/);
 	assert.match(body, /continueCursor:/);
 	assert.match(body, /deriveIsActiveForLater/);
+});
+
+test("operator script invokes only internal functions through Convex CLI", () => {
+	assert.match(
+		script,
+		/internal\.forLaterAlbums\.backfillLibraryForLaterBatch/,
+	);
+	assert.match(
+		script,
+		/internal\.forLaterAlbums\.verifyLibraryForLaterMigration/,
+	);
+	assert.match(script, /"convex", "run"/);
+	assert.doesNotMatch(script, /ConvexHttpClient/);
+	assert.doesNotMatch(script, /makeFunctionReference/);
 });

@@ -3,7 +3,12 @@ import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import { internalMutation, mutation, query } from "./_generated/server";
+import {
+	internalMutation,
+	internalQuery,
+	mutation,
+	query,
+} from "./_generated/server";
 import { upsertAlbumLibraryProjection } from "./_utils/albumLibraryProjection";
 import {
 	type RymMatchResult,
@@ -48,6 +53,7 @@ import {
 	sortRecommendationTagOptionsByCount,
 } from "./_utils/forLaterRecommendations";
 import { buildOpenableGoogleRymSearchLinks } from "./_utils/google_rym_lucky_search";
+import { duplicateGroupStartsOnPage } from "./_utils/library-for-later-migration";
 import {
 	type LibraryForLaterEvent,
 	applyLibraryForLaterEvent,
@@ -2006,7 +2012,7 @@ export const backfillMyAppearsInForLater = mutation({
 	},
 });
 
-export const backfillLibraryForLaterBatch = mutation({
+export const backfillLibraryForLaterBatch = internalMutation({
 	args: {
 		userId: v.string(),
 		cursor: v.optional(v.union(v.string(), v.null())),
@@ -2076,7 +2082,7 @@ export const backfillLibraryForLaterBatch = mutation({
 	},
 });
 
-export const verifyLibraryForLaterMigration = query({
+export const verifyLibraryForLaterMigration = internalQuery({
 	args: {
 		userId: v.string(),
 		cursor: v.optional(v.union(v.string(), v.null())),
@@ -2113,11 +2119,7 @@ export const verifyLibraryForLaterMigration = query({
 					q.eq("userId", args.userId).eq("albumId", albumId),
 				)
 				.collect();
-			const firstLegacyRow = legacyRows[0];
-			if (
-				!firstLegacyRow ||
-				!page.page.some((row) => row._id === firstLegacyRow._id)
-			) {
+			if (!duplicateGroupStartsOnPage(legacyRows, page.page)) {
 				continue;
 			}
 			if (
