@@ -40,6 +40,7 @@ test("backfill batch paginates legacy rows and reconciles duplicate albums", () 
 	assert.match(body, /forLater:/);
 	assert.match(body, /isActiveForLater:/);
 	assert.match(body, /appearsInForLater:/);
+	assert.match(body, /forLaterLastSeenAt:/);
 	assert.match(body, /processed:/);
 	assert.match(body, /isDone:/);
 	assert.match(body, /continueCursor:/);

@@ -59,3 +59,26 @@ test("public list rows expose canonical library and album IDs only", () => {
 	assert.match(validator, /albumId: v\.id\("spotifyAlbums"\)/);
 	assert.doesNotMatch(validator, /albumItemId/);
 });
+
+test("library-owned state patches materialize forLaterLastSeenAt", () => {
+	const start = source.indexOf("async function patchLibraryForLaterState");
+	const end = source.indexOf(
+		"async function requireLegacyForLaterItemByAlbum",
+		start,
+	);
+	const body = source.slice(start, end);
+	assert.match(body, /forLaterLastSeenAt:\s*patch\.forLater\.lastSeenAt/);
+});
+
+test("RYM not-on-site updates canonical album and refreshes library projection", () => {
+	const body = exportedFunctionBody("setForLaterAlbumRymNotOnSite");
+	assert.match(body, /ctx\.db\.patch\(args\.albumId/);
+	assert.match(body, /rymNotOnSite/);
+	assert.match(body, /refreshAlbumLibraryProjectionsForAlbum/);
+});
+
+test("manual RYM association clears canonical album rymNotOnSite", () => {
+	const body = exportedFunctionBody("associateForLaterAlbumWithRymScrape");
+	assert.match(body, /ctx\.db\.patch\(item\.albumId/);
+	assert.match(body, /rymNotOnSite:\s*undefined/);
+});

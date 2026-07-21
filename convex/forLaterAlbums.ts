@@ -9,7 +9,10 @@ import {
 	mutation,
 	query,
 } from "./_generated/server";
-import { upsertAlbumLibraryProjection } from "./_utils/albumLibraryProjection";
+import {
+	refreshAlbumLibraryProjectionsForAlbum,
+	upsertAlbumLibraryProjection,
+} from "./_utils/albumLibraryProjection";
 import {
 	type RymMatchResult,
 	buildArtistKeys,
@@ -259,6 +262,7 @@ async function patchLibraryForLaterState(
 	await ctx.db.patch(row._id, {
 		...patch,
 		appearsInForLater: patch.isActiveForLater,
+		forLaterLastSeenAt: patch.forLater.lastSeenAt,
 	});
 }
 
@@ -1170,7 +1174,7 @@ async function loadForLaterAlbumRows(
 	const filters = normalizeForLaterFilters(args.filters);
 	const matchingRows = stream(ctx.db, schema)
 		.query("albumLibraryItems")
-		.withIndex("by_userId_isActiveForLater_createdAt", (q) =>
+		.withIndex("by_userId_isActiveForLater_forLaterLastSeenAt", (q) =>
 			q.eq("userId", args.userId).eq("isActiveForLater", true),
 		)
 		.order("desc")
@@ -1672,12 +1676,21 @@ export const setForLaterAlbumRymNotOnSite = mutation({
 	handler: async (ctx, args): Promise<null> => {
 		requireAuth(ctx);
 		const item = await requireLegacyForLaterItemByAlbum(ctx, args);
+		const album = await ctx.db.get(args.albumId);
+		if (!album) {
+			throw new Error("Album not found");
+		}
 		const now = Date.now();
+		await ctx.db.patch(args.albumId, {
+			rymNotOnSite: args.notOnSite ? true : undefined,
+			updatedAt: now,
+		});
 		await ctx.db.patch(item._id, {
 			rymNotOnSite: args.notOnSite ? true : undefined,
 			updatedAt: now,
 		});
 		await syncForLaterItemFilterProjection(ctx, item._id);
+		await refreshAlbumLibraryProjectionsForAlbum(ctx, args.albumId);
 		return null;
 	},
 });
@@ -1828,6 +1841,11 @@ export const associateForLaterAlbumWithRymScrape = mutation({
 			method: "manual",
 			now,
 			refreshMode: "rym-slice",
+		});
+
+		await ctx.db.patch(item.albumId, {
+			rymNotOnSite: undefined,
+			updatedAt: now,
 		});
 
 		await ctx.db.patch(item._id, {
@@ -2125,6 +2143,7 @@ export const backfillLibraryForLaterBatch = internalMutation({
 				forLater: patch.forLater,
 				isActiveForLater: patch.isActiveForLater,
 				appearsInForLater: patch.isActiveForLater,
+				forLaterLastSeenAt: patch.forLater.lastSeenAt,
 			});
 		}
 

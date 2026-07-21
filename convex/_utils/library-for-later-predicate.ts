@@ -46,10 +46,14 @@ export function libraryRowMatchesForLaterFilters(
 		}
 	}
 
-	const genreKeys = new Set([
-		...row.primaryGenres.map((tag) => tag.key),
-		...row.secondaryGenres.map((tag) => tag.key),
-	]);
+	const genreKeys = new Set(
+		row.filterGenreKeysSorted && row.filterGenreKeysSorted.length > 0
+			? row.filterGenreKeysSorted
+			: [
+					...row.primaryGenres.map((tag) => tag.key),
+					...row.secondaryGenres.map((tag) => tag.key),
+				],
+	);
 	const descriptorKeys = new Set(row.descriptors.map((tag) => tag.key));
 
 	return (

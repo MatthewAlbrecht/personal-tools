@@ -23,7 +23,8 @@ test("For Later filters the stream before pagination", () => {
 
 	assert.match(source, /convex-helpers\/server\/stream/);
 	assert.match(body, /\.query\("albumLibraryItems"\)/);
-	assert.match(body, /by_userId_isActiveForLater_createdAt/);
+	assert.match(body, /by_userId_isActiveForLater_forLaterLastSeenAt/);
+	assert.doesNotMatch(body, /by_userId_isActiveForLater_createdAt/);
 	assert.ok(filterIndex >= 0, "filterWith must be present");
 	assert.ok(paginateIndex > filterIndex, "filterWith must precede paginate");
 	assert.match(body, /libraryRowMatchesForLaterFilters/);

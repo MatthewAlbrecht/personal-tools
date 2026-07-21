@@ -579,6 +579,8 @@ export default defineSchema({
 			}),
 		),
 		isActiveForLater: v.optional(v.boolean()),
+		// Materialized from forLater.lastSeenAt for indexed For Later recency pagination.
+		forLaterLastSeenAt: v.optional(v.number()),
 		// Optional until prod backfill completes for pre-existing rows; projection build
 		// always writes a real boolean via computeAppearsInForLater. Tighten to required
 		// once prod has run backfillMyAppearsInForLater for all users.
@@ -588,6 +590,8 @@ export default defineSchema({
 		primaryGenres: v.array(v.object({ key: v.string(), label: v.string() })),
 		secondaryGenres: v.array(v.object({ key: v.string(), label: v.string() })),
 		descriptors: v.array(v.object({ key: v.string(), label: v.string() })),
+		// Direct RYM genre keys plus ancestors for parent-genre filters.
+		filterGenreKeysSorted: v.optional(v.array(v.string())),
 		searchText: v.string(),
 	})
 		.index("by_userId_albumId", ["userId", "albumId"])
@@ -628,6 +632,11 @@ export default defineSchema({
 			"userId",
 			"isActiveForLater",
 			"createdAt",
+		])
+		.index("by_userId_isActiveForLater_forLaterLastSeenAt", [
+			"userId",
+			"isActiveForLater",
+			"forLaterLastSeenAt",
 		])
 		.index("by_userId_appearsInRobRankings_createdAt", [
 			"userId",

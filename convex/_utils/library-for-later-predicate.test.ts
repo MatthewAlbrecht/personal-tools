@@ -15,6 +15,7 @@ const baseRow = {
 	primaryGenres: [{ key: "ambient", label: "Ambient" }],
 	secondaryGenres: [{ key: "electronic", label: "Electronic" }],
 	descriptors: [{ key: "atmospheric", label: "Atmospheric" }],
+	filterGenreKeysSorted: ["ambient", "electronic"],
 } as Doc<"albumLibraryItems">;
 
 function matches(
@@ -64,9 +65,31 @@ test("listened and RYM filters use library projections", () => {
 	assert.equal(matches({}, { rymStatus: "no_scrape" }), false);
 });
 
-test("genre filters include primary, secondary, and projected ancestors", () => {
+test("genre filters prefer projected ancestor keys", () => {
 	assert.equal(matches({}, { genreKeys: ["ambient"] }), true);
 	assert.equal(matches({}, { genreKeys: ["electronic"] }), true);
+	assert.equal(
+		matches(
+			{
+				primaryGenres: [{ key: "acoustic blues", label: "Acoustic Blues" }],
+				secondaryGenres: [],
+				filterGenreKeysSorted: ["acoustic blues", "blues"],
+			},
+			{ genreKeys: ["blues"] },
+		),
+		true,
+	);
+	assert.equal(
+		matches(
+			{
+				primaryGenres: [{ key: "acoustic blues", label: "Acoustic Blues" }],
+				secondaryGenres: [],
+				filterGenreKeysSorted: ["acoustic blues"],
+			},
+			{ genreKeys: ["blues"] },
+		),
+		false,
+	);
 });
 
 test("descriptor and genre groups honor independent any/all matching", () => {

@@ -16,6 +16,7 @@ test("buildAlbumLibraryRymPatchFields sets only RYM-derived projection fields", 
 			secondaryGenres: [],
 			descriptors: [{ key: "lo-fi", label: "Lo-Fi" }],
 		},
+		filterGenreKeysSorted: ["rock", "pop rock"],
 		existingUpdatedAt: 500,
 	});
 
@@ -26,6 +27,9 @@ test("buildAlbumLibraryRymPatchFields sets only RYM-derived projection fields", 
 	assert.equal(patch.rymLinkedAt, 2000);
 	assert.deepEqual(patch.primaryGenres, [{ key: "rock", label: "Rock" }]);
 	assert.deepEqual(patch.descriptors, [{ key: "lo-fi", label: "Lo-Fi" }]);
+	assert.deepEqual(patch.filterGenreKeysSorted, ["rock", "pop rock"]);
+	assert.equal("rymNotOnSite" in patch, true);
+	assert.equal(patch.rymNotOnSite, undefined);
 	assert.equal(patch.updatedAt, 2000);
 	assert.equal("listenCount" in patch, false);
 	assert.equal("robRankingYears" in patch, false);

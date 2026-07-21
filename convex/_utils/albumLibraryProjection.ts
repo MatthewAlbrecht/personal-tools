@@ -7,6 +7,11 @@ import {
 	getAlbumLibraryAlbumType,
 	getAlbumLibraryRymStatus,
 } from "./albumLibraryRows";
+import {
+	buildDirectFilterGenreKeys,
+	buildFilterGenreKeysSortedWithAncestors,
+	loadRymGenreParentKeysByChild,
+} from "./forLaterFilterProjection";
 
 type AlbumLibraryTaxonomyTag = {
 	key: string;
@@ -49,6 +54,10 @@ export async function buildAlbumLibraryProjectionForAlbum(
 		? await loadRymTaxonomyForScrape(ctx, latestRymLink.scrapeId)
 		: getEmptyAlbumLibraryTaxonomy();
 	const robRankings = await loadRobRankingYearsForAlbum(ctx, args);
+	const filterGenreKeysSorted = await buildLibraryFilterGenreKeys(
+		ctx,
+		taxonomy,
+	);
 
 	const listenCount = userAlbum?.listenCount ?? 0;
 	const releaseYear = parseAlbumReleaseYear(album.releaseDate);
@@ -94,6 +103,7 @@ export async function buildAlbumLibraryProjectionForAlbum(
 		primaryGenres: taxonomy.primaryGenres,
 		secondaryGenres: taxonomy.secondaryGenres,
 		descriptors: taxonomy.descriptors,
+		filterGenreKeysSorted,
 		searchText: buildAlbumLibrarySearchText({
 			name: album.name,
 			artistName: album.artistName,
@@ -125,6 +135,7 @@ export async function upsertAlbumLibraryProjection(
 			...projection,
 			forLater: existing.forLater,
 			isActiveForLater: existing.isActiveForLater,
+			forLaterLastSeenAt: existing.forLaterLastSeenAt,
 			appearsInForLater:
 				existing.isActiveForLater ?? projection.appearsInForLater,
 		});
@@ -156,10 +167,12 @@ export function buildAlbumLibraryRymPatchFields(args: {
 	linkMethod: Doc<"rateYourMusicSpotifyAlbumLinks">["method"];
 	linkedAt: number;
 	taxonomy: AlbumLibraryTaxonomy;
+	filterGenreKeysSorted: string[];
 	existingUpdatedAt: number;
 }): Pick<
 	Doc<"albumLibraryItems">,
 	| "rymStatus"
+	| "rymNotOnSite"
 	| "rymScrapeId"
 	| "rymLinkMethod"
 	| "rymUrl"
@@ -167,10 +180,12 @@ export function buildAlbumLibraryRymPatchFields(args: {
 	| "primaryGenres"
 	| "secondaryGenres"
 	| "descriptors"
+	| "filterGenreKeysSorted"
 	| "updatedAt"
 > {
 	return {
 		rymStatus: getAlbumLibraryRymStatus(true),
+		rymNotOnSite: undefined,
 		rymScrapeId: args.scrape._id,
 		rymLinkMethod: args.linkMethod,
 		rymUrl: args.scrape.rymUrl,
@@ -178,6 +193,7 @@ export function buildAlbumLibraryRymPatchFields(args: {
 		primaryGenres: args.taxonomy.primaryGenres,
 		secondaryGenres: args.taxonomy.secondaryGenres,
 		descriptors: args.taxonomy.descriptors,
+		filterGenreKeysSorted: args.filterGenreKeysSorted,
 		updatedAt: Math.max(
 			args.existingUpdatedAt,
 			args.linkedAt,
@@ -196,6 +212,10 @@ export async function patchAlbumLibraryRymFieldsForAlbum(
 	},
 ): Promise<void> {
 	const taxonomy = await loadRymTaxonomyForScrape(ctx, args.scrape._id);
+	const filterGenreKeysSorted = await buildLibraryFilterGenreKeys(
+		ctx,
+		taxonomy,
+	);
 	const rows = await ctx.db
 		.query("albumLibraryItems")
 		.withIndex("by_albumId", (q) => q.eq("albumId", args.albumId))
@@ -209,10 +229,29 @@ export async function patchAlbumLibraryRymFieldsForAlbum(
 				linkMethod: args.linkMethod,
 				linkedAt: args.linkedAt,
 				taxonomy,
+				filterGenreKeysSorted,
 				existingUpdatedAt: row.updatedAt,
 			}),
 		);
 	}
+}
+
+async function buildLibraryFilterGenreKeys(
+	ctx: AlbumLibraryDbCtx,
+	taxonomy: AlbumLibraryTaxonomy,
+): Promise<string[]> {
+	const directKeys = buildDirectFilterGenreKeys(
+		taxonomy.primaryGenres,
+		taxonomy.secondaryGenres,
+	);
+	if (directKeys.length === 0) {
+		return [];
+	}
+	const parentKeysByChild = await loadRymGenreParentKeysByChild(ctx);
+	return buildFilterGenreKeysSortedWithAncestors(
+		directKeys,
+		parentKeysByChild,
+	);
 }
 
 async function loadLatestRymLinkForAlbum(
