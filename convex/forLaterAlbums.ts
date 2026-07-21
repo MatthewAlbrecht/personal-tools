@@ -1,10 +1,9 @@
+import { stream } from "convex-helpers/server/stream";
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
-import { stream } from "convex-helpers/server/stream";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalMutation, mutation, query } from "./_generated/server";
-import schema from "./schema";
 import { upsertAlbumLibraryProjection } from "./_utils/albumLibraryProjection";
 import {
 	type RymMatchResult,
@@ -22,10 +21,6 @@ import {
 } from "./_utils/forLaterAlbumsUi";
 import { durationMsToBucketKey } from "./_utils/forLaterDurationBuckets";
 import {
-	type LibraryForLaterEvent,
-	applyLibraryForLaterEvent,
-} from "./_utils/library-for-later-state";
-import {
 	buildDirectFilterGenreKeys,
 	buildFilterDescriptorKeysSorted,
 	buildFilterGenreKeysSortedWithAncestors,
@@ -42,6 +37,7 @@ import {
 	type ListenedAnswer,
 	RATING_MAX,
 	RATING_MIN,
+	RECOMMENDATION_POOL_SIZE,
 	type RecommendationTagOption,
 	buildDurationBucketRecommendationOptions,
 	buildSavedRecommendationAlbumRefs,
@@ -49,16 +45,22 @@ import {
 	chooseRecommendationRows,
 	getAddedDaysMax,
 	normalizeRecommendationCount,
-	RECOMMENDATION_POOL_SIZE,
 	sortRecommendationTagOptionsByCount,
 } from "./_utils/forLaterRecommendations";
 import { buildOpenableGoogleRymSearchLinks } from "./_utils/google_rym_lucky_search";
+import {
+	type LibraryForLaterEvent,
+	applyLibraryForLaterEvent,
+	deriveIsActiveForLater,
+	legacyRowsToLibraryForLater,
+} from "./_utils/library-for-later-state";
 import {
 	collectMappedRymScrapeIds,
 	isRymScrapeMappedElsewhere,
 	scrapeMatchesSearch,
 } from "./_utils/unmappedRymScrapes";
 import { requireAuth } from "./auth";
+import schema from "./schema";
 
 type ForLaterDbCtx = QueryCtx | MutationCtx;
 
@@ -1985,9 +1987,7 @@ export const backfillMyAppearsInForLater = mutation({
 		const limit = Math.min(Math.max(args.limit ?? 15, 1), 40);
 		const page = await ctx.db
 			.query("albumLibraryItems")
-			.withIndex("by_userId_createdAt", (q) =>
-				q.eq("userId", args.userId),
-			)
+			.withIndex("by_userId_createdAt", (q) => q.eq("userId", args.userId))
 			.paginate({
 				numItems: limit,
 				cursor: args.cursor ?? null,
@@ -2000,6 +2000,163 @@ export const backfillMyAppearsInForLater = mutation({
 		}
 		return {
 			processed: page.page.length,
+			isDone: page.isDone,
+			continueCursor: page.isDone ? null : page.continueCursor,
+		};
+	},
+});
+
+export const backfillLibraryForLaterBatch = mutation({
+	args: {
+		userId: v.string(),
+		cursor: v.optional(v.union(v.string(), v.null())),
+		limit: v.optional(v.number()),
+	},
+	returns: v.object({
+		processed: v.number(),
+		isDone: v.boolean(),
+		continueCursor: v.union(v.string(), v.null()),
+	}),
+	handler: async (ctx, args) => {
+		const limit = Math.min(Math.max(Math.floor(args.limit ?? 25), 1), 50);
+		const page = await ctx.db
+			.query("forLaterAlbumItems")
+			.withIndex("by_userId", (q) => q.eq("userId", args.userId))
+			.paginate({
+				numItems: limit,
+				cursor: args.cursor ?? null,
+				maximumRowsRead: limit,
+			});
+		const albumIds = new Set(page.page.map((row) => row.albumId));
+
+		for (const albumId of albumIds) {
+			const legacyRows = await ctx.db
+				.query("forLaterAlbumItems")
+				.withIndex("by_userId_albumId", (q) =>
+					q.eq("userId", args.userId).eq("albumId", albumId),
+				)
+				.collect();
+			const patch = legacyRowsToLibraryForLater(
+				legacyRows.map((row) => ({
+					firstSeenAt: row.firstSeenAt,
+					lastSeenAt: row.lastSeenAt,
+					playlistAddedAt: row.playlistAddedAt,
+					removedFromForLater: row.removedFromForLater,
+					markedAsSingle: row.markedAsSingle,
+					updatedAt: row.updatedAt,
+					creationTime: row._creationTime,
+				})),
+			);
+
+			await upsertAlbumLibraryProjection(ctx, {
+				userId: args.userId,
+				albumId,
+			});
+			const libraryRow = await ctx.db
+				.query("albumLibraryItems")
+				.withIndex("by_userId_albumId", (q) =>
+					q.eq("userId", args.userId).eq("albumId", albumId),
+				)
+				.first();
+			if (!libraryRow) {
+				throw new Error("Album library row could not be created");
+			}
+			await ctx.db.patch(libraryRow._id, {
+				forLater: patch.forLater,
+				isActiveForLater: patch.isActiveForLater,
+				appearsInForLater: patch.isActiveForLater,
+			});
+		}
+
+		return {
+			processed: albumIds.size,
+			isDone: page.isDone,
+			continueCursor: page.isDone ? null : page.continueCursor,
+		};
+	},
+});
+
+export const verifyLibraryForLaterMigration = query({
+	args: {
+		userId: v.string(),
+		cursor: v.optional(v.union(v.string(), v.null())),
+		limit: v.optional(v.number()),
+	},
+	returns: v.object({
+		legacyActive: v.number(),
+		libraryActive: v.number(),
+		missingLibraryState: v.number(),
+		mismatchedActivity: v.number(),
+		isDone: v.boolean(),
+		continueCursor: v.union(v.string(), v.null()),
+	}),
+	handler: async (ctx, args) => {
+		const limit = Math.min(Math.max(Math.floor(args.limit ?? 25), 1), 50);
+		const page = await ctx.db
+			.query("forLaterAlbumItems")
+			.withIndex("by_userId", (q) => q.eq("userId", args.userId))
+			.paginate({
+				numItems: limit,
+				cursor: args.cursor ?? null,
+				maximumRowsRead: limit,
+			});
+		const albumIds = new Set(page.page.map((row) => row.albumId));
+		let legacyActive = 0;
+		let libraryActive = 0;
+		let missingLibraryState = 0;
+		let mismatchedActivity = 0;
+
+		for (const albumId of albumIds) {
+			const legacyRows = await ctx.db
+				.query("forLaterAlbumItems")
+				.withIndex("by_userId_albumId", (q) =>
+					q.eq("userId", args.userId).eq("albumId", albumId),
+				)
+				.collect();
+			const firstLegacyRow = legacyRows[0];
+			if (
+				!firstLegacyRow ||
+				!page.page.some((row) => row._id === firstLegacyRow._id)
+			) {
+				continue;
+			}
+			if (
+				legacyRows.some(
+					(row) =>
+						row.isActive === true &&
+						row.markedAsSingle !== true &&
+						row.removedFromForLater !== true,
+				)
+			) {
+				legacyActive += 1;
+			}
+
+			const libraryRow = await ctx.db
+				.query("albumLibraryItems")
+				.withIndex("by_userId_albumId", (q) =>
+					q.eq("userId", args.userId).eq("albumId", albumId),
+				)
+				.first();
+			if (!libraryRow?.forLater || libraryRow.isActiveForLater === undefined) {
+				missingLibraryState += 1;
+				continue;
+			}
+			if (libraryRow.isActiveForLater) {
+				libraryActive += 1;
+			}
+			if (
+				libraryRow.isActiveForLater !==
+				deriveIsActiveForLater(libraryRow.forLater)
+			) {
+				mismatchedActivity += 1;
+			}
+		}
+
+		return {
+			legacyActive,
+			libraryActive,
+			missingLibraryState,
+			mismatchedActivity,
 			isDone: page.isDone,
 			continueCursor: page.isDone ? null : page.continueCursor,
 		};

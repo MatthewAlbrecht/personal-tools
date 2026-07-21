@@ -18,6 +18,7 @@
 		"infra:destroy": "pulumi destroy",
 		"migrate:lyrics": "node scripts/migrate-lyrics-to-prod.js",
 		"backfill:for-later-projection": "node scripts/backfill-for-later-filter-projection.mjs",
+		"backfill:library-for-later": "node scripts/backfill-library-for-later.mjs",
 		"import:rym-genres": "tsx scripts/import-rym-genre-hierarchy.ts genresfromrym.hml",
 		"repair:spotify-album-listens": "tsx scripts/repair-spotify-album-listens.ts"
 	},
