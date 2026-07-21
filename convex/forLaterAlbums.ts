@@ -22,6 +22,10 @@ import {
 } from "./_utils/forLaterAlbumsUi";
 import { durationMsToBucketKey } from "./_utils/forLaterDurationBuckets";
 import {
+	type LibraryForLaterEvent,
+	applyLibraryForLaterEvent,
+} from "./_utils/library-for-later-state";
+import {
 	buildDirectFilterGenreKeys,
 	buildFilterDescriptorKeysSorted,
 	buildFilterGenreKeysSortedWithAncestors,
@@ -220,6 +224,34 @@ type LoadForLaterAlbumRowsResult = {
 };
 
 const FOR_LATER_FILTER_MAXIMUM_ROWS_READ = 2_000;
+
+async function patchLibraryForLaterState(
+	ctx: MutationCtx,
+	args: {
+		userId: string;
+		albumId: Id<"spotifyAlbums">;
+		event: LibraryForLaterEvent;
+	},
+): Promise<void> {
+	await upsertAlbumLibraryProjection(ctx, {
+		userId: args.userId,
+		albumId: args.albumId,
+	});
+	const row = await ctx.db
+		.query("albumLibraryItems")
+		.withIndex("by_userId_albumId", (q) =>
+			q.eq("userId", args.userId).eq("albumId", args.albumId),
+		)
+		.first();
+	if (!row) {
+		throw new Error("Album library row could not be created");
+	}
+	const patch = applyLibraryForLaterEvent(row.forLater, args.event);
+	await ctx.db.patch(row._id, {
+		...patch,
+		appearsInForLater: patch.isActiveForLater,
+	});
+}
 
 function spotifyAlbumArtistKeys(doc: Doc<"spotifyAlbums">): string[] {
 	if (doc.rawData) {
@@ -1177,9 +1209,14 @@ export const upsertForLaterAlbumItem = mutation({
 		});
 
 		await syncForLaterItemFilterProjection(ctx, itemId);
-		await upsertAlbumLibraryProjection(ctx, {
+		await patchLibraryForLaterState(ctx, {
 			userId: args.userId,
 			albumId: args.albumId,
+			event: {
+				type: "observed",
+				seenAt: args.seenAt,
+				playlistAddedAt: args.playlistAddedAt,
+			},
 		});
 
 		return {
@@ -1187,49 +1224,6 @@ export const upsertForLaterAlbumItem = mutation({
 			isNew,
 			rymMatch,
 			rymMatchCreated: rymMatch.scrapeId !== undefined,
-		};
-	},
-});
-
-export const markForLaterAlbumsRemoved = mutation({
-	args: {
-		userId: v.string(),
-		activeSpotifyAlbumIds: v.array(v.string()),
-		removedAt: v.number(),
-	},
-	handler: async (
-		ctx,
-		args,
-	): Promise<{ removedCount: number; removedSpotifyAlbumIds: string[] }> => {
-		const activeItems = await ctx.db
-			.query("forLaterAlbumItems")
-			.withIndex("by_userId_active", (q) =>
-				q.eq("userId", args.userId).eq("isActive", true),
-			)
-			.collect();
-		const activeSpotifyAlbumIds = new Set(args.activeSpotifyAlbumIds);
-		const removedSpotifyAlbumIds: string[] = [];
-
-		for (const item of activeItems) {
-			if (activeSpotifyAlbumIds.has(item.spotifyAlbumId)) {
-				continue;
-			}
-
-			await ctx.db.patch(item._id, {
-				isActive: false,
-				removedAt: args.removedAt,
-				updatedAt: args.removedAt,
-			});
-			await upsertAlbumLibraryProjection(ctx, {
-				userId: args.userId,
-				albumId: item.albumId,
-			});
-			removedSpotifyAlbumIds.push(item.spotifyAlbumId);
-		}
-
-		return {
-			removedCount: removedSpotifyAlbumIds.length,
-			removedSpotifyAlbumIds,
 		};
 	},
 });
@@ -1609,9 +1603,12 @@ export const setForLaterAlbumMarkedAsSingle = mutation({
 			updatedAt: now,
 		});
 		await syncForLaterItemFilterProjection(ctx, args.itemId);
-		await upsertAlbumLibraryProjection(ctx, {
+		await patchLibraryForLaterState(ctx, {
 			userId: args.userId,
 			albumId: item.albumId,
+			event: args.markedAsSingle
+				? { type: "dismissed", dismissedAt: now }
+				: { type: "restored" },
 		});
 		return null;
 	},
@@ -1636,9 +1633,12 @@ export const setForLaterAlbumRemovedFromForLater = mutation({
 			updatedAt: now,
 		});
 		await syncForLaterItemFilterProjection(ctx, args.itemId);
-		await upsertAlbumLibraryProjection(ctx, {
+		await patchLibraryForLaterState(ctx, {
 			userId: args.userId,
 			albumId: item.albumId,
+			event: args.removedFromForLater
+				? { type: "dismissed", dismissedAt: now }
+				: { type: "restored" },
 		});
 		return null;
 	},

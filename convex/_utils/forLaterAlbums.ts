@@ -90,16 +90,3 @@ export function buildForLaterPlaylistAlbums(
 		}))
 		.sort((a, b) => a.spotifyAlbumId.localeCompare(b.spotifyAlbumId));
 }
-
-export function findRemovedSpotifyAlbumIds({
-	activeSpotifyAlbumIds,
-	seenSpotifyAlbumIds,
-}: {
-	activeSpotifyAlbumIds: string[];
-	seenSpotifyAlbumIds: string[];
-}): string[] {
-	const seen = new Set(seenSpotifyAlbumIds);
-	return activeSpotifyAlbumIds.filter(
-		(spotifyAlbumId) => !seen.has(spotifyAlbumId),
-	);
-}

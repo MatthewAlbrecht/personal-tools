@@ -15,19 +15,18 @@ function sliceHandler(exportName: string): string {
 	return source.slice(start, next === -1 ? undefined : next);
 }
 
-test("setForLaterAlbumMarkedAsSingle refreshes library projection", () => {
+test("setForLaterAlbumMarkedAsSingle patches library membership", () => {
 	const body = sliceHandler("setForLaterAlbumMarkedAsSingle");
-	assert.match(body, /upsertAlbumLibraryProjection/);
+	assert.match(body, /patchLibraryForLaterState/);
 });
 
-test("setForLaterAlbumRemovedFromForLater refreshes library projection", () => {
+test("setForLaterAlbumRemovedFromForLater patches library membership", () => {
 	const body = sliceHandler("setForLaterAlbumRemovedFromForLater");
-	assert.match(body, /upsertAlbumLibraryProjection/);
+	assert.match(body, /patchLibraryForLaterState/);
 });
 
-test("markForLaterAlbumsRemoved refreshes library projection per removed item", () => {
-	const body = sliceHandler("markForLaterAlbumsRemoved");
-	assert.match(body, /upsertAlbumLibraryProjection/);
+test("Spotify source absence is not reconciled", () => {
+	assert.doesNotMatch(source, /export const markForLaterAlbumsRemoved/);
 });
 
 test("backfillMyAppearsInForLater refreshes library projections", () => {
