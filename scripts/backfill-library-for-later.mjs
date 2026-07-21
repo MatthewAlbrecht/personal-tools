@@ -5,7 +5,9 @@ import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const prod = process.argv.includes("--prod");
-const positionalArgs = process.argv.slice(2).filter((arg) => arg !== "--prod");
+const positionalArgs = process.argv
+	.slice(2)
+	.filter((arg) => arg !== "--prod" && arg !== "--");
 const userId = positionalArgs[0] ?? process.env.USER_ID;
 const limitValue = Number(process.env.BACKFILL_LIMIT ?? "25");
 const limit = Number.isFinite(limitValue) ? limitValue : 25;

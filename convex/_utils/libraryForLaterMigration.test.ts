@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { duplicateGroupStartsOnPage } from "./library-for-later-migration";
+import { duplicateGroupStartsOnPage } from "./libraryForLaterMigration";
 
 test("counts a duplicate group only on the page containing its first row", () => {
 	const legacyRows = [{ _id: "first" }, { _id: "second" }];

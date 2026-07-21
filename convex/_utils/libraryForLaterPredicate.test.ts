@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { Doc } from "../_generated/dataModel";
 import { normalizeForLaterFilters } from "./forLaterAlbumsUi";
-import { libraryRowMatchesForLaterFilters } from "./library-for-later-predicate";
+import { libraryRowMatchesForLaterFilters } from "./libraryForLaterPredicate";
 
 const baseRow = {
 	isActiveForLater: true,

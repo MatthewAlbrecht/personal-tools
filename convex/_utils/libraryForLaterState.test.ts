@@ -4,7 +4,7 @@ import {
 	applyLibraryForLaterEvent,
 	deriveIsActiveForLater,
 	legacyRowsToLibraryForLater,
-} from "./library-for-later-state";
+} from "./libraryForLaterState";
 
 test("first observation creates active append-only state", () => {
 	assert.deepEqual(

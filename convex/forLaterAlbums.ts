@@ -56,14 +56,14 @@ import {
 	sortRecommendationTagOptionsByCount,
 } from "./_utils/forLaterRecommendations";
 import { buildOpenableGoogleRymSearchLinks } from "./_utils/google_rym_lucky_search";
-import { duplicateGroupStartsOnPage } from "./_utils/library-for-later-migration";
-import { libraryRowMatchesForLaterFilters } from "./_utils/library-for-later-predicate";
+import { duplicateGroupStartsOnPage } from "./_utils/libraryForLaterMigration";
+import { libraryRowMatchesForLaterFilters } from "./_utils/libraryForLaterPredicate";
 import {
 	type LibraryForLaterEvent,
 	applyLibraryForLaterEvent,
 	deriveIsActiveForLater,
 	legacyRowsToLibraryForLater,
-} from "./_utils/library-for-later-state";
+} from "./_utils/libraryForLaterState";
 import {
 	collectMappedRymScrapeIds,
 	isRymScrapeMappedElsewhere,
