@@ -258,18 +258,15 @@ test("buildSavedRecommendationAlbumRefs stores chosen album identifiers", () => 
 	assert.deepEqual(
 		buildSavedRecommendationAlbumRefs([
 			{
-				albumItemId: "item-1",
 				albumId: "album-1",
 				spotifyAlbumId: "spotify-1",
 			},
 			{
-				albumItemId: "item-2",
 				albumId: "album-2",
 				spotifyAlbumId: "spotify-2",
 			},
 		]),
 		{
-			albumItemIds: ["item-1", "item-2"],
 			albumIds: ["album-1", "album-2"],
 			spotifyAlbumIds: ["spotify-1", "spotify-2"],
 		},

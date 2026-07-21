@@ -715,83 +715,6 @@ async function syncForLaterRymLinkFilterProjection(
 	});
 }
 
-async function hydrateForLaterAlbumRow(
-	ctx: QueryCtx,
-	args: { userId: string; item: Doc<"forLaterAlbumItems"> },
-): Promise<ForLaterAlbumRow | null> {
-	const album = await ctx.db.get(args.item.albumId);
-	if (!album) {
-		return null;
-	}
-	const libraryItem = await ctx.db
-		.query("albumLibraryItems")
-		.withIndex("by_userId_albumId", (q) =>
-			q.eq("userId", args.userId).eq("albumId", args.item.albumId),
-		)
-		.first();
-	if (!libraryItem) {
-		return null;
-	}
-
-	const { resolvedScrapeId, scrape, linkMethod } =
-		await resolveRymContextForAlbum(ctx, {
-			albumId: args.item.albumId,
-			item: args.item,
-		});
-
-	const tags = resolvedScrapeId
-		? await loadTagsForScrape(ctx, resolvedScrapeId)
-		: { primaryGenres: [], secondaryGenres: [], descriptors: [] };
-
-	const listenSummary = await loadListenSummary(ctx, {
-		userId: args.userId,
-		albumId: args.item.albumId,
-	});
-
-	const parsedYear = album.releaseDate
-		? Number.parseInt(album.releaseDate.slice(0, 4), 10)
-		: Number.NaN;
-
-	const rymStatus = deriveRymStatus({
-		rymScrapeId: resolvedScrapeId,
-	});
-
-	const rymUrl = scrape?.rymUrl;
-	const rymMatchMethodOut = args.item.rymMatchMethod ?? linkMethod;
-
-	const row: ForLaterAlbumRow = {
-		id: String(libraryItem._id),
-		libraryItemId: libraryItem._id,
-		albumId: args.item.albumId,
-		spotifyAlbumId: args.item.spotifyAlbumId,
-		name: album.name,
-		artistName: album.artistName,
-		...(album.imageUrl ? { imageUrl: album.imageUrl } : {}),
-		...(album.releaseDate ? { releaseDate: album.releaseDate } : {}),
-		...(Number.isFinite(parsedYear) ? { releaseYear: parsedYear } : {}),
-		...(args.item.playlistAddedAt
-			? { playlistAddedAt: args.item.playlistAddedAt }
-			: {}),
-		firstSeenAt: args.item.firstSeenAt,
-		createdAt: args.item.createdAt,
-		lastSeenAt: args.item.lastSeenAt,
-		...(args.item.removedAt ? { removedAt: args.item.removedAt } : {}),
-		isActive: args.item.isActive,
-		...listenSummary,
-		rymStatus,
-		...(rymUrl ? { rymUrl } : {}),
-		...(rymMatchMethodOut ? { rymMatchMethod: rymMatchMethodOut } : {}),
-		...(args.item.rymNotOnSite === true ? { rymNotOnSite: true } : {}),
-		...(args.item.markedAsSingle === true ? { markedAsSingle: true } : {}),
-		...(args.item.removedFromForLater === true
-			? { removedFromForLater: true }
-			: {}),
-		...tags,
-	};
-
-	return row;
-}
-
 const FOR_LATER_RECOMMENDATION_SCAN_LIMIT = 2000;
 const DEFAULT_GENRE_BUTTON_LIMIT = 12;
 
@@ -808,17 +731,6 @@ type ForLaterRecommendationResult = {
 	wasLimitedByPool: boolean;
 };
 
-function forLaterRecommendationItemHidden(
-	item: Doc<"forLaterAlbumItems">,
-): boolean {
-	return (
-		item.filterMarkedAsSingle === true ||
-		item.filterRemovedFromForLater === true ||
-		item.markedAsSingle === true ||
-		item.removedFromForLater === true
-	);
-}
-
 function readableRecommendationLabelFromKey(key: string): string {
 	return key
 		.split(/[\s_-]+/)
@@ -827,57 +739,39 @@ function readableRecommendationLabelFromKey(key: string): string {
 		.join(" ");
 }
 
-function recommendationCandidateFromItem(
-	item: Doc<"forLaterAlbumItems">,
-): ForLaterRecommendationCandidate {
+function recommendationCandidateFromLibraryRow(
+	item: Doc<"albumLibraryItems">,
+): ForLaterRecommendationCandidate | null {
+	const forLater = item.forLater;
+	if (item.isActiveForLater !== true || !forLater) {
+		return null;
+	}
+
 	return {
 		id: String(item._id),
-		playlistAddedAt: item.playlistAddedAt,
-		firstSeenAt: item.firstSeenAt,
-		createdAt: item.createdAt,
-		releaseYear: item.filterReleaseYear,
+		playlistAddedAt: forLater.playlistAddedAt,
+		firstSeenAt: forLater.firstSeenAt,
+		createdAt: forLater.firstSeenAt,
+		releaseYear: item.releaseYear,
 		filterGenreKeysSorted: item.filterGenreKeysSorted ?? [],
-		filterDescriptorKeysSorted: item.filterDescriptorKeysSorted ?? [],
-		filterDurationMs: item.filterDurationMs,
-		hasListened: item.filterHasListened === true,
-		markedAsSingle: item.markedAsSingle,
-		removedFromForLater: item.removedFromForLater,
+		filterDescriptorKeysSorted: item.descriptors.map((tag) => tag.key).sort(),
+		filterDurationMs: item.totalDurationMs,
+		rating: item.rating,
+		hasListened: item.filterHasListened,
 	};
 }
 
-function recommendationCandidateFromRow(
-	row: ForLaterAlbumRow,
-	item: Doc<"forLaterAlbumItems">,
-): ForLaterRecommendationCandidate {
-	return {
-		id: row.id,
-		playlistAddedAt: row.playlistAddedAt,
-		firstSeenAt: row.firstSeenAt,
-		createdAt: row.createdAt,
-		releaseYear: row.releaseYear,
-		filterGenreKeysSorted: item.filterGenreKeysSorted ?? [],
-		filterDescriptorKeysSorted: item.filterDescriptorKeysSorted ?? [],
-		filterDurationMs: item.filterDurationMs,
-		rating: row.rating,
-		hasListened: row.hasListened,
-		markedAsSingle: row.markedAsSingle,
-		removedFromForLater: row.removedFromForLater,
-	};
-}
-
-async function collectVisibleActiveForLaterRecommendationItems(
+async function collectVisibleActiveLibraryForLaterRows(
 	ctx: ForLaterDbCtx,
 	args: { userId: string },
-): Promise<Doc<"forLaterAlbumItems">[]> {
-	const items = await ctx.db
-		.query("forLaterAlbumItems")
-		.withIndex("by_userId_isActive_lastSeenAt", (q) =>
-			q.eq("userId", args.userId).eq("isActive", true),
+): Promise<Doc<"albumLibraryItems">[]> {
+	return await ctx.db
+		.query("albumLibraryItems")
+		.withIndex("by_userId_isActiveForLater_forLaterLastSeenAt", (q) =>
+			q.eq("userId", args.userId).eq("isActiveForLater", true),
 		)
 		.order("desc")
 		.take(FOR_LATER_RECOMMENDATION_SCAN_LIMIT);
-
-	return items.filter((item) => !forLaterRecommendationItemHidden(item));
 }
 
 async function loadRecommendationGenreLabels(
@@ -908,7 +802,7 @@ function applyRecommendationOptionLabels(
 }
 
 function countBacklogGenreKeys(
-	items: Doc<"forLaterAlbumItems">[],
+	items: Doc<"albumLibraryItems">[],
 ): Map<string, number> {
 	const counts = new Map<string, number>();
 
@@ -930,7 +824,7 @@ async function collectForLaterRecommendationGenreOptions(
 	ctx: QueryCtx,
 	args: { userId: string; search?: string },
 ): Promise<RecommendationTagOption[]> {
-	const items = await collectVisibleActiveForLaterRecommendationItems(ctx, {
+	const items = await collectVisibleActiveLibraryForLaterRows(ctx, {
 		userId: args.userId,
 	});
 	const counts = countBacklogGenreKeys(items);
@@ -965,7 +859,7 @@ async function collectForLaterRecommendationCandidates(
 	ctx: ForLaterDbCtx,
 	args: { userId: string; answers: ForLaterRecommendationAnswers; now: number },
 ): Promise<ForLaterRecommendationHydratedCandidate[]> {
-	const items = await collectVisibleActiveForLaterRecommendationItems(ctx, {
+	const items = await collectVisibleActiveLibraryForLaterRows(ctx, {
 		userId: args.userId,
 	});
 	const cheapFilterAnswers: ForLaterRecommendationAnswers = {
@@ -976,8 +870,9 @@ async function collectForLaterRecommendationCandidates(
 
 	const candidates: ForLaterRecommendationHydratedCandidate[] = [];
 	for (const item of items) {
-		const itemCandidate = recommendationCandidateFromItem(item);
+		const itemCandidate = recommendationCandidateFromLibraryRow(item);
 		if (
+			!itemCandidate ||
 			!candidateMatchesRecommendationAnswers(
 				itemCandidate,
 				cheapFilterAnswers,
@@ -987,17 +882,19 @@ async function collectForLaterRecommendationCandidates(
 			continue;
 		}
 
-		const row = await hydrateForLaterAlbumRow(ctx, {
-			userId: args.userId,
-			item,
-		});
+		const row = await hydrateLibraryForLaterAlbumRow(ctx, item);
 		if (!row) {
 			continue;
 		}
 
 		candidates.push({
 			row,
-			candidate: recommendationCandidateFromRow(row, item),
+			candidate: {
+				...itemCandidate,
+				id: row.id,
+				rating: row.rating,
+				hasListened: row.hasListened,
+			},
 		});
 	}
 
@@ -1424,15 +1321,15 @@ export const getForLaterUiSummary = query({
 		requireAuth(ctx);
 
 		const activeRows = await ctx.db
-			.query("forLaterAlbumItems")
-			.withIndex("by_userId_active", (q) =>
-				q.eq("userId", args.userId).eq("isActive", true),
+			.query("albumLibraryItems")
+			.withIndex("by_userId_isActiveForLater_createdAt", (q) =>
+				q.eq("userId", args.userId).eq("isActiveForLater", true),
 			)
 			.collect();
-		const removedRows = await ctx.db
-			.query("forLaterAlbumItems")
-			.withIndex("by_userId_active", (q) =>
-				q.eq("userId", args.userId).eq("isActive", false),
+		const dismissedRows = await ctx.db
+			.query("albumLibraryItems")
+			.withIndex("by_userId_isActiveForLater_createdAt", (q) =>
+				q.eq("userId", args.userId).eq("isActiveForLater", false),
 			)
 			.collect();
 		const lastSync = await ctx.db
@@ -1441,13 +1338,11 @@ export const getForLaterUiSummary = query({
 			.order("desc")
 			.first();
 
-		const visibleActiveRows = activeRows.filter(
-			(row) => row.markedAsSingle !== true && row.removedFromForLater !== true,
-		);
-
 		return {
-			activeCount: visibleActiveRows.length,
-			removedCount: removedRows.length,
+			activeCount: activeRows.length,
+			removedCount: dismissedRows.filter(
+				(row) => row.forLater?.dismissedAt !== undefined,
+			).length,
 			lastSync: lastSync
 				? {
 						status: lastSync.status,
@@ -1490,10 +1385,12 @@ export const listForLaterDurationBucketCounts = query({
 	returns: v.array(recommendationOptionValidator),
 	handler: async (ctx, args) => {
 		requireAuth(ctx);
-		const items = await collectVisibleActiveForLaterRecommendationItems(ctx, {
+		const items = await collectVisibleActiveLibraryForLaterRows(ctx, {
 			userId: args.userId,
 		});
-		return buildDurationBucketRecommendationOptions(items);
+		return buildDurationBucketRecommendationOptions(
+			items.map((item) => ({ filterDurationMs: item.totalDurationMs })),
+		);
 	},
 });
 
@@ -1542,18 +1439,7 @@ export const createForLaterRecommendation = mutation({
 			now: args.now,
 			seed: args.seed,
 		});
-		const recommendationRowsWithLegacyIds = await Promise.all(
-			result.rows.map(async (row) => {
-				const legacyItem = await requireLegacyForLaterItemByAlbum(ctx, {
-					userId: args.userId,
-					albumId: row.albumId,
-				});
-				return { ...row, albumItemId: legacyItem._id };
-			}),
-		);
-		const albumRefs = buildSavedRecommendationAlbumRefs(
-			recommendationRowsWithLegacyIds,
-		);
+		const albumRefs = buildSavedRecommendationAlbumRefs(result.rows);
 		const recommendationId = await ctx.db.insert(
 			"forLaterAlbumRecommendations",
 			{
@@ -1565,7 +1451,6 @@ export const createForLaterRecommendation = mutation({
 				requestedCount: result.requestedCount,
 				matchingCount: result.matchingCount,
 				returnedCount: result.returnedCount,
-				albumItemIds: albumRefs.albumItemIds,
 				albumIds: albumRefs.albumIds,
 				spotifyAlbumIds: albumRefs.spotifyAlbumIds,
 			},

@@ -162,8 +162,8 @@ async function resolveForLaterMatches(
 ): Promise<MatchedAlbum[]> {
 	const libraryItems = await ctx.db
 		.query("albumLibraryItems")
-		.withIndex("by_userId_appearsInForLater_createdAt", (q) =>
-			q.eq("userId", args.userId).eq("appearsInForLater", true),
+		.withIndex("by_userId_isActiveForLater_createdAt", (q) =>
+			q.eq("userId", args.userId).eq("isActiveForLater", true),
 		)
 		.collect();
 
@@ -179,26 +179,6 @@ async function resolveForLaterMatches(
 		args.filters.genreClauses.length > 0
 			? await loadRymGenreParentKeysByChild(ctx)
 			: null;
-
-	// Map albumId → for-later addedAt, used for sortAt always and for addedWindow filtering when active.
-	const forLaterAddedAtByAlbumId = new Map<Id<"spotifyAlbums">, number>();
-	{
-		const forLaterItems = await ctx.db
-			.query("forLaterAlbumItems")
-			.withIndex("by_userId_active", (q) =>
-				q.eq("userId", args.userId).eq("isActive", true),
-			)
-			.collect();
-		for (const item of forLaterItems) {
-			if (item.markedAsSingle === true || item.removedFromForLater === true) {
-				continue;
-			}
-			forLaterAddedAtByAlbumId.set(
-				item.albumId,
-				item.playlistAddedAt ?? item.firstSeenAt ?? item.createdAt,
-			);
-		}
-	}
 
 	type Candidate = {
 		item: Doc<"albumLibraryItems">;
@@ -260,16 +240,12 @@ async function resolveForLaterMatches(
 			continue;
 		}
 
-		const forLaterAddedAt = forLaterAddedAtByAlbumId.get(item.albumId);
-		let sortAt = forLaterAddedAt ?? item.createdAt;
-		if (addedRange) {
-			if (forLaterAddedAt === undefined) {
-				continue;
-			}
-			if (!addedAtMatchesWindow(forLaterAddedAt, addedRange)) {
-				continue;
-			}
-			sortAt = forLaterAddedAt;
+		const sortAt =
+			item.forLater?.playlistAddedAt ??
+			item.forLater?.firstSeenAt ??
+			item.createdAt;
+		if (addedRange && !addedAtMatchesWindow(sortAt, addedRange)) {
+			continue;
 		}
 
 		const album = await ctx.db.get(item.albumId);
@@ -278,7 +254,12 @@ async function resolveForLaterMatches(
 		}
 
 		if (needsDuration) {
-			if (!durationMatchesFilters(album.totalDurationMs, args.filters)) {
+			if (
+				!durationMatchesFilters(
+					item.totalDurationMs ?? album.totalDurationMs,
+					args.filters,
+				)
+			) {
 				continue;
 			}
 		}

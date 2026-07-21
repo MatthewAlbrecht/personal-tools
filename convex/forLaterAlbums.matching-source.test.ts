@@ -27,21 +27,19 @@ test("For Later album upsert calls RYM matching after item upsert", () => {
 });
 
 test("For Later album upsert seeds album library projection", () => {
-	const upsertIndex = source.indexOf("upsertForLaterAlbumItem");
-	const libraryIndex = source.indexOf("await upsertAlbumLibraryProjection");
+	const start = source.indexOf("export const upsertForLaterAlbumItem");
+	const end = source.indexOf("\nexport const ", start + 1);
+	const body = source.slice(start, end === -1 ? undefined : end);
 
-	assert.ok(upsertIndex >= 0, "upsertForLaterAlbumItem must exist");
-	assert.ok(
-		libraryIndex > upsertIndex,
-		"upsertAlbumLibraryProjection must be called in the upsert flow",
-	);
-	assert.match(source, /import \{ upsertAlbumLibraryProjection \}/);
+	assert.ok(start >= 0, "upsertForLaterAlbumItem must exist");
+	assert.match(body, /patchLibraryForLaterState/);
 });
 
-test("recommendation genre counts use filterGenreKeysSorted not item.rymScrapeId", () => {
+test("recommendation genre counts use library filterGenreKeysSorted", () => {
+	assert.match(source, /countBacklogGenreKeys/);
 	assert.match(
 		source,
-		/recommendationFilterGenreKeysForItems[\s\S]*filterGenreKeysSorted/,
+		/countBacklogGenreKeys[\s\S]*filterGenreKeysSorted/,
 	);
 	assert.doesNotMatch(
 		source,
@@ -49,6 +47,6 @@ test("recommendation genre counts use filterGenreKeysSorted not item.rymScrapeId
 	);
 	assert.doesNotMatch(
 		source,
-		/collectForLaterRecommendationTagOptions[\s\S]*item\.rymScrapeId/,
+		/collectForLaterRecommendationGenreOptions[\s\S]*item\.rymScrapeId/,
 	);
 });

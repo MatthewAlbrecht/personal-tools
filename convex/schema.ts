@@ -978,7 +978,8 @@ export default defineSchema({
 		requestedCount: v.number(),
 		matchingCount: v.number(),
 		returnedCount: v.number(),
-		albumItemIds: v.array(v.id("forLaterAlbumItems")),
+		// Optional for historical records; new writes use albumIds only.
+		albumItemIds: v.optional(v.array(v.id("forLaterAlbumItems"))),
 		albumIds: v.array(v.id("spotifyAlbums")),
 		spotifyAlbumIds: v.array(v.string()),
 	})

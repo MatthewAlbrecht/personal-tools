@@ -459,19 +459,16 @@ export function selectRandomTagOptions(
 	);
 }
 
-export function buildSavedRecommendationAlbumRefs<AlbumItemId, AlbumId>(
+export function buildSavedRecommendationAlbumRefs<AlbumId>(
 	rows: readonly {
-		albumItemId: AlbumItemId;
 		albumId: AlbumId;
 		spotifyAlbumId: string;
 	}[],
 ): {
-	albumItemIds: AlbumItemId[];
 	albumIds: AlbumId[];
 	spotifyAlbumIds: string[];
 } {
 	return {
-		albumItemIds: rows.map((row) => row.albumItemId),
 		albumIds: rows.map((row) => row.albumId),
 		spotifyAlbumIds: rows.map((row) => row.spotifyAlbumId),
 	};
