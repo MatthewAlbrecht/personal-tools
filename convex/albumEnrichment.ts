@@ -3,12 +3,22 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import {
+	RECENT_ENRICHMENT_SCAN_LIMIT,
+	clampQueueLimit,
+	isForLaterRowHidden,
+	queuePreviewSpotifyAlbumId,
+	selectBoundedVisibleForLaterRows,
+	summarizeEnrichmentQueue,
+} from "./_utils/albumEnrichmentQueue";
+import {
 	type EnrichmentSliceKey,
+	REQUIRED_ENRICHMENT_SLICES,
 	type SlicePresence,
 	missingEnrichmentSlices,
 	normalizeEnrichmentTags,
 } from "./_utils/albumEnrichmentSlices";
 import { buildAlbumLibraryProjectionForAlbum } from "./_utils/albumLibraryProjection";
+import { requireAuth } from "./auth";
 
 type EnrichmentDbCtx = QueryCtx | MutationCtx;
 
@@ -79,6 +89,25 @@ const albumSnapshotFields = {
 	missingSlices: v.array(enrichmentSliceKeyValidator),
 	existingSlices: slicePresenceValidator,
 };
+
+const queueAlbumPreviewValidator = v.object({
+	albumId: v.id("spotifyAlbums"),
+	spotifyAlbumId: v.string(),
+	forLaterItemId: v.id("forLaterAlbumItems"),
+	title: v.string(),
+	artists: v.array(v.string()),
+	releaseYear: v.optional(v.number()),
+	coverImageUrl: v.optional(v.string()),
+	missingSlices: v.array(enrichmentSliceKeyValidator),
+	existingSlices: v.array(enrichmentSliceKeyValidator),
+});
+
+const missingSliceCountsValidator = v.object({
+	artistContext: v.number(),
+	whyListen: v.number(),
+	coverDescriptors: v.number(),
+	occasions: v.number(),
+});
 
 const rymLinkMethodValidator = v.union(
 	v.literal("spotify_id"),
@@ -229,6 +258,18 @@ type AlbumEnrichmentSnapshot = {
 	existingSlices: SlicePresence;
 };
 
+type QueueAlbumPreview = {
+	albumId: Id<"spotifyAlbums">;
+	spotifyAlbumId: string;
+	forLaterItemId: Id<"forLaterAlbumItems">;
+	title: string;
+	artists: string[];
+	releaseYear?: number;
+	coverImageUrl?: string;
+	missingSlices: EnrichmentSliceKey[];
+	existingSlices: EnrichmentSliceKey[];
+};
+
 /** Actual saved values (not just presence) for slices that already exist — used as grounding context for missing-slice research. */
 type ExistingEnrichmentContent = {
 	artistContext?: {
@@ -280,8 +321,58 @@ async function loadRymUrlForAlbum(
 	return scrape?.rymUrl;
 }
 
-function isForLaterItemHidden(item: Doc<"forLaterAlbumItems">): boolean {
-	return item.markedAsSingle === true || item.removedFromForLater === true;
+async function loadBoundedActiveForLaterItems(
+	ctx: EnrichmentDbCtx,
+	userId: string,
+): Promise<{
+	items: Doc<"forLaterAlbumItems">[];
+	scanned: number;
+	capped: boolean;
+}> {
+	const itemsWithSentinel = await ctx.db
+		.query("forLaterAlbumItems")
+		.withIndex("by_userId_isActive_lastSeenAt", (q) =>
+			q.eq("userId", userId).eq("isActive", true),
+		)
+		.order("desc")
+		.take(FOR_LATER_SCAN_LIMIT + 1);
+
+	const { rows, scanned, capped } = selectBoundedVisibleForLaterRows(
+		itemsWithSentinel,
+		FOR_LATER_SCAN_LIMIT,
+	);
+	return { items: rows, scanned, capped };
+}
+
+async function loadEnrichmentForAlbum(
+	ctx: EnrichmentDbCtx,
+	albumId: Id<"spotifyAlbums">,
+): Promise<Doc<"albumEnrichments"> | null> {
+	return await ctx.db
+		.query("albumEnrichments")
+		.withIndex("by_albumId", (q) => q.eq("albumId", albumId))
+		.first();
+}
+
+function buildQueueAlbumPreview(
+	item: Doc<"forLaterAlbumItems">,
+	album: Doc<"spotifyAlbums">,
+	slices: SlicePresence,
+): QueueAlbumPreview {
+	const releaseYear = parseReleaseYear(album.releaseDate);
+	return {
+		albumId: album._id,
+		spotifyAlbumId: queuePreviewSpotifyAlbumId(item, album),
+		forLaterItemId: item._id,
+		title: album.name,
+		artists: splitArtistNames(album.artistName),
+		...(releaseYear !== undefined ? { releaseYear } : {}),
+		...(album.imageUrl ? { coverImageUrl: album.imageUrl } : {}),
+		missingSlices: missingEnrichmentSlices(slices),
+		existingSlices: REQUIRED_ENRICHMENT_SLICES.filter(
+			(key) => slices[key] != null,
+		),
+	};
 }
 
 async function buildAlbumEnrichmentSnapshot(
@@ -392,18 +483,9 @@ export const claimNextForLater = mutation({
 		}),
 	),
 	handler: async (ctx, args) => {
-		const items = await ctx.db
-			.query("forLaterAlbumItems")
-			.withIndex("by_userId_isActive_lastSeenAt", (q) =>
-				q.eq("userId", args.userId).eq("isActive", true),
-			)
-			.order("desc")
-			.take(FOR_LATER_SCAN_LIMIT);
+		const { items } = await loadBoundedActiveForLaterItems(ctx, args.userId);
 
 		for (const item of items) {
-			if (isForLaterItemHidden(item)) {
-				continue;
-			}
 			const album = await ctx.db.get(item.albumId);
 			if (!album) {
 				continue;
@@ -428,6 +510,158 @@ export const claimNextForLater = mutation({
 		}
 
 		return { empty: true as const };
+	},
+});
+
+export const getQueueStatus = query({
+	args: { userId: v.string() },
+	returns: v.object({
+		scanned: v.number(),
+		capped: v.boolean(),
+		activeVisible: v.number(),
+		incomplete: v.number(),
+		complete: v.number(),
+		neverStarted: v.number(),
+		partial: v.number(),
+		missing: missingSliceCountsValidator,
+		nextClaimable: v.union(v.null(), queueAlbumPreviewValidator),
+	}),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+		const { items, scanned, capped } = await loadBoundedActiveForLaterItems(
+			ctx,
+			args.userId,
+		);
+		const summaryRows = [];
+		let nextClaimable: QueueAlbumPreview | null = null;
+
+		for (const item of items) {
+			const album = await ctx.db.get(item.albumId);
+			if (!album) {
+				continue;
+			}
+			const enrichment = await loadEnrichmentForAlbum(ctx, item.albumId);
+			const slices = enrichment?.slices ?? {};
+			summaryRows.push({
+				key: item._id,
+				isActive: item.isActive,
+				albumExists: true,
+				hasEnrichmentRow: enrichment !== null,
+				slices,
+			});
+			if (
+				nextClaimable === null &&
+				missingEnrichmentSlices(slices).length > 0
+			) {
+				nextClaimable = buildQueueAlbumPreview(item, album, slices);
+			}
+		}
+
+		const summary = summarizeEnrichmentQueue(summaryRows);
+		return {
+			scanned,
+			capped,
+			activeVisible: summary.activeVisible,
+			incomplete: summary.incomplete,
+			complete: summary.complete,
+			neverStarted: summary.neverStarted,
+			partial: summary.partial,
+			missing: summary.missing,
+			nextClaimable,
+		};
+	},
+});
+
+export const listIncompleteQueue = query({
+	args: {
+		userId: v.string(),
+		limit: v.optional(v.number()),
+	},
+	returns: v.object({
+		scanned: v.number(),
+		capped: v.boolean(),
+		rows: v.array(queueAlbumPreviewValidator),
+	}),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+		const limit = clampQueueLimit(args.limit, 25, 50);
+		const { items, scanned, capped } = await loadBoundedActiveForLaterItems(
+			ctx,
+			args.userId,
+		);
+		const rows: QueueAlbumPreview[] = [];
+
+		for (const item of items) {
+			if (rows.length >= limit) {
+				break;
+			}
+			const enrichment = await loadEnrichmentForAlbum(ctx, item.albumId);
+			const slices = enrichment?.slices ?? {};
+			if (missingEnrichmentSlices(slices).length === 0) {
+				continue;
+			}
+			const album = await ctx.db.get(item.albumId);
+			if (!album) {
+				continue;
+			}
+			rows.push(buildQueueAlbumPreview(item, album, slices));
+		}
+
+		return { scanned, capped, rows };
+	},
+});
+
+export const listRecentEnrichments = query({
+	args: { limit: v.optional(v.number()) },
+	returns: v.array(
+		v.object({
+			albumId: v.id("spotifyAlbums"),
+			spotifyAlbumId: v.string(),
+			title: v.string(),
+			artists: v.array(v.string()),
+			releaseYear: v.optional(v.number()),
+			coverImageUrl: v.optional(v.string()),
+			lastEnrichedAt: v.number(),
+			presentSlices: v.array(enrichmentSliceKeyValidator),
+		}),
+	),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+		const limit = clampQueueLimit(args.limit, 10, 25);
+		const enrichments = await ctx.db
+			.query("albumEnrichments")
+			.withIndex("by_lastEnrichedAt")
+			.order("desc")
+			.take(RECENT_ENRICHMENT_SCAN_LIMIT);
+		const rows = [];
+
+		for (const enrichment of enrichments) {
+			if (rows.length >= limit) {
+				break;
+			}
+			if (enrichment.lastEnrichedAt === undefined) {
+				continue;
+			}
+			const album = await ctx.db.get(enrichment.albumId);
+			if (!album) {
+				continue;
+			}
+			const releaseYear = parseReleaseYear(album.releaseDate);
+			rows.push({
+				albumId: album._id,
+				spotifyAlbumId: album.spotifyAlbumId,
+				title: album.name,
+				artists: splitArtistNames(album.artistName),
+				...(releaseYear !== undefined ? { releaseYear } : {}),
+				...(album.imageUrl ? { coverImageUrl: album.imageUrl } : {}),
+				lastEnrichedAt: enrichment.lastEnrichedAt,
+				presentSlices: REQUIRED_ENRICHMENT_SLICES.filter(
+					(key) => enrichment.slices[key] != null,
+				),
+			});
+		}
+
+		return rows;
 	},
 });
 
@@ -674,7 +908,7 @@ async function searchAlbumCandidates(
 		if (candidates.length >= CANDIDATE_RESULT_LIMIT) {
 			return candidates;
 		}
-		if (isForLaterItemHidden(item) || seenAlbumIds.has(item.albumId)) {
+		if (isForLaterRowHidden(item) || seenAlbumIds.has(item.albumId)) {
 			continue;
 		}
 		const album = await ctx.db.get(item.albumId);

@@ -27,7 +27,7 @@ Full design: `docs/superpowers/specs/2026-07-17-ai-album-research-enrichment-des
   - `GET resolve?q=...` — manual/eval mode: resolve an album by Convex id, Spotify id, or name
   - `POST save` — persist succeeded slices (`mode: "gaps" | "overwrite"`)
   - `POST trial` — eval mode only: persists one variant's payload into trial storage (never touches live data). Body: `{ trialRunId, albumId, slice, variantId, promptPath, payload, model? }`. Response includes `judgeKind` (`"auto" | "human" | "mixed"`) and, for `artistContext`/`coverDescriptors`, an `autoEval` (`{ passed, checks, notes }`) — auto-judging happens server-side on save, not in the skill.
-  - `POST promote-trial` — eval mode / trials UI only: copies a winning trial's payload into the live enrichment for that slice (`{ trialId }`). The skill itself never calls this — it's for the human reviewing trials afterward (Task 12 UI or a manual call).
+  - `POST promote-trial` — eval mode / trials UI only: copies a winning trial's payload into the live enrichment for that slice (`{ trialId }`). The skill itself never calls this — review and promote trials on the album details page.
 
 ## Identity lock (do this before any research, every mode)
 
@@ -190,6 +190,6 @@ For local smoke tests, use `.env.local` instead. Never hardcode or commit secret
 - **Success, album enriched:** `POST save` returns `savedSlices` — report and exit. Do not claim a second album in the same run.
 - **Failure:** zero slices succeeded, auth error, or ambiguous resolve — report and exit without retrying in-loop (next cron run will retry).
 
-### Not yet automated
+### Interactive eval
 
-Eval mode (`POST trial`/`POST promote-trial`, variant agents under `.cursor/agents/variants/`) is interactive-only and **out of scope** for this cron automation — it requires a human to review trials and pick a winner. The trials comparison UI (Task 12) is not built yet; until then, review trial rows via the Convex dashboard or `listTrialsForAlbum`/`setTrialVerdict`, then call `promote-trial` manually.
+Eval mode (`POST trial`/`POST promote-trial`, variant agents under `.cursor/agents/variants/`) is interactive-only and **out of scope** for this cron automation. Review variants, set verdicts, and promote a winner from the **Enrichment trials** section on `/albums/details/<albumId>`.

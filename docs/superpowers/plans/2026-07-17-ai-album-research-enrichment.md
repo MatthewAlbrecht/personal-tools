@@ -1,5 +1,7 @@
 # AI Album Research Enrichment Implementation Plan
 
+> **Historical record:** This plan has shipped. Its unchecked boxes and task-by-task status wording are retained as implementation history; use `docs/album-research-enrichment.md` for current operations and navigation.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Claim for-later albums missing enrichment slices, research them via Cursor skill/subagents, persist album-centric enrichment + facets over authed HTTP, and ship a polished `/albums/details/[albumId]` dossier with entry links from for-later and `/albums/all`.

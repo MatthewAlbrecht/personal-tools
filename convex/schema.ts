@@ -660,7 +660,8 @@ export default defineSchema({
 		updatedAt: v.number(),
 	})
 		.index("by_albumId", ["albumId"])
-		.index("by_spotifyAlbumId", ["spotifyAlbumId"]),
+		.index("by_spotifyAlbumId", ["spotifyAlbumId"])
+		.index("by_lastEnrichedAt", ["lastEnrichedAt"]),
 
 	albumCoverDescriptorFacets: defineTable({
 		albumId: v.id("spotifyAlbums"),

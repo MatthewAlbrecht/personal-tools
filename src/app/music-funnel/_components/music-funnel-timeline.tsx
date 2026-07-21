@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "convex/react";
+import { Disc3 } from "lucide-react";
 import Image from "next/image";
 import { useState } from "react";
 import { sourceRunHasActivity } from "~/lib/music-funnel-visit";
@@ -103,7 +104,9 @@ export function MusicFunnelTimeline({
 												className="size-10 shrink-0 rounded border border-border/60 bg-background object-cover"
 											/>
 										) : (
-											<div className="size-10 shrink-0 rounded border border-border/60 bg-muted" />
+											<div className="flex size-10 shrink-0 items-center justify-center rounded border border-border/60 bg-muted text-muted-foreground">
+												<Disc3 aria-hidden="true" className="size-5" />
+											</div>
 										)}
 										<div className="min-w-0 flex-1">
 											<p className="flex flex-wrap items-baseline gap-x-2 font-medium">

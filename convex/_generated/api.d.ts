@@ -8,15 +8,12 @@
  * @module
  */
 
-import type {
-  ApiFromModules,
-  FilterApi,
-  FunctionReference,
-} from "convex/server";
 import type * as _utils_albumEnrichmentAutoJudge from "../_utils/albumEnrichmentAutoJudge.js";
 import type * as _utils_albumEnrichmentJudgeKinds from "../_utils/albumEnrichmentJudgeKinds.js";
+import type * as _utils_albumEnrichmentQueue from "../_utils/albumEnrichmentQueue.js";
 import type * as _utils_albumEnrichmentSlices from "../_utils/albumEnrichmentSlices.js";
 import type * as _utils_albumEnrichmentTrialValidators from "../_utils/albumEnrichmentTrialValidators.js";
+import type * as _utils_albumLibraryForLaterMembership from "../_utils/albumLibraryForLaterMembership.js";
 import type * as _utils_albumLibraryIndexedList from "../_utils/albumLibraryIndexedList.js";
 import type * as _utils_albumLibraryProjection from "../_utils/albumLibraryProjection.js";
 import type * as _utils_albumLibraryRows from "../_utils/albumLibraryRows.js";
@@ -84,19 +81,19 @@ import type * as spotify from "../spotify.js";
 import type * as spotifyListenRepair from "../spotifyListenRepair.js";
 import type * as spotifyPlayEvents from "../spotifyPlayEvents.js";
 
-/**
- * A utility for referencing Convex functions in your app's API.
- *
- * Usage:
- * ```js
- * const myFunctionReference = api.myModule.myFunction;
- * ```
- */
+import type {
+  ApiFromModules,
+  FilterApi,
+  FunctionReference,
+} from "convex/server";
+
 declare const fullApi: ApiFromModules<{
   "_utils/albumEnrichmentAutoJudge": typeof _utils_albumEnrichmentAutoJudge;
   "_utils/albumEnrichmentJudgeKinds": typeof _utils_albumEnrichmentJudgeKinds;
+  "_utils/albumEnrichmentQueue": typeof _utils_albumEnrichmentQueue;
   "_utils/albumEnrichmentSlices": typeof _utils_albumEnrichmentSlices;
   "_utils/albumEnrichmentTrialValidators": typeof _utils_albumEnrichmentTrialValidators;
+  "_utils/albumLibraryForLaterMembership": typeof _utils_albumLibraryForLaterMembership;
   "_utils/albumLibraryIndexedList": typeof _utils_albumLibraryIndexedList;
   "_utils/albumLibraryProjection": typeof _utils_albumLibraryProjection;
   "_utils/albumLibraryRows": typeof _utils_albumLibraryRows;
@@ -164,11 +161,31 @@ declare const fullApi: ApiFromModules<{
   spotifyListenRepair: typeof spotifyListenRepair;
   spotifyPlayEvents: typeof spotifyPlayEvents;
 }>;
+
+/**
+ * A utility for referencing Convex functions in your app's public API.
+ *
+ * Usage:
+ * ```js
+ * const myFunctionReference = api.myModule.myFunction;
+ * ```
+ */
 export declare const api: FilterApi<
   typeof fullApi,
   FunctionReference<any, "public">
 >;
+
+/**
+ * A utility for referencing Convex functions in your app's internal API.
+ *
+ * Usage:
+ * ```js
+ * const myFunctionReference = internal.myModule.myFunction;
+ * ```
+ */
 export declare const internal: FilterApi<
   typeof fullApi,
   FunctionReference<any, "internal">
 >;
+
+export declare const components: {};

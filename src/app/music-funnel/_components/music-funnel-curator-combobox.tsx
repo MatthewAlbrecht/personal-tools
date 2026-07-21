@@ -11,6 +11,7 @@ import {
 } from "~/components/ui/combobox";
 import {
 	getCuratorComboboxItemLabel,
+	resolveCuratorComboboxBlurValue,
 	resolveCuratorComboboxItems,
 	resolveCuratorComboboxValueChange,
 } from "../_utils/music-funnel-curator-combobox-state";
@@ -40,6 +41,12 @@ export function MusicFunnelCuratorCombobox({
 		onValueChange(resolveCuratorComboboxValueChange(next));
 	}
 
+	function handleBlur(): void {
+		const nextValue = resolveCuratorComboboxBlurValue(filter, value);
+		setFilter(nextValue);
+		onValueChange(nextValue);
+	}
+
 	return (
 		<Combobox
 			items={items}
@@ -53,6 +60,7 @@ export function MusicFunnelCuratorCombobox({
 				placeholder="Curator name"
 				showClear={value.length > 0}
 				className="w-full"
+				onBlur={handleBlur}
 			/>
 			<ComboboxContent>
 				<ComboboxEmpty>No curators found.</ComboboxEmpty>

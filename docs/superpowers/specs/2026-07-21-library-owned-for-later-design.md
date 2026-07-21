@@ -34,7 +34,6 @@ forLater: v.optional(
 		firstSeenAt: v.number(),
 		lastSeenAt: v.number(),
 		playlistAddedAt: v.optional(v.number()),
-		isPresentInPlaylist: v.boolean(),
 		dismissedAt: v.optional(v.number()),
 	}),
 ),
@@ -47,7 +46,6 @@ Active membership is:
 
 ```ts
 forLater !== undefined &&
-forLater.isPresentInPlaylist &&
 forLater.dismissedAt === undefined
 ```
 
@@ -67,21 +65,21 @@ Keep `appearsInForLater` temporarily for compatibility, then remove it after all
 
 ## State semantics
 
-Spotify playlist presence and user dismissal are independent facts:
+For Later is an append-only ingestion queue, not a mirror of current Spotify playlist contents:
 
 - First observation sets `firstSeenAt`.
 - Every successful source observation updates `lastSeenAt`.
 - Spotify playlist metadata populates `playlistAddedAt` when available.
-- Present in the latest Spotify sync sets `isPresentInPlaylist = true`.
-- Missing from the latest complete Spotify sync sets `isPresentInPlaylist = false`.
 - User soft delete sets `dismissedAt`.
 - User restore clears `dismissedAt`.
-- Reappearing in Spotify does not clear `dismissedAt`.
-- Spotify removal never creates a dismissal.
+- Reobserving an album in Spotify does not clear `dismissedAt`.
+- Albums missing from a later Spotify sync are ignored and remain in For Later until explicitly dismissed.
 
-Do not collapse these facts into a status enum. An album can be both dismissed by the user and absent from Spotify.
+Do not create source-removal state. The app intentionally remembers every album observed in the source playlist.
 
 `markedAsSingle` is not For Later membership state. Album type belongs to the global album identity or an explicit album-level override and must not survive as a For Later browse flag.
+
+During migration, existing `markedAsSingle` rows become dismissed to preserve their current hidden behavior. Future single handling uses global album type.
 
 ## Write ownership
 
@@ -94,7 +92,7 @@ Create one plain TypeScript helper that accepts existing For Later state plus an
 }
 ```
 
-All mutations that observe playlist membership, dismiss, restore, or mark source absence call this helper and patch both fields atomically.
+All mutations that observe playlist membership, dismiss, or restore call this helper and patch both fields atomically.
 
 The helper is the sole owner of the materialized boolean. No mutation may accept `isActiveForLater` as an argument.
 
@@ -146,7 +144,7 @@ Verify:
 
 - active counts per user match the legacy definition;
 - dismissed albums remain dismissed;
-- source-absent albums are inactive without gaining dismissal;
+- legacy `markedAsSingle` rows become dismissed;
 - timestamps match sampled legacy rows;
 - every migrated library row has a materialized boolean.
 
@@ -171,7 +169,8 @@ Cleanup is a separate implementation plan and occurs only after production verif
 
 ## Failure handling
 
-- A failed Spotify sync must not mark unseen albums absent; source absence is written only after a complete source read.
+- Spotify sync never marks unseen albums absent.
+- Remove the unused legacy source-removal mutation and helper instead of carrying that behavior forward.
 - Backfill is idempotent and cursor-based.
 - Missing legacy rows do not erase valid library state.
 - Duplicate legacy rows are logged and resolved deterministically.
@@ -184,12 +183,9 @@ Test the state helper first:
 
 - first observation;
 - repeated observation;
-- source removal;
-- source reappearance;
 - dismissal;
 - restore;
-- dismissed then source-removed;
-- dismissed then source-reappears;
+- reobservation while dismissed;
 - materialized boolean always matches derived state.
 
 Add migration tests for duplicate reconciliation, missing timestamps, idempotency, and active-count parity.
@@ -212,6 +208,6 @@ If multiple independently queryable sources appear later, introduce a membership
 - `albumLibraryItems` directly represents For Later presence, dismissal, and timestamps.
 - For Later browsing and filtering query only library rows.
 - Soft-deleted albums remain understood by the library row.
-- Spotify absence and user dismissal remain distinct.
+- Spotify absence never removes an album from the app's append-only For Later queue.
 - Smart-playlist For Later sourcing uses the same active membership definition.
 - Legacy storage can be disabled without changing visible results.

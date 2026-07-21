@@ -28,8 +28,5 @@ export function GET(): Response {
 }
 
 function getRedirectUri(): string {
-	const baseUrl = process.env.VERCEL_URL
-		? `https://${process.env.VERCEL_URL}`
-		: "http://127.0.0.1:1333";
-	return `${baseUrl}/api/spotify/callback`;
+	return `${env.APP_URL}/api/spotify/callback`;
 }

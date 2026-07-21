@@ -73,10 +73,7 @@ export function BirthdayForm({
 				<Input
 					id="birthday-name"
 					onChange={(event) =>
-						setValues((current) => ({
-							...current,
-							name: event.currentTarget.value,
-						}))
+						setValues({ ...values, name: event.target.value })
 					}
 					placeholder="Jane Doe"
 					required
@@ -93,10 +90,7 @@ export function BirthdayForm({
 						max={12}
 						min={1}
 						onChange={(event) =>
-							setValues((current) => ({
-								...current,
-								month: event.currentTarget.value,
-							}))
+							setValues({ ...values, month: event.target.value })
 						}
 						required
 						type="number"
@@ -111,10 +105,7 @@ export function BirthdayForm({
 						max={31}
 						min={1}
 						onChange={(event) =>
-							setValues((current) => ({
-								...current,
-								day: event.currentTarget.value,
-							}))
+							setValues({ ...values, day: event.target.value })
 						}
 						required
 						type="number"
@@ -129,10 +120,7 @@ export function BirthdayForm({
 						max={9999}
 						min={1}
 						onChange={(event) =>
-							setValues((current) => ({
-								...current,
-								birthYear: event.currentTarget.value,
-							}))
+							setValues({ ...values, birthYear: event.target.value })
 						}
 						placeholder="Optional"
 						type="number"
@@ -147,10 +135,10 @@ export function BirthdayForm({
 					className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
 					id="birthday-entry-point"
 					onChange={(event) =>
-						setValues((current) => ({
-							...current,
-							entryPoint: event.currentTarget.value as ReminderStep,
-						}))
+						setValues({
+							...values,
+							entryPoint: event.target.value as ReminderStep,
+						})
 					}
 					value={values.entryPoint}
 				>

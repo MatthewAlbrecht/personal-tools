@@ -55,10 +55,9 @@ export function AlbumDetailsView({ details }: { details: AlbumDetails }) {
 			<Separator />
 			<ArtistContextSection artistContext={details.artistContext} />
 			<Separator />
-			<CoverAndOccasionsSection
-				coverDescriptors={details.coverDescriptors}
-				occasions={details.occasions}
-			/>
+			<CoverDescriptorsSection coverDescriptors={details.coverDescriptors} />
+			<Separator />
+			<OccasionsSection occasions={details.occasions} />
 			<Separator />
 			<LibraryAndQueueSection library={details.library} />
 			<Separator />
@@ -259,27 +258,31 @@ function ArtistContextSection({
 	);
 }
 
-function CoverAndOccasionsSection({
+function CoverDescriptorsSection({
 	coverDescriptors,
-	occasions,
 }: {
 	coverDescriptors: AlbumDetailsTag[];
-	occasions: AlbumDetailsTag[];
 }) {
-	const isEmpty = coverDescriptors.length === 0 && occasions.length === 0;
-
 	return (
 		<div className="space-y-3">
-			<SectionHeading>Cover &amp; occasions</SectionHeading>
-			{isEmpty ? (
+			<SectionHeading>Cover</SectionHeading>
+			{coverDescriptors.length === 0 ? (
 				<EmptyNote>Not enriched yet.</EmptyNote>
 			) : (
-				<div className="space-y-2">
-					{coverDescriptors.length > 0 ? (
-						<TagChips tags={coverDescriptors} />
-					) : null}
-					{occasions.length > 0 ? <TagChips tags={occasions} /> : null}
-				</div>
+				<TagChips tags={coverDescriptors} />
+			)}
+		</div>
+	);
+}
+
+function OccasionsSection({ occasions }: { occasions: AlbumDetailsTag[] }) {
+	return (
+		<div className="space-y-3">
+			<SectionHeading>Occasions</SectionHeading>
+			{occasions.length === 0 ? (
+				<EmptyNote>Not enriched yet.</EmptyNote>
+			) : (
+				<TagChips tags={occasions} />
 			)}
 		</div>
 	);

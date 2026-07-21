@@ -35,7 +35,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 			body: new URLSearchParams({
 				grant_type: "authorization_code",
 				code,
-				redirect_uri: getRedirectUri(request),
+				redirect_uri: getRedirectUri(),
 			}),
 		});
 
@@ -103,11 +103,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 	}
 }
 
-function getRedirectUri(_request: NextRequest): string {
-	const baseUrl = process.env.VERCEL_URL
-		? `https://${process.env.VERCEL_URL}`
-		: "http://127.0.0.1:1333";
-	return `${baseUrl}/api/spotify/callback`;
+function getRedirectUri(): string {
+	return `${env.APP_URL}/api/spotify/callback`;
 }
 
 type SpotifyTokenResponse = {

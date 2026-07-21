@@ -22,6 +22,7 @@ export const env = createEnv({
 		S3_BUCKET_NAME: z.string().min(1),
 		CLOUDFRONT_DOMAIN: z.string().min(1),
 		// Spotify OAuth
+		APP_URL: z.string().url(),
 		SPOTIFY_CLIENT_ID: z.string().min(1),
 		SPOTIFY_CLIENT_SECRET: z.string().min(1),
 		// OpenAI
@@ -75,6 +76,7 @@ export const env = createEnv({
 		AWS_REGION: process.env.AWS_REGION,
 		S3_BUCKET_NAME: process.env.S3_BUCKET_NAME,
 		CLOUDFRONT_DOMAIN: process.env.CLOUDFRONT_DOMAIN,
+		APP_URL: process.env.APP_URL,
 		SPOTIFY_CLIENT_ID: process.env.SPOTIFY_CLIENT_ID,
 		SPOTIFY_CLIENT_SECRET: process.env.SPOTIFY_CLIENT_SECRET,
 		OPENAI_API_KEY: process.env.OPENAI_API_KEY,

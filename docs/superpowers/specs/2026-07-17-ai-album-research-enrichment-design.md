@@ -30,7 +30,7 @@ Cursor is better at this kind of open-web research than a thin in-app LLM call. 
 - Filtering/browsing by cover descriptors or occasions in for-later or elsewhere (schema ready only)
 - Claiming enrichment for albums not on for-later
 - Cursor plugin packaging
-- In-app LLM researcher replacing Cursor (eval auto-judge may call a model; production research stays in Cursor)
+- In-app LLM researcher replacing Cursor (the shipped eval auto-judge is deterministic; production research stays in Cursor)
 - More than one album per automation run (eval may run multiple **variants** of one album/slice in one turn)
 - Migrating enrichment onto for-later rows
 - Large-batch offline eval harness / leaderboard across hundreds of albums
@@ -211,9 +211,9 @@ Goal: iterate on slice subagent system prompts with confidence before promoting 
 Skill eval mode
   → same identity lock as production
   → run N prompt variants for chosen slice(s) (same album)
-  → HTTP save-trial (never touches live albumEnrichments)
-  → auto-judge runs for auto/mixed factual fields
-  → Details page ?trials=… side-by-side compare
+  → POST /api/album-enrichment/trial (never touches live albumEnrichments)
+  → auto-judge runs structural and label checks for auto/mixed slices
+  → Album details page renders side-by-side trial comparison
   → Human picks winner on writing slices
   → Promote copies winning trial → live save for that slice
   → Operator updates production .cursor/agents/*.md to the winning variant text
@@ -231,12 +231,12 @@ Scheduled enrich **never** writes trials or auto-promotes. Eval is an explicit s
 
 | Slice | Judge | Notes |
 |-------|-------|--------|
-| `artistContext` | **mixed** | Auto-check factual fields (`origin`, `activeSince`, `instagramUrl`) against identity + cited/public sources. Human ranks `artistWriteup` + `listenIfYouLike` (and overall taste). |
+| `artistContext` | **mixed** | Auto-check that `origin` is present, `activeSince` has a plausible year/range shape, and any Instagram URL has a valid profile-URL shape. Human ranks `artistWriteup` + `listenIfYouLike` (and overall taste). |
 | `whyListen` | **human** | Side-by-side; pick the pitch you’d actually want on the dossier. |
-| `coverDescriptors` | **auto** | Tags must be grounded in the cover image / identity packet; reject RYM-musical bleed and empty/generic noise. |
+| `coverDescriptors` | **auto** | Require at least one tag and reject exact generic filler labels or entries on the RYM musical-genre blocklist. |
 | `occasions` | **human** | Subjective vibe fit — human pick. |
 
-Auto-judge is a **verifier** (pass/fail + short notes per check), not a replacement for research. It does not overwrite trial payloads.
+Auto-judge is a deterministic **structural verifier** (pass/fail + short notes per check), not a replacement for research. It does not verify facts against cited sources, compare against the identity packet, inspect the cover image, or overwrite trial payloads. Source-backed or image-grounded judging is deferred.
 
 ### Data: `albumEnrichmentTrials`
 
@@ -269,7 +269,7 @@ On `/albums/details/:albumId`, an **Enrichment trials** section (or subview) whe
 
 - Group by `trialRunId` + slice
 - Side-by-side payloads (writing slices emphasized)
-- Show auto-check results for factual/cover slices
+- Show structural and label auto-check results for artist-context/cover slices
 - Actions: mark win / reject; **Promote to live** (calls promote API or Convex mutation)
 
 Live dossier sections remain the source of truth after promote; trials stay for history.
@@ -296,7 +296,7 @@ Live dossier sections remain the source of truth after promote; trials stay for 
 - Details page is a credible dossier reachable from for-later and `/albums/all`
 - Cover descriptors never collide with RYM musical descriptor storage/UI naming
 - Eval mode can run ≥2 variants of one writing slice on one album into trials without changing live enrichment until promote
-- Auto-judge attaches pass/fail checks for `artistContext` factual fields and `coverDescriptors`
+- Auto-judge attaches structural pass/fail checks for `artistContext` fields and generic-label/genre-blocklist checks for `coverDescriptors`
 - Human can mark a winner and promote it to live from the details trials UI
 
 ## Future widen (non-v1)

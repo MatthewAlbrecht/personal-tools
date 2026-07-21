@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
 	getCuratorComboboxItemLabel,
+	resolveCuratorComboboxBlurValue,
 	resolveCuratorComboboxItems,
 	resolveCuratorComboboxValueChange,
 } from "./music-funnel-curator-combobox-state";
@@ -57,4 +58,12 @@ test("does not offer create when filter matches an existing curator case-insensi
 
 test("clears selection when value change is null", () => {
 	assert.equal(resolveCuratorComboboxValueChange(null), "");
+});
+
+test("commits a typed curator when the input loses focus", () => {
+	assert.equal(
+		resolveCuratorComboboxBlurValue("  Bob Smith  ", ""),
+		"Bob Smith",
+	);
+	assert.equal(resolveCuratorComboboxBlurValue("   ", "Alice"), "Alice");
 });

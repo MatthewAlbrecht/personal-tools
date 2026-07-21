@@ -35,11 +35,16 @@ export function getCuratorComboboxItemLabel({
 	return item;
 }
 
-export function resolveCuratorComboboxValueChange(
-	next: string | null,
-): string {
+export function resolveCuratorComboboxValueChange(next: string | null): string {
 	if (next == null) {
 		return "";
 	}
 	return next;
+}
+
+export function resolveCuratorComboboxBlurValue(
+	filter: string,
+	value: string,
+): string {
+	return filter.trim() || value;
 }
