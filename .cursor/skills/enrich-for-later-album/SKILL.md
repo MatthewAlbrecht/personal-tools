@@ -45,6 +45,10 @@ Build a **frozen identity packet** from the claim/resolve response — never fro
 
 `releaseYear`, `coverImageUrl`, `rymUrl` are optional — omit if absent, don't invent them. Pass this exact packet (plus each subagent's slice-specific instructions) into every subagent prompt. Subagents must treat it as ground truth and must not re-resolve, re-search-to-confirm, or second-guess which album/artist they're researching.
 
+## Model
+
+Research subagents are pinned to **Auto** via frontmatter (`model: auto` on each `.cursor/agents/{slice}.md` and matching variant files). When launching them (Task / subagent), **omit** the Task `model` param so frontmatter wins — do not pass a model override.
+
 ## Hard rules (all modes)
 
 - Never launch a research subagent before the identity packet is frozen.

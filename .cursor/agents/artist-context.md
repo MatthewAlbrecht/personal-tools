@@ -5,7 +5,7 @@ description: >-
   origin, active-since, Instagram, a short writeup, and comparable artists.
   Use only when given a frozen album identity packet by the
   enrich-for-later-album orchestrator; never invoke standalone.
-model: inherit
+model: auto
 readonly: true
 ---
 

@@ -122,7 +122,7 @@ Subagents receive this packet and **must not re-resolve** which album/artist the
 | Slice | Subagent | Output (conceptual) |
 |--------|----------|---------------------|
 | `artistContext` | `artist-context` | Origin, active-since, Instagram URL, artist writeup, listen-if-you-like list |
-| `whyListen` | `why-listen` | Short persuasive pitch (not a plot summary) |
+| `whyListen` | `why-listen` | Plainspoken pitch for why to put it on; no name-drops or track tours |
 | `coverDescriptors` | `cover-descriptors` | Artwork keyword tags (color, subject, setting, style) |
 | `occasions` | `occasions` | Situation/vibe tags (dinner party, road trip, late night, …) |
 

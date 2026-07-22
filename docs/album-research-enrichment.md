@@ -5,7 +5,7 @@ Album research enrichment is a Cursor-driven system: an explicit Cursor skill lo
 ## Research slices
 
 - `artistContext` — artist background, links, writeup, and similar-listening context
-- `whyListen` — a short, album-specific listening pitch
+- `whyListen` — a plainspoken pitch for why to put the album on (no name-drops or track tours)
 - `coverDescriptors` — visual artwork tags, separate from RYM musical descriptors
 - `occasions` — situations and settings where the album fits
 
