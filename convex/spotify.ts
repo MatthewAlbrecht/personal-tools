@@ -29,6 +29,11 @@ import {
 	matchRymForSpotifyAlbum,
 	normalizeAlbumTitle,
 } from "./_utils/albumMatching";
+import {
+	findAlbumByNormalizedTitleArtist,
+	insertManualAlbum,
+	recordManualListenForAlbum,
+} from "./_utils/manualAlbum";
 import { upsertSpotifyAlbumRecord } from "./_utils/upsertSpotifyAlbumRecord";
 import { buildSpotifyAlbumListItems } from "./_utils/spotify_album_list";
 import { requireAuth } from "./auth";
@@ -1664,6 +1669,94 @@ export const addAlbumToLibrary = mutation({
 	},
 });
 
+export const addManualAlbumToLibrary = mutation({
+	args: {
+		userId: v.string(),
+		name: v.string(),
+		artistName: v.string(),
+		releaseYear: v.number(),
+		imageUrl: v.optional(v.string()),
+		recordListen: v.optional(v.boolean()),
+		listenedAt: v.optional(v.number()),
+	},
+	returns: v.object({
+		albumId: v.id("spotifyAlbums"),
+		name: v.string(),
+		artistName: v.string(),
+		alreadyExists: v.boolean(),
+		alreadyInLibrary: v.boolean(),
+		listenRecorded: v.boolean(),
+	}),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+
+		const name = args.name.trim();
+		const artistName = args.artistName.trim();
+		if (!name) {
+			throw new Error("Album title is required");
+		}
+		if (!artistName) {
+			throw new Error("Artist name is required");
+		}
+		if (
+			!Number.isInteger(args.releaseYear) ||
+			args.releaseYear < 1000 ||
+			args.releaseYear > 9999
+		) {
+			throw new Error("Release year must be a 4-digit year");
+		}
+		if (args.recordListen && args.listenedAt === undefined) {
+			throw new Error("listenedAt is required when recordListen is true");
+		}
+
+		const existingAlbum = await findAlbumByNormalizedTitleArtist(ctx, {
+			name,
+			artistName,
+		});
+
+		const albumId = existingAlbum
+			? existingAlbum._id
+			: await insertManualAlbum(ctx, {
+					name,
+					artistName,
+					releaseYear: args.releaseYear,
+					imageUrl: args.imageUrl,
+				});
+
+		const existingLibraryRow = await ctx.db
+			.query("albumLibraryItems")
+			.withIndex("by_userId_albumId", (q) =>
+				q.eq("userId", args.userId).eq("albumId", albumId),
+			)
+			.first();
+		const alreadyInLibrary = existingLibraryRow !== null;
+
+		await upsertAlbumLibraryProjection(ctx, {
+			userId: args.userId,
+			albumId,
+		});
+
+		let listenRecorded = false;
+		if (args.recordListen && args.listenedAt !== undefined) {
+			const result = await recordManualListenForAlbum(ctx, {
+				userId: args.userId,
+				albumId,
+				listenedAt: args.listenedAt,
+			});
+			listenRecorded = result.recorded;
+		}
+
+		return {
+			albumId,
+			name: existingAlbum ? existingAlbum.name : name,
+			artistName: existingAlbum ? existingAlbum.artistName : artistName,
+			alreadyExists: existingAlbum !== null,
+			alreadyInLibrary,
+			listenRecorded,
+		};
+	},
+});
+
 const discographyAlbumUpsertItemValidator = v.object({
 	spotifyAlbumId: v.string(),
 	name: v.string(),
@@ -3038,72 +3131,18 @@ export const addManualAlbumListen = mutation({
 			);
 		}
 
-		// 2. Check for duplicate listens at the same timestamp
-		const existingListens = await ctx.db
-			.query("userAlbumListens")
-			.withIndex("by_userId_albumId", (q) =>
-				q.eq("userId", args.userId).eq("albumId", album._id),
-			)
-			.collect();
-
-		const isDuplicate = existingListens.some(
-			(listen) => listen.listenedAt === args.listenedAt,
-		);
-
-		if (isDuplicate) {
-			return { recorded: false, reason: "duplicate_listen" };
-		}
-
-		// 3. Create the listen event
-		await ctx.db.insert("userAlbumListens", {
+		// 2-4. Record the listen and refresh projections
+		const result = await recordManualListenForAlbum(ctx, {
 			userId: args.userId,
 			albumId: album._id,
 			listenedAt: args.listenedAt,
-			earliestPlayedAt: args.listenedAt,
-			latestPlayedAt: args.listenedAt,
-			trackIds: [],
-			source: "manual",
 		});
 
-		// 4. Upsert userAlbums record
-		const existingUserAlbum = await ctx.db
-			.query("userAlbums")
-			.withIndex("by_userId_albumId", (q) =>
-				q.eq("userId", args.userId).eq("albumId", album._id),
-			)
-			.first();
-
-		if (existingUserAlbum) {
-			await ctx.db.patch(existingUserAlbum._id, {
-				firstListenedAt: Math.min(
-					existingUserAlbum.firstListenedAt,
-					args.listenedAt,
-				),
-				lastListenedAt: Math.max(
-					existingUserAlbum.lastListenedAt,
-					args.listenedAt,
-				),
-				listenCount: existingUserAlbum.listenCount + 1,
-			});
-		} else {
-			await ctx.db.insert("userAlbums", {
-				userId: args.userId,
-				albumId: album._id,
-				firstListenedAt: args.listenedAt,
-				lastListenedAt: args.listenedAt,
-				listenCount: 1,
-			});
+		if (!result.recorded) {
+			return { recorded: false as const, reason: result.reason };
 		}
 
-		await refreshForLaterProjectionsForUserAlbum(ctx, {
-			userId: args.userId,
-			albumId: album._id,
-		});
-		await upsertAlbumLibraryProjection(ctx, {
-			userId: args.userId,
-			albumId: album._id,
-		});
-		return { recorded: true, albumName: album.name };
+		return { recorded: true as const, albumName: album.name };
 	},
 });
 
