@@ -19,6 +19,9 @@ import type * as _utils_albumLibraryProjection from "../_utils/albumLibraryProje
 import type * as _utils_albumLibraryRows from "../_utils/albumLibraryRows.js";
 import type * as _utils_albumMatching from "../_utils/albumMatching.js";
 import type * as _utils_albumMatchingCore from "../_utils/albumMatchingCore.js";
+import type * as _utils_bandcampAlbum from "../_utils/bandcampAlbum.js";
+import type * as _utils_bandcampAlbumUrl from "../_utils/bandcampAlbumUrl.js";
+import type * as _utils_bandcampReleaseDate from "../_utils/bandcampReleaseDate.js";
 import type * as _utils_concertEventDedupe from "../_utils/concertEventDedupe.js";
 import type * as _utils_forLaterAlbums from "../_utils/forLaterAlbums.js";
 import type * as _utils_forLaterAlbumsUi from "../_utils/forLaterAlbumsUi.js";
@@ -34,6 +37,7 @@ import type * as _utils_google_rym_lucky_search from "../_utils/google_rym_lucky
 import type * as _utils_libraryForLaterMigration from "../_utils/libraryForLaterMigration.js";
 import type * as _utils_libraryForLaterPredicate from "../_utils/libraryForLaterPredicate.js";
 import type * as _utils_libraryForLaterState from "../_utils/libraryForLaterState.js";
+import type * as _utils_manualAlbum from "../_utils/manualAlbum.js";
 import type * as _utils_musicFunnelRepeats from "../_utils/musicFunnelRepeats.js";
 import type * as _utils_playlistLyrics from "../_utils/playlistLyrics.js";
 import type * as _utils_rateYourMusicTaxonomy from "../_utils/rateYourMusicTaxonomy.js";
@@ -68,6 +72,7 @@ import type * as geniusAlbums from "../geniusAlbums.js";
 import type * as geniusCreditLabels from "../geniusCreditLabels.js";
 import type * as migrations_backfillCategorizedAt from "../migrations/backfillCategorizedAt.js";
 import type * as migrations_backfillSpotifyAlbumId from "../migrations/backfillSpotifyAlbumId.js";
+import type * as migrations_backfillSpotifyAlbumsSource from "../migrations/backfillSpotifyAlbumsSource.js";
 import type * as migrations_backfillUserTracks from "../migrations/backfillUserTracks.js";
 import type * as migrations_importMusicFunnelFromProd from "../migrations/importMusicFunnelFromProd.js";
 import type * as migrations_initializeRatingHistory from "../migrations/initializeRatingHistory.js";
@@ -102,6 +107,9 @@ declare const fullApi: ApiFromModules<{
   "_utils/albumLibraryRows": typeof _utils_albumLibraryRows;
   "_utils/albumMatching": typeof _utils_albumMatching;
   "_utils/albumMatchingCore": typeof _utils_albumMatchingCore;
+  "_utils/bandcampAlbum": typeof _utils_bandcampAlbum;
+  "_utils/bandcampAlbumUrl": typeof _utils_bandcampAlbumUrl;
+  "_utils/bandcampReleaseDate": typeof _utils_bandcampReleaseDate;
   "_utils/concertEventDedupe": typeof _utils_concertEventDedupe;
   "_utils/forLaterAlbums": typeof _utils_forLaterAlbums;
   "_utils/forLaterAlbumsUi": typeof _utils_forLaterAlbumsUi;
@@ -117,6 +125,7 @@ declare const fullApi: ApiFromModules<{
   "_utils/libraryForLaterMigration": typeof _utils_libraryForLaterMigration;
   "_utils/libraryForLaterPredicate": typeof _utils_libraryForLaterPredicate;
   "_utils/libraryForLaterState": typeof _utils_libraryForLaterState;
+  "_utils/manualAlbum": typeof _utils_manualAlbum;
   "_utils/musicFunnelRepeats": typeof _utils_musicFunnelRepeats;
   "_utils/playlistLyrics": typeof _utils_playlistLyrics;
   "_utils/rateYourMusicTaxonomy": typeof _utils_rateYourMusicTaxonomy;
@@ -151,6 +160,7 @@ declare const fullApi: ApiFromModules<{
   geniusCreditLabels: typeof geniusCreditLabels;
   "migrations/backfillCategorizedAt": typeof migrations_backfillCategorizedAt;
   "migrations/backfillSpotifyAlbumId": typeof migrations_backfillSpotifyAlbumId;
+  "migrations/backfillSpotifyAlbumsSource": typeof migrations_backfillSpotifyAlbumsSource;
   "migrations/backfillUserTracks": typeof migrations_backfillUserTracks;
   "migrations/importMusicFunnelFromProd": typeof migrations_importMusicFunnelFromProd;
   "migrations/initializeRatingHistory": typeof migrations_initializeRatingHistory;
