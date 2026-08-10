@@ -1,4 +1,5 @@
 const STORAGE_KEY = "rymReleaseCaptures";
+const STORAGE_KEY_BANDCAMP = "bandcampAlbumCaptures";
 const SETTINGS_BACKEND_ORIGIN = "rymBackendOrigin";
 const SETTINGS_BACKEND_SECRET = "rymBackendSecret";
 
@@ -139,6 +140,137 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 			sendResponse({ ok: true, backend });
 		} catch (error) {
 			console.error("[rym-release-scraper] failed to save capture", error);
+			sendResponse({ ok: false });
+		}
+	})();
+
+	return true;
+});
+
+/**
+ * POST Bandcamp album capture to Next.js → Convex when extension options are
+ * configured. Reuses the same origin/secret settings and host-permission
+ * flow as `forwardCaptureToBackend`.
+ */
+async function forwardBandcampCaptureToBackend(payload) {
+	const cfg = await chrome.storage.sync.get([
+		SETTINGS_BACKEND_ORIGIN,
+		SETTINGS_BACKEND_SECRET,
+	]);
+
+	const originRaw =
+		(typeof cfg[SETTINGS_BACKEND_ORIGIN] === "string" &&
+			cfg[SETTINGS_BACKEND_ORIGIN].trim()) ||
+		"https://www.moooose.dev";
+	const origin = originRaw.replace(/\/+$/, "");
+	const secret =
+		typeof cfg[SETTINGS_BACKEND_SECRET] === "string"
+			? cfg[SETTINGS_BACKEND_SECRET].trim()
+			: "";
+
+	if (!secret) {
+		console.info(
+			"[rym-release-scraper] bandcamp sync skipped — set ingest secret in extension options",
+		);
+		return { synced: false, skipped: true };
+	}
+
+	const permitted = await ensureHostPermissionForBackend(origin);
+	if (!permitted) {
+		console.warn(
+			"[rym-release-scraper] bandcamp sync blocked — host permission denied",
+		);
+		return {
+			synced: false,
+			skipped: false,
+			error: "Host permission denied — allow access when Chrome prompts",
+		};
+	}
+
+	const url = `${origin}/api/bandcamp/capture`;
+
+	try {
+		const res = await fetch(url, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				Authorization: `Bearer ${secret}`,
+			},
+			body: JSON.stringify({
+				bandcampUrl: payload.bandcampUrl,
+				name: payload.name,
+				artistName: payload.artistName,
+				imageUrl: payload.imageUrl,
+				releaseDate: payload.releaseDate,
+			}),
+		});
+
+		if (!res.ok) {
+			const text = await res.text();
+			let errorMessage = text;
+			try {
+				const parsed = JSON.parse(text);
+				if (typeof parsed?.error === "string" && parsed.error.trim()) {
+					errorMessage = parsed.error.trim();
+				}
+			} catch {
+				// keep raw response text
+			}
+			console.error(
+				"[rym-release-scraper] bandcamp sync failed",
+				res.status,
+				errorMessage,
+			);
+			return {
+				synced: false,
+				skipped: false,
+				status: res.status,
+				error: errorMessage,
+			};
+		}
+
+		const json = await res.json().catch(function ignoreJson() {
+			return {};
+		});
+		return {
+			synced: true,
+			skipped: false,
+			alreadyExists: json?.alreadyExists,
+			alreadyInLibrary: json?.alreadyInLibrary,
+		};
+	} catch (error) {
+		console.error("[rym-release-scraper] bandcamp sync error", error);
+		return {
+			synced: false,
+			skipped: false,
+			error: error instanceof Error ? error.message : String(error),
+		};
+	}
+}
+
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+	if (!message || message.type !== "BANDCAMP_ALBUM_CAPTURE") {
+		return;
+	}
+
+	void (async function persistBandcampCapture() {
+		try {
+			const prev = await chrome.storage.local.get(STORAGE_KEY_BANDCAMP);
+			const map =
+				prev[STORAGE_KEY_BANDCAMP] &&
+				typeof prev[STORAGE_KEY_BANDCAMP] === "object"
+					? prev[STORAGE_KEY_BANDCAMP]
+					: {};
+			map[message.payload.bandcampUrl] = message.payload;
+			await chrome.storage.local.set({ [STORAGE_KEY_BANDCAMP]: map });
+
+			const backend = await forwardBandcampCaptureToBackend(message.payload);
+			sendResponse({ ok: true, backend });
+		} catch (error) {
+			console.error(
+				"[rym-release-scraper] failed to save bandcamp capture",
+				error,
+			);
 			sendResponse({ ok: false });
 		}
 	})();
