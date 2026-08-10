@@ -118,11 +118,16 @@ export function EditAlbumDialog({
 						{album.source === "manual" && (
 							<Badge variant="secondary">Manual</Badge>
 						)}
+						{album.source === "bandcamp" && (
+							<Badge variant="secondary">Bandcamp</Badge>
+						)}
 					</DialogTitle>
 					<DialogDescription>
 						{album.source === "manual"
 							? "Update this manual album entry."
-							: "Replace the Spotify link with a manual entry — useful when the album isn't on Spotify or the match is wrong."}
+							: album.source === "bandcamp"
+								? "Update this Bandcamp album entry."
+								: "Replace the Spotify link with a manual entry — useful when the album isn't on Spotify or the match is wrong."}
 					</DialogDescription>
 				</DialogHeader>
 

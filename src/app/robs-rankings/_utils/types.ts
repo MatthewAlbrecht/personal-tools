@@ -3,7 +3,7 @@ import type { Id } from "convex/_generated/dataModel";
 export type RankingAlbum = {
 	_id: Id<"robRankingAlbums">;
 	albumId?: Id<"spotifyAlbums">;
-	source: "spotify" | "manual";
+	source: "spotify" | "manual" | "bandcamp";
 	artistNames?: string[];
 	position: number;
 	album: {

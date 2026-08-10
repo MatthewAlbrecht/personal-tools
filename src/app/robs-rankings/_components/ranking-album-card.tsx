@@ -15,6 +15,7 @@ type RankingAlbumCardProps = {
 	artistName: string;
 	imageUrl?: string;
 	isManual?: boolean;
+	source?: "spotify" | "manual" | "bandcamp";
 	isSingleArtist?: boolean;
 	showSingleArtistToggle?: boolean;
 	isSelected?: boolean;
@@ -68,6 +69,7 @@ export const RankingAlbumCard = forwardRef<
 		artistName,
 		imageUrl,
 		isManual = false,
+		source,
 		isSingleArtist = false,
 		showSingleArtistToggle = false,
 		isSelected = false,
@@ -110,9 +112,14 @@ export const RankingAlbumCard = forwardRef<
 			<div className="min-w-0 flex-1">
 				<div className="flex items-center gap-1.5">
 					<p className="truncate font-medium text-sm">{name}</p>
-					{isManual && (
+					{source === "manual" && (
 						<Badge variant="outline" className="h-4 px-1 text-[10px]">
 							Manual
+						</Badge>
+					)}
+					{source === "bandcamp" && (
+						<Badge variant="outline" className="h-4 px-1 text-[10px]">
+							Bandcamp
 						</Badge>
 					)}
 				</div>

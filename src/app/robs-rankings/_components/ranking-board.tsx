@@ -226,7 +226,11 @@ export function RankingBoard({
 												name={album.album?.name ?? "Unknown"}
 												artistName={album.album?.artistName ?? "Unknown"}
 												imageUrl={album.album?.imageUrl}
-												isManual={album.source === "manual"}
+												isManual={
+													album.source === "manual" ||
+													album.source === "bandcamp"
+												}
+												source={album.source}
 												isSingleArtist={album.artistNames?.length === 1}
 												showSingleArtistToggle={album.source === "spotify"}
 												isSelected={isSelected}
