@@ -381,17 +381,25 @@ function sendCapture(payload, button, errorEl, state) {
 				setCaptureToast("ok", `Saved to library: ${payload.name}`);
 				return;
 			}
+			if (backend?.skipped) {
+				state.hasSavedOnce = true;
+				state.idleLabel = "Update in library";
+				renderSuccess(button, errorEl, true);
+				setCaptureToast("ok", `Saved locally: ${payload.name}`);
+				return;
+			}
 
 			const detail =
 				typeof backend?.error === "string" && backend.error.trim()
 					? backend.error.trim()
-					: backend?.skipped
-						? "Set the ingest secret in extension options."
-						: typeof backend?.status === "number"
-							? `HTTP ${backend.status}`
-							: "network or permission error";
+					: typeof backend?.status === "number"
+						? `HTTP ${backend.status}`
+						: "network or permission error";
 			renderError(button, errorEl, state.idleLabel, detail);
-			setCaptureToast("warn", `Bandcamp sync failed — ${detail}`);
+			setCaptureToast(
+				"warn",
+				`Saved locally — backend sync failed (${detail}). Open extension options.`,
+			);
 		},
 	);
 }
