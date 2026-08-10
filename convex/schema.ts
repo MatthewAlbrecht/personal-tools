@@ -165,6 +165,7 @@ export default defineSchema({
 		zineCoverTextAlign: v.optional(zineCoverTextAlignValidator),
 		zineCoverTextOffsetXIn: v.optional(v.number()),
 		zineCoverTextOffsetYIn: v.optional(v.number()),
+		zineCoverShowTitle: v.optional(v.boolean()),
 		zineCoverReleaseYear: v.optional(v.number()),
 		introPageContent: v.optional(v.string()),
 		zineIntroParagraphSpacingPt: v.optional(v.number()),
@@ -247,6 +248,7 @@ export default defineSchema({
 		zineCoverTextAlign: v.optional(zineCoverTextAlignValidator),
 		zineCoverTextOffsetXIn: v.optional(v.number()),
 		zineCoverTextOffsetYIn: v.optional(v.number()),
+		zineCoverShowTitle: v.optional(v.boolean()),
 		zineCoverReleaseYear: v.optional(v.number()),
 		zineSpotifyQrStorageId: v.optional(v.id("_storage")),
 		zineSpotifyQrImageUrl: v.optional(v.string()),
@@ -517,7 +519,8 @@ export default defineSchema({
 
 	// Spotify Album tracking tables
 	spotifyAlbums: defineTable({
-		spotifyAlbumId: v.string(), // Spotify's album ID
+		spotifyAlbumId: v.optional(v.string()), // Spotify's album ID
+		source: v.union(v.literal("spotify"), v.literal("manual")),
 		name: v.string(),
 		albumTitleKey: v.optional(v.string()),
 		artistName: v.string(),
@@ -539,7 +542,7 @@ export default defineSchema({
 	albumLibraryItems: defineTable({
 		userId: v.string(),
 		albumId: v.id("spotifyAlbums"),
-		spotifyAlbumId: v.string(),
+		spotifyAlbumId: v.optional(v.string()),
 		name: v.string(),
 		artistName: v.string(),
 		artistSortKey: v.string(),
