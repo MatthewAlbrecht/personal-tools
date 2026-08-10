@@ -32,7 +32,9 @@ type RankingAlbumDisplay = {
 
 function isManualRankingEntry(ranking: Doc<"robRankingAlbums">): boolean {
 	if (ranking.source === "manual") return true;
-	if (ranking.source === "spotify") return false;
+	if (ranking.source === "spotify" || ranking.source === "bandcamp") {
+		return false;
+	}
 	return (
 		ranking.manualAlbumTitle !== undefined && ranking.albumId === undefined
 	);
@@ -64,7 +66,11 @@ function resolveRankingAlbumDisplay(
 
 function getRankingSource(
 	ranking: Doc<"robRankingAlbums">,
-): "spotify" | "manual" {
+	album?: Doc<"spotifyAlbums"> | null,
+): "spotify" | "manual" | "bandcamp" {
+	if (ranking.source === "bandcamp" || album?.source === "bandcamp") {
+		return "bandcamp";
+	}
 	return isManualRankingEntry(ranking) ? "manual" : "spotify";
 }
 
@@ -557,7 +563,7 @@ export const getAlbumsForYear = query({
 				return {
 					_id: ranking._id,
 					albumId: ranking.albumId,
-					source: getRankingSource(ranking),
+					source: getRankingSource(ranking, album),
 					artistNames: ranking.artistNames,
 					position: ranking.position,
 					album: resolveRankingAlbumDisplay(ranking, album),
