@@ -38,6 +38,7 @@ export async function upsertSpotifyAlbumRecord(
 			totalTracks: args.totalTracks,
 			genres: args.genres,
 			...(args.rawData !== undefined ? { rawData: args.rawData } : {}),
+			source: "spotify",
 			updatedAt: now,
 		});
 		await refreshAlbumLibraryProjectionsForAlbum(ctx, existing._id);
@@ -54,6 +55,7 @@ export async function upsertSpotifyAlbumRecord(
 		totalTracks: args.totalTracks,
 		genres: args.genres,
 		...(args.rawData !== undefined ? { rawData: args.rawData } : {}),
+		source: "spotify",
 		createdAt: now,
 		updatedAt: now,
 	});

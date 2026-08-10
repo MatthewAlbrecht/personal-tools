@@ -16,3 +16,20 @@ test("albumLibraryItems spotifyAlbumId is optional", () => {
 		/albumLibraryItems:\s*defineTable\(\{[\s\S]*?spotifyAlbumId:\s*v\.optional\(v\.string\(\)\)/,
 	);
 });
+
+const upsert = readFileSync(
+	join(process.cwd(), "convex/_utils/upsertSpotifyAlbumRecord.ts"),
+	"utf8",
+);
+const projection = readFileSync(
+	join(process.cwd(), "convex/_utils/albumLibraryProjection.ts"),
+	"utf8",
+);
+
+test("upsertSpotifyAlbumRecord sets source spotify on insert and patch", () => {
+	assert.match(upsert, /source:\s*"spotify"/);
+});
+
+test("album library projection copies optional spotifyAlbumId from album", () => {
+	assert.match(projection, /spotifyAlbumId:\s*album\.spotifyAlbumId/);
+});
