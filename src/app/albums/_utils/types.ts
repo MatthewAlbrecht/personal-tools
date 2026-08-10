@@ -60,7 +60,7 @@ export type TrackItem = {
 // Album item for all albums view
 export type AlbumItem = {
 	_id: string;
-	spotifyAlbumId: string;
+	spotifyAlbumId?: string;
 	name: string;
 	artistName: string;
 	imageUrl?: string;
@@ -71,7 +71,7 @@ export type AlbumItem = {
 
 export type AlbumLibraryRowData = {
 	_id: string;
-	spotifyAlbumId: string;
+	spotifyAlbumId?: string;
 	name: string;
 	artistName: string;
 	imageUrl?: string;

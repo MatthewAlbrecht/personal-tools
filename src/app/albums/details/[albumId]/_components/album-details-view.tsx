@@ -99,7 +99,7 @@ function TagChips({ tags }: { tags: AlbumDetailsTag[] }) {
 }
 
 function HeroSection({ hero }: { hero: AlbumDetails["hero"] }) {
-	const spotifyUrl = `https://open.spotify.com/album/${hero.spotifyAlbumId}`;
+	const hasSpotifyAlbumId = Boolean(hero.spotifyAlbumId?.trim());
 
 	return (
 		<div className="flex flex-col gap-4 sm:flex-row sm:items-start">
@@ -125,15 +125,17 @@ function HeroSection({ hero }: { hero: AlbumDetails["hero"] }) {
 					</p>
 				</div>
 				<div className="flex flex-wrap gap-3 text-sm">
-					<a
-						href={spotifyUrl}
-						target="_blank"
-						rel="noopener noreferrer"
-						className="inline-flex items-center gap-1 text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-					>
-						Spotify
-						<ExternalLink className="h-3 w-3" />
-					</a>
+					{hasSpotifyAlbumId ? (
+						<a
+							href={`https://open.spotify.com/album/${hero.spotifyAlbumId}`}
+							target="_blank"
+							rel="noopener noreferrer"
+							className="inline-flex items-center gap-1 text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+						>
+							Spotify
+							<ExternalLink className="h-3 w-3" />
+						</a>
+					) : null}
 					{hero.rymUrl ? (
 						<a
 							href={hero.rymUrl}
@@ -415,10 +417,14 @@ function ListensSection({ listens }: { listens: AlbumDetails["listens"] }) {
 }
 
 function RawIdentityFooter({ ids }: { ids: AlbumDetails["ids"] }) {
+	const hasSpotifyAlbumId = Boolean(ids.spotifyAlbumId?.trim());
+
 	return (
 		<div className="space-y-1.5 text-muted-foreground text-xs">
 			<p className="font-mono">Album: {ids.albumId}</p>
-			<p className="font-mono">Spotify: {ids.spotifyAlbumId}</p>
+			{hasSpotifyAlbumId ? (
+				<p className="font-mono">Spotify: {ids.spotifyAlbumId}</p>
+			) : null}
 			{ids.enrichmentId ? (
 				<p className="font-mono">Enrichment: {ids.enrichmentId}</p>
 			) : null}
