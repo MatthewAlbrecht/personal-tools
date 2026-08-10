@@ -29,6 +29,7 @@ import {
 	matchRymForSpotifyAlbum,
 	normalizeAlbumTitle,
 } from "./_utils/albumMatching";
+import { upsertBandcampAlbumRecord } from "./_utils/bandcampAlbum";
 import {
 	findAlbumByNormalizedTitleArtist,
 	insertManualAlbum,
@@ -1664,6 +1665,57 @@ export const addAlbumToLibrary = mutation({
 			albumId,
 			name: args.name,
 			artistName: args.artistName,
+			alreadyInLibrary,
+		};
+	},
+});
+
+export const captureBandcampAlbumToLibrary = mutation({
+	args: {
+		userId: v.string(),
+		bandcampUrl: v.string(),
+		name: v.string(),
+		artistName: v.string(),
+		imageUrl: v.optional(v.string()),
+		releaseDate: v.optional(v.string()),
+	},
+	returns: v.object({
+		albumId: v.id("spotifyAlbums"),
+		name: v.string(),
+		artistName: v.string(),
+		alreadyExists: v.boolean(),
+		alreadyInLibrary: v.boolean(),
+	}),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+		const { albumId, alreadyExists } = await upsertBandcampAlbumRecord(ctx, {
+			bandcampUrl: args.bandcampUrl,
+			name: args.name,
+			artistName: args.artistName,
+			imageUrl: args.imageUrl,
+			releaseDate: args.releaseDate,
+		});
+		const album = await ctx.db.get(albumId);
+		if (!album) throw new Error("Album not found after upsert");
+
+		const existingLibraryRow = await ctx.db
+			.query("albumLibraryItems")
+			.withIndex("by_userId_albumId", (q) =>
+				q.eq("userId", args.userId).eq("albumId", albumId),
+			)
+			.first();
+		const alreadyInLibrary = existingLibraryRow !== null;
+
+		await upsertAlbumLibraryProjection(ctx, {
+			userId: args.userId,
+			albumId,
+		});
+
+		return {
+			albumId,
+			name: album.name,
+			artistName: album.artistName,
+			alreadyExists,
 			alreadyInLibrary,
 		};
 	},
