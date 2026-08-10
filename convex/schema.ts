@@ -520,7 +520,8 @@ export default defineSchema({
 	// Spotify Album tracking tables
 	spotifyAlbums: defineTable({
 		spotifyAlbumId: v.optional(v.string()), // Spotify's album ID
-		source: v.union(v.literal("spotify"), v.literal("manual")),
+		source: v.union(v.literal("spotify"), v.literal("manual"), v.literal("bandcamp")),
+		bandcampUrl: v.optional(v.string()),
 		name: v.string(),
 		albumTitleKey: v.optional(v.string()),
 		artistName: v.string(),
@@ -537,7 +538,8 @@ export default defineSchema({
 	})
 		.index("by_spotifyAlbumId", ["spotifyAlbumId"])
 		.index("by_albumTitleKey", ["albumTitleKey"])
-		.index("by_createdAt", ["createdAt"]),
+		.index("by_createdAt", ["createdAt"])
+		.index("by_bandcampUrl", ["bandcampUrl"]),
 
 	albumLibraryItems: defineTable({
 		userId: v.string(),
@@ -1292,7 +1294,13 @@ export default defineSchema({
 		userId: v.string(),
 		yearId: v.id("robRankingYears"),
 		albumId: v.optional(v.id("spotifyAlbums")),
-		source: v.optional(v.union(v.literal("spotify"), v.literal("manual"))),
+		source: v.optional(
+			v.union(
+				v.literal("spotify"),
+				v.literal("manual"),
+				v.literal("bandcamp"),
+			),
+		),
 		artistNames: v.optional(v.array(v.string())),
 		manualArtistName: v.optional(v.string()),
 		manualAlbumTitle: v.optional(v.string()),

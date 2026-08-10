@@ -12,7 +12,7 @@ test("spotifyAlbums declares optional spotifyAlbumId and source union", () => {
 	);
 	assert.match(
 		schema,
-		/source:\s*v\.union\(\s*v\.literal\("spotify"\),\s*v\.literal\("manual"\)\s*\)/,
+		/source:\s*v\.union\(\s*v\.literal\("spotify"\),\s*v\.literal\("manual"\),\s*v\.literal\("bandcamp"\)\s*\)/,
 	);
 });
 
