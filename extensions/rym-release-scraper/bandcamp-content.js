@@ -61,7 +61,7 @@ function parseYear(text) {
 }
 
 function parseBandcampReleaseDate(raw) {
-	const text = raw.replace(/^released\s+/i, "").trim();
+	const text = raw.replace(/^(?:released|releases)\s+/i, "").trim();
 	if (!text) {
 		return undefined;
 	}
@@ -85,13 +85,13 @@ function collapseWhitespace(text) {
 	return (text || "").replace(/\s+/g, " ").trim();
 }
 
-/** Extracts the "released ..." line from the `.tralbum-credits` block. */
+/** Extracts the "released ..." or "releases ..." line from `.tralbum-credits`. */
 function extractReleasedText(creditsEl) {
 	if (!creditsEl) {
 		return "";
 	}
 	const text = creditsEl.textContent || "";
-	const match = text.match(/released\s+[^\n\r]+/i);
+	const match = text.match(/releases?\s+[^\n\r]+/i);
 	return match ? match[0].trim() : "";
 }
 

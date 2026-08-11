@@ -520,7 +520,11 @@ export default defineSchema({
 	// Spotify Album tracking tables
 	spotifyAlbums: defineTable({
 		spotifyAlbumId: v.optional(v.string()), // Spotify's album ID
-		source: v.union(v.literal("spotify"), v.literal("manual"), v.literal("bandcamp")),
+		source: v.union(
+			v.literal("spotify"),
+			v.literal("manual"),
+			v.literal("bandcamp"),
+		),
 		bandcampUrl: v.optional(v.string()),
 		name: v.string(),
 		albumTitleKey: v.optional(v.string()),
@@ -698,10 +702,7 @@ export default defineSchema({
 		label: v.string(),
 	})
 		.index("by_albumId", ["albumId"])
-		.index("by_coverDescriptorKey_albumId", [
-			"coverDescriptorKey",
-			"albumId",
-		]),
+		.index("by_coverDescriptorKey_albumId", ["coverDescriptorKey", "albumId"]),
 
 	albumOccasionFacets: defineTable({
 		albumId: v.id("spotifyAlbums"),
@@ -1037,9 +1038,7 @@ export default defineSchema({
 		notes: v.optional(v.string()),
 		scheduleHint: v.optional(v.string()),
 		isActive: v.boolean(),
-		kind: v.optional(
-			v.union(v.literal("recurring"), v.literal("one_off")),
-		),
+		kind: v.optional(v.union(v.literal("recurring"), v.literal("one_off"))),
 		spotifyPlaylistName: v.optional(v.string()),
 		spotifyOwnerId: v.optional(v.string()),
 		spotifyOwnerName: v.optional(v.string()),
@@ -1295,11 +1294,7 @@ export default defineSchema({
 		yearId: v.id("robRankingYears"),
 		albumId: v.optional(v.id("spotifyAlbums")),
 		source: v.optional(
-			v.union(
-				v.literal("spotify"),
-				v.literal("manual"),
-				v.literal("bandcamp"),
-			),
+			v.union(v.literal("spotify"), v.literal("manual"), v.literal("bandcamp")),
 		),
 		artistNames: v.optional(v.array(v.string())),
 		manualArtistName: v.optional(v.string()),
@@ -1615,9 +1610,5 @@ export default defineSchema({
 			v.literal("day_of"),
 		),
 		sentAt: v.number(),
-	}).index("by_birthday_year_step", [
-		"birthdayId",
-		"occurrenceYear",
-		"step",
-	]),
+	}).index("by_birthday_year_step", ["birthdayId", "occurrenceYear", "step"]),
 });

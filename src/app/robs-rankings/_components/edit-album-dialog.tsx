@@ -126,7 +126,7 @@ export function EditAlbumDialog({
 						{album.source === "manual"
 							? "Update this manual album entry."
 							: album.source === "bandcamp"
-								? "Update this Bandcamp album entry."
+								? "Replace the Bandcamp link with a manual entry — useful when the album details need correction."
 								: "Replace the Spotify link with a manual entry — useful when the album isn't on Spotify or the match is wrong."}
 					</DialogDescription>
 				</DialogHeader>
@@ -181,7 +181,11 @@ export function EditAlbumDialog({
 					>
 						Cancel
 					</Button>
-					<Button type="button" onClick={() => void handleSave()} disabled={isSaving}>
+					<Button
+						type="button"
+						onClick={() => void handleSave()}
+						disabled={isSaving}
+					>
 						{isSaving ? "Saving..." : "Save manual entry"}
 					</Button>
 				</DialogFooter>

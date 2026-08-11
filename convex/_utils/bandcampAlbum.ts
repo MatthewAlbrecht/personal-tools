@@ -35,8 +35,10 @@ export async function upsertBandcampAlbumRecord(
 			name,
 			artistName,
 			albumTitleKey,
-			imageUrl: args.imageUrl,
-			releaseDate: args.releaseDate,
+			...(args.imageUrl !== undefined ? { imageUrl: args.imageUrl } : {}),
+			...(args.releaseDate !== undefined
+				? { releaseDate: args.releaseDate }
+				: {}),
 			updatedAt: now,
 		});
 		return { albumId: existing._id, alreadyExists: true };

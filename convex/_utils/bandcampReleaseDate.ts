@@ -18,9 +18,7 @@ function padTwo(value: number): string {
 }
 
 function parseMonthDayYear(text: string): string | undefined {
-	const match = text.match(
-		/\b([A-Za-z]+)\s+(\d{1,2}),?\s+((?:19|20)\d{2})\b/,
-	);
+	const match = text.match(/\b([A-Za-z]+)\s+(\d{1,2}),?\s+((?:19|20)\d{2})\b/);
 	if (!match) {
 		return undefined;
 	}
@@ -50,7 +48,7 @@ function parseYear(text: string): string | undefined {
 }
 
 export function parseBandcampReleaseDate(raw: string): string | undefined {
-	const text = raw.replace(/^released\s+/i, "").trim();
+	const text = raw.replace(/^(?:released|releases)\s+/i, "").trim();
 	if (!text) {
 		return undefined;
 	}

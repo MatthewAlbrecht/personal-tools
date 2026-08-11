@@ -20,4 +20,12 @@ test("bandcamp upsert helper writes source bandcamp and never spotifyAlbumId", (
 	assert.match(helper, /source:\s*"bandcamp"/);
 	assert.doesNotMatch(helper, /spotifyAlbumId:/);
 	assert.match(helper, /by_bandcampUrl/);
+	assert.match(
+		helper,
+		/\.\.\.\(args\.imageUrl !== undefined \? \{ imageUrl: args\.imageUrl \} : \{\}\)/,
+	);
+	assert.match(
+		helper,
+		/\.\.\.\(args\.releaseDate !== undefined\s*\? \{ releaseDate: args\.releaseDate \}\s*: \{\}\)/,
+	);
 });
