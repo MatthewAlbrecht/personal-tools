@@ -1,7 +1,6 @@
 "use client";
 
 import { Disc3 } from "lucide-react";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AlbumRatingDrawer } from "~/components/album-rating-drawer";
 import { LoginPrompt } from "~/components/login-prompt";
@@ -10,14 +9,43 @@ import { SpotifyConnection } from "../spotify-playlister/_components/spotify-con
 import { AddListenDrawer } from "./_components/add-listen-view";
 import { AlbumsProvider, useAlbums } from "./_context/albums-context";
 
-const TABS = [
-	{ href: "/albums/recent", label: "Recent" },
-	{ href: "/albums/rated", label: "Rated" },
-	{ href: "/albums/library", label: "Library" },
-] as const;
+const VIEW_TITLES: Record<string, { title: string; blurb: string }> = {
+	"/albums/recent": {
+		title: "Listens",
+		blurb: "Chronological listens — rate what still needs a mark.",
+	},
+	"/albums/rated": {
+		title: "Rankings",
+		blurb: "Year tiers and on-page ranking.",
+	},
+	"/albums/up-next": {
+		title: "Queue",
+		blurb: "Prioritized queue from saves and picks.",
+	},
+	"/albums/library": {
+		title: "Library",
+		blurb: "Searchable catalog of albums you track.",
+	},
+	"/albums/tracks": {
+		title: "Tracks",
+		blurb: "Recent Spotify track plays.",
+	},
+};
+
+function getViewMeta(pathname: string): { title: string; blurb: string } {
+	for (const [path, meta] of Object.entries(VIEW_TITLES)) {
+		if (pathname === path || pathname.startsWith(`${path}/`)) {
+			return meta;
+		}
+	}
+	return {
+		title: "Albums",
+		blurb: "Your listening archive and queue.",
+	};
+}
 
 function AlbumsLayoutContent({ children }: { children: React.ReactNode }) {
-	const pathname = usePathname();
+	const pathname = usePathname() ?? "";
 	const {
 		userId,
 		isLoading,
@@ -38,9 +66,11 @@ function AlbumsLayoutContent({ children }: { children: React.ReactNode }) {
 		handleAddListen,
 	} = useAlbums();
 
+	const viewMeta = getViewMeta(pathname);
+
 	if (isLoading) {
 		return (
-			<div className="container mx-auto max-w-6xl p-6">
+			<div className="w-full p-6">
 				<div className="flex h-[50vh] items-center justify-center">
 					<p className="text-muted-foreground">Loading...</p>
 				</div>
@@ -58,61 +88,50 @@ function AlbumsLayoutContent({ children }: { children: React.ReactNode }) {
 		);
 	}
 
+	const showHistorySync =
+		pathname.startsWith("/albums/recent") ||
+		pathname.startsWith("/albums/rated") ||
+		pathname.startsWith("/albums/library") ||
+		pathname.startsWith("/albums/tracks");
+
 	return (
-		<div className="container mx-auto max-w-6xl p-6">
-			{/* Header */}
-			<div className="mb-6 flex items-start justify-between">
+		<div className="w-full p-6">
+			<div className="mb-6 flex items-start justify-between gap-4">
 				<div>
-					<h1 className="font-bold text-3xl">Album Tracker</h1>
-					<p className="mt-2 text-muted-foreground">
-						Track what albums you've listened to and when
+					<p className="mb-1 font-semibold text-[0.65rem] text-teal-800 uppercase tracking-[0.16em]">
+						My Albums
 					</p>
+					<h1 className="font-[family-name:var(--font-display)] font-semibold text-3xl tracking-tight">
+						{viewMeta.title}
+					</h1>
+					<p className="mt-2 text-muted-foreground text-sm">{viewMeta.blurb}</p>
 				</div>
-				{isConnected && (
+				{isConnected && showHistorySync ? (
 					<SyncAlbumsButton
 						isSyncing={isSyncing}
 						onSync={syncHistory}
 						variant="outline"
 						lastSyncedAt={lastSyncRun?.completedAt}
 					/>
-				)}
+				) : null}
 			</div>
 
-			{/* Spotify Connection */}
-			<SpotifyConnection
-				isConnected={isConnected}
-				displayName={connection?.displayName}
-				onDisconnect={handleDisconnect}
-			/>
+			{showHistorySync ? (
+				<SpotifyConnection
+					isConnected={isConnected}
+					displayName={connection?.displayName}
+					onDisconnect={handleDisconnect}
+				/>
+			) : null}
 
-			{isConnected && (
-				<div className="mt-6">
-					{/* Tabs */}
-					<div className="mb-6 flex gap-1 rounded-lg bg-muted p-1">
-						{TABS.map((tab) => {
-							const isActive = pathname === tab.href;
-							return (
-								<Link
-									key={tab.href}
-									href={tab.href}
-									className={`flex-1 rounded-md px-4 py-2 text-center font-medium text-sm transition-colors ${
-										isActive
-											? "bg-background text-foreground shadow-sm"
-											: "text-muted-foreground hover:text-foreground"
-									}`}
-								>
-									{tab.label}
-								</Link>
-							);
-						})}
-					</div>
-
-					{/* Page Content */}
-					{children}
+			{isConnected || pathname.startsWith("/albums/up-next") ? (
+				<div className={showHistorySync ? "mt-6" : undefined}>{children}</div>
+			) : (
+				<div className="mt-6 rounded-lg border border-dashed p-8 text-center text-muted-foreground text-sm">
+					Connect Spotify to use this view.
 				</div>
 			)}
 
-			{/* Add Listen Drawer */}
 			<AddListenDrawer
 				track={
 					trackToAddListen
