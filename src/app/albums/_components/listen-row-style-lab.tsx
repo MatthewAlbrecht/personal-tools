@@ -1,9 +1,20 @@
 "use client";
 
-import { Disc3, MoreHorizontal } from "lucide-react";
+import {
+	ArrowDownRight,
+	ArrowRight,
+	ArrowUpRight,
+	Disc3,
+	MoreHorizontal,
+} from "lucide-react";
 import Image from "next/image";
 import type { ReactNode } from "react";
-import { getRatingColors, getTierShortLabel } from "~/lib/album-tiers";
+import {
+	getRatingColors,
+	getTierInfo,
+	getTierShortLabel,
+	type SubTier,
+} from "~/lib/album-tiers";
 import { cn } from "~/lib/utils";
 
 type LabListen = {
@@ -238,14 +249,36 @@ function MenuGhost(): ReactNode {
 	);
 }
 
+function SubTierArrow({ subTier }: { subTier: SubTier }): ReactNode {
+	const Icon =
+		subTier === "High"
+			? ArrowUpRight
+			: subTier === "Med"
+				? ArrowRight
+				: ArrowDownRight;
+	return <Icon className="size-3 shrink-0" strokeWidth={2.25} aria-hidden />;
+}
+
 function RatingInk({ rating }: { rating: number }): ReactNode {
 	const colors = getRatingColors(rating);
+	const info = getTierInfo(rating);
+	if (!info) {
+		return (
+			<span className="font-medium text-[11px] text-muted-foreground/50">
+				Unrated
+			</span>
+		);
+	}
 	return (
 		<span
-			className={cn("font-medium text-[11px] tracking-tight", colors.text)}
+			className={cn(
+				"inline-flex items-center gap-0.5 font-medium text-[11px] tracking-tight",
+				colors.text,
+			)}
 			title="Opens ranking drawer"
 		>
-			{getTierShortLabel(rating)}
+			{info.tier}
+			<SubTierArrow subTier={info.subTier} />
 		</span>
 	);
 }
