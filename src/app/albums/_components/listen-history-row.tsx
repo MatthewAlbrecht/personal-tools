@@ -70,7 +70,7 @@ export function ListenHistoryRow({
 					)}
 				>
 					{/* Mobile — Aligned stack */}
-					<span className="flex items-stretch gap-3 px-1 py-2.5 md:hidden">
+					<span className="flex items-stretch gap-3 px-3 py-3 md:hidden">
 						<CoverWithCornerMark
 							name={name}
 							imageUrl={imageUrl}
@@ -78,7 +78,7 @@ export function ListenHistoryRow({
 							listenCount={listen.listenCount}
 							size="lg"
 						/>
-						<span className="flex min-h-16 min-w-0 flex-1 flex-col justify-between gap-1.5 py-0.5">
+						<span className="flex min-h-16 min-w-0 flex-1 flex-col justify-between gap-1.5">
 							<span className="min-w-0">
 								<span className="line-clamp-2 font-medium text-sm leading-snug">
 									{name}
@@ -87,18 +87,22 @@ export function ListenHistoryRow({
 									{artistName}
 								</span>
 							</span>
-							<span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
-								{rating !== undefined ? (
-									<RatingInk rating={rating} />
-								) : (
-									<UnrankedQuiet />
-								)}
-								{listen.isFirstListen ? (
-									<span className="text-muted-foreground tabular-nums">
-										{listen.listenCount}×
-									</span>
-								) : null}
-								<span className="text-muted-foreground/65">{day.label}</span>
+							<span className="flex items-end justify-between gap-3 text-[11px]">
+								<span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+									{rating !== undefined ? (
+										<RatingInk rating={rating} />
+									) : (
+										<UnrankedQuiet />
+									)}
+									{listen.isFirstListen ? (
+										<span className="text-muted-foreground tabular-nums">
+											{listen.listenCount}×
+										</span>
+									) : null}
+								</span>
+								<span className="shrink-0 text-muted-foreground/65 tabular-nums">
+									{day.label}
+								</span>
 							</span>
 						</span>
 					</span>
