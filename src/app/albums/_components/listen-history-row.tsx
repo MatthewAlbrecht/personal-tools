@@ -104,8 +104,8 @@ export function ListenHistoryRow({
 					</span>
 
 					{/* Desktop — Slim rail */}
-					<span className="hidden grid-cols-[3.5rem_minmax(0,1fr)_auto] items-center gap-3 px-1 py-2 md:grid">
-						<span className="self-stretch border-border/55 border-r pr-2 text-right">
+					<span className="hidden grid-cols-[3.5rem_minmax(0,1fr)_auto] items-start gap-3 px-1 py-2 md:grid">
+						<span className="border-border/55 border-r pt-1 pr-2 text-right">
 							{showDay ? (
 								<span className="font-medium text-[10px] text-muted-foreground tabular-nums leading-none">
 									{day.label}
@@ -124,14 +124,16 @@ export function ListenHistoryRow({
 								listenCount={listen.listenCount}
 								size="md"
 							/>
-							<span className="min-w-0">
-								<span className="line-clamp-1 font-medium text-sm">{name}</span>
-								<span className="mt-0.5 block truncate text-muted-foreground text-xs">
+							<span className="min-w-0 py-0.5">
+								<span className="line-clamp-1 font-medium text-sm leading-snug">
+									{name}
+								</span>
+								<span className="mt-0.5 block truncate text-muted-foreground text-xs leading-tight">
 									{artistName}
 								</span>
 							</span>
 						</span>
-						<span className="self-center">
+						<span className="pt-1.5 self-start">
 							{rating !== undefined ? (
 								<RatingInk rating={rating} />
 							) : (

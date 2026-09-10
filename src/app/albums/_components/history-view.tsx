@@ -211,14 +211,19 @@ export function HistoryView({
 											)}ms both`,
 										}}
 									>
-										<div className="mb-2.5 flex items-baseline gap-3 border-border/60 border-b pb-1.5">
-											<h2 className="font-[family-name:var(--font-display)] text-xl tracking-tight">
-												{section.label}
-											</h2>
-											<span className="text-muted-foreground text-xs">
-												{albumCount} {albumCount === 1 ? "album" : "albums"} ·{" "}
-												{newCount} new
-											</span>
+										<div className="mb-2.5 grid grid-cols-1 items-end gap-x-3 border-border/60 border-b pb-1.5 md:grid-cols-[3.5rem_minmax(0,1fr)]">
+											{/* Desktop: empty day gutter so the title shares the cover column axis */}
+											<span className="hidden md:block" aria-hidden />
+											<div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5">
+												<h2 className="font-[family-name:var(--font-display)] text-xl tracking-tight">
+													{section.label}
+												</h2>
+												<span className="text-muted-foreground text-xs">
+													{albumCount}{" "}
+													{albumCount === 1 ? "album" : "albums"} · {newCount}{" "}
+													new
+												</span>
+											</div>
 										</div>
 										<ul className="divide-y divide-border/40 overflow-hidden rounded-md border border-border/60 bg-background md:divide-y-0 md:border-0 md:bg-transparent">
 											{section.items.map((listen, index) => {
