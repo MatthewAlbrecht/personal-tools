@@ -1,12 +1,6 @@
 "use client";
 
-import {
-	Disc3,
-	MoreHorizontal,
-	RefreshCw,
-	SlidersHorizontal,
-	Trash2,
-} from "lucide-react";
+import { Disc3, SlidersHorizontal } from "lucide-react";
 import { useMemo, useState } from "react";
 import { SyncAlbumsButton } from "~/components/sync-albums-button";
 import {
@@ -21,12 +15,6 @@ import {
 } from "~/components/ui/alert-dialog";
 import { badgeVariants } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuTrigger,
-} from "~/components/ui/dropdown-menu";
 import { Separator } from "~/components/ui/separator";
 import {
 	Sheet,
@@ -44,9 +32,8 @@ import {
 import { cn } from "~/lib/utils";
 import { useAlbums } from "../_context/albums-context";
 import type { HistoryListen } from "../_utils/types";
-import { AlbumCard } from "./album-card";
 import { ConvertListenDrawer } from "./convert-listen-drawer";
-import { ListenRowStyleLab } from "./listen-row-style-lab";
+import { ListenHistoryRow, listenDayKey } from "./listen-history-row";
 import {
 	ListensFilters,
 	type ListensGrouping,
@@ -176,8 +163,6 @@ export function HistoryView({
 				</aside>
 
 				<div className="min-w-0">
-					<ListenRowStyleLab />
-
 					<div className="mb-4 lg:hidden">
 						<Button
 							type="button"
@@ -232,60 +217,33 @@ export function HistoryView({
 												{newCount} new
 											</span>
 										</div>
-										<ul className="space-y-0.5">
-											{section.items.map((listen) => (
-												<li
-													key={listen._id}
-													className="flex items-center gap-1"
-												>
-													<div className="min-w-0 flex-1">
-														<AlbumCard
-															name={listen.album?.name ?? "Unknown Album"}
-															artistName={
-																listen.album?.artistName ?? "Unknown Artist"
-															}
-															imageUrl={listen.album?.imageUrl}
-															listenedAt={listen.listenedAt}
-															listenCount={listen.listenCount}
-															isFirstListen={listen.isFirstListen}
+										<ul className="divide-y divide-border/40 overflow-hidden rounded-md border border-border/60 bg-background md:divide-y-0 md:border-0 md:bg-transparent">
+											{section.items.map((listen, index) => {
+												const prev = section.items[index - 1];
+												const showDay =
+													!prev ||
+													listenDayKey(listen.listenedAt) !==
+														listenDayKey(prev.listenedAt);
+
+												return (
+													<li key={listen._id}>
+														<ListenHistoryRow
+															listen={listen}
 															rating={albumRatings.get(listen.albumId)}
-															showListenDate
+															showDay={showDay}
 															onRate={() => onRateAlbum(listen)}
+															onConvert={() => setConvertTarget(listen)}
+															onDelete={() =>
+																setDeleteTarget({
+																	id: listen._id,
+																	name:
+																		listen.album?.name ?? "Unknown Album",
+																})
+															}
 														/>
-													</div>
-													<DropdownMenu modal={false}>
-														<DropdownMenuTrigger asChild>
-															<button
-																type="button"
-																className="rounded-md p-2 text-muted-foreground/40 transition-colors hover:bg-muted hover:text-muted-foreground sm:p-1.5"
-																aria-label="More options"
-															>
-																<MoreHorizontal className="h-4 w-4" />
-															</button>
-														</DropdownMenuTrigger>
-														<DropdownMenuContent align="end" className="w-40">
-															<DropdownMenuItem
-																onSelect={() => setConvertTarget(listen)}
-															>
-																<RefreshCw className="h-4 w-4" />
-																Convert listen
-															</DropdownMenuItem>
-															<DropdownMenuItem
-																variant="destructive"
-																onSelect={() =>
-																	setDeleteTarget({
-																		id: listen._id,
-																		name: listen.album?.name ?? "Unknown Album",
-																	})
-																}
-															>
-																<Trash2 className="h-4 w-4" />
-																Delete
-															</DropdownMenuItem>
-														</DropdownMenuContent>
-													</DropdownMenu>
-												</li>
-											))}
+													</li>
+												);
+											})}
 										</ul>
 									</section>
 								);
