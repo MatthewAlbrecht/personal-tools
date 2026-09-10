@@ -3,18 +3,17 @@
 import { Disc3 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { AlbumRatingDrawer } from "~/components/album-rating-drawer";
 import { LoginPrompt } from "~/components/login-prompt";
 import { SyncAlbumsButton } from "~/components/sync-albums-button";
 import { SpotifyConnection } from "../spotify-playlister/_components/spotify-connection";
 import { AddListenDrawer } from "./_components/add-listen-view";
-import { AlbumRatingDrawer } from "~/components/album-rating-drawer";
 import { AlbumsProvider, useAlbums } from "./_context/albums-context";
 
 const TABS = [
-	{ href: "/albums/history", label: "History" },
-	{ href: "/albums/rankings", label: "Rankings" },
-	{ href: "/albums/tracks", label: "Tracks" },
-	{ href: "/albums/all", label: "Albums" },
+	{ href: "/albums/recent", label: "Recent" },
+	{ href: "/albums/rated", label: "Rated" },
+	{ href: "/albums/library", label: "Library" },
 ] as const;
 
 function AlbumsLayoutContent({ children }: { children: React.ReactNode }) {
