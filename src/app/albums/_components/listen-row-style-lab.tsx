@@ -3,7 +3,6 @@
 import { Disc3, MoreHorizontal } from "lucide-react";
 import Image from "next/image";
 import type { ReactNode } from "react";
-import { Badge } from "~/components/ui/badge";
 import { getRatingColors, getTierShortLabel } from "~/lib/album-tiers";
 import { cn } from "~/lib/utils";
 
