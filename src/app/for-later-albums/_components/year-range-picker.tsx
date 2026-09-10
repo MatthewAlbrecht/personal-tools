@@ -9,6 +9,8 @@ import {
 } from "~/components/ui/popover";
 import { cn } from "~/lib/utils";
 import {
+	type YearRangeCell,
+	type YearRangeSelection,
 	applyYearRangeClick,
 	formatYearRangeLabel,
 	isDecadeFullyInSelection,
@@ -16,8 +18,6 @@ import {
 	listYearPickerDecades,
 	selectionFromFilterBounds,
 	selectionToFilterBounds,
-	type YearRangeCell,
-	type YearRangeSelection,
 } from "../_utils/year-range-selection";
 
 const YEAR_COLUMNS = 10;
@@ -30,11 +30,13 @@ export function YearRangePicker({
 	yearMax,
 	onCommit,
 	maxYear = new Date().getFullYear(),
+	id = "for-later-filter-year",
 }: {
 	yearMin?: number;
 	yearMax?: number;
 	onCommit: (bounds: { yearMin?: number; yearMax?: number }) => void;
 	maxYear?: number;
+	id?: string;
 }) {
 	const [open, setOpen] = useState(false);
 	const [draft, setDraft] = useState<YearRangeSelection>(() =>
@@ -64,7 +66,7 @@ export function YearRangePicker({
 		<Popover open={open} onOpenChange={handleOpenChange}>
 			<PopoverTrigger asChild>
 				<button
-					id="for-later-filter-year"
+					id={id}
 					type="button"
 					className={cn(
 						buttonVariants({ variant: "outline" }),
@@ -130,11 +132,15 @@ function YearPickerDecadeRow({
 	onCellClick: (cell: YearRangeCell) => void;
 }) {
 	const decadeLabel = `${Math.floor(decadeStart / 10)}0s`;
-	const decadeSelected = isDecadeFullyInSelection(decadeStart, selection, maxYear);
+	const decadeSelected = isDecadeFullyInSelection(
+		decadeStart,
+		selection,
+		maxYear,
+	);
 
 	return (
 		<tr>
-			<td className="border-border border p-0">
+			<td className="border border-border p-0">
 				<button
 					type="button"
 					className={yearCellClassName(decadeSelected)}
@@ -149,7 +155,7 @@ function YearPickerDecadeRow({
 					return (
 						<td
 							key={year}
-							className="border-border border bg-muted/20 p-0"
+							className="border border-border bg-muted/20 p-0"
 							aria-hidden
 						/>
 					);
@@ -158,7 +164,7 @@ function YearPickerDecadeRow({
 				const selected = isYearInSelection(year, selection);
 				const twoDigit = String(year % 100).padStart(2, "0");
 				return (
-					<td key={year} className="border-border border p-0">
+					<td key={year} className="border border-border p-0">
 						<button
 							type="button"
 							className={yearCellClassName(selected)}

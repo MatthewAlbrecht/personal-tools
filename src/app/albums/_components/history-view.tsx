@@ -39,7 +39,6 @@ import {
 	groupListensByWeek,
 	sectionStats,
 } from "~/lib/album-listens-grouping";
-import { extractReleaseYear } from "~/lib/album-tiers";
 import { cn } from "~/lib/utils";
 import type { HistoryListen } from "../_utils/types";
 import { AlbumCard } from "./album-card";
@@ -75,24 +74,16 @@ export function HistoryView({
 	const [grouping, setGrouping] = useState<ListensGrouping>("week");
 	const [onlyUnranked, setOnlyUnranked] = useState(false);
 	const [onlyFirstListens, setOnlyFirstListens] = useState(false);
-	const [yearFilter, setYearFilter] = useState("all");
+	const [yearMin, setYearMin] = useState<number | undefined>(undefined);
+	const [yearMax, setYearMax] = useState<number | undefined>(undefined);
 	const [filtersOpen, setFiltersOpen] = useState(false);
-
-	const availableYears = useMemo(() => {
-		const years = new Set<number>();
-		for (const listen of listens) {
-			const year = extractReleaseYear(listen.album?.releaseDate);
-			if (year !== null) years.add(year);
-		}
-		return Array.from(years).sort((a, b) => b - a);
-	}, [listens]);
 
 	const sections = useMemo(() => {
 		const filtered = filterListens(listens, {
 			onlyUnranked,
 			onlyFirstListens,
-			releaseYear:
-				yearFilter === "all" ? null : Number.parseInt(yearFilter, 10),
+			yearMin,
+			yearMax,
 			ratedAlbumIds: new Set(albumRatings.keys()),
 		});
 		return grouping === "week"
@@ -104,17 +95,19 @@ export function HistoryView({
 		grouping,
 		onlyUnranked,
 		onlyFirstListens,
-		yearFilter,
+		yearMin,
+		yearMax,
 	]);
 
 	const activeFilterCount =
 		Number(onlyUnranked) +
 		Number(onlyFirstListens) +
-		Number(yearFilter !== "all");
+		Number(yearMin !== undefined || yearMax !== undefined);
 	const filtersActive = listensFiltersAreActive({
 		onlyUnranked,
 		onlyFirstListens,
-		yearFilter,
+		yearMin,
+		yearMax,
 	});
 
 	const filterControls = (
@@ -125,9 +118,12 @@ export function HistoryView({
 			onOnlyUnrankedChange={setOnlyUnranked}
 			onlyFirstListens={onlyFirstListens}
 			onOnlyFirstListensChange={setOnlyFirstListens}
-			yearFilter={yearFilter}
-			onYearFilterChange={setYearFilter}
-			availableYears={availableYears}
+			yearMin={yearMin}
+			yearMax={yearMax}
+			onYearRangeCommit={({ yearMin: nextMin, yearMax: nextMax }) => {
+				setYearMin(nextMin);
+				setYearMax(nextMax);
+			}}
 		/>
 	);
 

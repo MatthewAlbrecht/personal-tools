@@ -1,16 +1,9 @@
 "use client";
 
-import { type ReactNode, useId } from "react";
+import type { ReactNode } from "react";
+import { YearRangePicker } from "~/app/for-later-albums/_components/year-range-picker";
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
-import {
-	Select,
-	SelectContent,
-	SelectGroup,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "~/components/ui/select";
 import { Separator } from "~/components/ui/separator";
 import { cn } from "~/lib/utils";
 
@@ -23,9 +16,9 @@ export function ListensFilters({
 	onOnlyUnrankedChange,
 	onlyFirstListens,
 	onOnlyFirstListensChange,
-	yearFilter,
-	onYearFilterChange,
-	availableYears,
+	yearMin,
+	yearMax,
+	onYearRangeCommit,
 	className,
 }: {
 	grouping: ListensGrouping;
@@ -34,13 +27,14 @@ export function ListensFilters({
 	onOnlyUnrankedChange: (checked: boolean) => void;
 	onlyFirstListens: boolean;
 	onOnlyFirstListensChange: (checked: boolean) => void;
-	yearFilter: string;
-	onYearFilterChange: (year: string) => void;
-	availableYears: number[];
+	yearMin?: number;
+	yearMax?: number;
+	onYearRangeCommit: (bounds: {
+		yearMin?: number;
+		yearMax?: number;
+	}) => void;
 	className?: string;
 }): ReactNode {
-	const yearFilterId = useId();
-
 	return (
 		<div className={cn("flex flex-col gap-4", className)}>
 			<fieldset className="m-0 min-w-0 border-0 p-0">
@@ -87,22 +81,13 @@ export function ListensFilters({
 			</div>
 
 			<div className="flex flex-col gap-1.5">
-				<Label htmlFor={yearFilterId}>Year</Label>
-				<Select value={yearFilter} onValueChange={onYearFilterChange}>
-					<SelectTrigger id={yearFilterId} size="sm" className="w-full">
-						<SelectValue placeholder="All Years" />
-					</SelectTrigger>
-					<SelectContent>
-						<SelectGroup>
-							<SelectItem value="all">All Years</SelectItem>
-							{availableYears.map((year) => (
-								<SelectItem key={year} value={year.toString()}>
-									{year}
-								</SelectItem>
-							))}
-						</SelectGroup>
-					</SelectContent>
-				</Select>
+				<Label htmlFor="listens-filter-year">Release year</Label>
+				<YearRangePicker
+					id="listens-filter-year"
+					yearMin={yearMin}
+					yearMax={yearMax}
+					onCommit={onYearRangeCommit}
+				/>
 			</div>
 		</div>
 	);
@@ -137,9 +122,13 @@ function FilterToggleCard({
 export function listensFiltersAreActive(opts: {
 	onlyUnranked: boolean;
 	onlyFirstListens: boolean;
-	yearFilter: string;
+	yearMin?: number;
+	yearMax?: number;
 }): boolean {
 	return (
-		opts.onlyUnranked || opts.onlyFirstListens || opts.yearFilter !== "all"
+		opts.onlyUnranked ||
+		opts.onlyFirstListens ||
+		opts.yearMin !== undefined ||
+		opts.yearMax !== undefined
 	);
 }

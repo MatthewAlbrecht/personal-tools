@@ -9,7 +9,8 @@ export type ListenGroup<T> = {
 export type FilterListensOptions = {
 	onlyUnranked: boolean;
 	onlyFirstListens: boolean;
-	releaseYear: number | null;
+	yearMin?: number;
+	yearMax?: number;
 	ratedAlbumIds: Set<string>;
 };
 
@@ -121,9 +122,15 @@ export function filterListens<T extends FilterableListen>(
 		if (opts.onlyFirstListens && !item.isFirstListen) {
 			return false;
 		}
-		if (opts.releaseYear !== null) {
+		if (opts.yearMin !== undefined || opts.yearMax !== undefined) {
 			const year = extractReleaseYear(item.album?.releaseDate);
-			if (year !== opts.releaseYear) {
+			if (year === null) {
+				return false;
+			}
+			if (opts.yearMin !== undefined && year < opts.yearMin) {
+				return false;
+			}
+			if (opts.yearMax !== undefined && year > opts.yearMax) {
 				return false;
 			}
 		}
