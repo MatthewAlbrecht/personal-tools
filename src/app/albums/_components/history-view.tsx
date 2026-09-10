@@ -220,7 +220,7 @@ export function HistoryView({
 												</span>
 											</div>
 										</div>
-										<ul className="divide-y divide-border/40 overflow-hidden rounded-md border border-border/60 bg-background md:divide-y-0 md:border-0 md:bg-transparent">
+										<ul className="divide-y divide-border/40 overflow-hidden rounded-md border border-border/60 bg-background md:rounded-none md:border-0 md:bg-transparent">
 											{section.items.map((listen, index) => {
 												const prev = section.items[index - 1];
 												const showDay =
