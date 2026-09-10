@@ -22,7 +22,7 @@ test("groupListensByWeek newest first and drops nothing", () => {
 	];
 	const groups = groupListensByWeek(items);
 	assert.equal(groups.length, 2);
-	assert.ok(groups[0]!.items.some((i) => i.id === "a"));
+	assert.ok(groups[0]?.items.some((i) => i.id === "a"));
 });
 
 test("sectionStats counts albums and new", () => {

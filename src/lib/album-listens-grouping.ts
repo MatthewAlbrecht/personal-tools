@@ -82,9 +82,7 @@ export function groupListensByWeek<T extends { listenedAt: number }>(
 		}
 	}
 
-	return Array.from(groups.values()).sort((a, b) =>
-		b.key.localeCompare(a.key),
-	);
+	return Array.from(groups.values()).sort((a, b) => b.key.localeCompare(a.key));
 }
 
 export function groupListensByMonth<T extends { listenedAt: number }>(
@@ -109,9 +107,7 @@ export function groupListensByMonth<T extends { listenedAt: number }>(
 		}
 	}
 
-	return Array.from(groups.values()).sort((a, b) =>
-		b.key.localeCompare(a.key),
-	);
+	return Array.from(groups.values()).sort((a, b) => b.key.localeCompare(a.key));
 }
 
 export function filterListens<T extends FilterableListen>(

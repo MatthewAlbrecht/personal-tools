@@ -9,7 +9,7 @@ export function getListenCountBadgeState({
 }): { showFirst: boolean; showCount: boolean } {
 	return {
 		showFirst: isFirstListen,
-		showCount: listenCount > 1,
+		showCount: listenCount >= 1,
 	};
 }
 

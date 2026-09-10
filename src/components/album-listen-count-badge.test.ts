@@ -2,17 +2,24 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { getListenCountBadgeState } from "./album-listen-count-badge";
 
-test("listenCount 1 without isFirstListen is not First", () => {
-	assert.deepEqual(getListenCountBadgeState({ listenCount: 1 }), {
+test("listenCount 0 shows nothing", () => {
+	assert.deepEqual(getListenCountBadgeState({ listenCount: 0 }), {
 		showFirst: false,
 		showCount: false,
 	});
 });
 
-test("isFirstListen shows First even when listenCount is 1", () => {
+test("listenCount 1 without isFirstListen shows only 1x", () => {
+	assert.deepEqual(getListenCountBadgeState({ listenCount: 1 }), {
+		showFirst: false,
+		showCount: true,
+	});
+});
+
+test("isFirstListen with listenCount 1 shows First and 1x", () => {
 	assert.deepEqual(
 		getListenCountBadgeState({ listenCount: 1, isFirstListen: true }),
-		{ showFirst: true, showCount: false },
+		{ showFirst: true, showCount: true },
 	);
 });
 
