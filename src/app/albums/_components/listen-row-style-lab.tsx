@@ -110,8 +110,8 @@ export function ListenRowStyleLab(): ReactNode {
 				</p>
 				<p className="max-w-2xl text-muted-foreground text-sm">
 					You liked Stacked and Day column. Below: three mobile-first takes of
-					each. Live list is unchanged. Menu = Convert / Delete. Rating → ranking
-					drawer; title → album details.
+					each. Lists are capped ({`Stacked max-w-2xl`} · {`Day max-w-3xl`}),
+					left-aligned — no dead space to a far-right menu. Live list unchanged.
 				</p>
 			</div>
 
@@ -130,6 +130,7 @@ export function ListenRowStyleLab(): ReactNode {
 					id="B1"
 					title="Aligned stack"
 					blurb="Current favorite bones: 64px cover, New on art, title/artist top, rating · Nx · day bottom flush with cover. Menu always reachable (touch)."
+					measure="stacked"
 				>
 					<StackedAligned rows={stacked} />
 				</StyleBlock>
@@ -138,6 +139,7 @@ export function ListenRowStyleLab(): ReactNode {
 					id="B2"
 					title="Day bands + dock"
 					blurb="Day lives in sticky-feeling section headers (saves row clutter). Meta docks under a hairline; rating ink + Nx only. Best when scanning a week."
+					measure="stacked"
 				>
 					<StackedDayBands rows={stacked} />
 				</StyleBlock>
@@ -146,6 +148,7 @@ export function ListenRowStyleLab(): ReactNode {
 					id="B3"
 					title="Priority rate"
 					blurb="Rating sits top-right (primary action on mobile). Title keeps full width below. Nx + day whisper under artist. Cover still owns New."
+					measure="stacked"
 				>
 					<StackedPriorityRate rows={stacked} />
 				</StyleBlock>
@@ -166,6 +169,7 @@ export function ListenRowStyleLab(): ReactNode {
 					id="D1"
 					title="Slim rail"
 					blurb="Narrow left day rail. On xs the rail shows day number only; sm+ shows Sep 10. Rating stacks under title on the narrowest widths so the right edge stays menu-only."
+					measure="day"
 				>
 					<DaySlimRail rows={dayed} />
 				</StyleBlock>
@@ -174,6 +178,7 @@ export function ListenRowStyleLab(): ReactNode {
 					id="D2"
 					title="Banded days"
 					blurb="No left column — day is a full-width band. Rows reclaim horizontal space for title + rating. Cleanest on phones."
+					measure="day"
 				>
 					<DayBanded rows={dayed} />
 				</StyleBlock>
@@ -182,6 +187,7 @@ export function ListenRowStyleLab(): ReactNode {
 					id="D3"
 					title="Calendar stub"
 					blurb="Two-line day stub (weekday + date) on the left — denser scan cue. Cover gets New chip. Right column is rating ink + menu only; Nx tucks under artist."
+					measure="day"
 				>
 					<DayCalendarStub rows={dayed} />
 				</StyleBlock>
@@ -194,11 +200,14 @@ function StyleBlock({
 	id,
 	title,
 	blurb,
+	measure,
 	children,
 }: {
 	id: string;
 	title: string;
 	blurb: string;
+	/** Reading measure — left-aligned so it still tracks the filter rail. */
+	measure: "stacked" | "day";
 	children: ReactNode;
 }): ReactNode {
 	return (
@@ -208,12 +217,16 @@ function StyleBlock({
 					<span className="mr-2 font-sans text-sm text-teal-800/70">{id}</span>
 					{title}
 				</h3>
-				<p className="mt-0.5 text-muted-foreground text-xs leading-relaxed">
+				<p className="mt-0.5 max-w-2xl text-muted-foreground text-xs leading-relaxed">
 					{blurb}
 				</p>
 			</div>
-			{/* max-w simulates phone column inside the lab */}
-			<div className="mx-auto max-w-md overflow-hidden rounded-md border border-border/70 bg-background sm:mx-0 sm:max-w-none">
+			<div
+				className={cn(
+					"overflow-hidden rounded-md border border-border/70 bg-background",
+					measure === "stacked" ? "max-w-2xl" : "max-w-3xl",
+				)}
+			>
 				{children}
 			</div>
 		</section>
