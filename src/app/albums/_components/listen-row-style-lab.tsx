@@ -161,9 +161,11 @@ function Cover({
 }: {
 	name: string;
 	imageUrl?: string;
-	size?: "sm" | "md";
+	size?: "sm" | "md" | "lg";
 }): ReactNode {
-	const dim = size === "md" ? "h-11 w-11" : "h-9 w-9";
+	const dim =
+		size === "lg" ? "h-14 w-14" : size === "md" ? "h-11 w-11" : "h-9 w-9";
+	const icon = size === "lg" ? "h-5 w-5" : "h-4 w-4";
 	return (
 		<div
 			className={cn(
@@ -177,11 +179,11 @@ function Cover({
 					alt={name}
 					fill
 					className="object-cover"
-					sizes="44px"
+					sizes={size === "lg" ? "56px" : "44px"}
 				/>
 			) : (
 				<div className="flex h-full w-full items-center justify-center">
-					<Disc3 className="h-4 w-4 text-muted-foreground" />
+					<Disc3 className={cn(icon, "text-muted-foreground")} />
 				</div>
 			)}
 		</div>
@@ -317,22 +319,24 @@ function StyleStacked({ rows }: { rows: LabListen[] }): ReactNode {
 		<ul className="divide-y divide-border/50">
 			{rows.map((row) => (
 				<li key={row.id} className="px-3 py-2.5 hover:bg-muted/30">
-					<div className="flex gap-3">
-						<Cover name={row.name} imageUrl={row.imageUrl} size="md" />
-						<div className="min-w-0 flex-1">
+					<div className="flex items-stretch gap-3">
+						<Cover name={row.name} imageUrl={row.imageUrl} size="lg" />
+						<div className="flex min-h-14 min-w-0 flex-1 flex-col justify-between gap-1 py-0.5">
 							<div className="flex items-start justify-between gap-2">
 								<button type="button" className="min-w-0 text-left">
 									<div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-										<span className="font-medium text-sm">{row.name}</span>
+										<span className="font-medium text-sm leading-tight">
+											{row.name}
+										</span>
 										{row.isFirstListen ? <NewMark /> : null}
 									</div>
-									<p className="text-muted-foreground text-xs">
+									<p className="mt-0.5 text-muted-foreground text-xs leading-tight">
 										{row.artistName}
 									</p>
 								</button>
 								<MenuGhost />
 							</div>
-							<div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px]">
+							<div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px]">
 								{row.rating !== undefined ? (
 									<Badge
 										variant="outline"
