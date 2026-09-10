@@ -9,41 +9,6 @@ import { SpotifyConnection } from "../spotify-playlister/_components/spotify-con
 import { AddListenDrawer } from "./_components/add-listen-view";
 import { AlbumsProvider, useAlbums } from "./_context/albums-context";
 
-const VIEW_TITLES: Record<string, { title: string; blurb: string }> = {
-	"/albums/recent": {
-		title: "Listens",
-		blurb: "Chronological listens — rate what still needs a mark.",
-	},
-	"/albums/rated": {
-		title: "Rankings",
-		blurb: "Year tiers and on-page ranking.",
-	},
-	"/albums/up-next": {
-		title: "Queue",
-		blurb: "Prioritized queue from saves and picks.",
-	},
-	"/albums/library": {
-		title: "Library",
-		blurb: "Searchable catalog of albums you track.",
-	},
-	"/albums/tracks": {
-		title: "Tracks",
-		blurb: "Recent Spotify track plays.",
-	},
-};
-
-function getViewMeta(pathname: string): { title: string; blurb: string } {
-	for (const [path, meta] of Object.entries(VIEW_TITLES)) {
-		if (pathname === path || pathname.startsWith(`${path}/`)) {
-			return meta;
-		}
-	}
-	return {
-		title: "Albums",
-		blurb: "Your listening archive and queue.",
-	};
-}
-
 function AlbumsLayoutContent({ children }: { children: React.ReactNode }) {
 	const pathname = usePathname() ?? "";
 	const {
@@ -65,8 +30,6 @@ function AlbumsLayoutContent({ children }: { children: React.ReactNode }) {
 		closeAddListenDrawer,
 		handleAddListen,
 	} = useAlbums();
-
-	const viewMeta = getViewMeta(pathname);
 
 	if (isLoading) {
 		return (
@@ -96,25 +59,16 @@ function AlbumsLayoutContent({ children }: { children: React.ReactNode }) {
 
 	return (
 		<div className="w-full p-6">
-			<div className="mb-6 flex items-start justify-between gap-4">
-				<div>
-					<p className="mb-1 font-semibold text-[0.65rem] text-teal-800 uppercase tracking-[0.16em]">
-						My Albums
-					</p>
-					<h1 className="font-[family-name:var(--font-display)] font-semibold text-3xl tracking-tight">
-						{viewMeta.title}
-					</h1>
-					<p className="mt-2 text-muted-foreground text-sm">{viewMeta.blurb}</p>
-				</div>
-				{isConnected && showHistorySync ? (
+			{isConnected && showHistorySync ? (
+				<div className="mb-4 flex justify-end">
 					<SyncAlbumsButton
 						isSyncing={isSyncing}
 						onSync={syncHistory}
 						variant="outline"
 						lastSyncedAt={lastSyncRun?.completedAt}
 					/>
-				) : null}
-			</div>
+				</div>
+			) : null}
 
 			{showHistorySync ? (
 				<SpotifyConnection
@@ -125,9 +79,11 @@ function AlbumsLayoutContent({ children }: { children: React.ReactNode }) {
 			) : null}
 
 			{isConnected || pathname.startsWith("/albums/up-next") ? (
-				<div className={showHistorySync ? "mt-6" : undefined}>{children}</div>
+				<div className={showHistorySync && isConnected ? "mt-4" : undefined}>
+					{children}
+				</div>
 			) : (
-				<div className="mt-6 rounded-lg border border-dashed p-8 text-center text-muted-foreground text-sm">
+				<div className="mt-4 rounded-lg border border-dashed p-8 text-center text-muted-foreground text-sm">
 					Connect Spotify to use this view.
 				</div>
 			)}
