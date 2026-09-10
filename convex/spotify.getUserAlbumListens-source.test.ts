@@ -17,9 +17,12 @@ function getUserAlbumListensBody(): string {
 test("getUserAlbumListens takes before joining albums", () => {
 	const body = getUserAlbumListensBody();
 	const takeAt = body.indexOf(".take(");
-	const collectAt = body.indexOf(".collect(");
 	assert.ok(takeAt >= 0, "expected .take(");
-	assert.equal(collectAt, -1, "must not .collect() all listens");
+	const collectAt = body.indexOf(".collect(");
+	assert.ok(
+		collectAt > takeAt,
+		"per-album listen collect must happen after take",
+	);
 	const getAlbumAt = body.indexOf("ctx.db.get(");
 	assert.ok(getAlbumAt > takeAt, "album joins must happen after take");
 });
@@ -28,6 +31,7 @@ test("getUserAlbumListens takes before joining albums", () => {
 test("getUserAlbumListens delegates enrichment to the shared helper", () => {
 	const body = getUserAlbumListensBody();
 	assert.match(body, /enrichListenWithUserAlbum\(/);
+	assert.match(body, /buildListenOrdinalsById\(/);
 	assert.match(body, /by_userId_albumId/);
 });
 

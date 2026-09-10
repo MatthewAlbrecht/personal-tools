@@ -4,7 +4,10 @@ import { api, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { action, mutation, query } from "./_generated/server";
-import { enrichListenWithUserAlbum } from "./_utils/albumListenEnrichment";
+import {
+	buildListenOrdinalsById,
+	enrichListenWithUserAlbum,
+} from "./_utils/albumListenEnrichment";
 import { computeAppearsInForLater } from "./_utils/albumLibraryForLaterMembership";
 import {
 	refreshAlbumLibraryProjectionsForAlbum,
@@ -3264,6 +3267,7 @@ export const getUserAlbumListens = query({
 			Doc<"spotifyAlbums"> | null
 		>();
 		const userAlbumById = new Map<Id<"spotifyAlbums">, Doc<"userAlbums">>();
+		const listenOrdinalById = new Map<string, number>();
 
 		await Promise.all(
 			uniqueAlbumIds.map(async (albumId) => {
@@ -3279,6 +3283,17 @@ export const getUserAlbumListens = query({
 				if (userAlbum) {
 					userAlbumById.set(albumId, userAlbum);
 				}
+
+				const albumListens = await ctx.db
+					.query("userAlbumListens")
+					.withIndex("by_userId_albumId", (q) =>
+						q.eq("userId", args.userId).eq("albumId", albumId),
+					)
+					.collect();
+				const ordinals = buildListenOrdinalsById(albumListens);
+				for (const [listenId, ordinal] of ordinals) {
+					listenOrdinalById.set(listenId, ordinal);
+				}
 			}),
 		);
 
@@ -3286,6 +3301,7 @@ export const getUserAlbumListens = query({
 			enrichListenWithUserAlbum(
 				{ ...listen, album: albumById.get(listen.albumId) ?? null },
 				userAlbumById.get(listen.albumId),
+				listenOrdinalById.get(listen._id) ?? 0,
 			),
 		);
 	},
