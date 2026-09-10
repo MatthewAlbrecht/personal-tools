@@ -24,11 +24,10 @@ test("getUserAlbumListens takes before joining albums", () => {
 	assert.ok(getAlbumAt > takeAt, "album joins must happen after take");
 });
 
-test("getUserAlbumListens enriches listenCount and isFirstListen", () => {
+// Enrichment behavior is covered by convex/_utils/albumListenEnrichment.test.ts.
+test("getUserAlbumListens delegates enrichment to the shared helper", () => {
 	const body = getUserAlbumListensBody();
-	assert.match(body, /listenCount/);
-	assert.match(body, /isFirstListen/);
-	assert.match(body, /firstListenedAt/);
+	assert.match(body, /enrichListenWithUserAlbum\(/);
 	assert.match(body, /by_userId_albumId/);
 });
 

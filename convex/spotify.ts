@@ -4,6 +4,7 @@ import { api, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { action, mutation, query } from "./_generated/server";
+import { enrichListenWithUserAlbum } from "./_utils/albumListenEnrichment";
 import { computeAppearsInForLater } from "./_utils/albumLibraryForLaterMembership";
 import {
 	refreshAlbumLibraryProjectionsForAlbum,
@@ -3230,6 +3231,23 @@ export const getUserAlbumListens = query({
 		userId: v.string(),
 		limit: v.optional(v.number()),
 	},
+	returns: v.array(
+		v.object({
+			_id: v.id("userAlbumListens"),
+			_creationTime: v.number(),
+			userId: v.string(),
+			albumId: v.id("spotifyAlbums"),
+			listenedAt: v.number(),
+			earliestPlayedAt: v.number(),
+			latestPlayedAt: v.number(),
+			trackIds: v.array(v.string()),
+			source: v.string(),
+			album: v.any(), // full spotifyAlbums doc or null
+			listenCount: v.number(),
+			firstListenedAt: v.optional(v.number()),
+			isFirstListen: v.boolean(),
+		}),
+	),
 	handler: async (ctx, args) => {
 		const limit = args.limit ?? 500;
 		const listens = await ctx.db
@@ -3264,22 +3282,12 @@ export const getUserAlbumListens = query({
 			}),
 		);
 
-		return listens.map((listen) => {
-			const album = albumById.get(listen.albumId) ?? null;
-			const userAlbum = userAlbumById.get(listen.albumId);
-			const listenCount = userAlbum?.listenCount ?? 0;
-			const firstListenedAt = userAlbum?.firstListenedAt;
-			const isFirstListen =
-				userAlbum !== undefined &&
-				listen.listenedAt === userAlbum.firstListenedAt;
-			return {
-				...listen,
-				album,
-				listenCount,
-				...(firstListenedAt !== undefined ? { firstListenedAt } : {}),
-				isFirstListen,
-			};
-		});
+		return listens.map((listen) =>
+			enrichListenWithUserAlbum(
+				{ ...listen, album: albumById.get(listen.albumId) ?? null },
+				userAlbumById.get(listen.albumId),
+			),
+		);
 	},
 });
 
