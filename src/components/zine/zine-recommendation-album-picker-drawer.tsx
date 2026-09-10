@@ -22,7 +22,7 @@ import { extractReleaseYear } from "~/lib/zine/spotify-discography-import";
 import { api } from "../../../convex/_generated/api";
 
 export type ZineSpotifyAlbumPickerSelection = {
-	spotifyAlbumId?: string;
+	spotifyAlbumId: string;
 	albumTitle: string;
 	artistName: string;
 	year?: string;
@@ -84,6 +84,11 @@ export function ZineRecommendationAlbumPickerDrawer({
 		imageUrl?: string;
 		releaseDate?: string;
 	}) {
+		if (!album.spotifyAlbumId) {
+			toast.error("That album has no Spotify ID.");
+			return;
+		}
+
 		onSelect({
 			spotifyAlbumId: album.spotifyAlbumId,
 			albumTitle: album.name,
