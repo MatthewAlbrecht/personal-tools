@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { type ReactNode, useId } from "react";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Label } from "~/components/ui/label";
@@ -40,6 +40,10 @@ export function ListensFilters({
 	availableYears: number[];
 	className?: string;
 }): ReactNode {
+	const onlyUnrankedId = useId();
+	const onlyFirstListensId = useId();
+	const yearFilterId = useId();
+
 	return (
 		<div className={cn("flex flex-col gap-4", className)}>
 			<fieldset className="m-0 min-w-0 border-0 p-0">
@@ -73,30 +77,30 @@ export function ListensFilters({
 			<div className="flex flex-col gap-3">
 				<div className="flex items-center gap-2">
 					<Checkbox
-						id="listens-only-unranked"
+						id={onlyUnrankedId}
 						checked={onlyUnranked}
 						onCheckedChange={(checked) =>
 							onOnlyUnrankedChange(checked === true)
 						}
 					/>
-					<Label htmlFor="listens-only-unranked">Only unranked</Label>
+					<Label htmlFor={onlyUnrankedId}>Only unranked</Label>
 				</div>
 				<div className="flex items-center gap-2">
 					<Checkbox
-						id="listens-only-first-listens"
+						id={onlyFirstListensId}
 						checked={onlyFirstListens}
 						onCheckedChange={(checked) =>
 							onOnlyFirstListensChange(checked === true)
 						}
 					/>
-					<Label htmlFor="listens-only-first-listens">Only first listens</Label>
+					<Label htmlFor={onlyFirstListensId}>Only first listens</Label>
 				</div>
 			</div>
 
 			<div className="flex flex-col gap-1.5">
-				<Label htmlFor="listens-year-filter">Year</Label>
+				<Label htmlFor={yearFilterId}>Year</Label>
 				<Select value={yearFilter} onValueChange={onYearFilterChange}>
-					<SelectTrigger id="listens-year-filter" size="sm" className="w-full">
+					<SelectTrigger id={yearFilterId} size="sm" className="w-full">
 						<SelectValue placeholder="All Years" />
 					</SelectTrigger>
 					<SelectContent>
