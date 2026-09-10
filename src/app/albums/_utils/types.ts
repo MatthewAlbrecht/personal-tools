@@ -16,6 +16,9 @@ export type HistoryListen = {
 	albumId: string;
 	listenedAt: number;
 	album: AlbumInfo | null;
+	listenCount: number;
+	isFirstListen: boolean;
+	firstListenedAt?: number;
 };
 
 // Ranked album item for rankings view

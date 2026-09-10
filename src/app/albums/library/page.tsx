@@ -76,6 +76,8 @@ function AllAlbumsPageInner() {
 					_id: album._id,
 					albumId: album._id,
 					listenedAt: album.lastListenedAt ?? Date.now(),
+					listenCount: album.listenCount,
+					isFirstListen: false,
 					album: {
 						name: album.name,
 						artistName: album.artistName,

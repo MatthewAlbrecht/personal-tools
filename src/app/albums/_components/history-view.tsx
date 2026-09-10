@@ -202,7 +202,8 @@ export function HistoryView({
 														}
 														imageUrl={listen.album?.imageUrl}
 														listenedAt={listen.listenedAt}
-														listenOrdinal={listenOrdinals.get(listen._id)}
+														listenCount={listen.listenCount}
+														isFirstListen={listen.isFirstListen}
 														rating={albumRatings.get(listen.albumId)}
 														listenedAgain={listenedAgain}
 														showListenDate
