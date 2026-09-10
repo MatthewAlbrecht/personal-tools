@@ -2,7 +2,6 @@
 
 import { type ReactNode, useId } from "react";
 import { Button } from "~/components/ui/button";
-import { Checkbox } from "~/components/ui/checkbox";
 import { Label } from "~/components/ui/label";
 import {
 	Select,
@@ -40,8 +39,6 @@ export function ListensFilters({
 	availableYears: number[];
 	className?: string;
 }): ReactNode {
-	const onlyUnrankedId = useId();
-	const onlyFirstListensId = useId();
 	const yearFilterId = useId();
 
 	return (
@@ -74,27 +71,19 @@ export function ListensFilters({
 
 			<Separator />
 
-			<div className="flex flex-col gap-3">
-				<div className="flex items-center gap-2">
-					<Checkbox
-						id={onlyUnrankedId}
-						checked={onlyUnranked}
-						onCheckedChange={(checked) =>
-							onOnlyUnrankedChange(checked === true)
-						}
-					/>
-					<Label htmlFor={onlyUnrankedId}>Only unranked</Label>
-				</div>
-				<div className="flex items-center gap-2">
-					<Checkbox
-						id={onlyFirstListensId}
-						checked={onlyFirstListens}
-						onCheckedChange={(checked) =>
-							onOnlyFirstListensChange(checked === true)
-						}
-					/>
-					<Label htmlFor={onlyFirstListensId}>Only first listens</Label>
-				</div>
+			<div className="flex flex-col gap-2">
+				<FilterToggleCard
+					pressed={onlyUnranked}
+					onPressedChange={onOnlyUnrankedChange}
+				>
+					Only unranked
+				</FilterToggleCard>
+				<FilterToggleCard
+					pressed={onlyFirstListens}
+					onPressedChange={onOnlyFirstListensChange}
+				>
+					Only first listens
+				</FilterToggleCard>
 			</div>
 
 			<div className="flex flex-col gap-1.5">
@@ -116,6 +105,32 @@ export function ListensFilters({
 				</Select>
 			</div>
 		</div>
+	);
+}
+
+function FilterToggleCard({
+	pressed,
+	onPressedChange,
+	children,
+}: {
+	pressed: boolean;
+	onPressedChange: (pressed: boolean) => void;
+	children: ReactNode;
+}): ReactNode {
+	return (
+		<button
+			type="button"
+			aria-pressed={pressed}
+			onClick={() => onPressedChange(!pressed)}
+			className={cn(
+				"w-full rounded-md border px-3 py-2.5 text-center text-sm transition-colors",
+				pressed
+					? "border-teal-800/40 bg-teal-800 text-teal-50 shadow-sm"
+					: "border-border bg-background text-foreground hover:bg-muted/60",
+			)}
+		>
+			{children}
+		</button>
 	);
 }
 
