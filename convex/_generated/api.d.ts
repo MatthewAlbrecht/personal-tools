@@ -70,6 +70,7 @@ import type * as folioSocietyReleases from "../folioSocietyReleases.js";
 import type * as forLaterAlbums from "../forLaterAlbums.js";
 import type * as geniusAlbums from "../geniusAlbums.js";
 import type * as geniusCreditLabels from "../geniusCreditLabels.js";
+import type * as home from "../home.js";
 import type * as migrations_backfillCategorizedAt from "../migrations/backfillCategorizedAt.js";
 import type * as migrations_backfillSpotifyAlbumId from "../migrations/backfillSpotifyAlbumId.js";
 import type * as migrations_backfillSpotifyAlbumsSource from "../migrations/backfillSpotifyAlbumsSource.js";
@@ -158,6 +159,7 @@ declare const fullApi: ApiFromModules<{
   forLaterAlbums: typeof forLaterAlbums;
   geniusAlbums: typeof geniusAlbums;
   geniusCreditLabels: typeof geniusCreditLabels;
+  home: typeof home;
   "migrations/backfillCategorizedAt": typeof migrations_backfillCategorizedAt;
   "migrations/backfillSpotifyAlbumId": typeof migrations_backfillSpotifyAlbumId;
   "migrations/backfillSpotifyAlbumsSource": typeof migrations_backfillSpotifyAlbumsSource;
