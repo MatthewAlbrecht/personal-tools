@@ -15,17 +15,10 @@ export default function HistoryPage() {
 		userId ? { userId, limit: 500 } : "skip",
 	);
 
-	// Fetch latest rating timestamps for "listened again" indicator
-	const latestRatingTimestamps = useQuery(
-		api.spotify.getLatestRatingTimestamps,
-		userId ? { userId } : "skip",
-	);
-
 	return (
 		<HistoryView
 			listens={albumListens ?? []}
 			albumRatings={albumRatings}
-			latestRatingTimestamps={latestRatingTimestamps ?? {}}
 			onRateAlbum={openRatingDrawer}
 			onDeleteListen={deleteAlbumListen}
 			isLoading={albumListens === undefined}

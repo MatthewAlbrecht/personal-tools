@@ -46,14 +46,13 @@ import { AlbumCard } from "./album-card";
 import { ConvertListenDrawer } from "./convert-listen-drawer";
 import {
 	ListensFilters,
-	listensFiltersAreActive,
 	type ListensGrouping,
+	listensFiltersAreActive,
 } from "./listens-filters";
 
 type HistoryViewProps = {
 	listens: HistoryListen[];
 	albumRatings: Map<string, number>;
-	latestRatingTimestamps: Record<string, number>;
 	onRateAlbum: (listen: HistoryListen) => void;
 	onDeleteListen: (listenId: string, albumName: string) => void;
 	isLoading: boolean;
@@ -62,7 +61,6 @@ type HistoryViewProps = {
 export function HistoryView({
 	listens,
 	albumRatings,
-	latestRatingTimestamps,
 	onRateAlbum,
 	onDeleteListen,
 	isLoading,
@@ -223,79 +221,59 @@ export function HistoryView({
 											</span>
 										</div>
 										<ul className="space-y-0.5">
-											{section.items.map((listen) => {
-												const lastRatedAt =
-													latestRatingTimestamps[String(listen.albumId)];
-												// Show indicator if listen happened on a later DAY than the last rating
-												// Compare dates only (not time) to avoid same-day timing issues
-												const listenDate = new Date(listen.listenedAt).setHours(
-													0,
-													0,
-													0,
-													0,
-												);
-												const ratedDate = lastRatedAt
-													? new Date(lastRatedAt).setHours(0, 0, 0, 0)
-													: 0;
-												const listenedAgain =
-													lastRatedAt !== undefined && listenDate > ratedDate;
-
-												return (
-													<li
-														key={listen._id}
-														className="flex items-center gap-1"
-													>
-														<div className="min-w-0 flex-1">
-															<AlbumCard
-																name={listen.album?.name ?? "Unknown Album"}
-																artistName={
-																	listen.album?.artistName ?? "Unknown Artist"
+											{section.items.map((listen) => (
+												<li
+													key={listen._id}
+													className="flex items-center gap-1"
+												>
+													<div className="min-w-0 flex-1">
+														<AlbumCard
+															name={listen.album?.name ?? "Unknown Album"}
+															artistName={
+																listen.album?.artistName ?? "Unknown Artist"
+															}
+															imageUrl={listen.album?.imageUrl}
+															listenedAt={listen.listenedAt}
+															listenCount={listen.listenCount}
+															isFirstListen={listen.isFirstListen}
+															rating={albumRatings.get(listen.albumId)}
+															showListenDate
+															onRate={() => onRateAlbum(listen)}
+														/>
+													</div>
+													<DropdownMenu modal={false}>
+														<DropdownMenuTrigger asChild>
+															<button
+																type="button"
+																className="rounded-md p-2 text-muted-foreground/40 transition-colors hover:bg-muted hover:text-muted-foreground sm:p-1.5"
+																aria-label="More options"
+															>
+																<MoreHorizontal className="h-4 w-4" />
+															</button>
+														</DropdownMenuTrigger>
+														<DropdownMenuContent align="end" className="w-40">
+															<DropdownMenuItem
+																onSelect={() => setConvertTarget(listen)}
+															>
+																<RefreshCw className="h-4 w-4" />
+																Convert listen
+															</DropdownMenuItem>
+															<DropdownMenuItem
+																variant="destructive"
+																onSelect={() =>
+																	setDeleteTarget({
+																		id: listen._id,
+																		name: listen.album?.name ?? "Unknown Album",
+																	})
 																}
-																imageUrl={listen.album?.imageUrl}
-																listenedAt={listen.listenedAt}
-																listenCount={listen.listenCount}
-																isFirstListen={listen.isFirstListen}
-																rating={albumRatings.get(listen.albumId)}
-																listenedAgain={listenedAgain}
-																showListenDate
-																onRate={() => onRateAlbum(listen)}
-															/>
-														</div>
-														<DropdownMenu modal={false}>
-															<DropdownMenuTrigger asChild>
-																<button
-																	type="button"
-																	className="rounded-md p-2 text-muted-foreground/40 transition-colors hover:bg-muted hover:text-muted-foreground sm:p-1.5"
-																	aria-label="More options"
-																>
-																	<MoreHorizontal className="h-4 w-4" />
-																</button>
-															</DropdownMenuTrigger>
-															<DropdownMenuContent align="end" className="w-40">
-																<DropdownMenuItem
-																	onSelect={() => setConvertTarget(listen)}
-																>
-																	<RefreshCw className="h-4 w-4" />
-																	Convert listen
-																</DropdownMenuItem>
-																<DropdownMenuItem
-																	variant="destructive"
-																	onSelect={() =>
-																		setDeleteTarget({
-																			id: listen._id,
-																			name:
-																				listen.album?.name ?? "Unknown Album",
-																		})
-																	}
-																>
-																	<Trash2 className="h-4 w-4" />
-																	Delete
-																</DropdownMenuItem>
-															</DropdownMenuContent>
-														</DropdownMenu>
-													</li>
-												);
-											})}
+															>
+																<Trash2 className="h-4 w-4" />
+																Delete
+															</DropdownMenuItem>
+														</DropdownMenuContent>
+													</DropdownMenu>
+												</li>
+											))}
 										</ul>
 									</section>
 								);

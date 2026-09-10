@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Disc3, RefreshCw } from "lucide-react";
+import { Check, Disc3 } from "lucide-react";
 import Image from "next/image";
 import { forwardRef } from "react";
 import { AlbumListenCountBadge } from "~/components/album-listen-count-badge";
@@ -23,7 +23,6 @@ type AlbumCardProps = {
 	onSelect?: () => void; // Click to select for keyboard navigation
 	isSelected?: boolean; // Keyboard navigation selection state
 	showSaved?: boolean; // Show "Saved" indicator
-	listenedAgain?: boolean; // Show indicator when listened after last rating
 };
 
 export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
@@ -43,7 +42,6 @@ export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
 			onSelect,
 			isSelected = false,
 			showSaved = false,
-			listenedAgain = false,
 		},
 		ref,
 	) {
@@ -127,16 +125,6 @@ export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
 							}}
 						/>
 					) : null}
-
-					{/* Listened Again Indicator */}
-					{listenedAgain && isRated && (
-						<span
-							className="inline-flex items-center rounded-full bg-amber-500/15 px-1.5 py-0.5 text-amber-600 dark:text-amber-400"
-							title="Listened again since last rating"
-						>
-							<RefreshCw className="h-3 w-3" />
-						</span>
-					)}
 
 					{listenCount !== undefined || isFirstListen ? (
 						<AlbumListenCountBadge
