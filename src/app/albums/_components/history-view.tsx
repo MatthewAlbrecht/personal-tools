@@ -44,7 +44,11 @@ import { cn } from "~/lib/utils";
 import type { HistoryListen } from "../_utils/types";
 import { AlbumCard } from "./album-card";
 import { ConvertListenDrawer } from "./convert-listen-drawer";
-import { ListensFilters, type ListensGrouping } from "./listens-filters";
+import {
+	ListensFilters,
+	listensFiltersAreActive,
+	type ListensGrouping,
+} from "./listens-filters";
 
 type HistoryViewProps = {
 	listens: HistoryListen[];
@@ -109,7 +113,11 @@ export function HistoryView({
 		Number(onlyUnranked) +
 		Number(onlyFirstListens) +
 		Number(yearFilter !== "all");
-	const filtersActive = activeFilterCount > 0;
+	const filtersActive = listensFiltersAreActive({
+		onlyUnranked,
+		onlyFirstListens,
+		yearFilter,
+	});
 
 	const filterControls = (
 		<ListensFilters
