@@ -4,6 +4,7 @@ import { ChevronDown } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { Separator } from "~/components/ui/separator";
 import {
 	APP_NAV_GROUPS,
 	type AppNavGroup,
@@ -13,14 +14,25 @@ import {
 import { cn } from "~/lib/utils";
 
 export function AppSidebar() {
+	const pathname = usePathname() ?? "";
+	const homeActive = pathname === "/";
+
 	return (
-		<nav aria-label="Primary" className="flex h-full flex-col gap-6 px-3 py-5">
+		<nav aria-label="Primary" className="flex h-full flex-col gap-4 px-3 py-4">
 			<Link
 				href="/"
-				className="px-2 font-[family-name:var(--font-display)] text-lg text-sidebar-foreground tracking-tight"
+				className={cn(
+					"rounded-md px-2.5 py-2 text-sm transition-colors",
+					homeActive
+						? "bg-teal-900 font-medium text-[#f4f7f6]"
+						: "font-medium text-stone-800 hover:bg-stone-900/5 hover:text-stone-950",
+				)}
 			>
 				Home
 			</Link>
+
+			<Separator className="bg-stone-900/10" />
+
 			{APP_NAV_GROUPS.map((group) => (
 				<NavGroup key={group.id} group={group} />
 			))}
@@ -30,6 +42,7 @@ export function AppSidebar() {
 
 function NavGroup({ group }: { group: AppNavGroup }) {
 	const [open, setOpen] = useState(!group.defaultCollapsed);
+	const isAlbums = group.id === "my-albums";
 
 	return (
 		<div className="space-y-1">
@@ -37,7 +50,7 @@ function NavGroup({ group }: { group: AppNavGroup }) {
 				<button
 					type="button"
 					onClick={() => setOpen((value) => !value)}
-					className="flex w-full items-center justify-between px-2 py-1 font-semibold text-[0.65rem] text-muted-foreground uppercase tracking-[0.14em]"
+					className="flex w-full items-center justify-between px-2.5 py-1 font-semibold text-[0.62rem] text-stone-500 uppercase tracking-[0.16em]"
 				>
 					{group.label}
 					<ChevronDown
@@ -48,15 +61,15 @@ function NavGroup({ group }: { group: AppNavGroup }) {
 					/>
 				</button>
 			) : (
-				<p className="px-2 py-1 font-semibold text-[0.65rem] text-muted-foreground uppercase tracking-[0.14em]">
+				<p className="px-2.5 py-1 font-semibold text-[0.62rem] text-stone-500 uppercase tracking-[0.16em]">
 					{group.label}
 				</p>
 			)}
 			{open ? (
-				<ul className="space-y-0.5">
+				<ul className={cn("space-y-0.5", isAlbums && "pb-1")}>
 					{group.items.map((item) => (
 						<li key={item.id}>
-							<NavLink item={item} />
+							<NavLink item={item} emphasized={isAlbums} />
 						</li>
 					))}
 				</ul>
@@ -65,7 +78,13 @@ function NavGroup({ group }: { group: AppNavGroup }) {
 	);
 }
 
-function NavLink({ item }: { item: AppNavItem }) {
+function NavLink({
+	item,
+	emphasized = false,
+}: {
+	item: AppNavItem;
+	emphasized?: boolean;
+}) {
 	const pathname = usePathname() ?? "";
 	const active = isNavItemActive(pathname, item);
 
@@ -73,10 +92,11 @@ function NavLink({ item }: { item: AppNavItem }) {
 		<Link
 			href={item.href}
 			className={cn(
-				"block rounded-md px-2 py-1.5 text-sm transition-colors",
+				"block rounded-md px-2.5 py-1.5 text-sm transition-colors",
+				emphasized && "py-2",
 				active
-					? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
-					: "text-sidebar-foreground/80 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground",
+					? "bg-teal-900 font-medium text-[#f4f7f6]"
+					: "text-stone-700 hover:bg-stone-900/5 hover:text-stone-950",
 			)}
 		>
 			{item.label}

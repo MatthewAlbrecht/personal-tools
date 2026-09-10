@@ -62,7 +62,9 @@ function AlbumsLayoutContent({ children }: { children: React.ReactNode }) {
 		isConnected && showHistorySync && !pathname.startsWith("/albums/recent");
 
 	return (
-		<div className="w-full p-6 pt-4">
+		// --albums-sticky-inset: page pt-4 (+ mt-2 when history chrome wraps children).
+		// Sticky rails (Listens filters) use this so they lock at the rest gap under the nav.
+		<div className="w-full p-6 pt-4 [--albums-sticky-inset:1rem]">
 			{showHistorySync ? (
 				<SpotifyConnection
 					isConnected={isConnected}
@@ -72,7 +74,15 @@ function AlbumsLayoutContent({ children }: { children: React.ReactNode }) {
 			) : null}
 
 			{isConnected || pathname.startsWith("/albums/up-next") ? (
-				<div className={showHistorySync ? "mt-2" : undefined}>{children}</div>
+				<div
+					className={
+						showHistorySync
+							? "mt-2 [--albums-sticky-inset:1.5rem]"
+							: undefined
+					}
+				>
+					{children}
+				</div>
 			) : (
 				<div className="mt-4 rounded-lg border border-dashed p-8 text-center text-muted-foreground text-sm">
 					Connect Spotify to use this view.

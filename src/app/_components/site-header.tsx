@@ -10,12 +10,12 @@ export function SiteHeader() {
 	const { isAuthenticated, logout } = useAuth();
 
 	return (
-		<header className="sticky top-0 z-50 w-full border-border/80 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/70">
+		<header className="sticky top-0 z-50 w-full border-stone-900/10 border-b bg-[#efeeea]/90 backdrop-blur supports-[backdrop-filter]:bg-[#efeeea]/80">
 			<div className="flex h-14 items-center gap-3 px-4 md:px-5">
 				{isAuthenticated ? <MobileNavSheet /> : null}
 				<Link
 					href="/"
-					className="shrink-0 font-[family-name:var(--font-display)] text-lg tracking-tight"
+					className="shrink-0 font-[family-name:var(--font-display)] text-[1.2rem] tracking-tight text-stone-950"
 				>
 					moooose
 				</Link>

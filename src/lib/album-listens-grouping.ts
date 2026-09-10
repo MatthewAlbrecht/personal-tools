@@ -115,6 +115,8 @@ export function filterListens<T extends FilterableListen>(
 	items: T[],
 	opts: FilterListensOptions,
 ): T[] {
+	// Kept for unit tests / shared predicate docs. Listens UI filters in
+	// `listUserAlbumListensPaginated` (denormalized indexes + optional filterWith).
 	return items.filter((item) => {
 		if (opts.onlyUnranked && opts.ratedAlbumIds.has(item.albumId)) {
 			return false;

@@ -48,6 +48,7 @@ export function ListenHistoryRow({
 	const name = listen.album?.name ?? "Unknown Album";
 	const artistName = listen.album?.artistName ?? "Unknown Artist";
 	const imageUrl = listen.album?.imageUrl;
+	const primaryGenresLine = formatPrimaryGenresLine(listen.primaryGenres);
 	const day = formatListenDay(listen.listenedAt);
 	const detailsHref = `/albums/details/${listen.albumId}`;
 	const ratingInfo = rating !== undefined ? getTierInfo(rating) : null;
@@ -60,11 +61,14 @@ export function ListenHistoryRow({
 	return (
 		<Popover open={open} onOpenChange={setOpen}>
 			<PopoverTrigger asChild>
-				<button
-					type="button"
+				<div
+					role="button"
+					tabIndex={0}
 					aria-label={`Actions for ${name}`}
 					className={cn(
-						"w-full max-w-xl text-left outline-none transition-colors md:max-w-2xl",
+						// flex-col (not inline-block) so empty day gutters cannot
+						// introduce a li baseline strut above divide-y hairlines.
+						"flex w-full max-w-xl flex-col text-left outline-none transition-colors md:max-w-2xl",
 						"hover:bg-muted/30 focus-visible:bg-muted/40 active:bg-muted/40",
 						"data-[state=open]:bg-muted/35",
 					)}
@@ -78,7 +82,7 @@ export function ListenHistoryRow({
 							listenCount={listen.listenCount}
 							size="lg"
 						/>
-						<span className="flex min-h-20 min-w-0 flex-1 flex-col justify-between gap-1.5">
+						<span className="flex min-h-24 min-w-0 flex-1 flex-col">
 							<span className="min-w-0">
 								<span className="line-clamp-2 font-medium text-sm leading-snug">
 									{name}
@@ -87,69 +91,85 @@ export function ListenHistoryRow({
 									{artistName}
 								</span>
 							</span>
-							<span className="flex items-end justify-between gap-3 text-[11px]">
-								<span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-									{rating !== undefined ? (
-										<RatingInk rating={rating} />
-									) : (
-										<UnrankedQuiet />
-									)}
-									{listen.isFirstListen ? (
-										<span className="text-muted-foreground tabular-nums">
-											{listen.listenCount}×
-										</span>
-									) : null}
-								</span>
-								<span className="shrink-0 text-muted-foreground/65 tabular-nums">
-									{day.label}
+							<span className="mt-auto flex flex-col gap-1.5">
+								{primaryGenresLine ? (
+									<span className="block truncate text-[11px] text-muted-foreground/70 leading-tight">
+										{primaryGenresLine}
+									</span>
+								) : null}
+								<span className="flex items-end justify-between gap-3 text-[11px]">
+									<span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+										{rating !== undefined ? (
+											<RatingInk rating={rating} />
+										) : (
+											<UnrankedQuiet onRate={onRate} />
+										)}
+										{listen.isFirstListen ? (
+											<span className="text-muted-foreground tabular-nums">
+												{listen.listenCount}×
+											</span>
+										) : null}
+									</span>
+									<span className="shrink-0 text-muted-foreground/65 tabular-nums">
+										{day.label}
+									</span>
 								</span>
 							</span>
 						</span>
 					</span>
 
 					{/* Desktop — Slim rail */}
-					<span className="hidden grid-cols-[3.5rem_minmax(0,1fr)] items-stretch md:grid">
-						<span className="flex items-start justify-end py-2.5 pr-2.5">
-							{showDay ? (
-								<span className="font-medium text-[10px] text-muted-foreground tabular-nums leading-none">
-									{day.label}
-								</span>
-							) : null}
+					<span className="hidden grid-cols-[3.5rem_minmax(0,1fr)] md:grid">
+						{/* Day gutter: label is out-of-flow so showDay cannot change row height */}
+						<span className="relative">
+							<span
+								className={cn(
+									"absolute top-2 right-2.5 font-medium text-[10px] text-muted-foreground tabular-nums leading-none",
+									!showDay && "invisible",
+								)}
+								aria-hidden={!showDay}
+							>
+								{day.label}
+							</span>
 						</span>
-						<span className="flex min-w-0 items-stretch">
+						<span className="relative min-w-0">
+							{/* Absolute rail: my-2-sized gaps, never contributes to row height */}
 							<span
 								aria-hidden
-								className="my-2 w-px shrink-0 bg-border/50"
+								className="pointer-events-none absolute top-2 bottom-2 left-0 w-px bg-border/50"
 							/>
-							<span className="flex min-w-0 flex-1 items-center justify-between gap-3 py-2.5 pr-1 pl-3">
-								<span className="flex min-w-0 items-center gap-2.5">
-									<CoverWithCornerMark
-										name={name}
-										imageUrl={imageUrl}
-										isFirstListen={listen.isFirstListen}
-										listenCount={listen.listenCount}
-										size="md"
-									/>
-									<span className="min-w-0">
-										<span className="line-clamp-1 font-medium text-sm leading-snug">
-											{name}
-										</span>
-										<span className="mt-0.5 block truncate text-muted-foreground text-xs leading-tight">
-											{artistName}
-										</span>
+							<span className="flex min-w-0 items-stretch gap-2.5 py-2 pr-1 pl-3">
+								<CoverWithCornerMark
+									name={name}
+									imageUrl={imageUrl}
+									isFirstListen={listen.isFirstListen}
+									listenCount={listen.listenCount}
+									size="md"
+								/>
+								<span className="flex min-h-0 min-w-0 flex-1 flex-col self-stretch">
+									<span className="line-clamp-1 font-medium text-sm leading-snug">
+										{name}
 									</span>
+									<span className="mt-0.5 block truncate text-muted-foreground text-xs leading-tight">
+										{artistName}
+									</span>
+									{primaryGenresLine ? (
+										<span className="mt-auto block truncate text-[11px] text-muted-foreground/70 leading-tight">
+											{primaryGenresLine}
+										</span>
+									) : null}
 								</span>
-								<span className="shrink-0">
+								<span className="shrink-0 self-center">
 									{rating !== undefined ? (
 										<RatingInk rating={rating} />
 									) : (
-										<UnrankedQuiet />
+										<UnrankedQuiet onRate={onRate} />
 									)}
 								</span>
 							</span>
 						</span>
 					</span>
-				</button>
+				</div>
 			</PopoverTrigger>
 
 			<PopoverContent
@@ -235,6 +255,21 @@ export function listenDayKey(listenedAt: number): string {
 	return formatListenDay(listenedAt).key;
 }
 
+export function formatPrimaryGenresLine(
+	genres: Array<{ key: string; label: string }> | undefined,
+): string | null {
+	if (!genres || genres.length === 0) {
+		return null;
+	}
+	const labels = genres
+		.map((genre) => genre.label.trim())
+		.filter((label) => label.length > 0);
+	if (labels.length === 0) {
+		return null;
+	}
+	return labels.join(", ");
+}
+
 function formatListenDay(listenedAt: number): { key: string; label: string } {
 	const date = new Date(listenedAt);
 	const key = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
@@ -254,8 +289,8 @@ function Cover({
 	imageUrl?: string;
 	size: "md" | "lg";
 }): ReactNode {
-	const dim = size === "lg" ? "h-20 w-20" : "h-14 w-14";
-	const icon = size === "lg" ? "h-6 w-6" : "h-5 w-5";
+	const dim = size === "lg" ? "h-24 w-24" : "h-16 w-16";
+	const icon = size === "lg" ? "h-7 w-7" : "h-6 w-6";
 	return (
 		<div
 			className={cn(
@@ -269,7 +304,7 @@ function Cover({
 					alt={name}
 					fill
 					className="object-cover"
-					sizes={size === "lg" ? "80px" : "56px"}
+					sizes={size === "lg" ? "96px" : "64px"}
 				/>
 			) : (
 				<div className="flex h-full w-full items-center justify-center">
@@ -306,7 +341,7 @@ function ListenCountOnCover({ count }: { count: number }): ReactNode {
 			className={cn(
 				"pointer-events-none absolute top-0.5 left-0.5 rounded-[3px] px-1 py-px font-semibold text-[8px] tabular-nums tracking-wide shadow-[0_1px_2px_rgba(0,0,0,0.25)]",
 				milestone === "default" &&
-					"bg-background/90 text-muted-foreground ring-1 ring-border/80",
+					"bg-white text-zinc-800 ring-1 ring-black/20",
 				milestone === "milestone-5" &&
 					"bg-sky-600 text-white ring-1 ring-sky-400/50",
 				milestone === "milestone-10" &&
@@ -375,11 +410,29 @@ function RatingInk({ rating }: { rating: number }): ReactNode {
 	);
 }
 
-function UnrankedQuiet(): ReactNode {
+function UnrankedQuiet({ onRate }: { onRate?: () => void }): ReactNode {
+	const className =
+		"font-medium text-[11px] text-muted-foreground/50 underline decoration-dashed underline-offset-2";
+
+	if (!onRate) {
+		return <span className={className}>Rate</span>;
+	}
+
 	return (
-		<span className="font-medium text-[11px] text-muted-foreground/50 underline decoration-dashed underline-offset-2">
+		<button
+			type="button"
+			className={className}
+			onClick={(e) => {
+				e.stopPropagation();
+				e.preventDefault();
+				onRate();
+			}}
+			onPointerDown={(e) => {
+				e.stopPropagation();
+			}}
+		>
 			Rate
-		</span>
+		</button>
 	);
 }
 

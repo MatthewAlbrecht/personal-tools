@@ -2,6 +2,7 @@ import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { upsertAlbumLibraryProjection } from "./albumLibraryProjection";
+import { syncListenFilterFieldsForUserAlbum } from "./albumListenDenormalized";
 import { normalizeAlbumTitle, normalizeArtistName } from "./albumMatching";
 
 export async function findAlbumByNormalizedTitleArtist(
@@ -105,6 +106,8 @@ export async function recordManualListenForAlbum(
 			listenCount: 1,
 		});
 	}
+
+	await syncListenFilterFieldsForUserAlbum(ctx, args.userId, args.albumId);
 
 	await ctx.runMutation(
 		internal.forLaterAlbums.refreshFilterProjectionsForUserAlbum,

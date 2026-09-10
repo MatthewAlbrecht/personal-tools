@@ -12,7 +12,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 			{isAuthenticated ? (
 				<aside
 					className={cn(
-						"sticky top-14 hidden h-[calc(100vh-3.5rem)] w-56 shrink-0 overflow-y-auto border-sidebar-border border-r bg-sidebar md:block",
+						"sticky top-14 hidden h-[calc(100vh-3.5rem)] w-56 shrink-0 overflow-y-auto border-stone-900/10 border-r bg-[#efeeea] md:block",
 					)}
 				>
 					<AppSidebar />

@@ -2,40 +2,50 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { APP_NAV_GROUPS, isNavItemActive } from "./app-nav";
 
-test("music group includes Albums, Up Next, Funnel, Lyrics, Playlists, Shows", () => {
-	const music = APP_NAV_GROUPS.find((g) => g.id === "music");
-	assert.ok(music);
-	const labels = music.items.map((i) => i.label);
-	assert.deepEqual(labels, [
-		"Albums",
-		"Up Next",
-		"Funnel",
-		"Lyrics",
-		"Playlists",
-		"Shows",
-	]);
+test("My Albums peers are Listens, Rankings, Queue, Library", () => {
+	const group = APP_NAV_GROUPS.find((g) => g.id === "my-albums");
+	assert.ok(group);
+	assert.deepEqual(
+		group.items.map((i) => i.label),
+		["Listens", "Rankings", "Queue", "Library"],
+	);
 });
 
-test("More demotes Tracks, Enrichment, Categorize tracks", () => {
+test("Music group is misc tools only", () => {
+	const music = APP_NAV_GROUPS.find((g) => g.id === "music");
+	assert.ok(music);
+	assert.deepEqual(
+		music.items.map((i) => i.label),
+		["Funnel", "Lyrics", "Playlists"],
+	);
+});
+
+test("Shows and demotions live under More", () => {
 	const more = APP_NAV_GROUPS.find((g) => g.id === "more");
 	assert.ok(more);
 	const labels = more.items.map((i) => i.label);
+	assert.ok(labels.includes("Shows"));
 	assert.ok(labels.includes("Tracks"));
 	assert.ok(labels.includes("Enrichment"));
 	assert.ok(labels.includes("Categorize tracks"));
+	assert.ok(labels.includes("Rob's Top 50"));
 	assert.ok(!labels.includes("For Later"));
+	assert.ok(more.defaultCollapsed);
 });
 
-test("Up Next href points at for-later until Phase 2", () => {
-	const music = APP_NAV_GROUPS.find((g) => g.id === "music");
-	const upNext = music?.items.find((i) => i.id === "up-next");
-	assert.equal(upNext?.href, "/for-later-albums");
-});
+test("album view active states do not bleed across peers", () => {
+	const group = APP_NAV_GROUPS.find((g) => g.id === "my-albums");
+	assert.ok(group);
+	const listens = group.items.find((i) => i.id === "listens");
+	const rankings = group.items.find((i) => i.id === "rankings");
+	const queue = group.items.find((i) => i.id === "queue");
+	const library = group.items.find((i) => i.id === "library");
+	assert.ok(listens && rankings && queue && library);
 
-test("isNavItemActive matches nested album routes for Albums", () => {
-	const music = APP_NAV_GROUPS.find((g) => g.id === "music");
-	const albums = music?.items.find((i) => i.id === "albums");
-	assert.ok(albums);
-	assert.equal(isNavItemActive("/albums/recent", albums), true);
-	assert.equal(isNavItemActive("/for-later-albums", albums), false);
+	assert.equal(isNavItemActive("/albums/recent", listens), true);
+	assert.equal(isNavItemActive("/albums/rated", listens), false);
+	assert.equal(isNavItemActive("/albums/up-next", queue), true);
+	assert.equal(isNavItemActive("/albums/library", library), true);
+	assert.equal(isNavItemActive("/albums/details/abc", library), true);
+	assert.equal(isNavItemActive("/albums/details/abc", listens), false);
 });

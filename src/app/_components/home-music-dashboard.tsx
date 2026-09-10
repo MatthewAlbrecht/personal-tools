@@ -35,15 +35,15 @@ export function HomeMusicDashboard() {
 	);
 	const recent = useQuery(
 		api.home.listRecentListens,
-		userId ? { userId, limit: 8 } : "skip",
+		userId ? { userId, limit: 6 } : "skip",
 	);
 	const needsRating = useQuery(
 		api.home.listNeedsRating,
-		userId ? { userId, limit: 8 } : "skip",
+		userId ? { userId, limit: 6 } : "skip",
 	);
 	const recentlySaved = useQuery(
 		api.home.listRecentlySavedForLater,
-		userId ? { userId, limit: 8 } : "skip",
+		userId ? { userId, limit: 6 } : "skip",
 	);
 
 	if (isLoading) {
@@ -53,73 +53,98 @@ export function HomeMusicDashboard() {
 	if (!userId) {
 		return (
 			<div className="mx-auto max-w-3xl px-4 py-16 text-center">
-				<p className="text-muted-foreground">
-					Sign in to open your listening home.
-				</p>
+				<p className="text-stone-600">Sign in to open your listening home.</p>
 			</div>
 		);
 	}
 
 	return (
-		<div className="relative overflow-hidden">
+		<div className="relative min-h-full bg-[#e9e8e4] text-stone-950">
+			{/* Cool studio wash — light field, no muddy midtones */}
 			<div
 				aria-hidden
-				className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_oklch(0.55_0.09_55_/_0.18),_transparent_55%),linear-gradient(180deg,_oklch(0.16_0.02_55)_0%,_transparent_42%)]"
+				className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-[radial-gradient(ellipse_at_12%_-10%,_oklch(0.78_0.06_195_/_0.45),_transparent_55%),linear-gradient(180deg,_#f3f2ef_0%,_transparent_100%)]"
 			/>
-			<div className="relative mx-auto flex max-w-5xl flex-col gap-12 px-4 py-10 sm:px-6 sm:py-14">
-				<header className="fade-in slide-in-from-bottom-2 max-w-2xl animate-in duration-500">
-					<p className="mb-2 font-semibold text-[0.7rem] text-amber-800/80 uppercase tracking-[0.18em] dark:text-amber-200/70">
-						Listening home
-					</p>
-					<h1 className="font-[family-name:var(--font-display)] text-4xl leading-[1.05] tracking-tight sm:text-5xl">
-						What should you play next?
-					</h1>
-					<p className="mt-3 max-w-xl text-base text-muted-foreground sm:text-lg">
-						A short list from your queue — refresh picks when you want a
-						different cut.
-					</p>
+			<div
+				aria-hidden
+				className="pointer-events-none absolute inset-0 opacity-[0.04]"
+				style={{
+					backgroundImage:
+						"url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")",
+				}}
+			/>
+
+			<div className="relative mx-auto flex max-w-5xl flex-col gap-8 px-4 py-8 sm:px-6 sm:py-10 lg:gap-10">
+				<header className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+					<div className="max-w-2xl animate-[home-rise_480ms_ease-out]">
+						<p className="mb-2 font-semibold text-[0.7rem] text-teal-800 uppercase tracking-[0.18em]">
+							Decide
+						</p>
+						<h1 className="font-[family-name:var(--font-display)] text-[2.4rem] leading-[1.05] tracking-[-0.025em] sm:text-[2.85rem]">
+							What should you play next?
+						</h1>
+						<p className="mt-3 max-w-lg text-[0.95rem] text-stone-700 leading-relaxed">
+							Shortlist from your queue — grab one, or let moooose pick.
+						</p>
+					</div>
+					<div className="flex shrink-0 flex-wrap items-center gap-2 animate-[home-rise_480ms_ease-out_60ms_both]">
+						<Button
+							type="button"
+							onClick={openRecommendationDrawer}
+							className="bg-teal-900 text-[#f4f7f6] shadow-sm hover:bg-teal-800"
+						>
+							Pick for me
+						</Button>
+						<Button
+							asChild
+							variant="outline"
+							className="border-stone-900/20 bg-[#f7f6f3]/80 text-stone-900 hover:bg-white"
+						>
+							<Link href="/albums/up-next">Open Queue</Link>
+						</Button>
+					</div>
 				</header>
 
 				<section
 					aria-labelledby="play-next-heading"
-					className="fade-in slide-in-from-bottom-3 animate-in fill-mode-both delay-100 duration-700"
+					className="animate-[home-rise_560ms_ease-out_100ms_both]"
 				>
-					<div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-						<div>
-							<h2
-								id="play-next-heading"
-								className="font-[family-name:var(--font-display)] text-2xl tracking-tight"
-							>
-								Play Next
-							</h2>
-							<p className="text-muted-foreground text-sm">
-								Placeholder from Up Next until ranking lands.
-							</p>
+					<div className="overflow-hidden rounded-2xl border border-stone-900/10 bg-[#f7f6f3] shadow-[0_18px_40px_-28px_oklch(0.35_0.02_250_/_0.35)]">
+						<div className="flex items-center justify-between gap-3 border-stone-900/8 border-b px-4 py-3.5 sm:px-5">
+							<div className="flex items-baseline gap-3">
+								<h2
+									id="play-next-heading"
+									className="font-[family-name:var(--font-display)] text-xl tracking-tight"
+								>
+									Play Next
+								</h2>
+								<span className="hidden font-medium text-xs text-stone-600 sm:inline">
+									From Queue
+								</span>
+							</div>
+							<span className="rounded-md bg-teal-900/8 px-2 py-0.5 font-semibold text-[0.65rem] text-teal-900 uppercase tracking-[0.12em]">
+								Queue
+							</span>
 						</div>
-						<div className="flex gap-2">
-							<Button type="button" onClick={openRecommendationDrawer}>
-								Pick for me
-							</Button>
-							<Button asChild type="button" variant="outline">
-								<Link href="/for-later-albums">Open Up Next</Link>
-							</Button>
+						<div className="px-1.5 py-1 sm:px-2 sm:py-1.5">
+							<AlbumStrip
+								rows={playNext}
+								empty="Nothing queued yet — add albums to Queue."
+								dense
+								showIndex
+							/>
 						</div>
 					</div>
-					<AlbumStrip
-						rows={playNext}
-						empty="Nothing queued yet — add albums to Up Next."
-						dense
-					/>
 				</section>
 
-				<div className="grid gap-10 lg:grid-cols-3">
+				<div className="grid gap-4 lg:grid-cols-3">
 					<HomeModule
 						title="Recently listened"
 						href="/albums/recent"
 						linkLabel="All recent"
 						rows={recent}
 						empty="No listens synced yet."
-						delayClass="delay-150"
+						delayMs={160}
 					/>
 					<HomeModule
 						title="Needs rating"
@@ -127,15 +152,15 @@ export function HomeMusicDashboard() {
 						linkLabel="Rate listens"
 						rows={needsRating}
 						empty="You're caught up on ratings."
-						delayClass="delay-200"
+						delayMs={220}
 					/>
 					<HomeModule
 						title="Recently saved"
-						href="/for-later-albums"
-						linkLabel="Up Next"
+						href="/albums/up-next"
+						linkLabel="Queue"
 						rows={recentlySaved}
 						empty="No recent saves."
-						delayClass="delay-300"
+						delayMs={280}
 					/>
 				</div>
 			</div>
@@ -155,34 +180,36 @@ function HomeModule({
 	linkLabel,
 	rows,
 	empty,
-	delayClass,
+	delayMs,
 }: {
 	title: string;
 	href: string;
 	linkLabel: string;
 	rows: HomeAlbumRow[] | undefined;
 	empty: string;
-	delayClass: string;
+	delayMs: number;
 }) {
 	return (
 		<section
-			className={cn(
-				"fade-in slide-in-from-bottom-2 animate-in fill-mode-both duration-700",
-				delayClass,
-			)}
+			className="overflow-hidden rounded-xl border border-stone-900/10 bg-[#f7f6f3]"
+			style={{
+				animation: `home-rise 560ms ease-out ${delayMs}ms both`,
+			}}
 		>
-			<div className="mb-3 flex items-baseline justify-between gap-2">
-				<h2 className="font-[family-name:var(--font-display)] text-xl tracking-tight">
+			<div className="flex items-baseline justify-between gap-2 border-stone-900/8 border-b px-3.5 py-3">
+				<h2 className="font-[family-name:var(--font-display)] text-base tracking-tight sm:text-lg">
 					{title}
 				</h2>
 				<Link
 					href={href}
-					className="text-muted-foreground text-xs uppercase tracking-[0.12em] hover:text-foreground"
+					className="font-semibold text-[0.65rem] text-teal-800 uppercase tracking-[0.12em] hover:text-stone-950"
 				>
 					{linkLabel}
 				</Link>
 			</div>
-			<AlbumStrip rows={rows} empty={empty} />
+			<div className="px-1 py-1">
+				<AlbumStrip rows={rows} empty={empty} />
+			</div>
 		</section>
 	);
 }
@@ -191,16 +218,21 @@ function AlbumStrip({
 	rows,
 	empty,
 	dense = false,
+	showIndex = false,
 }: {
 	rows: HomeAlbumRow[] | undefined;
 	empty: string;
 	dense?: boolean;
+	showIndex?: boolean;
 }) {
 	if (rows === undefined) {
 		return (
-			<div className={cn("space-y-2", dense && "space-y-3")}>
+			<div className={cn("space-y-2 p-2", dense && "space-y-2.5")}>
 				{Array.from({ length: dense ? 5 : 3 }, (_, index) => (
-					<Skeleton key={index} className="h-14 w-full rounded-lg" />
+					<Skeleton
+						key={index}
+						className="h-14 w-full rounded-lg bg-stone-900/8"
+					/>
 				))}
 			</div>
 		);
@@ -208,39 +240,42 @@ function AlbumStrip({
 
 	if (rows.length === 0) {
 		return (
-			<p className="rounded-lg border border-dashed px-4 py-6 text-muted-foreground text-sm">
-				{empty}
-			</p>
+			<p className="px-4 py-8 text-center text-sm text-stone-600">{empty}</p>
 		);
 	}
 
 	return (
-		<ul className={cn("space-y-1.5", dense && "space-y-2")}>
+		<ul>
 			{rows.map((row, index) => (
 				<li key={`${row.albumId}-${index}`}>
 					<Link
 						href={`/albums/details/${row.albumId}`}
 						className={cn(
-							"group flex items-center gap-3 rounded-lg border border-transparent px-2 py-2 transition-colors hover:border-border hover:bg-card/80",
+							"group flex items-center gap-3 rounded-lg px-2.5 py-2 transition-colors hover:bg-stone-900/[0.04]",
 							dense && "py-2.5",
 						)}
 					>
-						<div className="relative size-11 shrink-0 overflow-hidden rounded-md bg-muted shadow-sm">
+						{showIndex ? (
+							<span className="w-5 shrink-0 text-right font-medium font-mono text-[0.7rem] text-stone-500 tabular-nums">
+								{index + 1}
+							</span>
+						) : null}
+						<div className="relative size-11 shrink-0 overflow-hidden rounded-md bg-stone-300 ring-1 ring-stone-900/10 sm:size-12">
 							{row.imageUrl ? (
 								<Image
 									src={row.imageUrl}
 									alt=""
 									fill
-									sizes="44px"
+									sizes="48px"
 									className="object-cover"
 								/>
 							) : null}
 						</div>
 						<div className="min-w-0 flex-1">
-							<p className="truncate font-medium text-sm group-hover:text-foreground">
+							<p className="truncate font-semibold text-[0.925rem] text-stone-950 leading-snug">
 								{row.name}
 							</p>
-							<p className="truncate text-muted-foreground text-xs">
+							<p className="mt-0.5 truncate text-[0.8125rem] text-stone-600 leading-snug">
 								{row.artistName}
 							</p>
 						</div>
@@ -253,13 +288,15 @@ function AlbumStrip({
 
 function HomeSkeleton() {
 	return (
-		<div className="mx-auto max-w-5xl space-y-8 px-4 py-14">
-			<Skeleton className="h-12 w-2/3" />
-			<Skeleton className="h-40 w-full" />
-			<div className="grid gap-6 lg:grid-cols-3">
-				<Skeleton className="h-48 w-full" />
-				<Skeleton className="h-48 w-full" />
-				<Skeleton className="h-48 w-full" />
+		<div className="min-h-full bg-[#e9e8e4] px-4 py-10 sm:px-6">
+			<div className="mx-auto max-w-5xl space-y-8">
+				<Skeleton className="h-12 w-2/3 bg-stone-900/10" />
+				<Skeleton className="h-64 w-full rounded-2xl bg-stone-900/10" />
+				<div className="grid gap-4 lg:grid-cols-3">
+					<Skeleton className="h-48 w-full rounded-xl bg-stone-900/10" />
+					<Skeleton className="h-48 w-full rounded-xl bg-stone-900/10" />
+					<Skeleton className="h-48 w-full rounded-xl bg-stone-900/10" />
+				</div>
 			</div>
 		</div>
 	);

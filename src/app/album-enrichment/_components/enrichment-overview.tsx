@@ -44,7 +44,7 @@ export function EnrichmentOverview({
 							</p>
 						</div>
 						<div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
-							<QuickLink href="/for-later-albums" label="For Later" />
+							<QuickLink href="/albums/up-next" label="Queue" />
 							<QuickLink href="/albums/all" label="Album library" />
 							<a
 								href="https://github.com/MatthewAlbrecht/personal-tools/blob/main/docs/album-research-enrichment.md"

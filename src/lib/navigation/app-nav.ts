@@ -7,7 +7,7 @@ export type AppNavItem = {
 };
 
 export type AppNavGroup = {
-	id: "music" | "other" | "more";
+	id: "my-albums" | "music" | "more";
 	label: string;
 	items: AppNavItem[];
 	/** Collapsed by default on desktop */
@@ -16,21 +16,39 @@ export type AppNavGroup = {
 
 export const APP_NAV_GROUPS: AppNavGroup[] = [
 	{
+		id: "my-albums",
+		label: "My Albums",
+		items: [
+			{
+				id: "listens",
+				label: "Listens",
+				href: "/albums/recent",
+				matchPrefixes: ["/albums/recent"],
+			},
+			{
+				id: "rankings",
+				label: "Rankings",
+				href: "/albums/rated",
+				matchPrefixes: ["/albums/rated"],
+			},
+			{
+				id: "queue",
+				label: "Queue",
+				href: "/albums/up-next",
+				matchPrefixes: ["/albums/up-next"],
+			},
+			{
+				id: "library",
+				label: "Library",
+				href: "/albums/library",
+				matchPrefixes: ["/albums/library", "/albums/details"],
+			},
+		],
+	},
+	{
 		id: "music",
 		label: "Music",
 		items: [
-			{
-				id: "albums",
-				label: "Albums",
-				href: "/albums/recent",
-				matchPrefixes: ["/albums"],
-			},
-			{
-				id: "up-next",
-				label: "Up Next",
-				href: "/for-later-albums",
-				matchPrefixes: ["/for-later-albums"],
-			},
 			{ id: "funnel", label: "Funnel", href: "/music-funnel" },
 			{
 				id: "lyrics",
@@ -39,21 +57,6 @@ export const APP_NAV_GROUPS: AppNavGroup[] = [
 				matchPrefixes: ["/lyrics", "/playlist-lyrics"],
 			},
 			{ id: "playlists", label: "Playlists", href: "/smart-playlists" },
-			{
-				id: "shows",
-				label: "Shows",
-				href: "/concerts/upcoming",
-				matchPrefixes: ["/concerts"],
-			},
-		],
-	},
-	{
-		id: "other",
-		label: "Other",
-		items: [
-			{ id: "robs", label: "Rob's Top 50", href: "/robs-rankings" },
-			{ id: "folio", label: "Folio Society", href: "/folio-society" },
-			{ id: "birthdays", label: "Birthdays", href: "/birthdays" },
 		],
 	},
 	{
@@ -61,6 +64,12 @@ export const APP_NAV_GROUPS: AppNavGroup[] = [
 		label: "More",
 		defaultCollapsed: true,
 		items: [
+			{
+				id: "shows",
+				label: "Shows",
+				href: "/concerts/upcoming",
+				matchPrefixes: ["/concerts"],
+			},
 			{ id: "tracks", label: "Tracks", href: "/albums/tracks" },
 			{ id: "enrichment", label: "Enrichment", href: "/album-enrichment" },
 			{
@@ -68,6 +77,9 @@ export const APP_NAV_GROUPS: AppNavGroup[] = [
 				label: "Categorize tracks",
 				href: "/spotify-playlister",
 			},
+			{ id: "robs", label: "Rob's Top 50", href: "/robs-rankings" },
+			{ id: "folio", label: "Folio Society", href: "/folio-society" },
+			{ id: "birthdays", label: "Birthdays", href: "/birthdays" },
 			{ id: "rooleases", label: "Rooleases", href: "/rooleases" },
 			{ id: "articles", label: "Articles", href: "/articles" },
 			{ id: "books", label: "Books", href: "/books" },

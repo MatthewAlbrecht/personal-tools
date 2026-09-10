@@ -1189,10 +1189,29 @@ export default defineSchema({
 		latestPlayedAt: v.number(), // Max played_at from session tracks
 		trackIds: v.array(v.string()), // Spotify track IDs that were played
 		source: v.string(), // e.g., "recently_played_sync"
+		// Denormalized for Listens filter indexes. Optional until backfill completes.
+		isFirstListen: v.optional(v.boolean()),
+		hasRating: v.optional(v.boolean()),
+		releaseYear: v.optional(v.number()),
 	})
 		.index("by_userId", ["userId"])
 		.index("by_userId_albumId", ["userId", "albumId"])
-		.index("by_userId_listenedAt", ["userId", "listenedAt"]),
+		.index("by_userId_listenedAt", ["userId", "listenedAt"])
+		.index("by_userId_isFirstListen_listenedAt", [
+			"userId",
+			"isFirstListen",
+			"listenedAt",
+		])
+		.index("by_userId_hasRating_listenedAt", [
+			"userId",
+			"hasRating",
+			"listenedAt",
+		])
+		.index("by_userId_releaseYear_listenedAt", [
+			"userId",
+			"releaseYear",
+			"listenedAt",
+		]),
 
 	ratingHistory: defineTable({
 		userId: v.string(),
