@@ -7,7 +7,7 @@ import { Button } from "~/components/ui/button";
 import { LyricsZine, LyricsZineSkeleton } from "~/components/zine/lyrics-zine";
 import { coverTextLayoutFromStoredFields } from "~/lib/zine/zine-cover-text-layout";
 import { insideBackLayoutFromStoredFields } from "~/lib/zine/zine-inside-back-layout";
-import { hasInsideBackContent } from "~/lib/zine/zine-inside-back-sections";
+import { coerceZineInsideBackSections, hasInsideBackContent } from "~/lib/zine/zine-inside-back-sections";
 import type { ZineItemSettings } from "~/lib/zine/zine-types";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
@@ -122,10 +122,12 @@ export function PlaylistLyricsZine({ slug, variant }: PlaylistLyricsZineProps) {
 	const playlist = playlistData.playlist;
 	const insideBackSections =
 		variant === "public"
-			? hasInsideBackContent(playlist.zineInsideBackSections)
-				? (playlist.zineInsideBackSections ?? [])
+			? hasInsideBackContent(
+					coerceZineInsideBackSections(playlist.zineInsideBackSections),
+				)
+				? coerceZineInsideBackSections(playlist.zineInsideBackSections)
 				: undefined
-			: (playlist.zineInsideBackSections ?? []);
+			: coerceZineInsideBackSections(playlist.zineInsideBackSections);
 
 	return (
 		<LyricsZine

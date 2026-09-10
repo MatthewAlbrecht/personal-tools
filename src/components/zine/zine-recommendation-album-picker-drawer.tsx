@@ -22,7 +22,7 @@ import { extractReleaseYear } from "~/lib/zine/spotify-discography-import";
 import { api } from "../../../convex/_generated/api";
 
 export type ZineSpotifyAlbumPickerSelection = {
-	spotifyAlbumId: string;
+	spotifyAlbumId?: string;
 	albumTitle: string;
 	artistName: string;
 	year?: string;
@@ -78,7 +78,7 @@ export function ZineRecommendationAlbumPickerDrawer({
 	);
 
 	function handleSelectAlbum(album: {
-		spotifyAlbumId: string;
+		spotifyAlbumId?: string;
 		name: string;
 		artistName: string;
 		imageUrl?: string;

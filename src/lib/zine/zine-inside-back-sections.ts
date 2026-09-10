@@ -32,6 +32,20 @@ export type ZineInsideBackSection =
 	| ZineDiscographySection
 	| ZineRecommendationsSection;
 
+/** Drop legacy `text` sections from Convex payloads for the UI section union. */
+export function coerceZineInsideBackSections(
+	sections: readonly { type: string }[] | undefined,
+): ZineInsideBackSection[] {
+	if (!sections) {
+		return [];
+	}
+
+	return sections.filter(
+		(section): section is ZineInsideBackSection =>
+			section.type === "discography" || section.type === "recommendations",
+	);
+}
+
 export const ZINE_INSIDE_BACK_LIMITS = {
 	maxSections: 4,
 	/** Stored discography rows after Spotify import (user hides extras for print). */

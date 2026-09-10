@@ -31,6 +31,7 @@ import { ZineInsideBackSectionsEditor } from "~/components/zine/zine-inside-back
 import { useAuthToken } from "~/lib/hooks/use-auth-token";
 import { useSpotifyAuth } from "~/lib/hooks/use-spotify-auth";
 import type { ZineInsideBackSection } from "~/lib/zine/zine-inside-back-sections";
+import { coerceZineInsideBackSections } from "~/lib/zine/zine-inside-back-sections";
 import { resolveAlbumIntroContent } from "~/lib/zine/zine-intro-content";
 import { mapDiscographyReleasesToAlbumUpserts } from "~/lib/zine/spotify-discography-import";
 import { api } from "../../../../convex/_generated/api";
@@ -820,7 +821,9 @@ function buildAlbumForm(album: Album): AlbumFormState {
 			album.introPageContent,
 			album.summaryOverride,
 		),
-		zineInsideBackSections: album.zineInsideBackSections ?? [],
+		zineInsideBackSections: coerceZineInsideBackSections(
+			album.zineInsideBackSections,
+		),
 	};
 }
 

@@ -27,6 +27,7 @@ import { IntroContentEditor } from "~/components/zine/intro-content-editor";
 import { ZineInsideBackSectionsEditor } from "~/components/zine/zine-inside-back-sections-editor";
 import { useAuthToken } from "~/lib/hooks/use-auth-token";
 import type { ZineInsideBackSection } from "~/lib/zine/zine-inside-back-sections";
+import { coerceZineInsideBackSections } from "~/lib/zine/zine-inside-back-sections";
 import { api } from "../../../../convex/_generated/api";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import { getPlaylistDisplayTrackNumber } from "../_utils/song-display";
@@ -648,7 +649,9 @@ export function PlaylistLyricsEditor({ slug }: { slug: string }): ReactElement {
 			/>
 
 			<PlaylistInsideBackSectionsCard
-				initialSections={playlist.zineInsideBackSections ?? []}
+				initialSections={coerceZineInsideBackSections(
+					playlist.zineInsideBackSections,
+				)}
 				playlistId={playlist._id}
 			/>
 
