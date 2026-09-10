@@ -665,17 +665,16 @@ function DaySlimRail({ rows }: { rows: LabListen[] }): ReactNode {
 							</span>
 						</button>
 						<div className="flex items-center gap-1 self-center">
-							<div className="hidden flex-col items-end gap-0.5 sm:flex">
+							<div className="hidden sm:block">
 								{row.rating !== undefined ? (
-									<RatingInk rating={row.rating} />
+									<button type="button">
+										<RatingInk rating={row.rating} />
+									</button>
 								) : (
-									<UnrankedQuiet />
+									<button type="button">
+										<UnrankedQuiet />
+									</button>
 								)}
-								{row.isFirstListen ? (
-									<span className="text-[10px] text-muted-foreground tabular-nums">
-										{row.listenCount}×
-									</span>
-								) : null}
 							</div>
 							<RowMenu />
 						</div>
