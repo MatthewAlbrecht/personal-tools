@@ -54,8 +54,8 @@ const LAB_SAMPLES: LabListen[] = [
 		name: "Curious Objects",
 		artistName: "Cyst, Iglooghost",
 		rating: 14,
-		listenCount: 1,
-		isFirstListen: true,
+		listenCount: 5,
+		isFirstListen: false,
 		listenedAt: new Date(2026, 8, 10).getTime(),
 		dayKey: "Sep 10",
 		dayShort: "10",
@@ -75,8 +75,8 @@ const LAB_SAMPLES: LabListen[] = [
 		id: "4",
 		name: "SORB",
 		artistName: "MEITEI",
-		listenCount: 1,
-		isFirstListen: true,
+		listenCount: 10,
+		isFirstListen: false,
 		listenedAt: new Date(2026, 8, 9).getTime(),
 		dayKey: "Sep 9",
 		dayShort: "9",
@@ -86,8 +86,8 @@ const LAB_SAMPLES: LabListen[] = [
 		name: "SOUL SEEK",
 		artistName: "Surfacing",
 		rating: 14,
-		listenCount: 3,
-		isFirstListen: true,
+		listenCount: 20,
+		isFirstListen: false,
 		listenedAt: new Date(2026, 8, 8).getTime(),
 		dayKey: "Sep 8",
 		dayShort: "8",
@@ -281,9 +281,28 @@ function NewOnCover(): ReactNode {
 }
 
 function ListenCountOnCover({ count }: { count: number }): ReactNode {
+	const milestone =
+		count === 20
+			? "milestone-20"
+			: count === 10
+				? "milestone-10"
+				: count === 5
+					? "milestone-5"
+					: "default";
+
 	return (
 		<span
-			className="pointer-events-none absolute top-0.5 left-0.5 rounded-[3px] bg-background/90 px-1 py-px font-semibold text-[8px] text-muted-foreground tabular-nums tracking-wide shadow-[0_1px_2px_rgba(0,0,0,0.25)] ring-1 ring-border/80"
+			className={cn(
+				"pointer-events-none absolute top-0.5 left-0.5 rounded-[3px] px-1 py-px font-semibold text-[8px] tabular-nums tracking-wide shadow-[0_1px_2px_rgba(0,0,0,0.25)]",
+				milestone === "default" &&
+					"bg-background/90 text-muted-foreground ring-1 ring-border/80",
+				milestone === "milestone-5" &&
+					"bg-sky-600 text-white ring-1 ring-sky-400/50",
+				milestone === "milestone-10" &&
+					"bg-violet-600 text-white ring-1 ring-violet-300/60",
+				milestone === "milestone-20" &&
+					"bg-gradient-to-br from-amber-400 via-orange-500 to-rose-600 text-white ring-1 ring-amber-200/70",
+			)}
 			aria-label={`Listen ${count}`}
 		>
 			{count}×
