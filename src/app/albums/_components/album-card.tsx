@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Disc3, RefreshCw } from "lucide-react";
+import { Check, Disc3 } from "lucide-react";
 import Image from "next/image";
 import { forwardRef } from "react";
 import { AlbumListenCountBadge } from "~/components/album-listen-count-badge";
@@ -14,8 +14,8 @@ type AlbumCardProps = {
 	imageUrl?: string;
 	releaseDate?: string;
 	listenedAt?: number;
-	listenOrdinal?: number; // Which listen this was (1 = first, 2 = second, etc.)
-	listenCount?: number; // Total listens for aggregate album rows.
+	listenCount?: number;
+	isFirstListen?: boolean;
 	rating?: number; // 1-15 rating if rated
 	showListenDate?: boolean;
 	showReleaseYear?: boolean;
@@ -23,7 +23,6 @@ type AlbumCardProps = {
 	onSelect?: () => void; // Click to select for keyboard navigation
 	isSelected?: boolean; // Keyboard navigation selection state
 	showSaved?: boolean; // Show "Saved" indicator
-	listenedAgain?: boolean; // Show indicator when listened after last rating
 };
 
 export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
@@ -34,8 +33,8 @@ export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
 			imageUrl,
 			releaseDate,
 			listenedAt,
-			listenOrdinal,
 			listenCount,
+			isFirstListen = false,
 			rating,
 			showListenDate = false,
 			showReleaseYear = false,
@@ -43,7 +42,6 @@ export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
 			onSelect,
 			isSelected = false,
 			showSaved = false,
-			listenedAgain = false,
 		},
 		ref,
 	) {
@@ -63,7 +61,7 @@ export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
 				ref={ref}
 				onClick={onSelect}
 				className={cn(
-					"group flex items-center gap-2 rounded-md p-1 hover:bg-muted/50",
+					"group flex items-center gap-2 rounded-md p-1 transition-colors hover:bg-muted/50",
 					isSelected && !showSaved && "ring-2 ring-primary",
 					showSaved && "ring-2 ring-emerald-500/50",
 				)}
@@ -87,7 +85,17 @@ export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
 
 				{/* Album Info */}
 				<div className="min-w-0 flex-1">
-					<p className="truncate font-medium text-sm">{name}</p>
+					<div className="flex min-w-0 items-baseline gap-2">
+						<p className="truncate font-medium text-sm">{name}</p>
+						{isFirstListen ? (
+							<span
+								className="shrink-0 font-medium text-[10px] text-teal-800/70 tracking-wide"
+								title="First listen"
+							>
+								New
+							</span>
+						) : null}
+					</div>
 					<p className="truncate text-muted-foreground text-xs">{artistName}</p>
 				</div>
 
@@ -128,25 +136,8 @@ export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
 						/>
 					) : null}
 
-					{/* Listened Again Indicator */}
-					{listenedAgain && isRated && (
-						<span
-							className="inline-flex items-center rounded-full bg-amber-500/15 px-1.5 py-0.5 text-amber-600 dark:text-amber-400"
-							title="Listened again since last rating"
-						>
-							<RefreshCw className="h-3 w-3" />
-						</span>
-					)}
-
-					{/* Listen ordinal */}
-					{listenOrdinal !== undefined ? (
-						<AlbumListenCountBadge listenCount={listenOrdinal} />
-					) : null}
-
-					{listenCount !== undefined && listenCount > 0 ? (
-						<span className="inline-flex items-center rounded-full bg-muted px-1.5 py-0.5 font-medium text-[10px] text-muted-foreground">
-							{listenCount}×
-						</span>
+					{listenCount !== undefined ? (
+						<AlbumListenCountBadge listenCount={listenCount} />
 					) : null}
 
 					{/* Date/Year */}

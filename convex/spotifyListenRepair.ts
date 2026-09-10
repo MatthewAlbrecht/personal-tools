@@ -16,6 +16,7 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { upsertAlbumLibraryProjection } from "./_utils/albumLibraryProjection";
+import { syncListenFilterFieldsForUserAlbum } from "./_utils/albumListenDenormalized";
 
 export const listSyncLogsPage = internalQuery({
 	args: {
@@ -240,6 +241,8 @@ export const applyRepairCandidates = internalMutation({
 					listenCount: 1,
 				});
 			}
+
+			await syncListenFilterFieldsForUserAlbum(ctx, args.userId, album._id);
 
 			await ctx.runMutation(
 				internal.forLaterAlbums.refreshFilterProjectionsForUserAlbum,

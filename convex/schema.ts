@@ -158,6 +158,8 @@ export default defineSchema({
 		albumSlug: v.string(),
 		geniusAlbumUrl: v.string(),
 		totalSongs: v.number(),
+		/** Present on shared dev data from parallel zine work; keep optional so pushes succeed. */
+		albumArtUrl: v.optional(v.string()),
 		zineCoverImageUrl: v.optional(v.string()),
 		zineCoverImageStorageId: v.optional(v.id("_storage")),
 		zineCoverGreyscale: v.optional(v.boolean()),
@@ -174,6 +176,7 @@ export default defineSchema({
 			v.union(v.literal("top"), v.literal("center")),
 		),
 		zineIntroFontSizePt: v.optional(v.number()),
+		zineIntroBold: v.optional(v.boolean()),
 		zineDisplaySettings: v.optional(zineDisplaySettingsValidator),
 		zineInsideBackSections: v.optional(zineInsideBackSectionsValidator),
 		zineInsideBackMarginTopPt: v.optional(v.number()),
@@ -1186,10 +1189,29 @@ export default defineSchema({
 		latestPlayedAt: v.number(), // Max played_at from session tracks
 		trackIds: v.array(v.string()), // Spotify track IDs that were played
 		source: v.string(), // e.g., "recently_played_sync"
+		// Denormalized for Listens filter indexes. Optional until backfill completes.
+		isFirstListen: v.optional(v.boolean()),
+		hasRating: v.optional(v.boolean()),
+		releaseYear: v.optional(v.number()),
 	})
 		.index("by_userId", ["userId"])
 		.index("by_userId_albumId", ["userId", "albumId"])
-		.index("by_userId_listenedAt", ["userId", "listenedAt"]),
+		.index("by_userId_listenedAt", ["userId", "listenedAt"])
+		.index("by_userId_isFirstListen_listenedAt", [
+			"userId",
+			"isFirstListen",
+			"listenedAt",
+		])
+		.index("by_userId_hasRating_listenedAt", [
+			"userId",
+			"hasRating",
+			"listenedAt",
+		])
+		.index("by_userId_releaseYear_listenedAt", [
+			"userId",
+			"releaseYear",
+			"listenedAt",
+		]),
 
 	ratingHistory: defineTable({
 		userId: v.string(),

@@ -1,22 +1,28 @@
+import type { ReactNode } from "react";
+
+export function getListenCountBadgeState({
+	listenCount,
+}: {
+	listenCount: number;
+}): { showCount: boolean } {
+	return {
+		showCount: listenCount >= 1,
+	};
+}
+
 export function AlbumListenCountBadge({
 	listenCount,
 }: {
 	listenCount: number;
-}) {
-	if (listenCount <= 0) {
+}): ReactNode {
+	const { showCount } = getListenCountBadgeState({ listenCount });
+
+	if (!showCount) {
 		return null;
 	}
 
-	if (listenCount === 1) {
-		return (
-			<span className="inline-flex items-center rounded-full bg-emerald-500/15 px-2 py-0.5 font-medium text-[10px] text-emerald-600 dark:text-emerald-400">
-				First
-			</span>
-		);
-	}
-
 	return (
-		<span className="inline-flex items-center rounded-full bg-muted px-1.5 py-0.5 font-medium text-[10px] text-muted-foreground">
+		<span className="inline-flex items-center rounded-full bg-muted px-1.5 py-0.5 font-medium text-[10px] text-muted-foreground tabular-nums">
 			{listenCount}×
 		</span>
 	);

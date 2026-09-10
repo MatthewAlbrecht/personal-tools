@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation";
 const TABS = [
 	{ href: "/concerts/upcoming", label: "Upcoming Shows" },
 	{ href: "/concerts/new", label: "New Shows" },
-	{ href: "/concerts/venues", label: "Venues" },
 ] as const;
 
 export function ConcertTabs() {

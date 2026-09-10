@@ -6,6 +6,8 @@
 @theme {
 	--font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif,
 		"Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+	--font-display: "Fraunces", "Iowan Old Style", "Times New Roman", ui-serif,
+		serif;
 }
 
 @theme inline {
@@ -280,5 +282,16 @@
 	.print-compact .space-y-16 > * + *,
 	.print-compact .space-y-8 > * + * {
 		margin-top: 0 !important;
+	}
+}
+
+@keyframes home-rise {
+	from {
+		opacity: 0;
+		transform: translateY(10px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
 	}
 }

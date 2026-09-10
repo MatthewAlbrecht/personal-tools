@@ -16,6 +16,11 @@ export type HistoryListen = {
 	albumId: string;
 	listenedAt: number;
 	album: AlbumInfo | null;
+	listenCount: number;
+	isFirstListen: boolean;
+	firstListenedAt?: number;
+	/** RYM primary genres when linked; else up to 3 Spotify album genres. */
+	primaryGenres?: Array<{ key: string; label: string }>;
 };
 
 // Ranked album item for rankings view

@@ -1,24 +1,16 @@
 "use client";
 
 import { Disc3 } from "lucide-react";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { AlbumRatingDrawer } from "~/components/album-rating-drawer";
 import { LoginPrompt } from "~/components/login-prompt";
 import { SyncAlbumsButton } from "~/components/sync-albums-button";
 import { SpotifyConnection } from "../spotify-playlister/_components/spotify-connection";
 import { AddListenDrawer } from "./_components/add-listen-view";
-import { AlbumRatingDrawer } from "~/components/album-rating-drawer";
 import { AlbumsProvider, useAlbums } from "./_context/albums-context";
 
-const TABS = [
-	{ href: "/albums/history", label: "History" },
-	{ href: "/albums/rankings", label: "Rankings" },
-	{ href: "/albums/tracks", label: "Tracks" },
-	{ href: "/albums/all", label: "Albums" },
-] as const;
-
 function AlbumsLayoutContent({ children }: { children: React.ReactNode }) {
-	const pathname = usePathname();
+	const pathname = usePathname() ?? "";
 	const {
 		userId,
 		isLoading,
@@ -41,7 +33,7 @@ function AlbumsLayoutContent({ children }: { children: React.ReactNode }) {
 
 	if (isLoading) {
 		return (
-			<div className="container mx-auto max-w-6xl p-6">
+			<div className="w-full p-6">
 				<div className="flex h-[50vh] items-center justify-center">
 					<p className="text-muted-foreground">Loading...</p>
 				</div>
@@ -59,61 +51,55 @@ function AlbumsLayoutContent({ children }: { children: React.ReactNode }) {
 		);
 	}
 
+	const showHistorySync =
+		pathname.startsWith("/albums/recent") ||
+		pathname.startsWith("/albums/rated") ||
+		pathname.startsWith("/albums/library") ||
+		pathname.startsWith("/albums/tracks");
+
+	// Listens embeds sync in the filter rail; other views get a quiet page foot.
+	const showPageFootSync =
+		isConnected && showHistorySync && !pathname.startsWith("/albums/recent");
+
 	return (
-		<div className="container mx-auto max-w-6xl p-6">
-			{/* Header */}
-			<div className="mb-6 flex items-start justify-between">
-				<div>
-					<h1 className="font-bold text-3xl">Album Tracker</h1>
-					<p className="mt-2 text-muted-foreground">
-						Track what albums you've listened to and when
-					</p>
-				</div>
-				{isConnected && (
-					<SyncAlbumsButton
-						isSyncing={isSyncing}
-						onSync={syncHistory}
-						variant="outline"
-						lastSyncedAt={lastSyncRun?.completedAt}
-					/>
-				)}
-			</div>
+		// --albums-sticky-inset: page pt-4 (+ mt-2 when history chrome wraps children).
+		// Sticky rails (Listens filters) use this so they lock at the rest gap under the nav.
+		<div className="w-full p-6 pt-4 [--albums-sticky-inset:1rem]">
+			{showHistorySync ? (
+				<SpotifyConnection
+					isConnected={isConnected}
+					displayName={connection?.displayName}
+					onDisconnect={handleDisconnect}
+				/>
+			) : null}
 
-			{/* Spotify Connection */}
-			<SpotifyConnection
-				isConnected={isConnected}
-				displayName={connection?.displayName}
-				onDisconnect={handleDisconnect}
-			/>
-
-			{isConnected && (
-				<div className="mt-6">
-					{/* Tabs */}
-					<div className="mb-6 flex gap-1 rounded-lg bg-muted p-1">
-						{TABS.map((tab) => {
-							const isActive = pathname === tab.href;
-							return (
-								<Link
-									key={tab.href}
-									href={tab.href}
-									className={`flex-1 rounded-md px-4 py-2 text-center font-medium text-sm transition-colors ${
-										isActive
-											? "bg-background text-foreground shadow-sm"
-											: "text-muted-foreground hover:text-foreground"
-									}`}
-								>
-									{tab.label}
-								</Link>
-							);
-						})}
-					</div>
-
-					{/* Page Content */}
+			{isConnected || pathname.startsWith("/albums/up-next") ? (
+				<div
+					className={
+						showHistorySync
+							? "mt-2 [--albums-sticky-inset:1.5rem]"
+							: undefined
+					}
+				>
 					{children}
+				</div>
+			) : (
+				<div className="mt-4 rounded-lg border border-dashed p-8 text-center text-muted-foreground text-sm">
+					Connect Spotify to use this view.
 				</div>
 			)}
 
-			{/* Add Listen Drawer */}
+			{showPageFootSync ? (
+				<div className="mt-10 border-border/50 border-t pt-3">
+					<SyncAlbumsButton
+						variant="status"
+						isSyncing={isSyncing}
+						onSync={syncHistory}
+						lastSyncedAt={lastSyncRun?.completedAt}
+					/>
+				</div>
+			) : null}
+
 			<AddListenDrawer
 				track={
 					trackToAddListen

@@ -26,7 +26,7 @@ export function LoginForm() {
 		setIsSubmitting(false);
 
 		if (success) {
-			router.replace(next || "/books");
+			router.replace(next || "/");
 		} else {
 			setError("Invalid credentials");
 		}

@@ -1,73 +1,39 @@
 import { cookies } from "next/headers";
 import Link from "next/link";
+import { HomeMusicDashboard } from "~/app/_components/home-music-dashboard";
+import { Button } from "~/components/ui/button";
 
 export default async function Home() {
 	const cookieStore = await cookies();
 	const isAuthed = cookieStore.get("session")?.value != null;
+
+	if (isAuthed) {
+		return <HomeMusicDashboard />;
+	}
+
 	return (
-		<main className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-[#0f172a] to-[#0b1220] text-white">
-			<div className="container flex flex-col items-center justify-center gap-6 px-4 py-16">
-				<h1 className="font-extrabold text-5xl tracking-tight">
-					Personal Tools
+		<main className="relative flex min-h-[calc(100vh-3.5rem)] flex-col justify-center overflow-hidden px-4 py-16">
+			<div
+				aria-hidden
+				className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,_oklch(0.72_0.12_55_/_0.25),_transparent_40%),radial-gradient(circle_at_80%_0%,_oklch(0.45_0.04_250_/_0.2),_transparent_35%)]"
+			/>
+			<div className="relative mx-auto max-w-lg text-center">
+				<p className="mb-3 font-semibold text-[0.7rem] text-muted-foreground uppercase tracking-[0.2em]">
+					moooose
+				</p>
+				<h1 className="font-[family-name:var(--font-display)] text-5xl tracking-tight">
+					Personal listening tools
 				</h1>
-				<p className="text-white/80">Jump to a tool:</p>
-				<div className="grid grid-cols-1 gap-4">
-					<Link
-						className="rounded-lg bg-white/10 px-6 py-3 text-center font-semibold transition hover:bg-white/20"
-						href="/public/robs-top-50"
-					>
-						Rob&apos;s Top 50 →
-					</Link>
-					{isAuthed ? (
-						<>
-							<Link
-								className="rounded-lg bg-white/10 px-6 py-3 text-center font-semibold transition hover:bg-white/20"
-								href="/folio-society"
-							>
-								Folio Society Release Tracker →
-							</Link>
-							<Link
-								className="rounded-lg bg-white/10 px-6 py-3 text-center font-semibold transition hover:bg-white/20"
-								href="/lyrics"
-							>
-								Lyrics →
-							</Link>
-							<Link
-								className="rounded-lg bg-white/10 px-6 py-3 text-center font-semibold transition hover:bg-white/20"
-								href="/albums"
-							>
-								Albums →
-							</Link>
-							<Link
-								className="rounded-lg bg-white/10 px-6 py-3 text-center font-semibold transition hover:bg-white/20"
-								href="/smart-playlists"
-							>
-								Smart Playlists →
-							</Link>
-							<Link
-								className="rounded-lg bg-white/10 px-6 py-3 text-center font-semibold transition hover:bg-white/20"
-								href="/concerts"
-							>
-								Concert Tracker →
-							</Link>
-							<Link
-								className="rounded-lg bg-white/10 px-6 py-3 text-center font-semibold transition hover:bg-white/20"
-								href="/birthdays"
-							>
-								Birthdays →
-							</Link>
-							<Link
-								className="rounded-lg bg-white/10 px-6 py-3 text-center font-semibold transition hover:bg-white/20"
-								href="/robs-rankings"
-							>
-								Rob&apos;s Top 50 — Editor →
-							</Link>
-						</>
-					) : (
-						<p className="text-white/60">
-							Sign in for more tools, or browse Rob&apos;s Top 50 above.
-						</p>
-					)}
+				<p className="mt-4 text-muted-foreground">
+					Sign in for your queue and history, or browse the public Top 50.
+				</p>
+				<div className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
+					<Button asChild size="lg">
+						<Link href="/login">Sign in</Link>
+					</Button>
+					<Button asChild size="lg" variant="outline">
+						<Link href="/public/robs-top-50">Rob&apos;s Top 50</Link>
+					</Button>
 				</div>
 			</div>
 		</main>

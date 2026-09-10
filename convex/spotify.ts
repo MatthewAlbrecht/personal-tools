@@ -1,9 +1,22 @@
+import { stream } from "convex-helpers/server/stream";
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { action, mutation, query } from "./_generated/server";
+import {
+	buildListenOrdinalsById,
+	enrichListenWithUserAlbum,
+} from "./_utils/albumListenEnrichment";
+import { syncListenFilterFieldsForUserAlbum } from "./_utils/albumListenDenormalized";
+import {
+	LISTEN_FILTER_MAXIMUM_ROWS_READ,
+	chooseListenFilterIndex,
+	listenFilterNeedsPostFilter,
+	listenMatchesDenormalizedFilters,
+	listensFiltersAreActive,
+} from "./_utils/albumListenFilters";
 import { computeAppearsInForLater } from "./_utils/albumLibraryForLaterMembership";
 import {
 	refreshAlbumLibraryProjectionsForAlbum,
@@ -38,6 +51,7 @@ import {
 import { upsertSpotifyAlbumRecord } from "./_utils/upsertSpotifyAlbumRecord";
 import { buildSpotifyAlbumListItems } from "./_utils/spotify_album_list";
 import { requireAuth } from "./auth";
+import schema from "./schema";
 
 async function refreshForLaterProjectionsForUserAlbum(
 	ctx: MutationCtx,
@@ -3149,6 +3163,11 @@ export const recordAlbumListen = mutation({
 			});
 		}
 
+		await syncListenFilterFieldsForUserAlbum(
+			ctx,
+			args.userId,
+			args.albumId,
+		);
 		await refreshForLaterProjectionsForUserAlbum(ctx, {
 			userId: args.userId,
 			albumId: args.albumId,
@@ -3225,30 +3244,252 @@ export const getUserAlbums = query({
 	},
 });
 
+const enrichedAlbumListenValidator = v.object({
+	_id: v.id("userAlbumListens"),
+	_creationTime: v.number(),
+	userId: v.string(),
+	albumId: v.id("spotifyAlbums"),
+	listenedAt: v.number(),
+	earliestPlayedAt: v.number(),
+	latestPlayedAt: v.number(),
+	trackIds: v.array(v.string()),
+	source: v.string(),
+	album: v.any(), // full spotifyAlbums doc or null
+	listenCount: v.number(),
+	firstListenedAt: v.optional(v.number()),
+	isFirstListen: v.boolean(),
+	primaryGenres: v.array(albumLibraryTaxonomyTagValidator),
+});
+
+const LISTEN_HISTORY_PRIMARY_GENRE_CAP = 3;
+
+function primaryGenresFromSpotifyAlbum(
+	genres: string[] | undefined,
+): AlbumLibraryTaxonomyTag[] {
+	if (!genres || genres.length === 0) {
+		return [];
+	}
+
+	const tags: AlbumLibraryTaxonomyTag[] = [];
+	for (const genre of genres) {
+		const label = genre.trim();
+		if (!label) continue;
+		tags.push({
+			key: label.toLowerCase(),
+			label,
+		});
+		if (tags.length >= LISTEN_HISTORY_PRIMARY_GENRE_CAP) {
+			break;
+		}
+	}
+	return tags;
+}
+
+async function enrichAlbumListensPage(
+	ctx: QueryCtx,
+	userId: string,
+	listens: Doc<"userAlbumListens">[],
+) {
+	const uniqueAlbumIds = [...new Set(listens.map((listen) => listen.albumId))];
+	const albumById = new Map<Id<"spotifyAlbums">, Doc<"spotifyAlbums"> | null>();
+	const userAlbumById = new Map<Id<"spotifyAlbums">, Doc<"userAlbums">>();
+	const primaryGenresByAlbumId = new Map<
+		Id<"spotifyAlbums">,
+		AlbumLibraryTaxonomyTag[]
+	>();
+	const listenOrdinalById = new Map<string, number>();
+
+	await Promise.all(
+		uniqueAlbumIds.map(async (albumId) => {
+			const album = await ctx.db.get(albumId);
+			albumById.set(albumId, album);
+
+			const userAlbum = await ctx.db
+				.query("userAlbums")
+				.withIndex("by_userId_albumId", (q) =>
+					q.eq("userId", userId).eq("albumId", albumId),
+				)
+				.first();
+			if (userAlbum) {
+				userAlbumById.set(albumId, userAlbum);
+			}
+
+			const libraryItem = await ctx.db
+				.query("albumLibraryItems")
+				.withIndex("by_userId_albumId", (q) =>
+					q.eq("userId", userId).eq("albumId", albumId),
+				)
+				.first();
+			if (libraryItem && libraryItem.primaryGenres.length > 0) {
+				primaryGenresByAlbumId.set(
+					albumId,
+					libraryItem.primaryGenres.slice(0, LISTEN_HISTORY_PRIMARY_GENRE_CAP),
+				);
+			} else {
+				primaryGenresByAlbumId.set(
+					albumId,
+					primaryGenresFromSpotifyAlbum(album?.genres),
+				);
+			}
+
+			const albumListens = await ctx.db
+				.query("userAlbumListens")
+				.withIndex("by_userId_albumId", (q) =>
+					q.eq("userId", userId).eq("albumId", albumId),
+				)
+				.collect();
+			const ordinals = buildListenOrdinalsById(albumListens);
+			for (const [listenId, ordinal] of ordinals) {
+				listenOrdinalById.set(listenId, ordinal);
+			}
+		}),
+	);
+
+	return listens.map((listen) => {
+		const {
+			hasRating: _hasRating,
+			releaseYear: _releaseYear,
+			...listenFields
+		} = listen;
+		return enrichListenWithUserAlbum(
+			{
+				...listenFields,
+				album: albumById.get(listen.albumId) ?? null,
+				primaryGenres: primaryGenresByAlbumId.get(listen.albumId) ?? [],
+			},
+			userAlbumById.get(listen.albumId),
+			listenOrdinalById.get(listen._id) ?? 0,
+		);
+	});
+}
+
+export const listUserAlbumListensPaginated = query({
+	args: {
+		userId: v.string(),
+		paginationOpts: paginationOptsValidator,
+		onlyUnranked: v.optional(v.boolean()),
+		onlyFirstListens: v.optional(v.boolean()),
+		yearMin: v.optional(v.number()),
+		yearMax: v.optional(v.number()),
+	},
+	returns: v.object({
+		page: v.array(enrichedAlbumListenValidator),
+		isDone: v.boolean(),
+		continueCursor: v.string(),
+		pageStatus: v.optional(
+			v.union(v.literal("SplitRecommended"), v.literal("SplitRequired")),
+		),
+		splitCursor: v.optional(v.string()),
+	}),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+
+		const filterOpts = {
+			onlyUnranked: args.onlyUnranked === true,
+			onlyFirstListens: args.onlyFirstListens === true,
+			...(args.yearMin !== undefined ? { yearMin: args.yearMin } : {}),
+			...(args.yearMax !== undefined ? { yearMax: args.yearMax } : {}),
+		};
+
+		if (!listensFiltersAreActive(filterOpts)) {
+			const result = await ctx.db
+				.query("userAlbumListens")
+				.withIndex("by_userId_listenedAt", (q) => q.eq("userId", args.userId))
+				.order("desc")
+				.paginate(args.paginationOpts);
+
+			const page = await enrichAlbumListensPage(
+				ctx,
+				args.userId,
+				result.page,
+			);
+
+			return {
+				page,
+				isDone: result.isDone,
+				continueCursor: result.continueCursor,
+				...(result.pageStatus ? { pageStatus: result.pageStatus } : {}),
+				...(result.splitCursor !== undefined && result.splitCursor !== null
+					? { splitCursor: result.splitCursor }
+					: {}),
+			};
+		}
+
+		const indexChoice = chooseListenFilterIndex(filterOpts);
+		const needsPostFilter = listenFilterNeedsPostFilter(
+			filterOpts,
+			indexChoice,
+		);
+
+		const indexedStream = (() => {
+			const base = stream(ctx.db, schema).query("userAlbumListens");
+			if (indexChoice.kind === "firstListen") {
+				return base
+					.withIndex("by_userId_isFirstListen_listenedAt", (q) =>
+						q.eq("userId", args.userId).eq("isFirstListen", true),
+					)
+					.order("desc");
+			}
+			if (indexChoice.kind === "unranked") {
+				return base
+					.withIndex("by_userId_hasRating_listenedAt", (q) =>
+						q.eq("userId", args.userId).eq("hasRating", false),
+					)
+					.order("desc");
+			}
+			if (indexChoice.kind === "releaseYear") {
+				return base
+					.withIndex("by_userId_releaseYear_listenedAt", (q) =>
+						q.eq("userId", args.userId).eq("releaseYear", indexChoice.year),
+					)
+					.order("desc");
+			}
+			return base
+				.withIndex("by_userId_listenedAt", (q) => q.eq("userId", args.userId))
+				.order("desc");
+		})();
+
+		const result = needsPostFilter
+			? await indexedStream
+					.filterWith(async (listen) =>
+						listenMatchesDenormalizedFilters(listen, filterOpts),
+					)
+					.paginate({
+						...args.paginationOpts,
+						maximumRowsRead: LISTEN_FILTER_MAXIMUM_ROWS_READ,
+					})
+			: await indexedStream.paginate(args.paginationOpts);
+
+		const page = await enrichAlbumListensPage(ctx, args.userId, result.page);
+
+		return {
+			page,
+			isDone: result.isDone,
+			continueCursor: result.continueCursor,
+			...(result.pageStatus ? { pageStatus: result.pageStatus } : {}),
+			...(result.splitCursor !== undefined && result.splitCursor !== null
+				? { splitCursor: result.splitCursor }
+				: {}),
+		};
+	},
+});
+
+/** @deprecated Prefer listUserAlbumListensPaginated for the Listens UI. */
 export const getUserAlbumListens = query({
 	args: {
 		userId: v.string(),
 		limit: v.optional(v.number()),
 	},
+	returns: v.array(enrichedAlbumListenValidator),
 	handler: async (ctx, args) => {
+		const limit = Math.min(args.limit ?? 100, 200);
 		const listens = await ctx.db
 			.query("userAlbumListens")
 			.withIndex("by_userId_listenedAt", (q) => q.eq("userId", args.userId))
 			.order("desc")
-			.collect();
+			.take(limit);
 
-		// Fetch album details for each listen
-		const listensWithDetails = await Promise.all(
-			listens.map(async (listen) => {
-				const album = await ctx.db.get(listen.albumId);
-				return { ...listen, album };
-			}),
-		);
-
-		if (args.limit) {
-			return listensWithDetails.slice(0, args.limit);
-		}
-		return listensWithDetails;
+		return await enrichAlbumListensPage(ctx, args.userId, listens);
 	},
 });
 
@@ -3323,14 +3564,15 @@ async function recalcUserAlbumListenStats(
 
 	if (userAlbum) {
 		await ctx.db.patch(userAlbum._id, stats);
-		return;
+	} else {
+		await ctx.db.insert("userAlbums", {
+			userId,
+			albumId,
+			...stats,
+		});
 	}
 
-	await ctx.db.insert("userAlbums", {
-		userId,
-		albumId,
-		...stats,
-	});
+	await syncListenFilterFieldsForUserAlbum(ctx, userId, albumId);
 }
 
 export const searchSpotifyAlbumsByTitleKey = query({
@@ -3610,6 +3852,11 @@ export const deleteAlbumListen = mutation({
 					firstListenedAt: Math.min(...timestamps),
 					lastListenedAt: Math.max(...timestamps),
 				});
+				await syncListenFilterFieldsForUserAlbum(
+					ctx,
+					listen.userId,
+					listen.albumId,
+				);
 			}
 		}
 
@@ -3787,6 +4034,11 @@ export const updateAlbumRating = mutation({
 			rating: args.rating,
 			position: args.position,
 		});
+		await syncListenFilterFieldsForUserAlbum(
+			ctx,
+			userAlbum.userId,
+			userAlbum.albumId,
+		);
 		await upsertAlbumLibraryProjection(ctx, {
 			userId: userAlbum.userId,
 			albumId: userAlbum.albumId,

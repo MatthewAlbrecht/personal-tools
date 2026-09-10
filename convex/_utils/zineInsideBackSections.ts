@@ -29,6 +29,11 @@ export const zineInsideBackSectionValidator = v.union(
 		title: v.optional(v.string()),
 		items: v.array(zineRecommendationItemValidator),
 	}),
+	v.object({
+		type: v.literal("text"),
+		title: v.optional(v.string()),
+		content: v.string(),
+	}),
 );
 
 export const zineInsideBackSectionsValidator = v.array(
@@ -59,6 +64,11 @@ type StoredSection =
 				imageUrl?: string;
 				similarityBlurb?: string;
 			}>;
+	  }
+	| {
+			type: "text";
+			title?: string;
+			content: string;
 	  };
 
 function normalizeOptionalString(
@@ -96,6 +106,18 @@ export function normalizeZineInsideBackSections(
 				type: "discography",
 				title: normalizeOptionalString(section.title),
 				items,
+			});
+			continue;
+		}
+
+		if (section.type === "text") {
+			const content = section.content.trim();
+			if (content === "") continue;
+
+			normalized.push({
+				type: "text",
+				title: normalizeOptionalString(section.title),
+				content,
 			});
 			continue;
 		}
