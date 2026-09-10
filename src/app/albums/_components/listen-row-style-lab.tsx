@@ -189,6 +189,34 @@ function Cover({
 	);
 }
 
+function NewOnCover(): ReactNode {
+	return (
+		<span
+			className="pointer-events-none absolute top-0.5 left-0.5 rounded-[3px] bg-teal-950/90 px-1 py-px font-semibold text-[8px] text-teal-100 uppercase tracking-[0.14em] shadow-[0_1px_2px_rgba(0,0,0,0.45)] ring-1 ring-teal-300/25"
+			aria-label="First listen"
+		>
+			New
+		</span>
+	);
+}
+
+function StackedCover({
+	name,
+	imageUrl,
+	isFirstListen,
+}: {
+	name: string;
+	imageUrl?: string;
+	isFirstListen: boolean;
+}): ReactNode {
+	return (
+		<div className="relative shrink-0">
+			<Cover name={name} imageUrl={imageUrl} size="lg" />
+			{isFirstListen ? <NewOnCover /> : null}
+		</div>
+	);
+}
+
 function NewMark(): ReactNode {
 	return (
 		<span className="shrink-0 font-medium text-[10px] text-teal-800/70 tracking-wide">
@@ -317,16 +345,17 @@ function StyleStacked({ rows }: { rows: LabListen[] }): ReactNode {
 			{rows.map((row) => (
 				<li key={row.id} className="px-3 py-2.5 hover:bg-muted/30">
 					<div className="flex items-stretch gap-3">
-						<Cover name={row.name} imageUrl={row.imageUrl} size="lg" />
+						<StackedCover
+							name={row.name}
+							imageUrl={row.imageUrl}
+							isFirstListen={row.isFirstListen}
+						/>
 						<div className="flex min-h-16 min-w-0 flex-1 flex-col justify-between gap-1.5 py-0.5">
 							<div className="flex items-start justify-between gap-2">
 								<button type="button" className="min-w-0 text-left">
-									<div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-										<span className="font-medium text-sm leading-tight">
-											{row.name}
-										</span>
-										{row.isFirstListen ? <NewMark /> : null}
-									</div>
+									<span className="font-medium text-sm leading-tight">
+										{row.name}
+									</span>
 									<p className="mt-0.5 text-muted-foreground text-xs leading-tight">
 										{row.artistName}
 									</p>
