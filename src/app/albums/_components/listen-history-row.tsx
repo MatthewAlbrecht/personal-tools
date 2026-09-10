@@ -108,41 +108,39 @@ export function ListenHistoryRow({
 					</span>
 
 					{/* Desktop — Slim rail */}
-					<span className="hidden grid-cols-[3.5rem_minmax(0,1fr)_auto] items-stretch gap-3 px-1 py-2 md:grid">
-						<span className="flex justify-end border-border/55 border-r pt-1 pr-2">
+					<span className="hidden grid-cols-[3.5rem_minmax(0,1fr)] items-stretch md:grid">
+						<span className="flex items-start justify-end py-2.5 pr-2.5">
 							{showDay ? (
 								<span className="font-medium text-[10px] text-muted-foreground tabular-nums leading-none">
 									{day.label}
 								</span>
-							) : (
-								<span className="text-[10px] text-transparent" aria-hidden>
-									·
-								</span>
-							)}
+							) : null}
 						</span>
-						<span className="flex min-w-0 items-center gap-2.5">
-							<CoverWithCornerMark
-								name={name}
-								imageUrl={imageUrl}
-								isFirstListen={listen.isFirstListen}
-								listenCount={listen.listenCount}
-								size="md"
-							/>
-							<span className="min-w-0 py-0.5">
-								<span className="line-clamp-1 font-medium text-sm leading-snug">
-									{name}
-								</span>
-								<span className="mt-0.5 block truncate text-muted-foreground text-xs leading-tight">
-									{artistName}
+						<span className="flex min-w-0 items-center justify-between gap-3 border-border/50 border-l py-2.5 pr-1 pl-3">
+							<span className="flex min-w-0 items-center gap-2.5">
+								<CoverWithCornerMark
+									name={name}
+									imageUrl={imageUrl}
+									isFirstListen={listen.isFirstListen}
+									listenCount={listen.listenCount}
+									size="md"
+								/>
+								<span className="min-w-0">
+									<span className="line-clamp-1 font-medium text-sm leading-snug">
+										{name}
+									</span>
+									<span className="mt-0.5 block truncate text-muted-foreground text-xs leading-tight">
+										{artistName}
+									</span>
 								</span>
 							</span>
-						</span>
-						<span className="pt-1.5 self-start">
-							{rating !== undefined ? (
-								<RatingInk rating={rating} />
-							) : (
-								<UnrankedQuiet />
-							)}
+							<span className="shrink-0">
+								{rating !== undefined ? (
+									<RatingInk rating={rating} />
+								) : (
+									<UnrankedQuiet />
+								)}
+							</span>
 						</span>
 					</span>
 				</button>

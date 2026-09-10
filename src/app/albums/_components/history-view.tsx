@@ -206,10 +206,9 @@ export function HistoryView({
 											)}ms both`,
 										}}
 									>
-										<div className="mb-2.5 grid grid-cols-1 items-end gap-x-3 border-border/60 border-b pb-1.5 md:grid-cols-[3.5rem_minmax(0,1fr)]">
-											{/* Desktop: empty day gutter so the title shares the cover column axis */}
+										<div className="mb-0 grid grid-cols-1 items-end gap-x-0 md:grid-cols-[3.5rem_minmax(0,1fr)]">
 											<span className="hidden md:block" aria-hidden />
-											<div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5">
+											<div className="mb-2.5 flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5 border-border/60 border-b pb-1.5 md:border-border/50 md:border-l md:pl-3">
 												<h2 className="font-[family-name:var(--font-display)] text-xl tracking-tight">
 													{section.label}
 												</h2>
