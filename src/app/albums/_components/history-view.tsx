@@ -18,7 +18,7 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
-import { Badge } from "~/components/ui/badge";
+import { badgeVariants } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
 	DropdownMenu,
@@ -40,6 +40,7 @@ import {
 	sectionStats,
 } from "~/lib/album-listens-grouping";
 import { extractReleaseYear } from "~/lib/album-tiers";
+import { cn } from "~/lib/utils";
 import type { HistoryListen } from "../_utils/types";
 import { AlbumCard } from "./album-card";
 import { ConvertListenDrawer } from "./convert-listen-drawer";
@@ -173,9 +174,14 @@ export function HistoryView({
 							<SlidersHorizontal className="h-4 w-4" />
 							Filters
 							{filtersActive ? (
-								<Badge className="fade-in-0 zoom-in-90 ml-1 h-5 min-w-5 animate-in justify-center px-1.5 text-[0.65rem] duration-200">
+								<span
+									className={cn(
+										badgeVariants(),
+										"fade-in-0 zoom-in-90 ml-1 animate-in px-1.5 text-[0.65rem] duration-200",
+									)}
+								>
 									On
-								</Badge>
+								</span>
 							) : null}
 						</Button>
 					</div>
