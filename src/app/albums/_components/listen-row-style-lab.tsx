@@ -9,10 +9,17 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import type { ReactNode } from "react";
+import { Button } from "~/components/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
+import { Separator } from "~/components/ui/separator";
 import {
 	getRatingColors,
 	getTierInfo,
-	getTierShortLabel,
 	type SubTier,
 } from "~/lib/album-tiers";
 import { cn } from "~/lib/utils";
@@ -27,6 +34,7 @@ type LabListen = {
 	isFirstListen: boolean;
 	listenedAt: number;
 	dayKey: string;
+	dayShort: string;
 };
 
 const LAB_SAMPLES: LabListen[] = [
@@ -39,6 +47,7 @@ const LAB_SAMPLES: LabListen[] = [
 		isFirstListen: true,
 		listenedAt: new Date(2026, 8, 10).getTime(),
 		dayKey: "Sep 10",
+		dayShort: "10",
 	},
 	{
 		id: "2",
@@ -49,6 +58,7 @@ const LAB_SAMPLES: LabListen[] = [
 		isFirstListen: true,
 		listenedAt: new Date(2026, 8, 10).getTime(),
 		dayKey: "Sep 10",
+		dayShort: "10",
 	},
 	{
 		id: "3",
@@ -59,6 +69,7 @@ const LAB_SAMPLES: LabListen[] = [
 		isFirstListen: false,
 		listenedAt: new Date(2026, 8, 9).getTime(),
 		dayKey: "Sep 9",
+		dayShort: "9",
 	},
 	{
 		id: "4",
@@ -68,16 +79,18 @@ const LAB_SAMPLES: LabListen[] = [
 		isFirstListen: true,
 		listenedAt: new Date(2026, 8, 9).getTime(),
 		dayKey: "Sep 9",
+		dayShort: "9",
 	},
 	{
 		id: "5",
 		name: "SOUL SEEK",
 		artistName: "Surfacing",
 		rating: 14,
-		listenCount: 1,
+		listenCount: 3,
 		isFirstListen: true,
 		listenedAt: new Date(2026, 8, 8).getTime(),
 		dayKey: "Sep 8",
+		dayShort: "8",
 	},
 ];
 
@@ -86,51 +99,93 @@ const LAB_SAMPLES: LabListen[] = [
  * Mounted above the live list — does not change production rows.
  */
 export function ListenRowStyleLab(): ReactNode {
+	const stacked = LAB_SAMPLES.slice(0, 4);
+	const dayed = LAB_SAMPLES;
+
 	return (
-		<div className="mb-10 space-y-8 rounded-lg border border-teal-800/25 border-dashed bg-teal-800/[0.03] p-4 sm:p-5">
+		<div className="mb-10 space-y-10 rounded-lg border border-teal-800/25 border-dashed bg-teal-800/[0.03] p-4 sm:p-5">
 			<div className="space-y-1">
 				<p className="font-semibold text-[0.65rem] text-teal-800 uppercase tracking-[0.16em]">
-					Temporary · row style lab
+					Temporary · B / D variants
 				</p>
 				<p className="max-w-2xl text-muted-foreground text-sm">
-					Four directions for Listens rows. Live list below is unchanged. Three
-					dots today: Convert listen + Delete. Rating opens the ranking drawer;
-					album details live at{" "}
-					<code className="text-xs">/albums/details/[id]</code>.
+					You liked Stacked and Day column. Below: three mobile-first takes of
+					each. Live list is unchanged. Menu = Convert / Delete. Rating → ranking
+					drawer; title → album details.
 				</p>
 			</div>
 
-			<StyleBlock
-				id="A"
-				title="Ledger"
-				blurb="Close the desktop gap with a tight grid. Rating as colored ink (no pill). Day hairlines. Title = details; menu on hover."
-			>
-				<StyleLedger rows={LAB_SAMPLES.slice(0, 4)} />
-			</StyleBlock>
+			<section className="space-y-6">
+				<header className="space-y-0.5">
+					<h2 className="font-[family-name:var(--font-display)] text-xl tracking-tight">
+						B · Stacked
+					</h2>
+					<p className="text-muted-foreground text-xs">
+						Cover + two-line text. Optimized for thumb width and no early
+						truncation.
+					</p>
+				</header>
 
-			<StyleBlock
-				id="B"
-				title="Stacked"
-				blurb="Mobile-first: title gets the width; rating · Nx · date sit on a second line under the artist so nothing truncates early."
-			>
-				<StyleStacked rows={LAB_SAMPLES.slice(0, 4)} />
-			</StyleBlock>
+				<StyleBlock
+					id="B1"
+					title="Aligned stack"
+					blurb="Current favorite bones: 64px cover, New on art, title/artist top, rating · Nx · day bottom flush with cover. Menu always reachable (touch)."
+				>
+					<StackedAligned rows={stacked} />
+				</StyleBlock>
 
-			<StyleBlock
-				id="C"
-				title="Signal rail"
-				blurb="Left color rail = tier. Short rating code instead of full pill. Cover a touch larger. Date stays quiet on the right."
-			>
-				<StyleSignalRail rows={LAB_SAMPLES.slice(0, 4)} />
-			</StyleBlock>
+				<StyleBlock
+					id="B2"
+					title="Day bands + dock"
+					blurb="Day lives in sticky-feeling section headers (saves row clutter). Meta docks under a hairline; rating ink + Nx only. Best when scanning a week."
+				>
+					<StackedDayBands rows={stacked} />
+				</StyleBlock>
 
-			<StyleBlock
-				id="D"
-				title="Day column"
-				blurb="Date as a thin left column (your divider idea, vertical). Middle is album; right is only rating + menu. Good for scan-by-day."
-			>
-				<StyleDayColumn rows={LAB_SAMPLES.slice(0, 5)} />
-			</StyleBlock>
+				<StyleBlock
+					id="B3"
+					title="Priority rate"
+					blurb="Rating sits top-right (primary action on mobile). Title keeps full width below. Nx + day whisper under artist. Cover still owns New."
+				>
+					<StackedPriorityRate rows={stacked} />
+				</StyleBlock>
+			</section>
+
+			<section className="space-y-6">
+				<header className="space-y-0.5">
+					<h2 className="font-[family-name:var(--font-display)] text-xl tracking-tight">
+						D · Day column
+					</h2>
+					<p className="text-muted-foreground text-xs">
+						Date as structure. Mobile gets a shorter day glyph or a full band so
+						album text isn’t crushed.
+					</p>
+				</header>
+
+				<StyleBlock
+					id="D1"
+					title="Slim rail"
+					blurb="Narrow left day rail. On xs the rail shows day number only; sm+ shows Sep 10. Rating stacks under title on the narrowest widths so the right edge stays menu-only."
+				>
+					<DaySlimRail rows={dayed} />
+				</StyleBlock>
+
+				<StyleBlock
+					id="D2"
+					title="Banded days"
+					blurb="No left column — day is a full-width band. Rows reclaim horizontal space for title + rating. Cleanest on phones."
+				>
+					<DayBanded rows={dayed} />
+				</StyleBlock>
+
+				<StyleBlock
+					id="D3"
+					title="Calendar stub"
+					blurb="Two-line day stub (weekday + date) on the left — denser scan cue. Cover gets New chip. Right column is rating ink + menu only; Nx tucks under artist."
+				>
+					<DayCalendarStub rows={dayed} />
+				</StyleBlock>
+			</section>
 		</div>
 	);
 }
@@ -149,15 +204,16 @@ function StyleBlock({
 	return (
 		<section className="space-y-3">
 			<div>
-				<h3 className="font-[family-name:var(--font-display)] text-lg tracking-tight">
-					<span className="mr-2 text-sm text-teal-800/70">{id}</span>
+				<h3 className="font-[family-name:var(--font-display)] text-base tracking-tight sm:text-lg">
+					<span className="mr-2 font-sans text-sm text-teal-800/70">{id}</span>
 					{title}
 				</h3>
 				<p className="mt-0.5 text-muted-foreground text-xs leading-relaxed">
 					{blurb}
 				</p>
 			</div>
-			<div className="overflow-hidden rounded-md border border-border/70 bg-background">
+			{/* max-w simulates phone column inside the lab */}
+			<div className="mx-auto max-w-md overflow-hidden rounded-md border border-border/70 bg-background sm:mx-0 sm:max-w-none">
 				{children}
 			</div>
 		</section>
@@ -174,7 +230,7 @@ function Cover({
 	size?: "sm" | "md" | "lg";
 }): ReactNode {
 	const dim =
-		size === "lg" ? "h-16 w-16" : size === "md" ? "h-11 w-11" : "h-9 w-9";
+		size === "lg" ? "h-16 w-16" : size === "md" ? "h-12 w-12" : "h-10 w-10";
 	const icon = size === "lg" ? "h-5 w-5" : "h-4 w-4";
 	return (
 		<div
@@ -189,7 +245,7 @@ function Cover({
 					alt={name}
 					fill
 					className="object-cover"
-					sizes={size === "lg" ? "64px" : "44px"}
+					sizes={size === "lg" ? "64px" : size === "md" ? "48px" : "40px"}
 				/>
 			) : (
 				<div className="flex h-full w-full items-center justify-center">
@@ -211,41 +267,44 @@ function NewOnCover(): ReactNode {
 	);
 }
 
-function StackedCover({
+function CoverWithNew({
 	name,
 	imageUrl,
 	isFirstListen,
+	size = "lg",
 }: {
 	name: string;
 	imageUrl?: string;
 	isFirstListen: boolean;
+	size?: "sm" | "md" | "lg";
 }): ReactNode {
 	return (
 		<div className="relative shrink-0">
-			<Cover name={name} imageUrl={imageUrl} size="lg" />
+			<Cover name={name} imageUrl={imageUrl} size={size} />
 			{isFirstListen ? <NewOnCover /> : null}
 		</div>
 	);
 }
 
-function NewMark(): ReactNode {
+function RowMenu(): ReactNode {
 	return (
-		<span className="shrink-0 font-medium text-[10px] text-teal-800/70 tracking-wide">
-			New
-		</span>
-	);
-}
-
-function MenuGhost(): ReactNode {
-	return (
-		<button
-			type="button"
-			className="rounded-md p-1.5 text-muted-foreground/35 transition-colors hover:bg-muted hover:text-muted-foreground"
-			aria-label="More options (Convert / Delete)"
-			title="Convert listen · Delete"
-		>
-			<MoreHorizontal className="h-4 w-4" />
-		</button>
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<Button
+					type="button"
+					variant="ghost"
+					size="icon"
+					className="h-9 w-9 shrink-0 text-muted-foreground/50 hover:text-muted-foreground"
+					aria-label="More options"
+				>
+					<MoreHorizontal className="h-4 w-4" />
+				</Button>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="end" className="w-44">
+				<DropdownMenuItem>Convert listen</DropdownMenuItem>
+				<DropdownMenuItem variant="destructive">Delete</DropdownMenuItem>
+			</DropdownMenuContent>
+		</DropdownMenu>
 	);
 }
 
@@ -259,21 +318,24 @@ function SubTierArrow({ subTier }: { subTier: SubTier }): ReactNode {
 	return <Icon className="size-3 shrink-0" strokeWidth={2.25} aria-hidden />;
 }
 
-function RatingInk({ rating }: { rating: number }): ReactNode {
+function RatingInk({
+	rating,
+	className,
+}: {
+	rating: number;
+	className?: string;
+}): ReactNode {
 	const colors = getRatingColors(rating);
 	const info = getTierInfo(rating);
 	if (!info) {
-		return (
-			<span className="font-medium text-[11px] text-muted-foreground/50">
-				Unrated
-			</span>
-		);
+		return <UnrankedQuiet />;
 	}
 	return (
 		<span
 			className={cn(
 				"inline-flex items-center gap-0.5 font-medium text-[11px] tracking-tight",
 				colors.text,
+				className,
 			)}
 			title="Opens ranking drawer"
 		>
@@ -283,128 +345,64 @@ function RatingInk({ rating }: { rating: number }): ReactNode {
 	);
 }
 
-function RatingCode({ rating }: { rating: number }): ReactNode {
-	const colors = getRatingColors(rating);
-	const label = getTierShortLabel(rating).replace(/ [↗→↘]$/, "");
-	const code = label
-		.split(" ")
-		.map((part) => part[0])
-		.join("")
-		.toUpperCase();
-	return (
-		<span
-			className={cn(
-				"font-semibold text-[11px] tracking-tight tabular-nums",
-				colors.text,
-			)}
-			title={getTierShortLabel(rating)}
-		>
-			{code}
-		</span>
-	);
-}
-
 function UnrankedQuiet(): ReactNode {
 	return (
-		<span className="font-medium text-[11px] text-muted-foreground/50">
+		<span className="font-medium text-[11px] text-muted-foreground/50 underline decoration-dashed underline-offset-2">
 			Rate
 		</span>
 	);
 }
 
-/** A — Ledger: grid, ink rating, day hairlines */
-function StyleLedger({ rows }: { rows: LabListen[] }): ReactNode {
-	let lastDay = "";
-	return (
-		<ul>
-			{rows.map((row) => {
-				const showDayRule = row.dayKey !== lastDay;
-				lastDay = row.dayKey;
-				return (
-					<li key={row.id}>
-						{showDayRule ? (
-							<div className="flex items-center gap-3 px-3 pt-3 pb-1">
-								<span className="font-medium text-[10px] text-muted-foreground tabular-nums tracking-wide">
-									{row.dayKey}
-								</span>
-								<div className="h-px flex-1 bg-border/70" />
-							</div>
-						) : null}
-						<div className="group grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0 px-3 py-2 hover:bg-muted/40 sm:grid-cols-[auto_minmax(0,1fr)_auto_auto_auto]">
-							<Cover name={row.name} imageUrl={row.imageUrl} />
-							<button
-								type="button"
-								className="min-w-0 text-left"
-								title="Open album details"
-							>
-								<div className="flex min-w-0 items-baseline gap-2">
-									<span className="truncate font-medium text-sm">
-										{row.name}
-									</span>
-									{row.isFirstListen ? <NewMark /> : null}
-								</div>
-								<p className="truncate text-muted-foreground text-xs">
-									{row.artistName}
-								</p>
-							</button>
-							<div className="hidden justify-self-end sm:block">
-								{row.rating !== undefined ? (
-									<RatingInk rating={row.rating} />
-								) : (
-									<UnrankedQuiet />
-								)}
-							</div>
-							<span className="hidden text-muted-foreground text-xs tabular-nums sm:inline">
-								{row.listenCount}×
-							</span>
-							<div className="flex items-center gap-1 justify-self-end opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
-								<span className="text-[10px] text-muted-foreground tabular-nums sm:hidden">
-									{row.listenCount}×
-								</span>
-								<MenuGhost />
-							</div>
-						</div>
-					</li>
-				);
-			})}
-		</ul>
-	);
+function MetaDot(): ReactNode {
+	return <span className="text-border">·</span>;
 }
 
-/** B — Stacked: title full width, meta under */
-function StyleStacked({ rows }: { rows: LabListen[] }): ReactNode {
+function weekdayStub(dayKey: string): string {
+	if (dayKey === "Sep 10") return "Wed";
+	if (dayKey === "Sep 9") return "Tue";
+	if (dayKey === "Sep 8") return "Mon";
+	return "Day";
+}
+
+/* ─── B1 Aligned stack ─────────────────────────────────────────── */
+
+function StackedAligned({ rows }: { rows: LabListen[] }): ReactNode {
 	return (
 		<ul className="divide-y divide-border/50">
 			{rows.map((row) => (
-				<li key={row.id} className="px-3 py-2.5 hover:bg-muted/30">
+				<li key={row.id} className="px-3 py-2.5 active:bg-muted/40 sm:hover:bg-muted/30">
 					<div className="flex items-stretch gap-3">
-						<StackedCover
+						<CoverWithNew
 							name={row.name}
 							imageUrl={row.imageUrl}
 							isFirstListen={row.isFirstListen}
 						/>
 						<div className="flex min-h-16 min-w-0 flex-1 flex-col justify-between gap-1.5 py-0.5">
-							<div className="flex items-start justify-between gap-2">
-								<button type="button" className="min-w-0 text-left">
-									<span className="font-medium text-sm leading-tight">
+							<div className="flex items-start gap-1">
+								<button type="button" className="min-w-0 flex-1 text-left">
+									<span className="line-clamp-2 font-medium text-sm leading-snug">
 										{row.name}
 									</span>
-									<p className="mt-0.5 text-muted-foreground text-xs leading-tight">
+									<p className="mt-0.5 truncate text-muted-foreground text-xs leading-tight">
 										{row.artistName}
 									</p>
 								</button>
-								<MenuGhost />
+								<RowMenu />
 							</div>
-							<div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px]">
+							<div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
 								{row.rating !== undefined ? (
-									<RatingInk rating={row.rating} />
+									<button type="button" className="text-left">
+										<RatingInk rating={row.rating} />
+									</button>
 								) : (
-									<UnrankedQuiet />
+									<button type="button">
+										<UnrankedQuiet />
+									</button>
 								)}
 								<span className="text-muted-foreground tabular-nums">
 									{row.listenCount}×
 								</span>
-								<span className="text-muted-foreground/70">{row.dayKey}</span>
+								<span className="text-muted-foreground/65">{row.dayKey}</span>
 							</div>
 						</div>
 					</div>
@@ -414,50 +412,60 @@ function StyleStacked({ rows }: { rows: LabListen[] }): ReactNode {
 	);
 }
 
-/** C — Signal rail: left tier color, compact code */
-function StyleSignalRail({ rows }: { rows: LabListen[] }): ReactNode {
+/* ─── B2 Day bands + dock ──────────────────────────────────────── */
+
+function StackedDayBands({ rows }: { rows: LabListen[] }): ReactNode {
+	let lastDay = "";
 	return (
 		<ul>
 			{rows.map((row) => {
-				const colors =
-					row.rating !== undefined ? getRatingColors(row.rating) : null;
+				const showBand = row.dayKey !== lastDay;
+				lastDay = row.dayKey;
 				return (
-					<li
-						key={row.id}
-						className="group flex items-stretch gap-0 border-border/40 border-b last:border-b-0"
-					>
-						<div
-							className={cn(
-								"w-0 shrink-0 border-l-[3px]",
-								colors?.border ?? "border-border",
-							)}
-							aria-hidden
-						/>
-						<div className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2 hover:bg-muted/30">
-							<Cover name={row.name} imageUrl={row.imageUrl} size="md" />
-							<button type="button" className="min-w-0 flex-1 text-left">
-								<div className="flex min-w-0 items-baseline gap-2">
-									<span className="truncate font-medium text-sm">
-										{row.name}
-									</span>
-									{row.isFirstListen ? <NewMark /> : null}
-								</div>
-								<p className="truncate text-muted-foreground text-xs">
-									{row.artistName}
-									<span className="mx-1.5 text-border">·</span>
-									<span className="tabular-nums">{row.listenCount}×</span>
-								</p>
-							</button>
-							<div className="flex shrink-0 items-center gap-2">
-								{row.rating !== undefined ? (
-									<RatingCode rating={row.rating} />
-								) : (
-									<UnrankedQuiet />
-								)}
-								<span className="hidden w-12 text-right text-[11px] text-muted-foreground tabular-nums sm:inline">
+					<li key={row.id}>
+						{showBand ? (
+							<div className="sticky top-0 z-[1] flex items-center gap-2 border-border/60 border-y bg-muted/40 px-3 py-1.5 backdrop-blur-sm">
+								<span className="font-medium text-[10px] text-foreground/70 uppercase tracking-[0.14em]">
 									{row.dayKey}
 								</span>
-								<MenuGhost />
+								<Separator className="flex-1" />
+							</div>
+						) : null}
+						<div className="flex items-stretch gap-3 px-3 py-2.5 active:bg-muted/40 sm:hover:bg-muted/25">
+							<CoverWithNew
+								name={row.name}
+								imageUrl={row.imageUrl}
+								isFirstListen={row.isFirstListen}
+							/>
+							<div className="flex min-h-16 min-w-0 flex-1 flex-col justify-between gap-1.5 py-0.5">
+								<div className="flex items-start gap-1">
+									<button type="button" className="min-w-0 flex-1 text-left">
+										<span className="line-clamp-2 font-medium text-sm leading-snug">
+											{row.name}
+										</span>
+										<p className="mt-0.5 truncate text-muted-foreground text-xs">
+											{row.artistName}
+										</p>
+									</button>
+									<RowMenu />
+								</div>
+								<div className="space-y-1.5">
+									<Separator className="opacity-60" />
+									<div className="flex items-center gap-2.5 text-[11px]">
+										{row.rating !== undefined ? (
+											<button type="button">
+												<RatingInk rating={row.rating} />
+											</button>
+										) : (
+											<button type="button">
+												<UnrankedQuiet />
+											</button>
+										)}
+										<span className="text-muted-foreground tabular-nums">
+											{row.listenCount}×
+										</span>
+									</div>
+								</div>
 							</div>
 						</div>
 					</li>
@@ -467,8 +475,64 @@ function StyleSignalRail({ rows }: { rows: LabListen[] }): ReactNode {
 	);
 }
 
-/** D — Day column: date left, album center, sparse right */
-function StyleDayColumn({ rows }: { rows: LabListen[] }): ReactNode {
+/* ─── B3 Priority rate ─────────────────────────────────────────── */
+
+function StackedPriorityRate({ rows }: { rows: LabListen[] }): ReactNode {
+	return (
+		<ul className="divide-y divide-border/50">
+			{rows.map((row) => (
+				<li key={row.id} className="px-3 py-2.5 active:bg-muted/40 sm:hover:bg-muted/30">
+					<div className="flex gap-3">
+						<CoverWithNew
+							name={row.name}
+							imageUrl={row.imageUrl}
+							isFirstListen={row.isFirstListen}
+							size="md"
+						/>
+						<div className="min-w-0 flex-1 space-y-1">
+							<div className="flex items-start justify-between gap-2">
+								{row.rating !== undefined ? (
+									<button type="button" className="min-w-0 text-left">
+										<RatingInk
+											rating={row.rating}
+											className="text-xs sm:text-[11px]"
+										/>
+									</button>
+								) : (
+									<button type="button">
+										<UnrankedQuiet />
+									</button>
+								)}
+								<div className="flex items-center gap-0.5">
+									<span className="pr-1 text-[10px] text-muted-foreground tabular-nums">
+										{row.listenCount}×
+									</span>
+									<RowMenu />
+								</div>
+							</div>
+							<button type="button" className="block w-full min-w-0 text-left">
+								<span className="line-clamp-2 font-medium text-sm leading-snug">
+									{row.name}
+								</span>
+								<p className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 text-muted-foreground text-xs">
+									<span className="truncate">{row.artistName}</span>
+									<MetaDot />
+									<span className="shrink-0 text-muted-foreground/70">
+										{row.dayKey}
+									</span>
+								</p>
+							</button>
+						</div>
+					</div>
+				</li>
+			))}
+		</ul>
+	);
+}
+
+/* ─── D1 Slim rail ─────────────────────────────────────────────── */
+
+function DaySlimRail({ rows }: { rows: LabListen[] }): ReactNode {
 	let lastDay = "";
 	return (
 		<ul>
@@ -478,13 +542,18 @@ function StyleDayColumn({ rows }: { rows: LabListen[] }): ReactNode {
 				return (
 					<li
 						key={row.id}
-						className="grid grid-cols-[3.25rem_minmax(0,1fr)_auto] items-center gap-2 border-border/40 border-b px-2 py-2 last:border-b-0 sm:grid-cols-[4rem_minmax(0,1fr)_auto] sm:gap-3 sm:px-3"
+						className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-2 border-border/40 border-b px-2 py-2 last:border-b-0 sm:grid-cols-[3.5rem_minmax(0,1fr)_auto] sm:gap-3 sm:px-3"
 					>
-						<div className="self-stretch border-border/60 border-r pr-2 text-right">
+						<div className="self-stretch border-border/55 border-r pr-1.5 text-right sm:pr-2">
 							{showDay ? (
-								<span className="font-medium text-[10px] text-muted-foreground tabular-nums leading-none">
-									{row.dayKey.replace("Sep ", "9/")}
-								</span>
+								<>
+									<span className="font-medium text-[11px] text-muted-foreground tabular-nums leading-none sm:hidden">
+										{row.dayShort}
+									</span>
+									<span className="hidden font-medium text-[10px] text-muted-foreground tabular-nums leading-none sm:inline">
+										{row.dayKey}
+									</span>
+								</>
 							) : (
 								<span className="text-[10px] text-transparent" aria-hidden>
 									·
@@ -495,29 +564,193 @@ function StyleDayColumn({ rows }: { rows: LabListen[] }): ReactNode {
 							type="button"
 							className="flex min-w-0 items-center gap-2.5 text-left"
 						>
-							<Cover name={row.name} imageUrl={row.imageUrl} />
+							<CoverWithNew
+								name={row.name}
+								imageUrl={row.imageUrl}
+								isFirstListen={row.isFirstListen}
+								size="sm"
+							/>
 							<span className="min-w-0">
-								<span className="flex min-w-0 items-baseline gap-1.5">
-									<span className="truncate font-medium text-sm">
-										{row.name}
-									</span>
-									{row.isFirstListen ? <NewMark /> : null}
+								<span className="line-clamp-1 font-medium text-sm">
+									{row.name}
 								</span>
-								<span className="block truncate text-muted-foreground text-xs">
-									{row.artistName}
+								<span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 text-muted-foreground text-xs">
+									<span className="truncate">{row.artistName}</span>
+									<span className="tabular-nums text-muted-foreground/70 sm:hidden">
+										· {row.listenCount}×
+									</span>
+								</span>
+								<span className="mt-1 block sm:hidden">
+									{row.rating !== undefined ? (
+										<RatingInk rating={row.rating} />
+									) : (
+										<UnrankedQuiet />
+									)}
 								</span>
 							</span>
 						</button>
-						<div className="flex items-center gap-1.5 sm:gap-2">
-							{row.rating !== undefined ? (
-								<RatingInk rating={row.rating} />
-							) : (
-								<UnrankedQuiet />
+						<div className="flex items-center gap-1 self-center">
+							<div className="hidden flex-col items-end gap-0.5 sm:flex">
+								{row.rating !== undefined ? (
+									<RatingInk rating={row.rating} />
+								) : (
+									<UnrankedQuiet />
+								)}
+								<span className="text-[10px] text-muted-foreground tabular-nums">
+									{row.listenCount}×
+								</span>
+							</div>
+							<RowMenu />
+						</div>
+					</li>
+				);
+			})}
+		</ul>
+	);
+}
+
+/* ─── D2 Banded days ───────────────────────────────────────────── */
+
+function DayBanded({ rows }: { rows: LabListen[] }): ReactNode {
+	let lastDay = "";
+	return (
+		<ul>
+			{rows.map((row) => {
+				const showBand = row.dayKey !== lastDay;
+				lastDay = row.dayKey;
+				return (
+					<li key={row.id}>
+						{showBand ? (
+							<div className="flex items-baseline justify-between gap-3 border-border/50 border-b bg-muted/35 px-3 py-1.5">
+								<span className="font-medium text-[10px] text-foreground/75 uppercase tracking-[0.14em]">
+									{row.dayKey}
+								</span>
+								<span className="text-[10px] text-muted-foreground/70">
+									{weekdayStub(row.dayKey)}
+								</span>
+							</div>
+						) : null}
+						<div className="flex items-center gap-2.5 border-border/35 border-b px-3 py-2 last:border-b-0 active:bg-muted/35 sm:gap-3 sm:hover:bg-muted/25">
+							<CoverWithNew
+								name={row.name}
+								imageUrl={row.imageUrl}
+								isFirstListen={row.isFirstListen}
+								size="md"
+							/>
+							<button type="button" className="min-w-0 flex-1 text-left">
+								<span className="line-clamp-1 font-medium text-sm">
+									{row.name}
+								</span>
+								<span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-muted-foreground text-xs">
+									<span className="truncate">{row.artistName}</span>
+									<MetaDot />
+									<span className="shrink-0 tabular-nums">
+										{row.listenCount}×
+									</span>
+								</span>
+							</button>
+							<div className="flex shrink-0 items-center gap-0.5">
+								{row.rating !== undefined ? (
+									<button type="button" className="px-1">
+										<RatingInk rating={row.rating} />
+									</button>
+								) : (
+									<button type="button" className="px-1">
+										<UnrankedQuiet />
+									</button>
+								)}
+								<RowMenu />
+							</div>
+						</div>
+					</li>
+				);
+			})}
+		</ul>
+	);
+}
+
+/* ─── D3 Calendar stub ─────────────────────────────────────────── */
+
+function DayCalendarStub({ rows }: { rows: LabListen[] }): ReactNode {
+	let lastDay = "";
+	return (
+		<ul>
+			{rows.map((row) => {
+				const showDay = row.dayKey !== lastDay;
+				lastDay = row.dayKey;
+				return (
+					<li
+						key={row.id}
+						className="grid grid-cols-[2.75rem_minmax(0,1fr)_auto] items-center gap-2 border-border/40 border-b px-2 py-2 last:border-b-0 sm:grid-cols-[3.25rem_minmax(0,1fr)_auto] sm:gap-3 sm:px-3"
+					>
+						<div
+							className={cn(
+								"flex self-stretch flex-col items-end justify-start border-border/55 border-r pr-2 pt-0.5",
+								!showDay && "opacity-0",
 							)}
-							<span className="text-[10px] text-muted-foreground tabular-nums">
-								{row.listenCount}×
+							aria-hidden={!showDay}
+						>
+							<span className="font-medium text-[9px] text-muted-foreground/80 uppercase tracking-[0.12em] leading-none">
+								{weekdayStub(row.dayKey)}
 							</span>
-							<MenuGhost />
+							<span className="mt-1 font-[family-name:var(--font-display)] text-base text-foreground/85 tabular-nums leading-none">
+								{row.dayShort}
+							</span>
+						</div>
+						<button
+							type="button"
+							className="flex min-w-0 items-center gap-2.5 text-left"
+						>
+							<CoverWithNew
+								name={row.name}
+								imageUrl={row.imageUrl}
+								isFirstListen={row.isFirstListen}
+								size="md"
+							/>
+							<span className="min-w-0">
+								<span className="line-clamp-1 font-medium text-sm">
+									{row.name}
+								</span>
+								<span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-muted-foreground text-xs">
+									<span className="truncate">{row.artistName}</span>
+									<MetaDot />
+									<span className="shrink-0 tabular-nums">
+										{row.listenCount}×
+									</span>
+								</span>
+							</span>
+						</button>
+						<div className="flex items-center gap-0.5">
+							{row.rating !== undefined ? (
+								<button
+									type="button"
+									className="hidden max-w-[7.5rem] px-1 text-right sm:inline-flex"
+								>
+									<RatingInk rating={row.rating} />
+								</button>
+							) : (
+								<button
+									type="button"
+									className="hidden px-1 sm:inline-flex"
+								>
+									<UnrankedQuiet />
+								</button>
+							)}
+							{/* On mobile, rating sits in a second row via absolute? Keep compact: show under menu column */}
+							<div className="flex flex-col items-end gap-1 sm:contents">
+								<span className="sm:hidden">
+									{row.rating !== undefined ? (
+										<button type="button">
+											<RatingInk rating={row.rating} />
+										</button>
+									) : (
+										<button type="button">
+											<UnrankedQuiet />
+										</button>
+									)}
+								</span>
+								<RowMenu />
+							</div>
 						</div>
 					</li>
 				);
