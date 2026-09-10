@@ -2,9 +2,6 @@
 
 import type { ReactNode } from "react";
 import { YearRangePicker } from "~/app/for-later-albums/_components/year-range-picker";
-import { Button } from "~/components/ui/button";
-import { Label } from "~/components/ui/label";
-import { Separator } from "~/components/ui/separator";
 import { cn } from "~/lib/utils";
 
 export type ListensGrouping = "week" | "month";
@@ -36,52 +33,60 @@ export function ListensFilters({
 	className?: string;
 }): ReactNode {
 	return (
-		<div className={cn("flex flex-col gap-4", className)}>
+		<div className={cn("flex flex-col gap-5", className)}>
 			<fieldset className="m-0 min-w-0 border-0 p-0">
-				<legend className="mb-1.5 font-medium text-muted-foreground text-xs">
+				<legend className="mb-1.5 font-medium text-[0.65rem] text-muted-foreground uppercase tracking-[0.14em]">
 					Group by
 				</legend>
-				<div className="grid grid-cols-2 gap-1">
-					<Button
-						type="button"
-						size="sm"
-						variant={grouping === "week" ? "default" : "outline"}
-						aria-pressed={grouping === "week"}
-						onClick={() => onGroupingChange("week")}
-					>
-						Week
-					</Button>
-					<Button
-						type="button"
-						size="sm"
-						variant={grouping === "month" ? "default" : "outline"}
-						aria-pressed={grouping === "month"}
-						onClick={() => onGroupingChange("month")}
-					>
-						Month
-					</Button>
+				<div
+					className="flex rounded-md bg-muted/80 p-0.5"
+					role="group"
+					aria-label="Group by"
+				>
+					{(["week", "month"] as const).map((option) => (
+						<button
+							key={option}
+							type="button"
+							aria-pressed={grouping === option}
+							onClick={() => onGroupingChange(option)}
+							className={cn(
+								"flex-1 rounded-[5px] py-1.5 text-xs capitalize transition-all",
+								grouping === option
+									? "bg-background font-medium text-foreground shadow-sm"
+									: "text-muted-foreground hover:text-foreground",
+							)}
+						>
+							{option}
+						</button>
+					))}
 				</div>
 			</fieldset>
 
-			<Separator />
-
-			<div className="flex flex-col gap-2">
-				<FilterToggleCard
-					pressed={onlyUnranked}
-					onPressedChange={onOnlyUnrankedChange}
-				>
-					Only unranked
-				</FilterToggleCard>
-				<FilterToggleCard
-					pressed={onlyFirstListens}
-					onPressedChange={onOnlyFirstListensChange}
-				>
-					Only first listens
-				</FilterToggleCard>
+			<div>
+				<p className="mb-1.5 font-medium text-[0.65rem] text-muted-foreground uppercase tracking-[0.14em]">
+					Narrow
+				</p>
+				<div className="flex flex-col gap-0.5">
+					<CheckRow
+						pressed={onlyUnranked}
+						onPressedChange={onOnlyUnrankedChange}
+						label="Only unranked"
+					/>
+					<CheckRow
+						pressed={onlyFirstListens}
+						onPressedChange={onOnlyFirstListensChange}
+						label="Only first listens"
+					/>
+				</div>
 			</div>
 
-			<div className="flex flex-col gap-1.5">
-				<Label htmlFor="listens-filter-year">Release year</Label>
+			<div>
+				<label
+					htmlFor="listens-filter-year"
+					className="mb-1.5 block font-medium text-[0.65rem] text-muted-foreground uppercase tracking-[0.14em]"
+				>
+					Release year
+				</label>
 				<YearRangePicker
 					id="listens-filter-year"
 					yearMin={yearMin}
@@ -93,28 +98,53 @@ export function ListensFilters({
 	);
 }
 
-function FilterToggleCard({
+function CheckRow({
 	pressed,
 	onPressedChange,
-	children,
+	label,
 }: {
 	pressed: boolean;
 	onPressedChange: (pressed: boolean) => void;
-	children: ReactNode;
+	label: string;
 }): ReactNode {
 	return (
 		<button
 			type="button"
 			aria-pressed={pressed}
 			onClick={() => onPressedChange(!pressed)}
-			className={cn(
-				"w-full rounded-md border px-3 py-2.5 text-center text-sm transition-colors",
-				pressed
-					? "border-teal-800/40 bg-teal-800 text-teal-50 shadow-sm"
-					: "border-border bg-background text-foreground hover:bg-muted/60",
-			)}
+			className="flex w-full items-center gap-2 rounded-md px-1 py-1.5 text-left text-xs transition-colors hover:bg-muted/50"
 		>
-			{children}
+			<span
+				className={cn(
+					"flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[3px] border transition-colors",
+					pressed
+						? "border-teal-800 bg-teal-800 text-teal-50"
+						: "border-border bg-background",
+				)}
+				aria-hidden
+			>
+				{pressed ? (
+					<svg
+						viewBox="0 0 12 12"
+						className="h-2.5 w-2.5 fill-none stroke-current"
+					>
+						<title>Checked</title>
+						<path
+							d="M2.5 6.2 4.8 8.5 9.5 3.5"
+							strokeWidth="1.6"
+							strokeLinecap="round"
+							strokeLinejoin="round"
+						/>
+					</svg>
+				) : null}
+			</span>
+			<span
+				className={cn(
+					pressed ? "font-medium text-foreground" : "text-foreground/80",
+				)}
+			>
+				{label}
+			</span>
 		</button>
 	);
 }

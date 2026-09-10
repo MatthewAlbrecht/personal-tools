@@ -15,7 +15,6 @@ import {
 } from "~/components/ui/alert-dialog";
 import { badgeVariants } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { Separator } from "~/components/ui/separator";
 import {
 	Sheet,
 	SheetContent,
@@ -34,7 +33,6 @@ import { useAlbums } from "../_context/albums-context";
 import type { HistoryListen } from "../_utils/types";
 import { ConvertListenDrawer } from "./convert-listen-drawer";
 import { ListenHistoryRow, listenDayKey } from "./listen-history-row";
-import { ListensFilterStyleLab } from "./listens-filter-style-lab";
 import {
 	ListensFilters,
 	type ListensGrouping,
@@ -147,12 +145,11 @@ export function HistoryView({
 			<div className="lg:grid lg:grid-cols-[12rem_minmax(0,1fr)] lg:gap-10">
 				<aside className="hidden lg:block">
 					<div className="lg:sticky lg:top-20">
-						<p className="mb-3 font-semibold text-[0.65rem] text-teal-800 uppercase tracking-[0.16em]">
+						<p className="mb-4 font-semibold text-[0.65rem] text-foreground/70 uppercase tracking-[0.16em]">
 							Filters
 						</p>
 						{filterControls}
-						<div className="mt-6 space-y-3">
-							<Separator />
+						<div className="mt-6">
 							<SyncAlbumsButton
 								variant="status"
 								isSyncing={isSyncing}
@@ -164,8 +161,6 @@ export function HistoryView({
 				</aside>
 
 				<div className="min-w-0">
-					<ListensFilterStyleLab />
-
 					<div className="mb-4 lg:hidden">
 						<Button
 							type="button"
@@ -277,8 +272,7 @@ export function HistoryView({
 					</SheetHeader>
 					<div className="flex flex-col gap-4 px-4 pb-6">
 						{filterControls}
-						<div className="space-y-3">
-							<Separator />
+						<div className="mt-2">
 							<SyncAlbumsButton
 								variant="status"
 								isSyncing={isSyncing}
