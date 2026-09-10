@@ -168,7 +168,7 @@ export function ListenRowStyleLab(): ReactNode {
 				<StyleBlock
 					id="D1"
 					title="Slim rail"
-					blurb="Narrow left day rail. On xs the rail shows day number only; sm+ shows Sep 10. Rating stacks under title on the narrowest widths so the right edge stays menu-only."
+					blurb="Narrow left day rail + larger cover. Same corner chip as B1 (New / Nx). On xs the rail shows day number only; rating stacks under title on narrow widths."
 					measure="day"
 				>
 					<DaySlimRail rows={dayed} />
@@ -310,21 +310,23 @@ function CoverWithNew({
 	);
 }
 
-/** B1: New on first listen, otherwise listen ordinal chip in the same corner. */
+/** Corner chip: New on first listen, otherwise listen ordinal. */
 function CoverWithCornerMark({
 	name,
 	imageUrl,
 	isFirstListen,
 	listenCount,
+	size = "lg",
 }: {
 	name: string;
 	imageUrl?: string;
 	isFirstListen: boolean;
 	listenCount: number;
+	size?: "sm" | "md" | "lg";
 }): ReactNode {
 	return (
 		<div className="relative shrink-0">
-			<Cover name={name} imageUrl={imageUrl} size="lg" />
+			<Cover name={name} imageUrl={imageUrl} size={size} />
 			{isFirstListen ? (
 				<NewOnCover />
 			) : (
@@ -615,11 +617,12 @@ function DaySlimRail({ rows }: { rows: LabListen[] }): ReactNode {
 							type="button"
 							className="flex min-w-0 items-center gap-2.5 text-left"
 						>
-							<CoverWithNew
+							<CoverWithCornerMark
 								name={row.name}
 								imageUrl={row.imageUrl}
 								isFirstListen={row.isFirstListen}
-								size="sm"
+								listenCount={row.listenCount}
+								size="md"
 							/>
 							<span className="min-w-0">
 								<span className="line-clamp-1 font-medium text-sm">
@@ -627,9 +630,11 @@ function DaySlimRail({ rows }: { rows: LabListen[] }): ReactNode {
 								</span>
 								<span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 text-muted-foreground text-xs">
 									<span className="truncate">{row.artistName}</span>
-									<span className="tabular-nums text-muted-foreground/70 sm:hidden">
-										· {row.listenCount}×
-									</span>
+									{row.isFirstListen ? (
+										<span className="tabular-nums text-muted-foreground/70 sm:hidden">
+											· {row.listenCount}×
+										</span>
+									) : null}
 								</span>
 								<span className="mt-1 block sm:hidden">
 									{row.rating !== undefined ? (
@@ -647,9 +652,11 @@ function DaySlimRail({ rows }: { rows: LabListen[] }): ReactNode {
 								) : (
 									<UnrankedQuiet />
 								)}
-								<span className="text-[10px] text-muted-foreground tabular-nums">
-									{row.listenCount}×
-								</span>
+								{row.isFirstListen ? (
+									<span className="text-[10px] text-muted-foreground tabular-nums">
+										{row.listenCount}×
+									</span>
+								) : null}
 							</div>
 							<RowMenu />
 						</div>
