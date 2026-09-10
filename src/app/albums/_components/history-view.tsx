@@ -206,7 +206,7 @@ export function HistoryView({
 											)}ms both`,
 										}}
 									>
-										<div className="mb-0 grid grid-cols-1 items-end gap-x-0 md:grid-cols-[3.5rem_minmax(0,1fr)]">
+										<div className="mb-0 grid max-w-xl grid-cols-1 items-end gap-x-0 md:max-w-2xl md:grid-cols-[3.5rem_minmax(0,1fr)]">
 											<span className="hidden md:block" aria-hidden />
 											<div className="mb-2.5 flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5 border-border/60 border-b pb-1.5 md:border-border/50 md:border-l md:pl-3">
 												<h2 className="font-[family-name:var(--font-display)] text-xl tracking-tight">
@@ -219,7 +219,7 @@ export function HistoryView({
 												</span>
 											</div>
 										</div>
-										<ul className="divide-y divide-border/40 overflow-hidden rounded-md border border-border/60 bg-background md:rounded-none md:border-0 md:bg-transparent">
+										<ul className="max-w-xl divide-y divide-border/40 overflow-hidden rounded-md border border-border/60 bg-background md:max-w-2xl md:rounded-none md:border-0 md:bg-transparent">
 											{section.items.map((listen, index) => {
 												const prev = section.items[index - 1];
 												const showDay =

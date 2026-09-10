@@ -78,7 +78,7 @@ export function ListenHistoryRow({
 							listenCount={listen.listenCount}
 							size="lg"
 						/>
-						<span className="flex min-h-16 min-w-0 flex-1 flex-col justify-between gap-1.5">
+						<span className="flex min-h-20 min-w-0 flex-1 flex-col justify-between gap-1.5">
 							<span className="min-w-0">
 								<span className="line-clamp-2 font-medium text-sm leading-snug">
 									{name}
@@ -116,30 +116,36 @@ export function ListenHistoryRow({
 								</span>
 							) : null}
 						</span>
-						<span className="flex min-w-0 items-center justify-between gap-3 border-border/50 border-l py-2.5 pr-1 pl-3">
-							<span className="flex min-w-0 items-center gap-2.5">
-								<CoverWithCornerMark
-									name={name}
-									imageUrl={imageUrl}
-									isFirstListen={listen.isFirstListen}
-									listenCount={listen.listenCount}
-									size="md"
-								/>
-								<span className="min-w-0">
-									<span className="line-clamp-1 font-medium text-sm leading-snug">
-										{name}
-									</span>
-									<span className="mt-0.5 block truncate text-muted-foreground text-xs leading-tight">
-										{artistName}
+						<span className="flex min-w-0 items-stretch">
+							<span
+								aria-hidden
+								className="my-2 w-px shrink-0 bg-border/50"
+							/>
+							<span className="flex min-w-0 flex-1 items-center justify-between gap-3 py-2.5 pr-1 pl-3">
+								<span className="flex min-w-0 items-center gap-2.5">
+									<CoverWithCornerMark
+										name={name}
+										imageUrl={imageUrl}
+										isFirstListen={listen.isFirstListen}
+										listenCount={listen.listenCount}
+										size="md"
+									/>
+									<span className="min-w-0">
+										<span className="line-clamp-1 font-medium text-sm leading-snug">
+											{name}
+										</span>
+										<span className="mt-0.5 block truncate text-muted-foreground text-xs leading-tight">
+											{artistName}
+										</span>
 									</span>
 								</span>
-							</span>
-							<span className="shrink-0">
-								{rating !== undefined ? (
-									<RatingInk rating={rating} />
-								) : (
-									<UnrankedQuiet />
-								)}
+								<span className="shrink-0">
+									{rating !== undefined ? (
+										<RatingInk rating={rating} />
+									) : (
+										<UnrankedQuiet />
+									)}
+								</span>
 							</span>
 						</span>
 					</span>
@@ -248,8 +254,8 @@ function Cover({
 	imageUrl?: string;
 	size: "md" | "lg";
 }): ReactNode {
-	const dim = size === "lg" ? "h-16 w-16" : "h-12 w-12";
-	const icon = size === "lg" ? "h-5 w-5" : "h-4 w-4";
+	const dim = size === "lg" ? "h-20 w-20" : "h-14 w-14";
+	const icon = size === "lg" ? "h-6 w-6" : "h-5 w-5";
 	return (
 		<div
 			className={cn(
@@ -263,7 +269,7 @@ function Cover({
 					alt={name}
 					fill
 					className="object-cover"
-					sizes={size === "lg" ? "64px" : "48px"}
+					sizes={size === "lg" ? "80px" : "56px"}
 				/>
 			) : (
 				<div className="flex h-full w-full items-center justify-center">
