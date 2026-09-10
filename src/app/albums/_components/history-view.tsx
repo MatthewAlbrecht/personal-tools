@@ -46,6 +46,7 @@ import { useAlbums } from "../_context/albums-context";
 import type { HistoryListen } from "../_utils/types";
 import { AlbumCard } from "./album-card";
 import { ConvertListenDrawer } from "./convert-listen-drawer";
+import { ListenRowStyleLab } from "./listen-row-style-lab";
 import {
 	ListensFilters,
 	type ListensGrouping,
@@ -175,6 +176,8 @@ export function HistoryView({
 				</aside>
 
 				<div className="min-w-0">
+					<ListenRowStyleLab />
+
 					<div className="mb-4 lg:hidden">
 						<Button
 							type="button"
