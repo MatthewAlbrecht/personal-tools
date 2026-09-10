@@ -129,7 +129,7 @@ export function ListenRowStyleLab(): ReactNode {
 				<StyleBlock
 					id="B1"
 					title="Aligned stack"
-					blurb="Current favorite bones: 64px cover, New on art, title/artist top, rating · Nx · day bottom flush with cover. Menu always reachable (touch)."
+					blurb="64px cover with corner chip: New on first listen, Nx when it’s a repeat. Title/artist top; rating · day bottom. Menu always reachable."
 					measure="stacked"
 				>
 					<StackedAligned rows={stacked} />
@@ -280,6 +280,17 @@ function NewOnCover(): ReactNode {
 	);
 }
 
+function ListenCountOnCover({ count }: { count: number }): ReactNode {
+	return (
+		<span
+			className="pointer-events-none absolute top-0.5 left-0.5 rounded-[3px] bg-slate-950/85 px-1 py-px font-semibold text-[8px] text-slate-100 tabular-nums tracking-wide shadow-[0_1px_2px_rgba(0,0,0,0.45)] ring-1 ring-white/15"
+			aria-label={`Listen ${count}`}
+		>
+			{count}×
+		</span>
+	);
+}
+
 function CoverWithNew({
 	name,
 	imageUrl,
@@ -295,6 +306,30 @@ function CoverWithNew({
 		<div className="relative shrink-0">
 			<Cover name={name} imageUrl={imageUrl} size={size} />
 			{isFirstListen ? <NewOnCover /> : null}
+		</div>
+	);
+}
+
+/** B1: New on first listen, otherwise listen ordinal chip in the same corner. */
+function CoverWithCornerMark({
+	name,
+	imageUrl,
+	isFirstListen,
+	listenCount,
+}: {
+	name: string;
+	imageUrl?: string;
+	isFirstListen: boolean;
+	listenCount: number;
+}): ReactNode {
+	return (
+		<div className="relative shrink-0">
+			<Cover name={name} imageUrl={imageUrl} size="lg" />
+			{isFirstListen ? (
+				<NewOnCover />
+			) : (
+				<ListenCountOnCover count={listenCount} />
+			)}
 		</div>
 	);
 }
@@ -385,10 +420,11 @@ function StackedAligned({ rows }: { rows: LabListen[] }): ReactNode {
 			{rows.map((row) => (
 				<li key={row.id} className="px-3 py-2.5 active:bg-muted/40 sm:hover:bg-muted/30">
 					<div className="flex items-stretch gap-3">
-						<CoverWithNew
+						<CoverWithCornerMark
 							name={row.name}
 							imageUrl={row.imageUrl}
 							isFirstListen={row.isFirstListen}
+							listenCount={row.listenCount}
 						/>
 						<div className="flex min-h-16 min-w-0 flex-1 flex-col justify-between gap-1.5 py-0.5">
 							<div className="flex items-start gap-1">
@@ -412,9 +448,11 @@ function StackedAligned({ rows }: { rows: LabListen[] }): ReactNode {
 										<UnrankedQuiet />
 									</button>
 								)}
-								<span className="text-muted-foreground tabular-nums">
-									{row.listenCount}×
-								</span>
+								{row.isFirstListen ? (
+									<span className="text-muted-foreground tabular-nums">
+										{row.listenCount}×
+									</span>
+								) : null}
 								<span className="text-muted-foreground/65">{row.dayKey}</span>
 							</div>
 						</div>
