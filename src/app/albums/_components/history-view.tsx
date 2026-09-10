@@ -44,11 +44,7 @@ import { cn } from "~/lib/utils";
 import type { HistoryListen } from "../_utils/types";
 import { AlbumCard } from "./album-card";
 import { ConvertListenDrawer } from "./convert-listen-drawer";
-import {
-	ListensFilters,
-	type ListensGrouping,
-	listensFiltersAreActive,
-} from "./listens-filters";
+import { ListensFilters, type ListensGrouping } from "./listens-filters";
 
 type HistoryViewProps = {
 	listens: HistoryListen[];
@@ -109,11 +105,11 @@ export function HistoryView({
 		yearFilter,
 	]);
 
-	const filtersActive = listensFiltersAreActive({
-		onlyUnranked,
-		onlyFirstListens,
-		yearFilter,
-	});
+	const activeFilterCount =
+		Number(onlyUnranked) +
+		Number(onlyFirstListens) +
+		Number(yearFilter !== "all");
+	const filtersActive = activeFilterCount > 0;
 
 	const filterControls = (
 		<ListensFilters
@@ -155,7 +151,7 @@ export function HistoryView({
 		<>
 			<div className="lg:grid lg:grid-cols-[12rem_minmax(0,1fr)] lg:gap-10">
 				<aside className="hidden lg:block">
-					<div className="sticky top-6">
+					<div className="lg:sticky lg:top-20">
 						<p className="mb-3 font-semibold text-[0.65rem] text-teal-800 uppercase tracking-[0.16em]">
 							Filters
 						</p>
@@ -169,6 +165,8 @@ export function HistoryView({
 							type="button"
 							variant="outline"
 							size="sm"
+							aria-expanded={filtersOpen}
+							aria-controls="history-filters-sheet"
 							onClick={() => setFiltersOpen(true)}
 						>
 							<SlidersHorizontal className="h-4 w-4" />
@@ -180,7 +178,7 @@ export function HistoryView({
 										"fade-in-0 zoom-in-90 ml-1 animate-in px-1.5 text-[0.65rem] duration-200",
 									)}
 								>
-									On
+									{activeFilterCount}
 								</span>
 							) : null}
 						</Button>
@@ -212,8 +210,8 @@ export function HistoryView({
 												{section.label}
 											</h2>
 											<span className="text-muted-foreground text-xs">
-												{albumCount} {albumCount === 1 ? "album" : "albums"}
-												{newCount > 0 ? ` · ${newCount} new` : null}
+												{albumCount} {albumCount === 1 ? "album" : "albums"} ·{" "}
+												{newCount} new
 											</span>
 										</div>
 										<ul className="space-y-0.5">
@@ -300,7 +298,11 @@ export function HistoryView({
 			</div>
 
 			<Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
-				<SheetContent side="left" className="w-[17rem] gap-0">
+				<SheetContent
+					id="history-filters-sheet"
+					side="left"
+					className="w-[17rem] gap-0"
+				>
 					<SheetHeader>
 						<SheetTitle className="font-[family-name:var(--font-display)] text-lg">
 							Filters
