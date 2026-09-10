@@ -4,8 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const TABS = [
-	{ href: "/lyrics", label: "Albums" },
-	{ href: "/lyrics/playlists", label: "Playlists" },
+	{ href: "/lyrics", label: "Album sheets" },
+	{ href: "/lyrics/playlists", label: "Playlist sheets" },
 ] as const;
 
 export function LyricsTabs() {

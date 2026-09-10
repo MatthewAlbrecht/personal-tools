@@ -44,6 +44,9 @@ export function ConcertsHeader({
 					</p>
 				</div>
 				<div className="flex shrink-0 items-center justify-end gap-2">
+					<Button asChild type="button" variant="outline">
+						<Link href="/concerts/venues">Venues</Link>
+					</Button>
 					<Button
 						disabled={selectedVenueCount === 0 || isSyncing}
 						onClick={onSync}

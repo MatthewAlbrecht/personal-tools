@@ -2,7 +2,8 @@
 
 import { useQuery } from "convex/react";
 import { Music2 } from "lucide-react";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 import { LoginPrompt } from "~/components/login-prompt";
 import { useMusicFunnelVisitCursor } from "~/lib/hooks/use-music-funnel-visit-cursor";
 import { useSpotifyAuth } from "~/lib/hooks/use-spotify-auth";
@@ -16,8 +17,24 @@ import { MusicFunnelTimeline } from "./_components/music-funnel-timeline";
 type MusicFunnelTab = "timeline" | "repeats";
 
 export default function MusicFunnelPage() {
+	return (
+		<Suspense
+			fallback={
+				<div className="container mx-auto max-w-6xl p-6">Loading...</div>
+			}
+		>
+			<MusicFunnelPageInner />
+		</Suspense>
+	);
+}
+
+function MusicFunnelPageInner() {
 	const { userId, isConnected, connection, isLoading } = useSpotifyAuth();
-	const [activeTab, setActiveTab] = useState<MusicFunnelTab>("timeline");
+	const router = useRouter();
+	const searchParams = useSearchParams();
+	const tabParam = searchParams?.get("tab");
+	const activeTab: MusicFunnelTab =
+		tabParam === "repeats" ? "repeats" : "timeline";
 	const [configOpen, setConfigOpen] = useState(false);
 	const { visitSince } = useMusicFunnelVisitCursor(userId ?? "");
 
@@ -33,6 +50,17 @@ export default function MusicFunnelPage() {
 		api.musicFunnel.listSources,
 		userId ? { userId } : "skip",
 	);
+
+	function handleTabChange(tab: MusicFunnelTab): void {
+		const params = new URLSearchParams(searchParams?.toString() ?? "");
+		if (tab === "timeline") {
+			params.delete("tab");
+		} else {
+			params.set("tab", tab);
+		}
+		const query = params.toString();
+		router.replace(query ? `/music-funnel?${query}` : "/music-funnel");
+	}
 
 	if (isLoading) {
 		return <div className="container mx-auto max-w-6xl p-6">Loading...</div>;
@@ -65,7 +93,7 @@ export default function MusicFunnelPage() {
 				spotifyDisplayName={connection?.displayName}
 				summary={summary}
 				activeTab={activeTab}
-				onTabChange={setActiveTab}
+				onTabChange={handleTabChange}
 				onOpenConfig={() => setConfigOpen(true)}
 			/>
 			<MusicFunnelMissedBanner userId={userId} visitSince={visitSince} />
