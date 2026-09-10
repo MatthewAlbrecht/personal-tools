@@ -3231,24 +3231,55 @@ export const getUserAlbumListens = query({
 		limit: v.optional(v.number()),
 	},
 	handler: async (ctx, args) => {
+		const limit = args.limit ?? 500;
 		const listens = await ctx.db
 			.query("userAlbumListens")
 			.withIndex("by_userId_listenedAt", (q) => q.eq("userId", args.userId))
 			.order("desc")
-			.collect();
+			.take(limit);
 
-		// Fetch album details for each listen
-		const listensWithDetails = await Promise.all(
-			listens.map(async (listen) => {
-				const album = await ctx.db.get(listen.albumId);
-				return { ...listen, album };
+		const uniqueAlbumIds = [
+			...new Set(listens.map((listen) => listen.albumId)),
+		];
+		const albumById = new Map<
+			Id<"spotifyAlbums">,
+			Doc<"spotifyAlbums"> | null
+		>();
+		const userAlbumById = new Map<Id<"spotifyAlbums">, Doc<"userAlbums">>();
+
+		await Promise.all(
+			uniqueAlbumIds.map(async (albumId) => {
+				const album = await ctx.db.get(albumId);
+				albumById.set(albumId, album);
+
+				const userAlbum = await ctx.db
+					.query("userAlbums")
+					.withIndex("by_userId_albumId", (q) =>
+						q.eq("userId", args.userId).eq("albumId", albumId),
+					)
+					.first();
+				if (userAlbum) {
+					userAlbumById.set(albumId, userAlbum);
+				}
 			}),
 		);
 
-		if (args.limit) {
-			return listensWithDetails.slice(0, args.limit);
-		}
-		return listensWithDetails;
+		return listens.map((listen) => {
+			const album = albumById.get(listen.albumId) ?? null;
+			const userAlbum = userAlbumById.get(listen.albumId);
+			const listenCount = userAlbum?.listenCount ?? 0;
+			const firstListenedAt = userAlbum?.firstListenedAt;
+			const isFirstListen =
+				userAlbum !== undefined &&
+				listen.listenedAt === userAlbum.firstListenedAt;
+			return {
+				...listen,
+				album,
+				listenCount,
+				...(firstListenedAt !== undefined ? { firstListenedAt } : {}),
+				isFirstListen,
+			};
+		});
 	},
 });
 
