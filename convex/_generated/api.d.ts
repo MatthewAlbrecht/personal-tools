@@ -66,7 +66,6 @@ import type * as birthdays from "../birthdays.js";
 import type * as bookSearch from "../bookSearch.js";
 import type * as concertActions from "../concertActions.js";
 import type * as concerts from "../concerts.js";
-import type * as devSeedFromProd from "../devSeedFromProd.js";
 import type * as folioSociety from "../folioSociety.js";
 import type * as folioSocietyDetails from "../folioSocietyDetails.js";
 import type * as folioSocietyImages from "../folioSocietyImages.js";
@@ -160,7 +159,6 @@ declare const fullApi: ApiFromModules<{
   bookSearch: typeof bookSearch;
   concertActions: typeof concertActions;
   concerts: typeof concerts;
-  devSeedFromProd: typeof devSeedFromProd;
   folioSociety: typeof folioSociety;
   folioSocietyDetails: typeof folioSocietyDetails;
   folioSocietyImages: typeof folioSocietyImages;

@@ -523,10 +523,13 @@ export default defineSchema({
 	// Spotify Album tracking tables
 	spotifyAlbums: defineTable({
 		spotifyAlbumId: v.optional(v.string()), // Spotify's album ID
-		source: v.union(
-			v.literal("spotify"),
-			v.literal("manual"),
-			v.literal("bandcamp"),
+		// Temporary optional for prod gate: backfill then re-require.
+		source: v.optional(
+			v.union(
+				v.literal("spotify"),
+				v.literal("manual"),
+				v.literal("bandcamp"),
+			),
 		),
 		bandcampUrl: v.optional(v.string()),
 		name: v.string(),
