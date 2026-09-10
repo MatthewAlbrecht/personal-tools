@@ -221,7 +221,7 @@ export function ForLaterRow({
 										/>
 									</RowExternalLink>
 								) : null}
-								{row.spotifyAlbumId.trim() ? (
+								{row.spotifyAlbumId?.trim() ? (
 									<RowExternalLink
 										href={buildSpotifyAlbumUrl(row.spotifyAlbumId)}
 										ariaLabel={`Open ${row.name} on Spotify`}

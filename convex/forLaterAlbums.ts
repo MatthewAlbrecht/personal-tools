@@ -146,7 +146,7 @@ const forLaterAlbumRowValidator = v.object({
 	id: v.string(),
 	libraryItemId: v.id("albumLibraryItems"),
 	albumId: v.id("spotifyAlbums"),
-	spotifyAlbumId: v.string(),
+	spotifyAlbumId: v.optional(v.string()),
 	name: v.string(),
 	artistName: v.string(),
 	imageUrl: v.optional(v.string()),
@@ -199,7 +199,7 @@ type ForLaterAlbumRow = {
 	id: string;
 	libraryItemId: Id<"albumLibraryItems">;
 	albumId: Id<"spotifyAlbums">;
-	spotifyAlbumId: string;
+	spotifyAlbumId?: string;
 	name: string;
 	artistName: string;
 	imageUrl?: string;

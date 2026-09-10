@@ -269,13 +269,17 @@ async function resolveForLaterMatches(
 
 	candidates.sort((a, b) => b.sortAt - a.sortAt);
 
-	return candidates.map((c) => ({
-		spotifyAlbumId: c.item.spotifyAlbumId,
-		albumId: c.item.albumId,
-		name: c.item.name,
-		artistName: c.item.artistName,
-		totalTracks: c.album.totalTracks,
-	}));
+	return candidates
+		.map((c) => ({
+			spotifyAlbumId: c.item.spotifyAlbumId,
+			albumId: c.item.albumId,
+			name: c.item.name,
+			artistName: c.item.artistName,
+			totalTracks: c.album.totalTracks,
+		}))
+		.filter(
+			(album): album is MatchedAlbum => album.spotifyAlbumId !== undefined,
+		);
 }
 
 async function resolveRankingsMatches(
@@ -418,8 +422,13 @@ async function resolveRankingsMatches(
 			album = loaded;
 		}
 
+		const spotifyAlbumId = c.item.spotifyAlbumId;
+		if (!spotifyAlbumId) {
+			continue;
+		}
+
 		matches.push({
-			spotifyAlbumId: c.item.spotifyAlbumId,
+			spotifyAlbumId,
 			albumId: c.item.albumId,
 			name: c.item.name,
 			artistName: c.item.artistName,

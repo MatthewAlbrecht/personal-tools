@@ -685,7 +685,9 @@ function RecommendationResults({
 }
 
 function RecommendationResultCard({ row }: { row: ForLaterAlbumRowData }) {
-	const spotifyUrl = buildSpotifyAlbumUrl(row.spotifyAlbumId);
+	const spotifyUrl = row.spotifyAlbumId
+		? buildSpotifyAlbumUrl(row.spotifyAlbumId)
+		: null;
 
 	return (
 		<article className="rounded-xl border bg-card p-3">
@@ -816,8 +818,10 @@ function joinTagLabels(tags: Array<{ key: string; label: string }>): string {
 		.join(", ");
 }
 
-function buildSpotifyAlbumUrl(spotifyAlbumId: string): string | null {
-	const trimmedId = spotifyAlbumId.trim();
+function buildSpotifyAlbumUrl(
+	spotifyAlbumId: string | undefined,
+): string | null {
+	const trimmedId = spotifyAlbumId?.trim();
 	if (!trimmedId) {
 		return null;
 	}

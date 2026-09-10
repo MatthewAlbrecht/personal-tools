@@ -31,7 +31,7 @@ export type ForLaterAlbumRowData = {
 	id: string;
 	libraryItemId: Id<"albumLibraryItems">;
 	albumId: Id<"spotifyAlbums">;
-	spotifyAlbumId: string;
+	spotifyAlbumId?: string;
 	name: string;
 	artistName: string;
 	imageUrl?: string;

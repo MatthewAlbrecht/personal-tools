@@ -78,7 +78,7 @@ export const listExistingListensForUser = internalQuery({
 		);
 		const spotifyAlbumIdByDbId = new Map<Id<"spotifyAlbums">, string>();
 		for (const album of albums) {
-			if (album) {
+			if (album?.spotifyAlbumId) {
 				spotifyAlbumIdByDbId.set(album._id, album.spotifyAlbumId);
 			}
 		}

@@ -570,6 +570,9 @@ export const searchSpotifyAlbumsForMapping = query({
 		}> = [];
 
 		for (const album of albums) {
+			if (!album.spotifyAlbumId) {
+				continue;
+			}
 			if (!spotifyAlbumMatchesSearch(album, searchTerm)) {
 				continue;
 			}
@@ -613,8 +616,10 @@ export const autoMatchSpotifyAlbum = mutation({
 				q.eq("albumTitleKey", albumTitleKey),
 			)
 			.collect();
-		const matches = candidates.filter((candidate) =>
-			artistKeysIntersect(artistKeys, buildSpotifyAlbumArtistKeys(candidate)),
+		const matches = candidates.filter(
+			(candidate) =>
+				candidate.spotifyAlbumId !== undefined &&
+				artistKeysIntersect(artistKeys, buildSpotifyAlbumArtistKeys(candidate)),
 		);
 
 		if (matches.length === 0) {
@@ -632,7 +637,7 @@ export const autoMatchSpotifyAlbum = mutation({
 		}
 
 		const match = matches[0];
-		if (!match) {
+		if (!match?.spotifyAlbumId) {
 			return {
 				matched: false,
 				reason: "No Spotify album matched this album title and artist.",
@@ -694,7 +699,7 @@ export const setSpotifyAlbumMapping = mutation({
 		await patchSpotifyAlbumMapping(ctx, {
 			albumId: args.albumId,
 			spotifyAlbumConvexId: spotifyAlbum._id,
-			spotifyAlbumId: spotifyAlbum.spotifyAlbumId,
+			spotifyAlbumId,
 			method: "manual",
 			now: Date.now(),
 		});
@@ -709,7 +714,7 @@ export const setSpotifyAlbumMapping = mutation({
 				`Mapped to ${spotifyAlbum.name} by ${spotifyAlbum.artistName}.`,
 				durationSync,
 			),
-			spotifyAlbumId: spotifyAlbum.spotifyAlbumId,
+			spotifyAlbumId,
 			spotifyAlbumConvexId: spotifyAlbum._id,
 			durationsUpdatedCount: durationSync.updatedCount,
 			matchedSongs: durationSync.matchedSongs,

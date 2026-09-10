@@ -86,7 +86,7 @@ async function patchScrapeAlbumConvexId(
 
 export type SpotifyAlbumRymMatchArgs = {
 	albumId: Id<"spotifyAlbums">;
-	spotifyAlbumId: string;
+	spotifyAlbumId?: string;
 	albumTitleKey: string;
 	artistKeys: string[];
 };
@@ -136,22 +136,25 @@ export async function matchRymForSpotifyAlbum(
 	ctx: MutationCtx,
 	args: SpotifyAlbumRymMatchArgs & { now: number },
 ): Promise<RymMatchResult> {
-	const exactScrape = await ctx.db
-		.query("rateYourMusicScrapes")
-		.withIndex("by_spotifyAlbumId", (q) =>
-			q.eq("spotifyAlbumId", args.spotifyAlbumId),
-		)
-		.first();
+	if (args.spotifyAlbumId) {
+		const spotifyAlbumId = args.spotifyAlbumId;
+		const exactScrape = await ctx.db
+			.query("rateYourMusicScrapes")
+			.withIndex("by_spotifyAlbumId", (q) =>
+				q.eq("spotifyAlbumId", spotifyAlbumId),
+			)
+			.first();
 
-	if (exactScrape) {
-		await linkRymScrapeToSpotifyAlbum(ctx, {
-			scrapeId: exactScrape._id,
-			albumId: args.albumId,
-			spotifyAlbumId: args.spotifyAlbumId,
-			method: "spotify_id",
-			now: args.now,
-		});
-		return { scrapeId: exactScrape._id, method: "spotify_id" };
+		if (exactScrape) {
+			await linkRymScrapeToSpotifyAlbum(ctx, {
+				scrapeId: exactScrape._id,
+				albumId: args.albumId,
+				spotifyAlbumId,
+				method: "spotify_id",
+				now: args.now,
+			});
+			return { scrapeId: exactScrape._id, method: "spotify_id" };
+		}
 	}
 
 	const scrapes = await ctx.db

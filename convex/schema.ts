@@ -672,7 +672,7 @@ export default defineSchema({
 
 	albumEnrichments: defineTable({
 		albumId: v.id("spotifyAlbums"),
-		spotifyAlbumId: v.string(),
+		spotifyAlbumId: v.optional(v.string()),
 		slices: v.object({
 			artistContext: v.optional(v.object({ updatedAt: v.number() })),
 			whyListen: v.optional(v.object({ updatedAt: v.number() })),
@@ -723,7 +723,7 @@ export default defineSchema({
 		/** Groups variants compared in one eval turn. */
 		trialRunId: v.string(),
 		albumId: v.id("spotifyAlbums"),
-		spotifyAlbumId: v.string(),
+		spotifyAlbumId: v.optional(v.string()),
 		slice: enrichmentSliceKeyValidator,
 		variantId: v.string(),
 		promptPath: v.string(),

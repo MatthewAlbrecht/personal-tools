@@ -119,7 +119,7 @@ export function clampQueueLimit(
 
 export function queuePreviewSpotifyAlbumId(
 	forLaterItem: { spotifyAlbumId: string },
-	_canonicalAlbum: { spotifyAlbumId: string },
+	_canonicalAlbum: { spotifyAlbumId?: string },
 ): string {
 	return forLaterItem.spotifyAlbumId;
 }

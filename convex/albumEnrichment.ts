@@ -134,7 +134,7 @@ const albumDetailsForLaterValidator = v.object({
 const albumDetailsValidator = v.object({
 	hero: v.object({
 		albumId: v.id("spotifyAlbums"),
-		spotifyAlbumId: v.string(),
+		spotifyAlbumId: v.optional(v.string()),
 		...albumSnapshotFields,
 	}),
 	whyListen: v.object({
@@ -173,7 +173,7 @@ const albumDetailsValidator = v.object({
 	}),
 	ids: v.object({
 		albumId: v.id("spotifyAlbums"),
-		spotifyAlbumId: v.string(),
+		spotifyAlbumId: v.optional(v.string()),
 		enrichmentId: v.optional(v.id("albumEnrichments")),
 		forLaterItemId: v.optional(v.id("forLaterAlbumItems")),
 		libraryItemId: v.optional(v.id("albumLibraryItems")),
@@ -185,7 +185,7 @@ type AlbumDetailsTag = { key: string; label: string };
 type AlbumDetails = {
 	hero: AlbumEnrichmentSnapshot & {
 		albumId: Id<"spotifyAlbums">;
-		spotifyAlbumId: string;
+		spotifyAlbumId?: string;
 	};
 	whyListen: { whyListenPitch?: string };
 	artistContext: {
@@ -230,7 +230,7 @@ type AlbumDetails = {
 	};
 	ids: {
 		albumId: Id<"spotifyAlbums">;
-		spotifyAlbumId: string;
+		spotifyAlbumId?: string;
 		enrichmentId?: Id<"albumEnrichments">;
 		forLaterItemId?: Id<"forLaterAlbumItems">;
 		libraryItemId?: Id<"albumLibraryItems">;
@@ -616,7 +616,7 @@ export const listRecentEnrichments = query({
 	returns: v.array(
 		v.object({
 			albumId: v.id("spotifyAlbums"),
-			spotifyAlbumId: v.string(),
+			spotifyAlbumId: v.optional(v.string()),
 			title: v.string(),
 			artists: v.array(v.string()),
 			releaseYear: v.optional(v.number()),
@@ -860,7 +860,7 @@ function albumMatchesSearchTerm(
 
 type AlbumCandidate = {
 	albumId: Id<"spotifyAlbums">;
-	spotifyAlbumId: string;
+	spotifyAlbumId?: string;
 	title: string;
 	artistName: string;
 };
@@ -937,7 +937,7 @@ export const resolveAlbum = query({
 		v.object({
 			kind: v.literal("exact"),
 			albumId: v.id("spotifyAlbums"),
-			spotifyAlbumId: v.string(),
+			spotifyAlbumId: v.optional(v.string()),
 			...albumSnapshotFields,
 		}),
 		v.object({
@@ -945,7 +945,7 @@ export const resolveAlbum = query({
 			candidates: v.array(
 				v.object({
 					albumId: v.id("spotifyAlbums"),
-					spotifyAlbumId: v.string(),
+					spotifyAlbumId: v.optional(v.string()),
 					title: v.string(),
 					artistName: v.string(),
 				}),

@@ -1,6 +1,6 @@
 export type SpotifyAlbumDoc = {
 	_id: string;
-	spotifyAlbumId: string;
+	spotifyAlbumId?: string;
 	name: string;
 	artistName: string;
 	imageUrl?: string;

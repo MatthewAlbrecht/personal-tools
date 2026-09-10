@@ -1318,7 +1318,7 @@ export const getRecentlyPlayedTracks = query({
 		// Create a map of albumId -> releaseDate
 		const albumReleaseDates = new Map<string, string | undefined>();
 		for (const album of albums) {
-			if (album) {
+			if (album?.spotifyAlbumId) {
 				albumReleaseDates.set(album.spotifyAlbumId, album.releaseDate);
 			}
 		}
@@ -2569,7 +2569,7 @@ const albumLibraryTaxonomyTagValidator = v.object({
 
 const albumLibraryRowValidator = v.object({
 	_id: v.id("spotifyAlbums"),
-	spotifyAlbumId: v.string(),
+	spotifyAlbumId: v.optional(v.string()),
 	name: v.string(),
 	artistName: v.string(),
 	imageUrl: v.optional(v.string()),
@@ -2628,7 +2628,7 @@ const albumLibrarySortValidator = v.union(
 
 type AlbumLibraryRow = {
 	_id: Id<"spotifyAlbums">;
-	spotifyAlbumId: string;
+	spotifyAlbumId?: string;
 	name: string;
 	artistName: string;
 	imageUrl?: string;
@@ -3495,7 +3495,7 @@ export const getUserAlbumListens = query({
 
 const spotifyAlbumSearchResultValidator = v.object({
 	albumId: v.id("spotifyAlbums"),
-	spotifyAlbumId: v.string(),
+	spotifyAlbumId: v.optional(v.string()),
 	name: v.string(),
 	artistName: v.string(),
 	imageUrl: v.optional(v.string()),

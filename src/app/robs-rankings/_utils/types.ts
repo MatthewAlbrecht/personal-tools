@@ -16,7 +16,7 @@ export type RankingAlbum = {
 
 export type AvailableAlbum = {
 	_id: Id<"spotifyAlbums">;
-	spotifyAlbumId: string;
+	spotifyAlbumId?: string;
 	name: string;
 	artistName: string;
 	imageUrl?: string;

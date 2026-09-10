@@ -43,7 +43,7 @@ const albumEnrichmentTrialDocValidator = v.object({
 	_creationTime: v.number(),
 	trialRunId: v.string(),
 	albumId: v.id("spotifyAlbums"),
-	spotifyAlbumId: v.string(),
+	spotifyAlbumId: v.optional(v.string()),
 	slice: enrichmentSliceKeyValidator,
 	variantId: v.string(),
 	promptPath: v.string(),

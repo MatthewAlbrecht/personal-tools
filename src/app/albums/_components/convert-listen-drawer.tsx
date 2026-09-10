@@ -21,7 +21,7 @@ import { useAlbums } from "../_context/albums-context";
 
 type SpotifyAlbumSearchResult = {
 	albumId: Id<"spotifyAlbums">;
-	spotifyAlbumId: string;
+	spotifyAlbumId?: string;
 	name: string;
 	artistName: string;
 	imageUrl?: string;

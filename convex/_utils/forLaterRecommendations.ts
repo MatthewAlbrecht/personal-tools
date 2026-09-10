@@ -462,7 +462,7 @@ export function selectRandomTagOptions(
 export function buildSavedRecommendationAlbumRefs<AlbumId>(
 	rows: readonly {
 		albumId: AlbumId;
-		spotifyAlbumId: string;
+		spotifyAlbumId?: string;
 	}[],
 ): {
 	albumIds: AlbumId[];
@@ -470,7 +470,9 @@ export function buildSavedRecommendationAlbumRefs<AlbumId>(
 } {
 	return {
 		albumIds: rows.map((row) => row.albumId),
-		spotifyAlbumIds: rows.map((row) => row.spotifyAlbumId),
+		spotifyAlbumIds: rows.flatMap((row) =>
+			row.spotifyAlbumId ? [row.spotifyAlbumId] : [],
+		),
 	};
 }
 
