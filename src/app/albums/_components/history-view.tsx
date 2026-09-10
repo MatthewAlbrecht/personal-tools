@@ -8,6 +8,7 @@ import {
 	Trash2,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { SyncAlbumsButton } from "~/components/sync-albums-button";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -26,6 +27,7 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
+import { Separator } from "~/components/ui/separator";
 import {
 	Sheet,
 	SheetContent,
@@ -40,6 +42,7 @@ import {
 	sectionStats,
 } from "~/lib/album-listens-grouping";
 import { cn } from "~/lib/utils";
+import { useAlbums } from "../_context/albums-context";
 import type { HistoryListen } from "../_utils/types";
 import { AlbumCard } from "./album-card";
 import { ConvertListenDrawer } from "./convert-listen-drawer";
@@ -64,6 +67,7 @@ export function HistoryView({
 	onDeleteListen,
 	isLoading,
 }: HistoryViewProps) {
+	const { isSyncing, syncHistory, lastSyncRun } = useAlbums();
 	const [deleteTarget, setDeleteTarget] = useState<{
 		id: string;
 		name: string;
@@ -158,6 +162,15 @@ export function HistoryView({
 							Filters
 						</p>
 						{filterControls}
+						<div className="mt-6 space-y-3">
+							<Separator />
+							<SyncAlbumsButton
+								variant="status"
+								isSyncing={isSyncing}
+								onSync={syncHistory}
+								lastSyncedAt={lastSyncRun?.completedAt}
+							/>
+						</div>
 					</div>
 				</aside>
 
@@ -293,7 +306,18 @@ export function HistoryView({
 							Group and narrow your listen history.
 						</SheetDescription>
 					</SheetHeader>
-					<div className="px-4 pb-4">{filterControls}</div>
+					<div className="flex flex-col gap-4 px-4 pb-6">
+						{filterControls}
+						<div className="space-y-3">
+							<Separator />
+							<SyncAlbumsButton
+								variant="status"
+								isSyncing={isSyncing}
+								onSync={syncHistory}
+								lastSyncedAt={lastSyncRun?.completedAt}
+							/>
+						</div>
+					</div>
 				</SheetContent>
 			</Sheet>
 

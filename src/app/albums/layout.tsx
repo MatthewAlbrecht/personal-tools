@@ -57,19 +57,12 @@ function AlbumsLayoutContent({ children }: { children: React.ReactNode }) {
 		pathname.startsWith("/albums/library") ||
 		pathname.startsWith("/albums/tracks");
 
-	return (
-		<div className="w-full p-6">
-			{isConnected && showHistorySync ? (
-				<div className="mb-4 flex justify-end">
-					<SyncAlbumsButton
-						isSyncing={isSyncing}
-						onSync={syncHistory}
-						variant="outline"
-						lastSyncedAt={lastSyncRun?.completedAt}
-					/>
-				</div>
-			) : null}
+	// Listens embeds sync in the filter rail; other views get a quiet page foot.
+	const showPageFootSync =
+		isConnected && showHistorySync && !pathname.startsWith("/albums/recent");
 
+	return (
+		<div className="w-full p-6 pt-4">
 			{showHistorySync ? (
 				<SpotifyConnection
 					isConnected={isConnected}
@@ -79,14 +72,23 @@ function AlbumsLayoutContent({ children }: { children: React.ReactNode }) {
 			) : null}
 
 			{isConnected || pathname.startsWith("/albums/up-next") ? (
-				<div className={showHistorySync && isConnected ? "mt-4" : undefined}>
-					{children}
-				</div>
+				<div className={showHistorySync ? "mt-2" : undefined}>{children}</div>
 			) : (
 				<div className="mt-4 rounded-lg border border-dashed p-8 text-center text-muted-foreground text-sm">
 					Connect Spotify to use this view.
 				</div>
 			)}
+
+			{showPageFootSync ? (
+				<div className="mt-10 border-border/50 border-t pt-3">
+					<SyncAlbumsButton
+						variant="status"
+						isSyncing={isSyncing}
+						onSync={syncHistory}
+						lastSyncedAt={lastSyncRun?.completedAt}
+					/>
+				</div>
+			) : null}
 
 			<AddListenDrawer
 				track={
