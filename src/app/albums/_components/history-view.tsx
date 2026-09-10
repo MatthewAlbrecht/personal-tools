@@ -34,6 +34,7 @@ import { useAlbums } from "../_context/albums-context";
 import type { HistoryListen } from "../_utils/types";
 import { ConvertListenDrawer } from "./convert-listen-drawer";
 import { ListenHistoryRow, listenDayKey } from "./listen-history-row";
+import { ListensFilterStyleLab } from "./listens-filter-style-lab";
 import {
 	ListensFilters,
 	type ListensGrouping,
@@ -163,6 +164,8 @@ export function HistoryView({
 				</aside>
 
 				<div className="min-w-0">
+					<ListensFilterStyleLab />
+
 					<div className="mb-4 lg:hidden">
 						<Button
 							type="button"
