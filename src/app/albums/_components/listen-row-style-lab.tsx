@@ -272,7 +272,7 @@ function Cover({
 function NewOnCover(): ReactNode {
 	return (
 		<span
-			className="pointer-events-none absolute top-0.5 left-0.5 rounded-[3px] bg-teal-950/90 px-1 py-px font-semibold text-[8px] text-teal-100 uppercase tracking-[0.14em] shadow-[0_1px_2px_rgba(0,0,0,0.45)] ring-1 ring-teal-300/25"
+			className="pointer-events-none absolute top-0.5 left-0.5 rounded-[3px] bg-teal-600 px-1 py-px font-semibold text-[8px] text-white uppercase tracking-[0.14em] shadow-[0_1px_2px_rgba(0,0,0,0.35)] ring-1 ring-teal-400/50"
 			aria-label="First listen"
 		>
 			New
@@ -283,7 +283,7 @@ function NewOnCover(): ReactNode {
 function ListenCountOnCover({ count }: { count: number }): ReactNode {
 	return (
 		<span
-			className="pointer-events-none absolute top-0.5 left-0.5 rounded-[3px] bg-slate-950/85 px-1 py-px font-semibold text-[8px] text-slate-100 tabular-nums tracking-wide shadow-[0_1px_2px_rgba(0,0,0,0.45)] ring-1 ring-white/15"
+			className="pointer-events-none absolute top-0.5 left-0.5 rounded-[3px] bg-background/90 px-1 py-px font-semibold text-[8px] text-muted-foreground tabular-nums tracking-wide shadow-[0_1px_2px_rgba(0,0,0,0.25)] ring-1 ring-border/80"
 			aria-label={`Listen ${count}`}
 		>
 			{count}×
