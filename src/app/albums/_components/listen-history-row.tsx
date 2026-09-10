@@ -108,8 +108,8 @@ export function ListenHistoryRow({
 					</span>
 
 					{/* Desktop — Slim rail */}
-					<span className="hidden grid-cols-[3.5rem_minmax(0,1fr)_auto] items-start gap-3 px-1 py-2 md:grid">
-						<span className="border-border/55 border-r pt-1 pr-2 text-right">
+					<span className="hidden grid-cols-[3.5rem_minmax(0,1fr)_auto] items-stretch gap-3 px-1 py-2 md:grid">
+						<span className="flex justify-end border-border/55 border-r pt-1 pr-2">
 							{showDay ? (
 								<span className="font-medium text-[10px] text-muted-foreground tabular-nums leading-none">
 									{day.label}
