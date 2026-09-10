@@ -158,6 +158,8 @@ export default defineSchema({
 		albumSlug: v.string(),
 		geniusAlbumUrl: v.string(),
 		totalSongs: v.number(),
+		/** Present on shared dev data from parallel zine work; keep optional so pushes succeed. */
+		albumArtUrl: v.optional(v.string()),
 		zineCoverImageUrl: v.optional(v.string()),
 		zineCoverImageStorageId: v.optional(v.id("_storage")),
 		zineCoverGreyscale: v.optional(v.boolean()),
@@ -174,6 +176,7 @@ export default defineSchema({
 			v.union(v.literal("top"), v.literal("center")),
 		),
 		zineIntroFontSizePt: v.optional(v.number()),
+		zineIntroBold: v.optional(v.boolean()),
 		zineDisplaySettings: v.optional(zineDisplaySettingsValidator),
 		zineInsideBackSections: v.optional(zineInsideBackSectionsValidator),
 		zineInsideBackMarginTopPt: v.optional(v.number()),
