@@ -164,7 +164,7 @@ function Cover({
 	size?: "sm" | "md" | "lg";
 }): ReactNode {
 	const dim =
-		size === "lg" ? "h-14 w-14" : size === "md" ? "h-11 w-11" : "h-9 w-9";
+		size === "lg" ? "h-16 w-16" : size === "md" ? "h-11 w-11" : "h-9 w-9";
 	const icon = size === "lg" ? "h-5 w-5" : "h-4 w-4";
 	return (
 		<div
@@ -179,7 +179,7 @@ function Cover({
 					alt={name}
 					fill
 					className="object-cover"
-					sizes={size === "lg" ? "56px" : "44px"}
+					sizes={size === "lg" ? "64px" : "44px"}
 				/>
 			) : (
 				<div className="flex h-full w-full items-center justify-center">
@@ -321,7 +321,7 @@ function StyleStacked({ rows }: { rows: LabListen[] }): ReactNode {
 				<li key={row.id} className="px-3 py-2.5 hover:bg-muted/30">
 					<div className="flex items-stretch gap-3">
 						<Cover name={row.name} imageUrl={row.imageUrl} size="lg" />
-						<div className="flex min-h-14 min-w-0 flex-1 flex-col justify-between gap-1 py-0.5">
+						<div className="flex min-h-16 min-w-0 flex-1 flex-col justify-between gap-1.5 py-0.5">
 							<div className="flex items-start justify-between gap-2">
 								<button type="button" className="min-w-0 text-left">
 									<div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
