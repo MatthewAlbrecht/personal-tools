@@ -64,7 +64,7 @@ export function ListenHistoryRow({
 					type="button"
 					aria-label={`Actions for ${name}`}
 					className={cn(
-						"w-full max-w-2xl text-left outline-none transition-colors md:max-w-3xl",
+						"w-full max-w-xl text-left outline-none transition-colors md:max-w-2xl",
 						"hover:bg-muted/30 focus-visible:bg-muted/40 active:bg-muted/40",
 						"data-[state=open]:bg-muted/35",
 					)}
