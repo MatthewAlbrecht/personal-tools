@@ -61,7 +61,9 @@ export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
 				ref={ref}
 				onClick={onSelect}
 				className={cn(
-					"group flex items-center gap-2 rounded-md p-1 hover:bg-muted/50",
+					"group flex items-center gap-2 rounded-md p-1 transition-colors hover:bg-muted/50",
+					isFirstListen &&
+						"bg-teal-800/[0.04] ring-1 ring-teal-800/15 ring-inset",
 					isSelected && !showSaved && "ring-2 ring-primary",
 					showSaved && "ring-2 ring-emerald-500/50",
 				)}
@@ -85,7 +87,17 @@ export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
 
 				{/* Album Info */}
 				<div className="min-w-0 flex-1">
-					<p className="truncate font-medium text-sm">{name}</p>
+					<div className="flex min-w-0 items-center gap-1.5">
+						<p className="truncate font-medium text-sm">{name}</p>
+						{isFirstListen ? (
+							<span
+								className="shrink-0 rounded border border-teal-800/20 bg-teal-800/10 px-1.5 py-px font-semibold text-[9px] text-teal-800 uppercase tracking-[0.14em]"
+								title="First listen"
+							>
+								New
+							</span>
+						) : null}
+					</div>
 					<p className="truncate text-muted-foreground text-xs">{artistName}</p>
 				</div>
 
@@ -126,11 +138,8 @@ export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
 						/>
 					) : null}
 
-					{listenCount !== undefined || isFirstListen ? (
-						<AlbumListenCountBadge
-							listenCount={listenCount ?? 0}
-							isFirstListen={isFirstListen}
-						/>
+					{listenCount !== undefined ? (
+						<AlbumListenCountBadge listenCount={listenCount} />
 					) : null}
 
 					{/* Date/Year */}
