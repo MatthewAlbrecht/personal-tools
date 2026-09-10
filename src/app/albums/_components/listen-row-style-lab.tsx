@@ -234,10 +234,8 @@ function RatingCode({ rating }: { rating: number }): ReactNode {
 	return (
 		<span
 			className={cn(
-				"inline-flex min-w-[2rem] items-center justify-center rounded border px-1.5 py-0.5 font-semibold text-[10px] tabular-nums",
-				colors.bg,
+				"font-semibold text-[11px] tracking-tight tabular-nums",
 				colors.text,
-				colors.border,
 			)}
 			title={getTierShortLabel(rating)}
 		>
@@ -338,20 +336,9 @@ function StyleStacked({ rows }: { rows: LabListen[] }): ReactNode {
 							</div>
 							<div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px]">
 								{row.rating !== undefined ? (
-									<Badge
-										variant="outline"
-										className={cn(
-											"h-5 rounded-sm px-1.5 font-medium text-[10px]",
-											getRatingColors(row.rating).text,
-											getRatingColors(row.rating).border,
-										)}
-									>
-										{getTierShortLabel(row.rating)}
-									</Badge>
+									<RatingInk rating={row.rating} />
 								) : (
-									<span className="text-muted-foreground/60 underline decoration-dashed underline-offset-2">
-										Rate
-									</span>
+									<UnrankedQuiet />
 								)}
 								<span className="text-muted-foreground tabular-nums">
 									{row.listenCount}×
