@@ -365,13 +365,21 @@ export const undoLast = mutation({
 		}),
 	),
 	handler: async (ctx, args) => {
-		const recent = await ctx.db
-			.query("albumDuels")
-			.withIndex("by_user_createdAt", (q) => q.eq("userId", args.userId))
-			.order("desc")
-			.take(50);
+		let cursor: string | null = null;
+		let duel: Doc<"albumDuels"> | undefined;
 
-		const duel = recent.find((row) => row.undoneAt === undefined);
+		for (;;) {
+			const page = await ctx.db
+				.query("albumDuels")
+				.withIndex("by_user_createdAt", (q) => q.eq("userId", args.userId))
+				.order("desc")
+				.paginate({ numItems: 50, cursor });
+
+			duel = page.page.find((row) => row.undoneAt === undefined);
+			if (duel || page.isDone) break;
+			cursor = page.continueCursor;
+		}
+
 		if (!duel) {
 			return { undone: false as const };
 		}
@@ -429,7 +437,7 @@ export const listDuelTop = query({
 			return {
 				userAlbumId: row.userAlbum._id,
 				albumId: row.album._id,
-				elo: score?.elo ?? DEFAULT_ELO,
+				elo: score?.elo ?? seedEloFromRating(row.rating),
 				matches: score?.matches ?? 0,
 				title: row.album.name,
 				artist: row.album.artistName,

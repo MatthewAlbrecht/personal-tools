@@ -48,6 +48,20 @@ test("undoLast sets undoneAt", () => {
 	assert.match(body, /bBefore/);
 });
 
+test("undoLast paginates through duels instead of take(50)", () => {
+	const body = sliceExport("undoLast");
+	assert.doesNotMatch(body, /\.take\(50\)/);
+	assert.match(body, /\.paginate\(/);
+	assert.match(body, /continueCursor/);
+	assert.match(body, /isDone/);
+});
+
+test("listDuelTop uses rating prior for unscored albums", () => {
+	const body = sliceExport("listDuelTop");
+	assert.match(body, /seedEloFromRating\(row\.rating\)/);
+	assert.doesNotMatch(body, /score\?\.elo \?\? DEFAULT_ELO/);
+});
+
 test("getPair does not write duel scores", () => {
 	const body = sliceExport("getPair");
 	assert.doesNotMatch(body, /db\.insert/);
