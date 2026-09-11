@@ -26,6 +26,7 @@ import type * as _utils_bandcampAlbum from "../_utils/bandcampAlbum.js";
 import type * as _utils_bandcampAlbumUrl from "../_utils/bandcampAlbumUrl.js";
 import type * as _utils_bandcampReleaseDate from "../_utils/bandcampReleaseDate.js";
 import type * as _utils_concertEventDedupe from "../_utils/concertEventDedupe.js";
+import type * as _utils_duelElo from "../_utils/duelElo.js";
 import type * as _utils_forLaterAlbums from "../_utils/forLaterAlbums.js";
 import type * as _utils_forLaterAlbumsUi from "../_utils/forLaterAlbumsUi.js";
 import type * as _utils_forLaterDurationBuckets from "../_utils/forLaterDurationBuckets.js";
@@ -60,6 +61,7 @@ import type * as _utils_upsertSpotifyAlbumRecord from "../_utils/upsertSpotifyAl
 import type * as _utils_zineCoverTextLayout from "../_utils/zineCoverTextLayout.js";
 import type * as _utils_zineInsideBackLayout from "../_utils/zineInsideBackLayout.js";
 import type * as _utils_zineInsideBackSections from "../_utils/zineInsideBackSections.js";
+import type * as albumDuels from "../albumDuels.js";
 import type * as albumEnrichment from "../albumEnrichment.js";
 import type * as albumEnrichmentTrials from "../albumEnrichmentTrials.js";
 import type * as articles from "../articles.js";
@@ -123,6 +125,7 @@ declare const fullApi: ApiFromModules<{
   "_utils/bandcampAlbumUrl": typeof _utils_bandcampAlbumUrl;
   "_utils/bandcampReleaseDate": typeof _utils_bandcampReleaseDate;
   "_utils/concertEventDedupe": typeof _utils_concertEventDedupe;
+  "_utils/duelElo": typeof _utils_duelElo;
   "_utils/forLaterAlbums": typeof _utils_forLaterAlbums;
   "_utils/forLaterAlbumsUi": typeof _utils_forLaterAlbumsUi;
   "_utils/forLaterDurationBuckets": typeof _utils_forLaterDurationBuckets;
@@ -157,6 +160,7 @@ declare const fullApi: ApiFromModules<{
   "_utils/zineCoverTextLayout": typeof _utils_zineCoverTextLayout;
   "_utils/zineInsideBackLayout": typeof _utils_zineInsideBackLayout;
   "_utils/zineInsideBackSections": typeof _utils_zineInsideBackSections;
+  albumDuels: typeof albumDuels;
   albumEnrichment: typeof albumEnrichment;
   albumEnrichmentTrials: typeof albumEnrichmentTrials;
   articles: typeof articles;
