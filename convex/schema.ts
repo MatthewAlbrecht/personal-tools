@@ -1228,6 +1228,59 @@ export default defineSchema({
 		.index("by_userAlbumId", ["userAlbumId"])
 		.index("by_userAlbumId_ratedAt", ["userAlbumId", "ratedAt"]),
 
+	manualRankingSnapshots: defineTable({
+		userId: v.string(),
+		year: v.number(),
+		weekSundayUtcMs: v.number(),
+		capturedAt: v.optional(v.number()),
+		entryCount: v.number(),
+		status: v.union(v.literal("pending"), v.literal("complete")),
+	}).index("by_user_year_week", ["userId", "year", "weekSundayUtcMs"]),
+
+	manualRankingSnapshotEntries: defineTable({
+		snapshotId: v.id("manualRankingSnapshots"),
+		userId: v.string(),
+		year: v.number(),
+		weekSundayUtcMs: v.number(),
+		userAlbumId: v.id("userAlbums"),
+		albumId: v.id("spotifyAlbums"),
+		ordinal: v.number(),
+		rating: v.number(),
+		position: v.number(),
+	})
+		.index("by_snapshotId", ["snapshotId", "ordinal"])
+		.index("by_user_year_week_ordinal", [
+			"userId",
+			"year",
+			"weekSundayUtcMs",
+			"ordinal",
+		])
+		.index("by_user_album_week", ["userId", "userAlbumId", "weekSundayUtcMs"]),
+
+	albumDuelScores: defineTable({
+		userId: v.string(),
+		userAlbumId: v.id("userAlbums"),
+		albumId: v.id("spotifyAlbums"),
+		elo: v.number(),
+		matches: v.number(),
+		updatedAt: v.number(),
+	})
+		.index("by_user", ["userId"])
+		.index("by_user_userAlbum", ["userId", "userAlbumId"]),
+
+	albumDuels: defineTable({
+		userId: v.string(),
+		aUserAlbumId: v.id("userAlbums"),
+		bUserAlbumId: v.id("userAlbums"),
+		winnerUserAlbumId: v.id("userAlbums"),
+		aBefore: v.number(),
+		bBefore: v.number(),
+		aAfter: v.number(),
+		bAfter: v.number(),
+		createdAt: v.number(),
+		undoneAt: v.optional(v.number()),
+	}).index("by_user_createdAt", ["userId", "createdAt"]),
+
 	spotifySyncLogs: defineTable({
 		userId: v.string(),
 		syncType: v.string(), // "recently_played" | "liked_tracks"
