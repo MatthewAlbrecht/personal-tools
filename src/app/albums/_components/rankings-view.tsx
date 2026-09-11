@@ -1,5 +1,6 @@
 "use client";
 
+import { useQuery } from "convex/react";
 import { ArrowDown, ArrowUp, Disc3, SlidersHorizontal } from "lucide-react";
 import {
 	type ReactNode,
@@ -10,6 +11,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Kbd, KbdGroup } from "~/components/ui/kbd";
 import { Separator } from "~/components/ui/separator";
@@ -28,7 +30,12 @@ import {
 	decadeLabel,
 	frameManualBoard,
 } from "~/lib/ranking-ordinals";
+import { previousSundayUtcMs } from "~/lib/ranking-week";
+import { type WowSignal, wowSignals } from "~/lib/ranking-wow";
+import { cn } from "~/lib/utils";
+import { api } from "../../../../convex/_generated/api";
 import type { RankedAlbumItem } from "../_utils/types";
+import { useAlbums } from "../_context/albums-context";
 import { RankingBoardRow, RankingBoardRowSkeleton } from "./ranking-board-row";
 import {
 	RankingsFilters,
@@ -69,8 +76,31 @@ export function RankingsView({
 	const [filtersOpen, setFiltersOpen] = useState(false);
 	const selectedRowRef = useRef<HTMLDivElement>(null);
 	const savedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const { userId } = useAlbums();
 
 	const yearIsAll = yearFilter === "all";
+	const yearNumber = yearIsAll ? null : Number.parseInt(yearFilter, 10);
+	const wowEnabled =
+		!yearIsAll && userId !== null && !Number.isNaN(yearNumber ?? Number.NaN);
+	const weekSundayUtcMs = useMemo(() => previousSundayUtcMs(Date.now()), []);
+
+	const priorWeekSnapshot = useQuery(
+		api.rankingSnapshots.getCompleteWeek,
+		wowEnabled && yearNumber !== null
+			? { userId, year: yearNumber, weekSundayUtcMs }
+			: "skip",
+	);
+
+	const priorOrdinals = useMemo(() => {
+		if (!priorWeekSnapshot) return null;
+		const map = new Map<string, number>();
+		for (const entry of priorWeekSnapshot.entries) {
+			map.set(entry.userAlbumId, entry.ordinal);
+		}
+		return map;
+	}, [priorWeekSnapshot]);
+
+	const showWowHint = wowEnabled && priorWeekSnapshot === null;
 	const isReorderingEnabled = !yearIsAll && mode === "board";
 
 	const debouncedUpdate = useDebouncedCallback(
@@ -434,6 +464,12 @@ export function RankingsView({
 		</div>
 	);
 
+	const wowHint = showWowHint ? (
+		<p className="mb-3 text-[11px] text-muted-foreground/65 leading-snug">
+			WoW signals appear after Sunday&apos;s snapshot
+		</p>
+	) : null;
+
 	function renderBoardList(): ReactNode {
 		if (visibleAlbums.length === 0) {
 			return (
@@ -463,6 +499,8 @@ export function RankingsView({
 					onSelect={setSelectedIndex}
 					showTierRunner
 					previousAlbum={null}
+					wowEnabled={wowEnabled}
+					priorOrdinals={priorOrdinals}
 				/>
 
 				{framed.edge51to65.length > 0 ? (
@@ -485,6 +523,8 @@ export function RankingsView({
 							onSelect={setSelectedIndex}
 							showTierRunner
 							previousAlbum={framed.top50[framed.top50.length - 1] ?? null}
+							wowEnabled={wowEnabled}
+							priorOrdinals={priorOrdinals}
 						/>
 					</section>
 				) : null}
@@ -514,6 +554,8 @@ export function RankingsView({
 								framed.top50[framed.top50.length - 1] ??
 								null
 							}
+							wowEnabled={wowEnabled}
+							priorOrdinals={priorOrdinals}
 						/>
 					</section>
 				) : null}
@@ -526,6 +568,7 @@ export function RankingsView({
 			<div className="xl:flex xl:max-w-full xl:items-stretch xl:gap-8">
 				<div className="w-full min-w-0 max-w-xl md:max-w-2xl xl:w-2xl xl:shrink-0">
 					{listHeader}
+					{wowHint}
 
 					{mode === "duel" ? (
 						<div className="flex h-72 flex-col items-center justify-center gap-2 rounded-lg border border-border/70 border-dashed bg-muted/20 px-6 text-center">
@@ -566,6 +609,8 @@ function BoardSegment({
 	onSelect,
 	showTierRunner,
 	previousAlbum,
+	wowEnabled,
+	priorOrdinals,
 }: {
 	albums: Array<RankedAlbumItem & { ordinal: number }>;
 	albumIdToIndex: Map<string, number>;
@@ -576,6 +621,8 @@ function BoardSegment({
 	onSelect: (index: number) => void;
 	showTierRunner: boolean;
 	previousAlbum: (RankedAlbumItem & { ordinal: number }) | null;
+	wowEnabled: boolean;
+	priorOrdinals: Map<string, number> | null;
 }): ReactNode {
 	if (albums.length === 0) return null;
 
@@ -645,6 +692,11 @@ function BoardSegment({
 				isSelected={isSelected}
 				showSaved={album._id === savedAlbumId}
 				staggerIndex={album.ordinal <= 10 ? album.ordinal - 1 : undefined}
+				wowSlot={renderWowSlot({
+					album,
+					wowEnabled,
+					priorOrdinals,
+				})}
 				onSelect={
 					isReorderingEnabled && flatIdx !== undefined
 						? () => onSelect(flatIdx)
@@ -655,4 +707,58 @@ function BoardSegment({
 	}
 
 	return <div className="flex flex-col gap-0.5">{nodes}</div>;
+}
+
+function renderWowSlot({
+	album,
+	wowEnabled,
+	priorOrdinals,
+}: {
+	album: RankedAlbumItem & { ordinal: number };
+	wowEnabled: boolean;
+	priorOrdinals: Map<string, number> | null;
+}): ReactNode {
+	if (!wowEnabled || !priorOrdinals) return null;
+
+	const priorOrdinal = priorOrdinals.get(album._id) ?? null;
+	const signal = wowSignals({
+		currentOrdinal: album.ordinal,
+		priorOrdinal,
+		priorInTop50: priorOrdinal !== null && priorOrdinal <= 50,
+	});
+
+	if (!signal) return null;
+	return <WowChip signal={signal} />;
+}
+
+function WowChip({ signal }: { signal: NonNullable<WowSignal> }): ReactNode {
+	if (signal.kind === "new") {
+		return (
+			<Badge
+				className="h-4 rounded-[3px] border-transparent bg-teal-600 px-1 py-0 font-semibold text-[8px] text-white uppercase tracking-[0.14em] hover:bg-teal-600"
+				aria-label="New to Top 50"
+			>
+				New
+			</Badge>
+		);
+	}
+
+	const movedUp = signal.delta > 0;
+	return (
+		<span
+			className={cn(
+				"font-medium text-[10px] tabular-nums",
+				movedUp
+					? "text-teal-700/90 dark:text-teal-400/90"
+					: "text-muted-foreground/65",
+			)}
+			aria-label={
+				movedUp
+					? `Up ${signal.delta} spots since last Sunday`
+					: `Down ${Math.abs(signal.delta)} spots since last Sunday`
+			}
+		>
+			{movedUp ? `↑${signal.delta}` : `↓${Math.abs(signal.delta)}`}
+		</span>
+	);
 }

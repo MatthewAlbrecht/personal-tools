@@ -20,7 +20,6 @@ export const RankingBoardRow = forwardRef<
 		isSelected?: boolean;
 		showSaved?: boolean;
 		onSelect?: () => void;
-		/** Reserved for Task 7 WoW chips — do not wire yet. */
 		wowSlot?: ReactNode;
 		staggerIndex?: number;
 	}
