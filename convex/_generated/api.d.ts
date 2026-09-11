@@ -43,6 +43,8 @@ import type * as _utils_libraryForLaterState from "../_utils/libraryForLaterStat
 import type * as _utils_manualAlbum from "../_utils/manualAlbum.js";
 import type * as _utils_musicFunnelRepeats from "../_utils/musicFunnelRepeats.js";
 import type * as _utils_playlistLyrics from "../_utils/playlistLyrics.js";
+import type * as _utils_rankingOrdinals from "../_utils/rankingOrdinals.js";
+import type * as _utils_rankingWeek from "../_utils/rankingWeek.js";
 import type * as _utils_rateYourMusicTaxonomy from "../_utils/rateYourMusicTaxonomy.js";
 import type * as _utils_robRankingArtistStats from "../_utils/robRankingArtistStats.js";
 import type * as _utils_robRankingGenreStats from "../_utils/robRankingGenreStats.js";
@@ -66,6 +68,7 @@ import type * as birthdays from "../birthdays.js";
 import type * as bookSearch from "../bookSearch.js";
 import type * as concertActions from "../concertActions.js";
 import type * as concerts from "../concerts.js";
+import type * as crons from "../crons.js";
 import type * as folioSociety from "../folioSociety.js";
 import type * as folioSocietyDetails from "../folioSocietyDetails.js";
 import type * as folioSocietyImages from "../folioSocietyImages.js";
@@ -84,6 +87,7 @@ import type * as migrations_initializeRatingHistory from "../migrations/initiali
 import type * as migrations_migrateRatingsToThreeTier from "../migrations/migrateRatingsToThreeTier.js";
 import type * as musicFunnel from "../musicFunnel.js";
 import type * as playlistLyrics from "../playlistLyrics.js";
+import type * as rankingSnapshots from "../rankingSnapshots.js";
 import type * as rateYourMusicScrapes from "../rateYourMusicScrapes.js";
 import type * as robRankings from "../robRankings.js";
 import type * as rooleases from "../rooleases.js";
@@ -136,6 +140,8 @@ declare const fullApi: ApiFromModules<{
   "_utils/manualAlbum": typeof _utils_manualAlbum;
   "_utils/musicFunnelRepeats": typeof _utils_musicFunnelRepeats;
   "_utils/playlistLyrics": typeof _utils_playlistLyrics;
+  "_utils/rankingOrdinals": typeof _utils_rankingOrdinals;
+  "_utils/rankingWeek": typeof _utils_rankingWeek;
   "_utils/rateYourMusicTaxonomy": typeof _utils_rateYourMusicTaxonomy;
   "_utils/robRankingArtistStats": typeof _utils_robRankingArtistStats;
   "_utils/robRankingGenreStats": typeof _utils_robRankingGenreStats;
@@ -159,6 +165,7 @@ declare const fullApi: ApiFromModules<{
   bookSearch: typeof bookSearch;
   concertActions: typeof concertActions;
   concerts: typeof concerts;
+  crons: typeof crons;
   folioSociety: typeof folioSociety;
   folioSocietyDetails: typeof folioSocietyDetails;
   folioSocietyImages: typeof folioSocietyImages;
@@ -177,6 +184,7 @@ declare const fullApi: ApiFromModules<{
   "migrations/migrateRatingsToThreeTier": typeof migrations_migrateRatingsToThreeTier;
   musicFunnel: typeof musicFunnel;
   playlistLyrics: typeof playlistLyrics;
+  rankingSnapshots: typeof rankingSnapshots;
   rateYourMusicScrapes: typeof rateYourMusicScrapes;
   robRankings: typeof robRankings;
   rooleases: typeof rooleases;
