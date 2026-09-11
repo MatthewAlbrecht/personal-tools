@@ -83,10 +83,6 @@ export const RankingBoardRow = forwardRef<
 				isHero &&
 					!isSelected &&
 					"bg-gradient-to-r from-teal-950/[0.06] to-transparent",
-				band === "podium" &&
-					!isSelected &&
-					!showSaved &&
-					"bg-gradient-to-r from-teal-950/[0.03] to-transparent",
 				onSelect && "cursor-pointer hover:bg-muted/40",
 				isSelected && "translate-x-0.5",
 			)}
