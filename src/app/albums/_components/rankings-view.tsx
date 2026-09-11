@@ -14,7 +14,6 @@ import {
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Kbd, KbdGroup } from "~/components/ui/kbd";
-import { Separator } from "~/components/ui/separator";
 import {
 	Sheet,
 	SheetContent,
@@ -22,7 +21,7 @@ import {
 	SheetHeader,
 	SheetTitle,
 } from "~/components/ui/sheet";
-import { TIER_ORDER, type TierName, getTierInfo } from "~/lib/album-tiers";
+import { TIER_ORDER, type TierName, getTierLabel } from "~/lib/album-tiers";
 import { useDebouncedCallback } from "~/lib/hooks/use-debounced-callback";
 import {
 	assignOrdinals,
@@ -406,7 +405,7 @@ export function RankingsView({
 	visibleAlbums.forEach((a, i) => albumIdToIndex.set(a._id, i));
 
 	const listHeader = (
-		<div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+		<div className="mb-2 flex flex-wrap items-center justify-between gap-2">
 			<div className="xl:hidden">
 				<Button
 					type="button"
@@ -466,7 +465,7 @@ export function RankingsView({
 	);
 
 	const wowHint = showWowHint ? (
-		<p className="mb-3 text-[11px] text-muted-foreground/65 leading-snug">
+		<p className="mb-2 text-[11px] text-muted-foreground/65 leading-snug">
 			WoW signals appear after Sunday&apos;s snapshot
 		</p>
 	) : null;
@@ -489,7 +488,7 @@ export function RankingsView({
 		}
 
 		return (
-			<div className="flex flex-col gap-8">
+			<div className="flex flex-col gap-5">
 				<BoardSegment
 					albums={framed.top50}
 					albumIdToIndex={albumIdToIndex}
@@ -498,7 +497,7 @@ export function RankingsView({
 					savedAlbumId={savedAlbumId}
 					isReorderingEnabled={isReorderingEnabled}
 					onSelect={setSelectedIndex}
-					showTierRunner
+					showReleaseYear={yearIsAll}
 					previousAlbum={null}
 					wowEnabled={wowEnabled}
 					priorOrdinals={priorOrdinals}
@@ -522,7 +521,7 @@ export function RankingsView({
 							savedAlbumId={savedAlbumId}
 							isReorderingEnabled={isReorderingEnabled}
 							onSelect={setSelectedIndex}
-							showTierRunner
+							showReleaseYear={yearIsAll}
 							previousAlbum={framed.top50[framed.top50.length - 1] ?? null}
 							wowEnabled={wowEnabled}
 							priorOrdinals={priorOrdinals}
@@ -549,7 +548,7 @@ export function RankingsView({
 							savedAlbumId={savedAlbumId}
 							isReorderingEnabled={isReorderingEnabled}
 							onSelect={setSelectedIndex}
-							showTierRunner
+							showReleaseYear={yearIsAll}
 							previousAlbum={
 								framed.edge51to65[framed.edge51to65.length - 1] ??
 								framed.top50[framed.top50.length - 1] ??
@@ -587,7 +586,11 @@ export function RankingsView({
 
 					{mode === "duel" ? (
 						showDuelArena && userId !== null && yearNumber !== null ? (
-							<RankingsDuelArena userId={userId} year={yearNumber} />
+							<RankingsDuelArena
+								userId={userId}
+								year={yearNumber}
+								albums={visibleAlbums}
+							/>
 						) : (
 							<div className="flex h-72 flex-col items-center justify-center gap-2 rounded-lg border border-border/70 border-dashed bg-slate-50/40 px-6 text-center dark:bg-slate-950/20">
 								<p className="font-[family-name:var(--font-display)] text-lg tracking-tight">
@@ -625,7 +628,7 @@ function BoardSegment({
 	savedAlbumId,
 	isReorderingEnabled,
 	onSelect,
-	showTierRunner,
+	showReleaseYear,
 	previousAlbum,
 	wowEnabled,
 	priorOrdinals,
@@ -637,64 +640,128 @@ function BoardSegment({
 	savedAlbumId: string | null;
 	isReorderingEnabled: boolean;
 	onSelect: (index: number) => void;
-	showTierRunner: boolean;
+	showReleaseYear: boolean;
 	previousAlbum: (RankedAlbumItem & { ordinal: number }) | null;
 	wowEnabled: boolean;
 	priorOrdinals: Map<string, number> | null;
 }): ReactNode {
 	if (albums.length === 0) return null;
 
-	const nodes: ReactNode[] = [];
-	let currentDecade: string | null = null;
-	let prevTier: TierName | null = previousAlbum?.rating
-		? (getTierInfo(previousAlbum.rating)?.tier ?? null)
-		: null;
+	const decadeChunks: Array<{
+		decade: string;
+		albums: Array<RankedAlbumItem & { ordinal: number }>;
+	}> = [];
 
-	for (let i = 0; i < albums.length; i++) {
-		const album = albums[i];
-		if (!album) continue;
-
+	for (const album of albums) {
 		const decade = decadeLabel(album.ordinal);
-		if (decade !== currentDecade) {
-			currentDecade = decade;
-			nodes.push(
-				<div
-					key={`decade-${decade}-${album.ordinal}`}
-					className="-mx-1 sticky top-[calc(3.5rem+var(--albums-sticky-inset,0px))] z-[1] bg-background/90 px-1 pt-3 pb-1 backdrop-blur-sm first:pt-0"
-					style={{
-						animation: `home-rise 420ms ease-out ${Math.min(i * 20, 120)}ms both`,
-					}}
-				>
-					<div className="flex items-end gap-3 border-border/50 border-b pb-1">
-						<h2 className="font-[family-name:var(--font-display)] text-foreground/90 text-lg tracking-tight">
-							{decade}
-						</h2>
-						<Separator className="mb-1.5 flex-1 opacity-40" />
-					</div>
-				</div>,
-			);
+		const last = decadeChunks[decadeChunks.length - 1];
+		if (last && last.decade === decade) {
+			last.albums.push(album);
+		} else {
+			decadeChunks.push({ decade, albums: [album] });
 		}
+	}
 
-		if (showTierRunner && album.rating) {
-			const tier = getTierInfo(album.rating)?.tier ?? null;
-			if (tier && prevTier !== null && tier !== prevTier) {
-				nodes.push(
-					<div
-						key={`tier-${tier}-${album._id}`}
-						className="relative h-0 overflow-visible"
-					>
-						<span className="-top-2 absolute left-10 z-[1] bg-background px-1 font-medium text-[0.6rem] text-muted-foreground/75 uppercase tracking-[0.12em]">
-							from here down: {tier}
-						</span>
-					</div>,
+	return (
+		<div className="flex flex-col gap-5">
+			{decadeChunks.map((chunk, chunkIndex) => {
+				const priorAlbum =
+					chunkIndex === 0
+						? previousAlbum
+						: (decadeChunks[chunkIndex - 1]?.albums.at(-1) ?? null);
+				const incomingSubdivision =
+					priorAlbum && typeof priorAlbum.rating === "number"
+						? priorAlbum.rating
+						: null;
+
+				return (
+					<DecadeGroup
+						key={`${chunk.decade}-${chunk.albums[0]?._id ?? chunkIndex}`}
+						decade={chunk.decade}
+						albums={chunk.albums}
+						incomingSubdivision={incomingSubdivision}
+						albumIdToIndex={albumIdToIndex}
+						selectedIndex={selectedIndex}
+						selectedRowRef={selectedRowRef}
+						savedAlbumId={savedAlbumId}
+						isReorderingEnabled={isReorderingEnabled}
+						onSelect={onSelect}
+						showReleaseYear={showReleaseYear}
+						wowEnabled={wowEnabled}
+						priorOrdinals={priorOrdinals}
+					/>
 				);
-			}
-			if (tier) prevTier = tier;
+			})}
+		</div>
+	);
+}
+
+const STICKY_TOP =
+	"top-[calc(3.5rem+var(--albums-sticky-inset,0px))]" as const;
+
+function SubdivisionStickyRail({ label }: { label: string }): ReactNode {
+	return (
+		<div
+			className={cn(
+				"-mx-1 sticky z-[1] flex h-6 items-center gap-3 bg-background/95 px-1 backdrop-blur-sm",
+				STICKY_TOP,
+			)}
+		>
+			<div className="h-px min-w-0 flex-1 bg-foreground/12" />
+			<span className="max-w-[11rem] shrink-0 truncate bg-background pl-2 font-medium text-[0.65rem] text-muted-foreground/80 leading-none tracking-[0.02em]">
+				{label}
+			</span>
+		</div>
+	);
+}
+
+function DecadeGroup({
+	decade,
+	albums,
+	incomingSubdivision,
+	albumIdToIndex,
+	selectedIndex,
+	selectedRowRef,
+	savedAlbumId,
+	isReorderingEnabled,
+	onSelect,
+	showReleaseYear,
+	wowEnabled,
+	priorOrdinals,
+}: {
+	decade: string;
+	albums: Array<RankedAlbumItem & { ordinal: number }>;
+	incomingSubdivision: number | null;
+	albumIdToIndex: Map<string, number>;
+	selectedIndex: number | null;
+	selectedRowRef: RefObject<HTMLDivElement | null>;
+	savedAlbumId: string | null;
+	isReorderingEnabled: boolean;
+	onSelect: (index: number) => void;
+	showReleaseYear: boolean;
+	wowEnabled: boolean;
+	priorOrdinals: Map<string, number> | null;
+}): ReactNode {
+	const nodes: ReactNode[] = [];
+	let currentSubdivision: number | null = incomingSubdivision;
+
+	for (const album of albums) {
+		const subdivision =
+			typeof album.rating === "number" ? album.rating : null;
+		const subdivisionChanged =
+			subdivision !== null && subdivision !== currentSubdivision;
+
+		let subdivisionLabel: string | undefined;
+		if (subdivisionChanged) {
+			currentSubdivision = subdivision;
+			subdivisionLabel = getTierLabel(subdivision) ?? undefined;
 		}
 
 		const flatIdx = albumIdToIndex.get(album._id);
 		const isSelected = flatIdx === selectedIndex;
-		const releaseYear = album.album?.releaseDate?.substring(0, 4);
+		const releaseYear = showReleaseYear
+			? album.album?.releaseDate?.substring(0, 4)
+			: undefined;
 
 		nodes.push(
 			<RankingBoardRow
@@ -706,7 +773,7 @@ function BoardSegment({
 				imageUrl={album.album?.imageUrl}
 				releaseYear={releaseYear}
 				listenCount={album.listenCount}
-				rating={album.rating}
+				subdivisionLabel={subdivisionLabel}
 				isSelected={isSelected}
 				showSaved={album._id === savedAlbumId}
 				staggerIndex={album.ordinal <= 10 ? album.ordinal - 1 : undefined}
@@ -724,7 +791,11 @@ function BoardSegment({
 		);
 	}
 
-	return <div className="flex flex-col gap-0.5">{nodes}</div>;
+	return (
+		<section className="flex flex-col" aria-label={decade}>
+			{nodes}
+		</section>
+	);
 }
 
 function renderWowSlot({

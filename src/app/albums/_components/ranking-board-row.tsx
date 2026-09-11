@@ -16,7 +16,7 @@ export const RankingBoardRow = forwardRef<
 		imageUrl?: string;
 		releaseYear?: string;
 		listenCount?: number;
-		rating?: number;
+		subdivisionLabel?: string;
 		isSelected?: boolean;
 		showSaved?: boolean;
 		onSelect?: () => void;
@@ -31,7 +31,7 @@ export const RankingBoardRow = forwardRef<
 		imageUrl,
 		releaseYear,
 		listenCount,
-		rating,
+		subdivisionLabel,
 		isSelected = false,
 		showSaved = false,
 		onSelect,
@@ -73,8 +73,9 @@ export const RankingBoardRow = forwardRef<
 					: undefined
 			}
 			className={cn(
-				"group relative flex w-full items-center gap-3 rounded-md text-left outline-none transition-[background-color,box-shadow,transform] duration-200",
+				"group relative flex w-full items-center gap-2.5 rounded-md text-left outline-none transition-[background-color,box-shadow,transform] duration-200",
 				padForBand(band),
+				(ordinal === 1 || ordinal === 5) && "mb-5",
 				isSelected &&
 					!showSaved &&
 					"bg-teal-950/[0.04] ring-2 ring-teal-800/35",
@@ -82,6 +83,10 @@ export const RankingBoardRow = forwardRef<
 				isHero &&
 					!isSelected &&
 					"bg-gradient-to-r from-teal-950/[0.06] to-transparent",
+				band === "podium" &&
+					!isSelected &&
+					!showSaved &&
+					"bg-gradient-to-r from-teal-950/[0.03] to-transparent",
 				onSelect && "cursor-pointer hover:bg-muted/40",
 				isSelected && "translate-x-0.5",
 			)}
@@ -94,8 +99,8 @@ export const RankingBoardRow = forwardRef<
 				)}
 			>
 				{isHero ? (
-					<span className="mb-0.5 text-teal-800/80" aria-hidden>
-						<Crown className="size-3.5" strokeWidth={1.75} />
+					<span className="text-teal-800/80" aria-hidden>
+						<Crown className="size-3" strokeWidth={1.75} />
 					</span>
 				) : null}
 				<span
@@ -104,7 +109,7 @@ export const RankingBoardRow = forwardRef<
 						ordinalType(band),
 						isHero &&
 							"font-[family-name:var(--font-display)] text-teal-950 dark:text-teal-100",
-						band === "podium" &&
+						(band === "podium" || band === "top5") &&
 							"font-[family-name:var(--font-display)] text-foreground/90",
 					)}
 				>
@@ -130,40 +135,33 @@ export const RankingBoardRow = forwardRef<
 					/>
 				) : (
 					<div className="flex size-full items-center justify-center">
-						<Disc3 className="size-4 text-muted-foreground/50" />
+						<Disc3 className="size-3.5 text-muted-foreground/50" />
 					</div>
 				)}
 			</div>
 
 			{/* Title / artist */}
-			<div className="min-w-0 flex-1">
+			<div className="min-w-0 flex-1 pr-2">
 				<p
 					className={cn(
-						"truncate leading-snug",
+						"truncate leading-tight",
 						titleType(band),
-						(band === "hero" || band === "podium") &&
+						(band === "hero" || band === "podium" || band === "top5") &&
 							"font-[family-name:var(--font-display)] tracking-tight",
 					)}
 				>
 					{name}
 				</p>
-				<p
-					className={cn(
-						"truncate text-muted-foreground",
-						band === "hero" || band === "podium" ? "text-sm" : "text-xs",
-					)}
-				>
+				<p className="truncate text-muted-foreground text-xs leading-tight">
 					{artistName}
 				</p>
 			</div>
 
-			{/* Meta + reserved WoW slot */}
-			<div className="flex shrink-0 items-center gap-2">
+			{/* Meta — subdivision opener + listens + year */}
+			<div className="ml-auto flex shrink-0 items-center gap-3 pl-2">
 				{wowSlot ? (
 					<div className="flex min-w-[2.5rem] justify-end">{wowSlot}</div>
-				) : (
-					<div className="min-w-[2.5rem]" aria-hidden />
-				)}
+				) : null}
 
 				<span
 					className={cn(
@@ -177,14 +175,17 @@ export const RankingBoardRow = forwardRef<
 					Saved
 				</span>
 
-				{rating !== undefined ? (
-					<span className="hidden text-[11px] text-muted-foreground/70 tabular-nums sm:inline">
-						{rating}
+				{subdivisionLabel ? (
+					<span
+						className="hidden max-w-[10.5rem] truncate text-right font-medium text-[0.65rem] text-muted-foreground/75 tracking-[0.02em] sm:inline"
+						title={subdivisionLabel}
+					>
+						{subdivisionLabel}
 					</span>
 				) : null}
 
 				{listenCount !== undefined ? (
-					<span className="hidden text-[11px] text-muted-foreground/55 tabular-nums sm:inline">
+					<span className="hidden w-7 text-right text-[11px] text-muted-foreground/55 tabular-nums sm:inline">
 						{listenCount}×
 					</span>
 				) : null}
@@ -224,21 +225,16 @@ function coverForBand(band: OrdinalBand): {
 	className: string;
 	sizes: string;
 } {
+	// Three visual tiers + a whisper bump for #6–10 vs the long tail.
 	switch (band) {
 		case "hero":
-			return { className: "size-20", sizes: "80px" };
-		case "podium":
-			return { className: "size-16", sizes: "64px" };
-		case "top5":
 			return { className: "size-14", sizes: "56px" };
-		case "top10":
-			return { className: "size-12", sizes: "48px" };
-		case "top25":
+		case "podium":
+		case "top5":
 			return { className: "size-11", sizes: "44px" };
-		case "top50":
+		case "top10":
 			return { className: "size-10", sizes: "40px" };
-		case "edge":
-		case "rest":
+		default:
 			return { className: "size-9", sizes: "36px" };
 	}
 }
@@ -246,38 +242,27 @@ function coverForBand(band: OrdinalBand): {
 function padForBand(band: OrdinalBand): string {
 	switch (band) {
 		case "hero":
-			return "px-2 py-3.5";
+			return "px-1.5 py-2";
 		case "podium":
-			return "px-2 py-3";
 		case "top5":
-			return "px-2 py-2.5";
-		case "top10":
-			return "px-2 py-2";
-		case "top25":
 			return "px-1.5 py-1.5";
-		case "top50":
+		default:
 			return "px-1.5 py-1";
-		case "edge":
-		case "rest":
-			return "px-1.5 py-0.5";
 	}
 }
 
 function ordinalWidth(band: OrdinalBand): string {
-	if (band === "hero" || band === "podium") return "w-10";
-	if (band === "top5" || band === "top10") return "w-8";
+	if (band === "hero") return "w-9";
+	if (band === "podium" || band === "top5") return "w-8";
 	return "w-7";
 }
 
 function ordinalType(band: OrdinalBand): string {
 	switch (band) {
 		case "hero":
-			return "text-2xl";
-		case "podium":
 			return "text-xl";
+		case "podium":
 		case "top5":
-			return "text-lg";
-		case "top10":
 			return "text-base";
 		default:
 			return "text-sm";
@@ -287,12 +272,9 @@ function ordinalType(band: OrdinalBand): string {
 function titleType(band: OrdinalBand): string {
 	switch (band) {
 		case "hero":
-			return "font-semibold text-lg";
-		case "podium":
 			return "font-semibold text-base";
+		case "podium":
 		case "top5":
-			return "font-medium text-[0.95rem]";
-		case "top10":
 			return "font-medium text-sm";
 		default:
 			return "font-medium text-sm";

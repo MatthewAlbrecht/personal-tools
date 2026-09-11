@@ -420,6 +420,31 @@ export const undoLast = mutation({
 	},
 });
 
+/** Slim Elo map for client-side pairing — no album joins. */
+export const listScores = query({
+	args: {
+		userId: v.string(),
+	},
+	returns: v.array(
+		v.object({
+			userAlbumId: v.id("userAlbums"),
+			elo: v.number(),
+			matches: v.number(),
+		}),
+	),
+	handler: async (ctx, args) => {
+		const scores = await ctx.db
+			.query("albumDuelScores")
+			.withIndex("by_user", (q) => q.eq("userId", args.userId))
+			.collect();
+		return scores.map((row) => ({
+			userAlbumId: row.userAlbumId,
+			elo: row.elo,
+			matches: row.matches,
+		}));
+	},
+});
+
 export const listDuelTop = query({
 	args: {
 		userId: v.string(),

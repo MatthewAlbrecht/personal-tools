@@ -68,3 +68,11 @@ test("getPair does not write duel scores", () => {
 	assert.doesNotMatch(body, /db\.patch/);
 	assert.doesNotMatch(body, /getOrCreateScore/);
 });
+
+test("listScores is a slim scores-only query", () => {
+	const body = sliceExport("listScores");
+	assert.match(body, /^export const listScores = query/);
+	assert.doesNotMatch(body, /Date\.now/);
+	assert.doesNotMatch(body, /loadRatedAlbumsForYear/);
+	assert.match(body, /albumDuelScores/);
+});
