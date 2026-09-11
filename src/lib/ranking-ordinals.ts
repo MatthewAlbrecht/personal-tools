@@ -12,7 +12,8 @@ export type OrdinalBand =
 	| "top10"
 	| "top25"
 	| "top50"
-	| "edge";
+	| "edge"
+	| "rest";
 
 export type FramedManualBoard<T> = {
 	top50: Array<T & { ordinal: number }>;
@@ -57,6 +58,9 @@ export function decadeLabel(ordinal: number): string {
 	if (ordinal >= 61 && ordinal <= 65) {
 		return "61–65";
 	}
+	if (ordinal >= 66 && ordinal <= 70) {
+		return "66–70";
+	}
 
 	const start = Math.floor((ordinal - 1) / 10) * 10 + 1;
 	const end = start + 9;
@@ -82,5 +86,8 @@ export function bandForOrdinal(ordinal: number): OrdinalBand {
 	if (ordinal <= 50) {
 		return "top50";
 	}
-	return "edge";
+	if (ordinal <= 65) {
+		return "edge";
+	}
+	return "rest";
 }

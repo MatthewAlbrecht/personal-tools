@@ -36,6 +36,11 @@ test("bandForOrdinal and decadeLabel", () => {
 	assert.equal(bandForOrdinal(1), "hero");
 	assert.equal(bandForOrdinal(3), "podium");
 	assert.equal(bandForOrdinal(51), "edge");
+	assert.equal(bandForOrdinal(66), "rest");
+	assert.equal(bandForOrdinal(80), "rest");
 	assert.equal(decadeLabel(1), "1–10");
 	assert.equal(decadeLabel(65), "61–65");
+	assert.equal(decadeLabel(66), "66–70");
+	assert.equal(decadeLabel(71), "71–80");
+	assert.equal(decadeLabel(80), "71–80");
 });
