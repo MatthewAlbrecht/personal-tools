@@ -578,7 +578,7 @@ export function RankingsView({
 					className={cn(
 						"w-full min-w-0 xl:shrink-0",
 						showDuelArena
-							? "max-w-3xl md:max-w-4xl xl:max-w-4xl"
+							? "max-w-3xl md:max-w-4xl xl:max-w-5xl"
 							: "max-w-xl md:max-w-2xl xl:w-2xl",
 					)}
 				>

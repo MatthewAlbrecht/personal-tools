@@ -37,7 +37,6 @@ export function RankingsDuelArena({
 }: {
 	userId: string;
 	year: number;
-	onNeedYear?: () => void;
 }): ReactNode {
 	const [pairSeed, setPairSeed] = useState(() => Date.now());
 	const [settlingWinner, setSettlingWinner] = useState<"a" | "b" | null>(null);
@@ -202,7 +201,7 @@ export function RankingsDuelArena({
 				</div>
 			) : (
 				<div
-					className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5"
+					className="mx-auto grid w-full max-w-3xl grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6"
 					aria-label="Duel matchup"
 				>
 					<DuelCard
@@ -346,24 +345,24 @@ function DuelCard({
 						src={candidate.imageUrl}
 						alt=""
 						fill
-						sizes="(max-width: 640px) 100vw, 320px"
+						sizes="(max-width: 640px) 100vw, 420px"
 						className="object-cover"
 						priority
 					/>
 				) : (
 					<div className="flex size-full items-center justify-center">
-						<Disc3 className="size-16 text-muted-foreground/35" />
+						<Disc3 className="size-20 text-muted-foreground/35" />
 					</div>
 				)}
 				<Badge
 					variant="secondary"
-					className="absolute top-2.5 left-2.5 h-5 rounded-[4px] border-0 bg-background/85 px-1.5 font-semibold text-[10px] text-foreground/80 uppercase tracking-[0.12em] backdrop-blur-sm"
+					className="absolute top-3 left-3 h-5 rounded-[4px] border-0 bg-background/85 px-1.5 font-semibold text-[10px] text-foreground/80 uppercase tracking-[0.12em] backdrop-blur-sm"
 				>
 					{label}
 				</Badge>
 			</div>
-			<div className="flex flex-col gap-1 border-border/40 border-t bg-slate-50/40 px-3.5 py-3 dark:bg-slate-950/30">
-				<p className="font-[family-name:var(--font-display)] text-base leading-snug tracking-tight">
+			<div className="flex flex-col gap-1 border-border/40 border-t bg-slate-50/40 px-4 py-3.5 dark:bg-slate-950/30">
+				<p className="font-[family-name:var(--font-display)] text-lg leading-snug tracking-tight">
 					{title}
 				</p>
 				<p className="truncate text-muted-foreground text-sm">{artist}</p>
@@ -385,7 +384,7 @@ function DuelCard({
 
 function DuelArenaSkeleton(): ReactNode {
 	return (
-		<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5">
+		<div className="mx-auto grid w-full max-w-3xl grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6">
 			<DuelCardSkeleton />
 			<DuelCardSkeleton />
 		</div>
@@ -396,8 +395,8 @@ function DuelCardSkeleton(): ReactNode {
 	return (
 		<div className="overflow-hidden rounded-lg border border-border/60">
 			<Skeleton className="aspect-square w-full rounded-none" />
-			<div className="flex flex-col gap-2 px-3.5 py-3">
-				<Skeleton className="h-5 w-3/4" />
+			<div className="flex flex-col gap-2 px-4 py-3.5">
+				<Skeleton className="h-6 w-3/4" />
 				<Skeleton className="h-4 w-1/2" />
 				<Skeleton className="mt-1 h-3 w-16" />
 			</div>
