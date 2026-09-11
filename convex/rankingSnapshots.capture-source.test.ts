@@ -18,11 +18,11 @@ function exportBody(exportName: string, nextExport?: string): string {
 	return source.slice(start, end);
 }
 
-test("captureUserWeek skips when status is complete", () => {
+test("captureUserWeek always writes via captureYearForUser", () => {
 	const body = exportBody("captureUserWeek", "seedUserWeek");
-	assert.match(source, /status === "complete"/);
-	assert.match(source, /return "skipped"/);
 	assert.match(body, /captureYearForUser/);
+	assert.doesNotMatch(source, /status === "complete"/);
+	assert.doesNotMatch(source, /return "skipped"/);
 });
 
 test("orchestrateSunday fans out via scheduler per user", () => {
@@ -38,9 +38,10 @@ test("getCompleteWeek has no Date.now", () => {
 	assert.match(body, /status !== "complete"/);
 });
 
-test("capture takes Top 65 and uses pending|complete status", () => {
-	assert.match(source, /const TOP_N = 65/);
-	assert.match(source, /\.slice\(0, TOP_N\)/);
+test("capture writes full ranked year and uses pending|complete status", () => {
+	assert.doesNotMatch(source, /const TOP_N = 65/);
+	assert.doesNotMatch(source, /\.slice\(0, TOP_N\)/);
+	assert.match(source, /\[\.\.\.args\.albums\]\.sort\(compareManualRank\)/);
 	assert.match(source, /v\.literal\("pending"\)/);
 	assert.match(source, /v\.literal\("complete"\)/);
 	assert.match(source, /status: "pending"/);

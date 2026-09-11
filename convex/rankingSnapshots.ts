@@ -6,7 +6,6 @@ import { internalMutation, query } from "./_generated/server";
 import { compareManualRank } from "./_utils/rankingOrdinals";
 import { previousSundayUtcMs } from "./_utils/rankingWeek";
 
-const TOP_N = 65;
 const RETENTION_SUNDAYS = 26;
 
 const snapshotStatusValidator = v.union(
@@ -93,7 +92,7 @@ async function captureYearForUser(
 		weekSundayUtcMs: number;
 		albums: RatedYearAlbum[];
 	},
-): Promise<"processed" | "skipped"> {
+): Promise<"processed"> {
 	const existing = await ctx.db
 		.query("manualRankingSnapshots")
 		.withIndex("by_user_year_week", (q) =>
@@ -103,10 +102,6 @@ async function captureYearForUser(
 				.eq("weekSundayUtcMs", args.weekSundayUtcMs),
 		)
 		.unique();
-
-	if (existing?.status === "complete") {
-		return "skipped";
-	}
 
 	let snapshotId: Id<"manualRankingSnapshots">;
 	if (existing) {
@@ -126,11 +121,10 @@ async function captureYearForUser(
 		});
 	}
 
-	const sorted = [...args.albums].sort(compareManualRank);
-	const top = sorted.slice(0, TOP_N);
+	const ranked = [...args.albums].sort(compareManualRank);
 
-	for (let i = 0; i < top.length; i++) {
-		const album = top[i];
+	for (let i = 0; i < ranked.length; i++) {
+		const album = ranked[i];
 		if (!album) continue;
 		await ctx.db.insert("manualRankingSnapshotEntries", {
 			snapshotId,
@@ -147,7 +141,7 @@ async function captureYearForUser(
 
 	await ctx.db.patch(snapshotId, {
 		status: "complete",
-		entryCount: top.length,
+		entryCount: ranked.length,
 		capturedAt: Date.now(),
 	});
 
@@ -229,23 +223,18 @@ export const captureUserWeek = internalMutation({
 		}
 
 		let yearsProcessed = 0;
-		let yearsSkipped = 0;
 
 		for (const [year, albums] of byYear) {
-			const result = await captureYearForUser(ctx, {
+			await captureYearForUser(ctx, {
 				userId: args.userId,
 				year,
 				weekSundayUtcMs: args.weekSundayUtcMs,
 				albums,
 			});
-			if (result === "skipped") {
-				yearsSkipped += 1;
-			} else {
-				yearsProcessed += 1;
-			}
+			yearsProcessed += 1;
 		}
 
-		return { yearsProcessed, yearsSkipped };
+		return { yearsProcessed, yearsSkipped: 0 };
 	},
 });
 
