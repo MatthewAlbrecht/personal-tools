@@ -34,9 +34,10 @@ import { previousSundayUtcMs } from "~/lib/ranking-week";
 import { type WowSignal, wowSignals } from "~/lib/ranking-wow";
 import { cn } from "~/lib/utils";
 import { api } from "../../../../convex/_generated/api";
-import type { RankedAlbumItem } from "../_utils/types";
 import { useAlbums } from "../_context/albums-context";
+import type { RankedAlbumItem } from "../_utils/types";
 import { RankingBoardRow, RankingBoardRowSkeleton } from "./ranking-board-row";
+import { RankingsDuelArena } from "./rankings-duel-arena";
 import {
 	RankingsFilters,
 	type RankingsFrame,
@@ -563,23 +564,40 @@ export function RankingsView({
 		);
 	}
 
+	const showDuelArena =
+		mode === "duel" &&
+		!yearIsAll &&
+		yearNumber !== null &&
+		!Number.isNaN(yearNumber) &&
+		userId !== null;
+
 	return (
 		<>
 			<div className="xl:flex xl:max-w-full xl:items-stretch xl:gap-8">
-				<div className="w-full min-w-0 max-w-xl md:max-w-2xl xl:w-2xl xl:shrink-0">
+				<div
+					className={cn(
+						"w-full min-w-0 xl:shrink-0",
+						showDuelArena
+							? "max-w-3xl md:max-w-4xl xl:max-w-4xl"
+							: "max-w-xl md:max-w-2xl xl:w-2xl",
+					)}
+				>
 					{listHeader}
-					{wowHint}
+					{mode === "board" ? wowHint : null}
 
 					{mode === "duel" ? (
-						<div className="flex h-72 flex-col items-center justify-center gap-2 rounded-lg border border-border/70 border-dashed bg-muted/20 px-6 text-center">
-							<p className="font-[family-name:var(--font-display)] text-lg tracking-tight">
-								Duel mode — next
-							</p>
-							<p className="max-w-xs text-muted-foreground text-sm leading-snug">
-								Pairwise sharpening lands in a later pass. Stay on Board to
-								reorder this year.
-							</p>
-						</div>
+						showDuelArena && userId !== null && yearNumber !== null ? (
+							<RankingsDuelArena userId={userId} year={yearNumber} />
+						) : (
+							<div className="flex h-72 flex-col items-center justify-center gap-2 rounded-lg border border-border/70 border-dashed bg-slate-50/40 px-6 text-center dark:bg-slate-950/20">
+								<p className="font-[family-name:var(--font-display)] text-lg tracking-tight">
+									Pick a year to duel
+								</p>
+								<p className="max-w-xs text-muted-foreground text-sm leading-snug">
+									Reorder, duel, and week-over-week need a concrete year.
+								</p>
+							</div>
+						)
 					) : (
 						renderBoardList()
 					)}
