@@ -9,6 +9,7 @@ import {
 	Download,
 	MoreHorizontal,
 	Plus,
+	SlidersHorizontal,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -25,6 +26,7 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
+import { badgeVariants } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
 	DropdownMenu,
@@ -33,7 +35,15 @@ import {
 	DropdownMenuLabel,
 	DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
+import {
+	Sheet,
+	SheetContent,
+	SheetDescription,
+	SheetHeader,
+	SheetTitle,
+} from "~/components/ui/sheet";
 import { useDebouncedState } from "~/lib/hooks/use-debounced-state";
+import { cn } from "~/lib/utils";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import type {
@@ -46,6 +56,7 @@ import { formatRelativeTime } from "../_utils/formatters";
 import type { AlbumLibraryRowData } from "../_utils/types";
 import { AddAlbumToLibraryDialog } from "./add-album-to-library-dialog";
 import { AlbumRymAssociateDrawer } from "./album-rym-associate-drawer";
+import { LibraryFilters } from "./library-filters";
 
 type CopiedField = "album" | "artist";
 type AlbumLibrarySort = "recent" | "artist";
@@ -168,11 +179,16 @@ export function AllAlbumsView({
 	const hasNonDefaultFilters =
 		searchInput.trim() !== DEFAULT_ALBUM_LIBRARY_FILTERS.searchQuery ||
 		!albumLibraryFiltersAreDefault(filterState);
+	const activeFilterCount = countAlbumLibraryActiveFilters(
+		filterState,
+		searchInput,
+	);
 	const [rymAssociateAlbum, setRymAssociateAlbum] =
 		useState<AlbumLibraryRowData | null>(null);
 	const [optimisticRymLinks, setOptimisticRymLinks] = useState(
 		() => new Map<string, OptimisticRymLink>(),
 	);
+	const [filtersOpen, setFiltersOpen] = useState(false);
 	const [addAlbumDialogOpen, setAddAlbumDialogOpen] = useState(false);
 	const [backfillDialogOpen, setBackfillDialogOpen] = useState(false);
 	const [isBackfillingLibraryIndex, setIsBackfillingLibraryIndex] =
@@ -428,233 +444,164 @@ export function AllAlbumsView({
 		);
 	}
 
+	const filterControls = (
+		<LibraryFilters
+			searchInput={searchInput}
+			onSearchInputChange={setSearchInput}
+			yearFilter={yearFilter}
+			availableYears={availableYearOptions}
+			onYearFilterChange={(nextYear) =>
+				updateFilterQuery({ yearFilter: nextYear })
+			}
+			albumTypeFilter={albumTypeFilter}
+			onAlbumTypeFilterChange={(nextType) =>
+				updateFilterQuery({ albumTypeFilter: nextType })
+			}
+			listenFilter={listenFilter}
+			onListenFilterChange={(nextListen) =>
+				updateFilterQuery({ listenFilter: nextListen })
+			}
+			rymFilter={rymFilter}
+			onRymFilterChange={(nextRym) => updateFilterQuery({ rymFilter: nextRym })}
+			robRankingFilter={robRankingFilter}
+			onRobRankingFilterChange={(nextRob) =>
+				updateFilterQuery({ robRankingFilter: nextRob })
+			}
+			sortBy={sortBy}
+			onSortByChange={(nextSort) => updateFilterQuery({ sortBy: nextSort })}
+			canClear={hasNonDefaultFilters}
+			onClear={clearFilters}
+		/>
+	);
+
 	return (
-		<div className="space-y-4">
-			<div className="flex items-center justify-end gap-2">
-				{userId ? (
-					<Button
-						type="button"
-						variant="outline"
-						size="sm"
-						onClick={() => setAddAlbumDialogOpen(true)}
-					>
-						<Plus className="mr-1.5 h-4 w-4" />
-						Add album
-					</Button>
+		<div className="xl:flex xl:max-w-full xl:items-stretch xl:gap-8">
+			<div className="w-full min-w-0 max-w-xl md:max-w-2xl xl:w-2xl xl:shrink-0">
+				<div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+					<div className="xl:hidden">
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							aria-expanded={filtersOpen}
+							aria-controls="library-filters-sheet"
+							onClick={() => setFiltersOpen(true)}
+						>
+							<SlidersHorizontal className="h-4 w-4" />
+							Filters
+							{hasNonDefaultFilters ? (
+								<span
+									className={cn(
+										badgeVariants(),
+										"fade-in-0 zoom-in-90 ml-1 animate-in px-1.5 text-[0.65rem] duration-200",
+									)}
+								>
+									{activeFilterCount}
+								</span>
+							) : null}
+						</Button>
+					</div>
+					<div className="flex min-w-0 flex-1 items-center justify-end gap-2">
+						<span className="mr-auto text-muted-foreground text-xs tabular-nums">
+							{albums.length} loaded
+						</span>
+						{userId ? (
+							<Button
+								type="button"
+								variant="outline"
+								size="sm"
+								onClick={() => setAddAlbumDialogOpen(true)}
+							>
+								<Plus className="mr-1.5 h-4 w-4" />
+								Add album
+							</Button>
+						) : null}
+						<AlbumLibraryAdminMenu
+							userId={userId}
+							isRunningLibraryAction={isRunningLibraryAction}
+							isBackfillingLibraryIndex={isBackfillingLibraryIndex}
+							isBackfillingTitleKeys={isBackfillingTitleKeys}
+							isBackfillingRymLinks={isBackfillingRymLinks}
+							isBackfillingReleaseYearSortKey={
+								isBackfillingReleaseYearSortKey
+							}
+							onBuildLibraryIndex={() => void handleBackfillLibraryIndex()}
+							onBackfillTitleKeys={() => void handleBackfillTitleKeys()}
+							onBackfillReleaseYearSortKeys={() =>
+								void handleBackfillReleaseYearSortKeys()
+							}
+							onBackfillRymLinks={() => setBackfillDialogOpen(true)}
+						/>
+					</div>
+				</div>
+
+				<div className="space-y-1">
+					{isLoading && albums.length === 0 ? (
+						<AlbumLibraryListLoadingState />
+					) : albums.length === 0 ? (
+						<AllAlbumsEmptyState
+							hasFilters={hasNonDefaultFilters}
+							canLoadMore={canLoadMore}
+							isLoadingMore={isLoadingMore}
+							isBuildingLibraryIndex={isBackfillingLibraryIndex}
+							canBuildLibraryIndex={Boolean(userId)}
+							onBuildLibraryIndex={() => void handleBackfillLibraryIndex()}
+							onLoadMore={onLoadMore}
+						/>
+					) : (
+						albums.map((album) => {
+							const displayAlbum = applyOptimisticRymLink(album);
+							return (
+								<AlbumCardRow
+									key={album._id}
+									album={displayAlbum}
+									onAddListen={() => onAddListen(album)}
+									onRate={() => onRateAlbum(album)}
+									onLinkRym={() => setRymAssociateAlbum(album)}
+									onSetRymNotOnSite={(notOnSite) =>
+										handleSetRymNotOnSite(album, notOnSite)
+									}
+								/>
+							);
+						})
+					)}
+				</div>
+				{albums.length > 0 && (canLoadMore || isLoadingMore) ? (
+					<div className="flex justify-center pt-2">
+						<LoadMoreAlbumsButton
+							isLoadingMore={isLoadingMore}
+							onLoadMore={onLoadMore}
+						/>
+					</div>
 				) : null}
-				<AlbumLibraryAdminMenu
-					userId={userId}
-					isRunningLibraryAction={isRunningLibraryAction}
-					isBackfillingLibraryIndex={isBackfillingLibraryIndex}
-					isBackfillingTitleKeys={isBackfillingTitleKeys}
-					isBackfillingRymLinks={isBackfillingRymLinks}
-					isBackfillingReleaseYearSortKey={isBackfillingReleaseYearSortKey}
-					onBuildLibraryIndex={() => void handleBackfillLibraryIndex()}
-					onBackfillTitleKeys={() => void handleBackfillTitleKeys()}
-					onBackfillReleaseYearSortKeys={() =>
-						void handleBackfillReleaseYearSortKeys()
-					}
-					onBackfillRymLinks={() => setBackfillDialogOpen(true)}
-				/>
 			</div>
 
-			{/* Filters */}
-			<div className="space-y-3">
-				{/* Search Input */}
-				<div>
-					<input
-						type="text"
-						placeholder="Search albums by name or artist..."
-						value={searchInput}
-						onChange={(e) => setSearchInput(e.target.value)}
-						className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-					/>
-				</div>
-
-				{/* Filter Controls */}
-				<div className="flex flex-wrap items-center gap-4">
-					{/* Release Year Filter */}
-					<div className="flex items-center gap-2">
-						<label htmlFor="year-filter" className="font-medium text-sm">
-							Year:
-						</label>
-						<select
-							id="year-filter"
-							value={yearFilter}
-							onChange={(e) =>
-								updateFilterQuery({ yearFilter: e.target.value })
-							}
-							className="rounded-md border bg-background px-2 py-1 text-sm"
-						>
-							<option value="all">All Years</option>
-							{availableYearOptions.map((year) => (
-								<option key={year} value={year.toString()}>
-									{year}
-								</option>
-							))}
-						</select>
-					</div>
-
-					{/* Album Type Filter */}
-					<div className="flex items-center gap-2">
-						<label htmlFor="album-type-filter" className="font-medium text-sm">
-							Type:
-						</label>
-						<select
-							id="album-type-filter"
-							value={albumTypeFilter}
-							onChange={(e) =>
-								updateFilterQuery({
-									albumTypeFilter: e.target.value as AlbumLibraryAlbumType,
-								})
-							}
-							className="rounded-md border bg-background px-2 py-1 text-sm"
-						>
-							<option value="all">All Types</option>
-							<option value="album">Albums</option>
-							<option value="single">Singles</option>
-						</select>
-					</div>
-
-					{/* Listen Status Filter */}
-					<div className="flex items-center gap-2">
-						<label htmlFor="listen-filter" className="font-medium text-sm">
-							Listens:
-						</label>
-						<select
-							id="listen-filter"
-							value={listenFilter}
-							onChange={(e) =>
-								updateFilterQuery({
-									listenFilter: e.target.value as AlbumLibraryListenStatus,
-								})
-							}
-							className="rounded-md border bg-background px-2 py-1 text-sm"
-						>
-							<option value="all">All Albums</option>
-							<option value="listened">Listened</option>
-							<option value="unlistened">Unlistened</option>
-						</select>
-					</div>
-
-					{/* RYM Status Filter */}
-					<div className="flex items-center gap-2">
-						<label htmlFor="rym-filter" className="font-medium text-sm">
-							RYM:
-						</label>
-						<select
-							id="rym-filter"
-							value={rymFilter}
-							onChange={(e) =>
-								updateFilterQuery({
-									rymFilter: e.target.value as AlbumLibraryRymStatus,
-								})
-							}
-							className="rounded-md border bg-background px-2 py-1 text-sm"
-						>
-							<option value="all">All</option>
-							<option value="linked">Linked</option>
-							<option value="unlinked">Unlinked</option>
-						</select>
-					</div>
-
-					{/* Rob Ranking Filter */}
-					<div className="flex items-center gap-2">
-						<label htmlFor="rob-ranking-filter" className="font-medium text-sm">
-							Rob:
-						</label>
-						<select
-							id="rob-ranking-filter"
-							value={robRankingFilter}
-							onChange={(e) =>
-								updateFilterQuery({
-									robRankingFilter: e.target
-										.value as AlbumLibraryRobRankingStatus,
-								})
-							}
-							className="rounded-md border bg-background px-2 py-1 text-sm"
-						>
-							<option value="all">All</option>
-							<option value="appears">Appears</option>
-							<option value="not_appears">Does not appear</option>
-						</select>
-					</div>
-
-					{/* Sort Control */}
-					<div className="flex items-center gap-2">
-						<label htmlFor="album-sort" className="font-medium text-sm">
-							Sort:
-						</label>
-						<select
-							id="album-sort"
-							value={sortBy}
-							onChange={(e) =>
-								updateFilterQuery({
-									sortBy: e.target.value as AlbumLibrarySort,
-								})
-							}
-							className="rounded-md border bg-background px-2 py-1 text-sm"
-						>
-							<option value="recent">Recent</option>
-							<option value="artist">Artist name</option>
-						</select>
-					</div>
-
-					<p className="text-muted-foreground text-sm">
-						Showing {albums.length} loaded
+			<aside className="hidden w-48 shrink-0 xl:block">
+				<div className="max-h-[calc(100vh-3.5rem-var(--albums-sticky-inset,0px))] overflow-y-auto overscroll-contain border-border/40 border-l py-0.5 pl-5 xl:sticky xl:top-[calc(3.5rem+var(--albums-sticky-inset,0px))] xl:z-10">
+					<p className="mb-4 font-semibold text-[0.65rem] text-foreground/70 uppercase tracking-[0.16em]">
+						Filters
 					</p>
-					<Button
-						type="button"
-						variant="outline"
-						size="sm"
-						disabled={!hasNonDefaultFilters}
-						onClick={clearFilters}
-					>
-						Clear filters
-					</Button>
+					{filterControls}
 				</div>
-			</div>
+			</aside>
 
-			{/* Albums List */}
-			<div className="space-y-1">
-				{isLoading && albums.length === 0 ? (
-					<AlbumLibraryListLoadingState />
-				) : albums.length === 0 ? (
-					<AllAlbumsEmptyState
-						hasFilters={hasNonDefaultFilters}
-						canLoadMore={canLoadMore}
-						isLoadingMore={isLoadingMore}
-						isBuildingLibraryIndex={isBackfillingLibraryIndex}
-						canBuildLibraryIndex={Boolean(userId)}
-						onBuildLibraryIndex={() => void handleBackfillLibraryIndex()}
-						onLoadMore={onLoadMore}
-					/>
-				) : (
-					albums.map((album) => {
-						const displayAlbum = applyOptimisticRymLink(album);
-						return (
-							<AlbumCardRow
-								key={album._id}
-								album={displayAlbum}
-								onAddListen={() => onAddListen(album)}
-								onRate={() => onRateAlbum(album)}
-								onLinkRym={() => setRymAssociateAlbum(album)}
-								onSetRymNotOnSite={(notOnSite) =>
-									handleSetRymNotOnSite(album, notOnSite)
-								}
-							/>
-						);
-					})
-				)}
-			</div>
-			{albums.length > 0 && (canLoadMore || isLoadingMore) ? (
-				<div className="flex justify-center pt-2">
-					<LoadMoreAlbumsButton
-						isLoadingMore={isLoadingMore}
-						onLoadMore={onLoadMore}
-					/>
-				</div>
-			) : null}
+			<Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
+				<SheetContent
+					id="library-filters-sheet"
+					side="right"
+					className="w-[17rem] gap-0"
+				>
+					<SheetHeader>
+						<SheetTitle className="font-[family-name:var(--font-display)] text-lg">
+							Filters
+						</SheetTitle>
+						<SheetDescription>
+							Search and narrow your catalog.
+						</SheetDescription>
+					</SheetHeader>
+					<div className="flex flex-col gap-4 px-4 pb-6">{filterControls}</div>
+				</SheetContent>
+			</Sheet>
 			<AlbumRymAssociateDrawer
 				album={rymAssociateAlbum}
 				open={rymAssociateAlbum !== null}
@@ -1247,6 +1194,26 @@ function albumLibraryFiltersAreDefault(
 		filters.albumTypeFilter === DEFAULT_ALBUM_LIBRARY_FILTERS.albumTypeFilter &&
 		filters.yearFilter === DEFAULT_ALBUM_LIBRARY_FILTERS.yearFilter &&
 		filters.sortBy === DEFAULT_ALBUM_LIBRARY_FILTERS.sortBy
+	);
+}
+
+function countAlbumLibraryActiveFilters(
+	filters: AlbumLibraryFilterState,
+	searchInput: string,
+): number {
+	return (
+		Number(searchInput.trim() !== DEFAULT_ALBUM_LIBRARY_FILTERS.searchQuery) +
+		Number(filters.yearFilter !== DEFAULT_ALBUM_LIBRARY_FILTERS.yearFilter) +
+		Number(
+			filters.albumTypeFilter !== DEFAULT_ALBUM_LIBRARY_FILTERS.albumTypeFilter,
+		) +
+		Number(filters.listenFilter !== DEFAULT_ALBUM_LIBRARY_FILTERS.listenFilter) +
+		Number(filters.rymFilter !== DEFAULT_ALBUM_LIBRARY_FILTERS.rymFilter) +
+		Number(
+			filters.robRankingFilter !==
+				DEFAULT_ALBUM_LIBRARY_FILTERS.robRankingFilter,
+		) +
+		Number(filters.sortBy !== DEFAULT_ALBUM_LIBRARY_FILTERS.sortBy)
 	);
 }
 
