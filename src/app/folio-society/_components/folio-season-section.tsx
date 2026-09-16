@@ -32,7 +32,11 @@ export function FolioSeasonSection({
 		productId: number,
 		status: "owned" | "want" | null,
 	) => void;
-	marksFor: (productId: number, fallback: FolioCatalogCard) => {
+	marksFor: (
+		productId: number,
+		fallback: FolioCatalogCard,
+		family?: FolioFamilyEdition[],
+	) => {
 		owned: boolean;
 		want: boolean;
 	};
@@ -113,13 +117,14 @@ export function FolioSeasonSection({
 					if (insertAfter !== index || !openCard) {
 						return [tile];
 					}
-					const selectedMarks = marksFor(selectedId, openCard);
+					const selectedMarks = marksFor(
+						selectedId,
+						openCard,
+						family as FolioFamilyEdition[] | undefined,
+					);
 					return [
 						tile,
-						<div
-							key={`${openCard.titleKey}-detail`}
-							className="col-span-full overflow-hidden transition-[max-height] duration-[240ms] ease-out"
-						>
+						<FolioExpandRow key={`${openCard.titleKey}-detail`}>
 							<FolioBookDetail
 								card={openCard}
 								now={now}
@@ -135,7 +140,7 @@ export function FolioSeasonSection({
 								owned={selectedMarks.owned}
 								want={selectedMarks.want}
 							/>
-						</div>,
+						</FolioExpandRow>,
 					];
 				})}
 			</div>
@@ -154,6 +159,30 @@ export function FolioSeasonSectionSkeleton(): ReactNode {
 				))}
 			</div>
 		</section>
+	);
+}
+
+function FolioExpandRow({
+	children,
+}: {
+	children: ReactNode;
+}): ReactNode {
+	const [open, setOpen] = useState(false);
+
+	useEffect(() => {
+		const frame = requestAnimationFrame(() => {
+			setOpen(true);
+		});
+		return () => cancelAnimationFrame(frame);
+	}, []);
+
+	return (
+		<div
+			className="col-span-full grid transition-[grid-template-rows] duration-[240ms] ease-out"
+			style={{ gridTemplateRows: open ? "1fr" : "0fr" }}
+		>
+			<div className="min-h-0 overflow-hidden">{children}</div>
+		</div>
 	);
 }
 

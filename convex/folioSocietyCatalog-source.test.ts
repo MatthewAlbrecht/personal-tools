@@ -78,6 +78,14 @@ test("public catalog functions declare returns validators", () => {
 	);
 	assert.match(
 		source,
+		/export const getFamilyByTitleKey = query\(\{[\s\S]*?owned:\s*v\.boolean\(\)[\s\S]*?want:\s*v\.boolean\(\)/,
+	);
+	assert.match(
+		source,
+		/export const getFamilyByTitleKey = query\(\{[\s\S]*?loadOwnershipForProducts/,
+	);
+	assert.match(
+		source,
 		/export const setOwnership = mutation\(\{[\s\S]*?returns:\s*v\.null\(\)/,
 	);
 });

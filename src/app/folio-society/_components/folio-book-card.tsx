@@ -1,7 +1,7 @@
 "use client";
 
 import { Bookmark, Check } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
@@ -34,6 +34,8 @@ export type FolioFamilyEdition = {
 	heroImageUrl: string | null;
 	isComingSoon: boolean;
 	authorName: string | null;
+	owned: boolean;
+	want: boolean;
 };
 
 export type FolioProductImage = {
@@ -190,9 +192,15 @@ export function FolioBookDetail({
 	);
 	const thumbs = sortImages(images ?? []);
 	const [showAll, setShowAll] = useState(false);
+	const [coverUrl, setCoverUrl] = useState<string | null>(null);
 	const visibleThumbs = showAll ? thumbs : thumbs.slice(0, 4);
-	const cover = selected.heroImageUrl ?? thumbs[0]?.blobUrl ?? null;
+	const cover =
+		coverUrl ?? selected.heroImageUrl ?? thumbs[0]?.blobUrl ?? null;
 	const initial = selected.name.trim().charAt(0).toUpperCase() || "F";
+
+	useEffect(() => {
+		setCoverUrl(null);
+	}, [selectedProductId]);
 
 	return (
 		<div className="grid gap-6 py-4 md:grid-cols-[minmax(0,16rem)_minmax(0,1fr)]">
@@ -214,7 +222,13 @@ export function FolioBookDetail({
 							<button
 								key={image._id}
 								type="button"
-								className="h-14 w-11 overflow-hidden border border-stone-400/40"
+								onClick={() => setCoverUrl(image.blobUrl)}
+								className={cn(
+									"h-14 w-11 overflow-hidden border",
+									cover === image.blobUrl
+										? "border-stone-600"
+										: "border-stone-400/40",
+								)}
 							>
 								<img
 									src={image.blobUrl}
@@ -408,6 +422,8 @@ function familyMemberFromCard(card: FolioCatalogCard): FolioFamilyEdition {
 		heroImageUrl: card.heroImageUrl,
 		isComingSoon: card.isComingSoon,
 		authorName: card.authorName,
+		owned: card.owned,
+		want: card.want,
 	};
 }
 

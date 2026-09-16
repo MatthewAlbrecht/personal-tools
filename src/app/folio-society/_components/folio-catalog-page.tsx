@@ -27,7 +27,10 @@ import {
 	parseFolioFilters,
 	serializeFolioFilters,
 } from "../_utils/filter-state";
-import type { FolioCatalogCard } from "./folio-book-card";
+import type {
+	FolioCatalogCard,
+	FolioFamilyEdition,
+} from "./folio-book-card";
 import { FolioFilters as FolioFiltersControls } from "./folio-filters";
 import { FolioSeasonSection, FolioSeasonSectionSkeleton } from "./folio-season-section";
 import { FolioSettingsSheet } from "./folio-settings-sheet";
@@ -85,6 +88,7 @@ export function FolioCatalogPage(): ReactNode {
 	>({});
 	const setOwnership = useMutation(api.folioSocietyCatalog.setOwnership);
 	const sentinelRef = useRef<HTMLDivElement | null>(null);
+	const lastFamilyRef = useRef<FolioFamilyEdition[] | undefined>(undefined);
 
 	useEffect(() => {
 		setSearchInput(filters.search ?? "");
@@ -188,13 +192,26 @@ export function FolioCatalogPage(): ReactNode {
 	function marksFor(
 		productId: number,
 		fallback: FolioCatalogCard,
+		family?: FolioFamilyEdition[],
 	): OwnershipMarks {
-		return (
-			optimisticMarks[productId] ?? {
-				owned: fallback.productId === productId ? fallback.owned : false,
-				want: fallback.productId === productId ? fallback.want : false,
-			}
-		);
+		if (family) {
+			lastFamilyRef.current = family;
+		}
+		const optimistic = optimisticMarks[productId];
+		if (optimistic) {
+			return optimistic;
+		}
+		if (productId !== fallback.productId) {
+			const row = family?.find((item) => item.productId === productId);
+			return {
+				owned: row?.owned ?? false,
+				want: row?.want ?? false,
+			};
+		}
+		return {
+			owned: fallback.owned,
+			want: fallback.want,
+		};
 	}
 
 	async function handleSetOwnership(
@@ -205,10 +222,28 @@ export function FolioCatalogPage(): ReactNode {
 		const card = seasons
 			.flatMap((season) => season.cards)
 			.find((row) => row.productId === productId);
-		const prior: OwnershipMarks = previous ?? {
-			owned: card?.owned ?? false,
-			want: card?.want ?? false,
-		};
+		const prior: OwnershipMarks =
+			previous ??
+			marksFor(
+				productId,
+				card ?? {
+					titleKey: "",
+					productId: -1,
+					name: "",
+					authorName: null,
+					url: "",
+					price: null,
+					catalogLaunchTime: 0,
+					edition: "standard",
+					isComingSoon: false,
+					heroImageUrl: null,
+					familyHasLimited: false,
+					familyHasSigned: false,
+					owned: false,
+					want: false,
+				},
+				lastFamilyRef.current,
+			);
 		const next: OwnershipMarks =
 			status === "owned"
 				? { owned: true, want: false }

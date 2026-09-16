@@ -229,6 +229,8 @@ export const getFamilyByTitleKey = query({
 			heroImageUrl: v.union(v.string(), v.null()),
 			isComingSoon: v.boolean(),
 			authorName: v.union(v.string(), v.null()),
+			owned: v.boolean(),
+			want: v.boolean(),
 		}),
 	),
 	handler: async (ctx, args) => {
@@ -237,17 +239,27 @@ export const getFamilyByTitleKey = query({
 			.query("folioSocietyReleases")
 			.withIndex("by_titleKey", (q) => q.eq("titleKey", args.titleKey))
 			.take(32);
-		return siblings.map((release) => ({
-			productId: release.id,
-			name: release.name,
-			edition: release.edition ?? "standard",
-			price: release.price ?? null,
-			catalogLaunchTime: release.catalogLaunchTime ?? 0,
-			url: release.url,
-			heroImageUrl: release.heroImageUrl ?? null,
-			isComingSoon: release.isComingSoon === true,
-			authorName: release.authorName ?? null,
-		}));
+		const ownership = await loadOwnershipForProducts(
+			ctx,
+			siblings.map((release) => release.id),
+			null,
+		);
+		return siblings.map((release) => {
+			const status = ownership.get(release.id);
+			return {
+				productId: release.id,
+				name: release.name,
+				edition: release.edition ?? "standard",
+				price: release.price ?? null,
+				catalogLaunchTime: release.catalogLaunchTime ?? 0,
+				url: release.url,
+				heroImageUrl: release.heroImageUrl ?? null,
+				isComingSoon: release.isComingSoon === true,
+				authorName: release.authorName ?? null,
+				owned: status === "owned",
+				want: status === "want",
+			};
+		});
 	},
 });
 
