@@ -1,7 +1,7 @@
 import { v } from "convex/values";
-import { api } from "./_generated/api";
-import type { Doc } from "./_generated/dataModel";
-import { action, mutation, query } from "./_generated/server";
+import { api, internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
+import { action, internalQuery, mutation, query } from "./_generated/server";
 import { requireAuth } from "./auth";
 
 // Type for the API product response
@@ -123,6 +123,18 @@ export const getStats = query({
 	},
 });
 
+export const getReleaseByExternalId = internalQuery({
+	args: { id: v.number() },
+	returns: v.union(v.id("folioSocietyReleases"), v.null()),
+	handler: async (ctx, args): Promise<Id<"folioSocietyReleases"> | null> => {
+		const release = await ctx.db
+			.query("folioSocietyReleases")
+			.withIndex("by_external_id", (q) => q.eq("id", args.id))
+			.first();
+		return release?._id ?? null;
+	},
+});
+
 // Get all releases (simple query for sync action)
 export const getAllReleases = query({
 	args: {},
@@ -234,8 +246,6 @@ export const syncReleases = action({
 			endId = config.endId,
 			autoExpand = true,
 			enrich = true,
-			detailsTtlHours = 24,
-			maxConcurrent = 10,
 		} = args;
 
 		// Generate ID range
@@ -245,53 +255,16 @@ export const syncReleases = action({
 		);
 
 		try {
-			// Make API call to Folio Society
-			const apiUrl = `https://www.foliosociety.com/usa/api/n/load?type=product&verbosity=1&ids=${ids.join(
-				",",
-			)}&pushDeps=false`;
-
-			console.log(`🌐 Making API call to: ${apiUrl.substring(0, 100)}...`);
-			console.log(
-				`📊 Checking ID range: ${ids[0]} to ${ids[ids.length - 1]} (${
-					ids.length
-				} total)`,
-			);
-
-			const response = await fetch(apiUrl, {
-				headers: {
-					"sec-ch-ua-platform": '"macOS"',
-					Referer: "https://www.foliosociety.com/usa/the-complete-collection",
-					"sec-ch-ua": '"Chromium";v="139", "Not;A=Brand";v="99"',
-					"sec-ch-ua-mobile": "?0",
-					"User-Agent":
-						"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
-					Accept: "application/json, text/plain, */*",
-					"X-Store-Id": "2",
-					DNT: "1",
-				},
-			});
-
-			if (!response.ok) {
-				throw new Error(
-					`API request failed: ${response.status} ${response.statusText}`,
-				);
+			const rawProducts: unknown[] = [];
+			for (const chunk of chunkIdRange(ids, 50)) {
+				const chunkResult = await fetchFolioProducts(chunk);
+				rawProducts.push(...chunkResult);
 			}
 
-			const data = await response.json();
-
-			console.log(
-				`📥 API Response: ${JSON.stringify(data, null, 2).substring(0, 500)}...`,
-			);
-
-			if (!data.result || !Array.isArray(data.result)) {
-				console.error("❌ Invalid API response format:", data);
-				throw new Error("Invalid API response format");
-			}
-
-			console.log(`📦 Raw products from API: ${data.result.length}`);
+			console.log(`📦 Raw products from API: ${rawProducts.length}`);
 
 			// Validate products
-			const validProducts: FolioSocietyProduct[] = data.result.filter(
+			const validProducts: FolioSocietyProduct[] = rawProducts.filter(
 				(product: unknown): product is FolioSocietyProduct => {
 					if (typeof product !== "object" || product === null) return false;
 					const p = product as Record<string, unknown>;
@@ -305,13 +278,6 @@ export const syncReleases = action({
 				},
 			);
 
-			// Get existing releases
-			const existingReleases: Doc<"folioSocietyReleases">[] =
-				await ctx.runQuery(api.folioSocietyReleases.getAllReleases);
-
-			const existingIds = new Set(existingReleases.map((r) => r.id));
-
-			console.log(`📋 Found ${existingIds.size} existing releases in database`);
 			console.log(`🔍 Processing ${validProducts.length} products from API...`);
 
 			const newReleases: FolioSocietyProduct[] = [];
@@ -319,10 +285,12 @@ export const syncReleases = action({
 
 			// Update database with new/changed products
 			for (const product of validProducts) {
-				const existingRelease = existingReleases.find(
-					(r) => r.id === product.id,
-				);
-				const isNew = !existingRelease;
+				const existingId: Id<"folioSocietyReleases"> | null =
+					await ctx.runQuery(
+						internal.folioSocietyReleases.getReleaseByExternalId,
+						{ id: product.id },
+					);
+				const isNew = existingId === null;
 
 				if (isNew) {
 					console.log(
@@ -331,10 +299,9 @@ export const syncReleases = action({
 					newReleases.push(product);
 				}
 
-				if (existingRelease) {
-					// Update existing release
+				if (existingId) {
 					await ctx.runMutation(api.folioSocietyReleases.updateRelease, {
-						id: existingRelease._id,
+						id: existingId,
 						sku: product.sku,
 						name: product.name,
 						url: product.url,
@@ -346,7 +313,6 @@ export const syncReleases = action({
 						lastUpdatedAt: now,
 					});
 				} else {
-					// Create new release
 					await ctx.runMutation(api.folioSocietyReleases.createRelease, {
 						id: product.id,
 						sku: product.sku,
@@ -361,6 +327,11 @@ export const syncReleases = action({
 						lastUpdatedAt: now,
 					});
 				}
+
+				await ctx.runMutation(
+					internal.folioSocietyCatalog.applyCatalogFields,
+					catalogFieldsFromProduct(product as unknown as Record<string, unknown>),
+				);
 			}
 
 			console.log(
@@ -396,39 +367,8 @@ export const syncReleases = action({
 				newReleasesCount: newReleases.length,
 			};
 
-			// Non-blocking enrichment trigger
 			if (enrich) {
-				console.log(
-					`🔄 Scheduling enrichment for ${validProducts.length} products from batch API...`,
-				);
-				console.log(
-					`📋 Enrichment params: TTL=${detailsTtlHours}h, maxConcurrent=${maxConcurrent}, limit=100`,
-				);
-				console.log(
-					`🎯 Product IDs to check: ${validProducts.map((p) => p.id).join(", ")}`,
-				);
-
-				// Schedule enrichment as non-blocking
-				console.log("🔄 Scheduling enrichment as non-blocking job...");
-				try {
-					await ctx.scheduler.runAfter(
-						0,
-						api.folioSocietyDetails.enrichDetails,
-						{
-							productIds: validProducts.map((p) => p.id),
-							detailsTtlHours,
-							maxConcurrent,
-							limit: 100,
-						},
-					);
-					console.log(
-						`✅ Enrichment job scheduled successfully for ${validProducts.length} products`,
-					);
-				} catch (error) {
-					console.error("❌ Failed to schedule enrichment job:", error);
-				}
-			} else {
-				console.log("⏭️  Enrichment disabled - skipping details fetch");
+				console.log("⏭️  Sync skips auto-enrichment; use settings to enrich");
 			}
 
 			return result;
@@ -442,3 +382,92 @@ export const syncReleases = action({
 		}
 	},
 });
+
+function chunkIdRange(ids: number[], size: number): number[][] {
+	const chunks: number[][] = [];
+	for (let i = 0; i < ids.length; i += size) {
+		chunks.push(ids.slice(i, i + size));
+	}
+	return chunks;
+}
+
+const FOLIO_LOAD_HEADERS = {
+	"sec-ch-ua-platform": '"macOS"',
+	Referer: "https://www.foliosociety.com/usa/the-complete-collection",
+	"sec-ch-ua": '"Chromium";v="139", "Not;A=Brand";v="99"',
+	"sec-ch-ua-mobile": "?0",
+	"User-Agent":
+		"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+	Accept: "application/json, text/plain, */*",
+	"X-Store-Id": "2",
+	DNT: "1",
+};
+
+async function fetchFolioProducts(ids: number[]): Promise<unknown[]> {
+	if (ids.length <= 50) {
+		const apiUrl = `https://www.foliosociety.com/usa/api/n/load?type=product&verbosity=3&ids=${ids.join(
+			",",
+		)}&pushDeps=false`;
+
+		console.log(`🌐 Making API call to: ${apiUrl.substring(0, 100)}...`);
+		console.log(
+			`📊 Checking ID range: ${ids[0]} to ${ids[ids.length - 1]} (${
+				ids.length
+			} ids)`,
+		);
+
+		const response = await fetch(apiUrl, {
+			headers: FOLIO_LOAD_HEADERS,
+		});
+
+		if (!response.ok) {
+			throw new Error(
+				`API request failed: ${response.status} ${response.statusText}`,
+			);
+		}
+
+		const data: unknown = await response.json();
+		if (
+			typeof data !== "object" ||
+			data === null ||
+			!("result" in data) ||
+			!Array.isArray(data.result)
+		) {
+			console.error("❌ Invalid API response format:", data);
+			throw new Error("Invalid API response format");
+		}
+
+		return data.result as unknown[];
+	}
+
+	throw new Error("Folio load chunk exceeds 50 ids");
+}
+
+function catalogFieldsFromProduct(product: Record<string, unknown>): {
+	productId: number;
+	name: string;
+	authorName?: string;
+	launchTimeIso?: string;
+	publicationDateText?: string;
+	image?: string;
+	folioImagePath?: string;
+	isComingSoon?: boolean;
+} {
+	const authorRaw = product.author_name ?? product.authorName;
+	const launchRaw = product.launch_time;
+	const publicationRaw = product.publication_date;
+	const comingRaw = product.is_coming_soon ?? product.isComingSoon;
+	const image = typeof product.image === "string" ? product.image : undefined;
+
+	return {
+		productId: product.id as number,
+		name: product.name as string,
+		...(typeof authorRaw === "string" ? { authorName: authorRaw } : {}),
+		...(typeof launchRaw === "string" ? { launchTimeIso: launchRaw } : {}),
+		...(typeof publicationRaw === "string"
+			? { publicationDateText: publicationRaw }
+			: {}),
+		...(image !== undefined ? { image, folioImagePath: image } : {}),
+		...(typeof comingRaw === "boolean" ? { isComingSoon: comingRaw } : {}),
+	};
+}
