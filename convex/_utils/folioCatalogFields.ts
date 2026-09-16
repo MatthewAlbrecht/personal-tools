@@ -156,8 +156,8 @@ export function seasonFromTimestamp(ms: number): FolioSeason {
 	}
 
 	return {
-		seasonKey: `${year}-winter`,
-		seasonSortKey: `${year}-${String(month + 1).padStart(2, "0")}`,
+		seasonKey: `${year - 1}-winter`,
+		seasonSortKey: `${year - 1}-12`,
 		label: `Winter ${year}`,
 	};
 }

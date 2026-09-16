@@ -30,7 +30,6 @@ export default async function handler(
 		// Perform the sync
 		console.log("🔄 Calling syncReleases mutation...");
 		const result = await convex.action(api.folioSocietyReleases.syncReleases, {
-			enrich: true,
 			detailsTtlHours: 24,
 			maxConcurrent: 10,
 		});

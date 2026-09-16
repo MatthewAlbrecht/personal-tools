@@ -44,10 +44,10 @@ export function FolioSettingsSheet(): ReactNode {
 		setEndIdInput(String(config.endId));
 	}, [config]);
 
-	const backfillRunning =
-		config && "backfillStatus" in config
-			? config.backfillStatus === "running"
-			: false;
+	const backfillStatus =
+		config && "backfillStatus" in config ? config.backfillStatus : undefined;
+	const backfillRunning = backfillStatus === "running";
+	const backfillError = backfillStatus === "error";
 
 	async function handleSync(): Promise<void> {
 		setIsSyncing(true);
@@ -207,9 +207,14 @@ export function FolioSettingsSheet(): ReactNode {
 							onClick={handleStartBackfill}
 							disabled={isStartingBackfill}
 						>
-							Dates filling in
+							Fill dates
 						</Button>
 					)}
+					{backfillError ? (
+						<p className="text-muted-foreground text-sm">
+							Couldn’t fill dates.
+						</p>
+					) : null}
 				</div>
 			</SheetContent>
 		</Sheet>

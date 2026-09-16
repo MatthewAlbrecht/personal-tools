@@ -15,10 +15,7 @@ test("inferEdition limited and signed", () => {
 });
 
 test("inferEdition bundle only without dates", () => {
-	assert.equal(
-		inferEdition("The Shirley Jackson Collection", false),
-		"bundle",
-	);
+	assert.equal(inferEdition("The Shirley Jackson Collection", false), "bundle");
 	assert.equal(
 		inferEdition("The Shirley Jackson Collection", true),
 		"standard",
@@ -27,8 +24,14 @@ test("inferEdition bundle only without dates", () => {
 
 test("makeTitleKey requires author to join", () => {
 	assert.equal(makeTitleKey("Carrie ", "Stephen King"), "stephen king|carrie");
-	assert.notEqual(makeTitleKey("Carrie", undefined), makeTitleKey("Carrie", "King"));
-	assert.match(makeTitleKey("Carrie (Limited Edition)", "Stephen King"), /\|carrie$/);
+	assert.notEqual(
+		makeTitleKey("Carrie", undefined),
+		makeTitleKey("Carrie", "King"),
+	);
+	assert.match(
+		makeTitleKey("Carrie (Limited Edition)", "Stephen King"),
+		/\|carrie$/,
+	);
 });
 
 test("parsePublicationDateToMs accepts DD/MM/YYYY and DD/MM/YY", () => {
@@ -49,6 +52,16 @@ test("seasonFromTimestamp Fall before Spring and Dec rolls Winter label", () => 
 	assert.ok(fall.seasonSortKey > spring.seasonSortKey);
 	assert.equal(dec.label, "Winter 2027");
 	assert.equal(dec.seasonSortKey, "2026-12");
+});
+
+test("seasonFromTimestamp Jan and Feb share December winter", () => {
+	const jan = seasonFromTimestamp(Date.UTC(2027, 0, 15));
+	const feb = seasonFromTimestamp(Date.UTC(2027, 1, 10));
+	assert.equal(jan.seasonSortKey, "2026-12");
+	assert.equal(feb.seasonSortKey, "2026-12");
+	assert.equal(jan.label, "Winter 2027");
+	assert.equal(feb.label, "Winter 2027");
+	assert.equal(jan.seasonKey, "2026-winter");
 });
 
 test("catalogLaunchTime prefers launch", () => {
