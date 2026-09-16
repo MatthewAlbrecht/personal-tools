@@ -175,8 +175,9 @@ export const listCatalogPage = query({
 		);
 		const ownershipByProduct = loaded.ownershipByProduct;
 		const grouped = groupIntoSeasons(filtered, ownershipByProduct, filters);
+		const trimmed = omitCappedTailSeason(grouped, !loaded.exhausted);
 		const paged = pageCompleteSeasons(
-			grouped,
+			trimmed,
 			before,
 			pageSize,
 			loaded.exhausted,
@@ -577,10 +578,11 @@ async function loadCatalogCandidates(
 		return await loadOwnedWantCandidates(ctx, filters);
 	}
 	if (filters.search?.trim()) {
+		const searchLoaded = await loadSearchCandidates(ctx, filters);
 		return {
-			releases: await loadSearchCandidates(ctx, filters),
+			releases: searchLoaded.releases,
 			ownershipByProduct: null,
-			exhausted: true,
+			exhausted: searchLoaded.exhausted,
 		};
 	}
 	if (filters.le || filters.signed) {
@@ -592,17 +594,19 @@ async function loadCatalogCandidates(
 		);
 	}
 	if (filters.coming) {
+		const comingLoaded = await loadComingCandidates(ctx, now, filters);
 		return {
-			releases: await loadComingCandidates(ctx, now, filters),
+			releases: comingLoaded.releases,
 			ownershipByProduct: null,
-			exhausted: true,
+			exhausted: comingLoaded.exhausted,
 		};
 	}
 	if (filters.thisYear) {
+		const thisYearLoaded = await loadThisYearCandidates(ctx, now);
 		return {
-			releases: await loadThisYearCandidates(ctx, now),
+			releases: thisYearLoaded.releases,
 			ownershipByProduct: null,
-			exhausted: true,
+			exhausted: thisYearLoaded.exhausted,
 		};
 	}
 	return await walkIndexedSeasons(ctx, filters, beforeSeasonSortKey, "bundle");
@@ -625,6 +629,7 @@ async function loadOwnedWantCandidates(
 	}
 
 	const ownershipByProduct: OwnershipMap = new Map();
+	let exhausted = true;
 	for (const status of statuses) {
 		const rows = await ctx.db
 			.query("folioSocietyOwnership")
@@ -632,6 +637,9 @@ async function loadOwnedWantCandidates(
 				q.eq("userId", FOLIO_OWNER_USER_ID).eq("status", status),
 			)
 			.take(OWNERSHIP_CAP);
+		if (rows.length >= OWNERSHIP_CAP) {
+			exhausted = false;
+		}
 		for (const row of rows) {
 			const existing = ownershipByProduct.get(row.productId);
 			if (existing === "owned") {
@@ -652,13 +660,15 @@ async function loadOwnedWantCandidates(
 		}
 	}
 
-	return { releases, ownershipByProduct, exhausted: true };
+	return { releases, ownershipByProduct, exhausted };
 }
+
+const SEARCH_CAP = 64;
 
 async function loadSearchCandidates(
 	ctx: QueryCtx,
 	filters: CatalogFilters,
-): Promise<ReleaseDoc[]> {
+): Promise<{ releases: ReleaseDoc[]; exhausted: boolean }> {
 	const search = filters.search?.trim() ?? "";
 	const editionFilter =
 		filters.le && !filters.signed
@@ -668,7 +678,7 @@ async function loadSearchCandidates(
 				: undefined;
 	const bundleFilter = filters.bundles ? undefined : false;
 
-	return await ctx.db
+	const releases = await ctx.db
 		.query("folioSocietyReleases")
 		.withSearchIndex("search_title_author", (q) => {
 			const searched = q.search("searchText", search).eq("isActive", true);
@@ -681,14 +691,15 @@ async function loadSearchCandidates(
 			}
 			return withEdition.eq("isBundle", bundleFilter);
 		})
-		.take(64);
+		.take(SEARCH_CAP);
+	return { releases, exhausted: releases.length < SEARCH_CAP };
 }
 
 async function loadComingCandidates(
 	ctx: QueryCtx,
 	now: number,
 	filters: CatalogFilters,
-): Promise<ReleaseDoc[]> {
+): Promise<{ releases: ReleaseDoc[]; exhausted: boolean }> {
 	const upcoming = await ctx.db
 		.query("folioSocietyReleases")
 		.withIndex("by_isActive_catalogLaunchTime", (q) =>
@@ -709,15 +720,16 @@ async function loadComingCandidates(
 		(row) => row.isComingSoon === true,
 	);
 
-	return unionById([...upcoming, ...undatedComing]);
+	const releases = unionById([...upcoming, ...undatedComing]);
+	return { releases, exhausted: upcoming.length < COMING_CAP };
 }
 
 async function loadThisYearCandidates(
 	ctx: QueryCtx,
 	now: number,
-): Promise<ReleaseDoc[]> {
+): Promise<{ releases: ReleaseDoc[]; exhausted: boolean }> {
 	const year = new Date(now).getUTCFullYear();
-	return await ctx.db
+	const releases = await ctx.db
 		.query("folioSocietyReleases")
 		.withIndex("by_isActive_catalogLaunchTime", (q) =>
 			q
@@ -726,6 +738,7 @@ async function loadThisYearCandidates(
 				.lt("catalogLaunchTime", Date.UTC(year + 1, 0, 1)),
 		)
 		.take(THIS_YEAR_CAP);
+	return { releases, exhausted: releases.length < THIS_YEAR_CAP };
 }
 
 async function takeByBundleRange(
@@ -1084,7 +1097,17 @@ function pickVisibleSku(
 	return byEdition(skus);
 }
 
-function pageCompleteSeasons(
+export function omitCappedTailSeason(
+	seasons: CatalogSeason[],
+	hitCap: boolean,
+): CatalogSeason[] {
+	if (!hitCap || seasons.length <= 1) {
+		return seasons;
+	}
+	return seasons.slice(0, -1);
+}
+
+export function pageCompleteSeasons(
 	seasons: CatalogSeason[],
 	beforeSeasonSortKey: string | undefined,
 	pageSize: number,
@@ -1101,6 +1124,9 @@ function pageCompleteSeasons(
 		return season.seasonSortKey < beforeSeasonSortKey;
 	});
 	const page = eligible.slice(0, pageSize);
+	if (page.length === 0) {
+		return { seasons: [], continueCursor: null, isDone: true };
+	}
 	const oldest = page[page.length - 1];
 	const remaining = eligible.length > page.length;
 	const isDone = !remaining && exhausted;

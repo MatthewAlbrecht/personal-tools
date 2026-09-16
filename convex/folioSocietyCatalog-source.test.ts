@@ -84,7 +84,8 @@ test("public catalog functions declare returns validators", () => {
 
 test("search uses search_title_author and caps at 64", () => {
 	assert.match(source, /withSearchIndex\("search_title_author"/);
-	assert.match(source, /\.take\(64\)/);
+	assert.match(source, /SEARCH_CAP = 64/);
+	assert.match(source, /\.take\(SEARCH_CAP\)/);
 });
 
 test("listCatalogPage uses custom beforeSeasonSortKey cursor", () => {
@@ -99,4 +100,37 @@ test("seasonLabelFromKeys uses seasonSortKey for December winter year+1", async 
 	assert.equal(seasonLabelFromKeys("2026-spring", "2026-03"), "Spring 2026");
 	assert.equal(seasonLabelFromKeys("2026-fall", "2026-09"), "Fall 2026");
 	assert.equal(seasonLabelFromKeys("undated", "0000-00"), "Undated");
+});
+
+function mockSeason(seasonSortKey: string) {
+	return {
+		seasonKey: seasonSortKey,
+		seasonSortKey,
+		label: seasonSortKey,
+		cards: [],
+	};
+}
+
+test("pageCompleteSeasons empty page is done with null cursor", async () => {
+	const { pageCompleteSeasons } = await import("./folioSocietyCatalog.js");
+	const result = pageCompleteSeasons([], undefined, 1, false);
+	assert.equal(result.isDone, true);
+	assert.equal(result.continueCursor, null);
+	assert.deepEqual(result.seasons, []);
+});
+
+test("omitCappedTailSeason drops oldest season when hit cap", async () => {
+	const { omitCappedTailSeason } = await import("./folioSocietyCatalog.js");
+	const seasons = [mockSeason("2026-06"), mockSeason("2026-03")];
+	const trimmed = omitCappedTailSeason(seasons, true);
+	assert.equal(trimmed.length, 1);
+	assert.equal(trimmed[0]?.seasonSortKey, "2026-06");
+});
+
+test("omitCappedTailSeason keeps sole season when hit cap", async () => {
+	const { omitCappedTailSeason } = await import("./folioSocietyCatalog.js");
+	const seasons = [mockSeason("2026-06")];
+	const trimmed = omitCappedTailSeason(seasons, true);
+	assert.equal(trimmed.length, 1);
+	assert.equal(trimmed[0]?.seasonSortKey, "2026-06");
 });
