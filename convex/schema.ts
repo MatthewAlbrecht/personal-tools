@@ -50,6 +50,8 @@ export default defineSchema({
 		startId: v.number(),
 		endId: v.number(),
 		updatedAt: v.number(), // Unix timestamp - more efficient for database operations
+		backfillCursorExternalId: v.optional(v.number()),
+		backfillStatus: v.optional(v.string()),
 	}),
 
 	folioSocietyReleases: defineTable({
@@ -64,11 +66,58 @@ export default defineSchema({
 		firstSeenAt: v.number(), // Unix timestamp
 		lastSeenAt: v.number(), // Unix timestamp
 		lastUpdatedAt: v.number(), // Unix timestamp
+		launchTime: v.optional(v.number()),
+		publicationDateText: v.optional(v.string()),
+		publicationDateTime: v.optional(v.number()),
+		catalogLaunchTime: v.optional(v.number()),
+		isComingSoon: v.optional(v.boolean()),
+		edition: v.optional(
+			v.union(
+				v.literal("standard"),
+				v.literal("limited"),
+				v.literal("signed"),
+				v.literal("bundle"),
+			),
+		),
+		isBundle: v.optional(v.boolean()),
+		titleKey: v.optional(v.string()),
+		authorName: v.optional(v.string()),
+		searchText: v.optional(v.string()),
+		seasonKey: v.optional(v.string()),
+		seasonSortKey: v.optional(v.string()),
+		heroImageUrl: v.optional(v.string()),
+		familyHasLimited: v.optional(v.boolean()),
+		familyHasSigned: v.optional(v.boolean()),
 	})
 		.index("by_external_id", ["id"]) // For unique lookups by external ID
 		.index("by_firstSeenAt", ["firstSeenAt"]) // For date range queries
 		.index("by_lastSeenAt", ["lastSeenAt"]) // For recent activity
-		.index("by_isActive", ["isActive"]), // For filtering active/inactive
+		.index("by_isActive", ["isActive"]) // For filtering active/inactive
+		.index("by_titleKey", ["titleKey"])
+		.index("by_isActive_isBundle_seasonSortKey", [
+			"isActive",
+			"isBundle",
+			"seasonSortKey",
+		])
+		.index("by_isActive_edition_seasonSortKey", [
+			"isActive",
+			"edition",
+			"seasonSortKey",
+		])
+		.index("by_isActive_catalogLaunchTime", ["isActive", "catalogLaunchTime"])
+		.searchIndex("search_title_author", {
+			searchField: "searchText",
+			filterFields: ["isActive", "edition", "isBundle"],
+		}),
+
+	folioSocietyOwnership: defineTable({
+		userId: v.string(),
+		productId: v.number(),
+		status: v.union(v.literal("owned"), v.literal("want")),
+		updatedAt: v.number(),
+	})
+		.index("by_user_product", ["userId", "productId"])
+		.index("by_user_status", ["userId", "status"]),
 
 	folioSocietyProductDetails: defineTable({
 		productId: v.number(), // Maps to folioSocietyReleases.id
