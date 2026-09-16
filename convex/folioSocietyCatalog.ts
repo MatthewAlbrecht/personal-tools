@@ -695,6 +695,29 @@ async function loadSearchCandidates(
 	return { releases, exhausted: releases.length < SEARCH_CAP };
 }
 
+export function comingPathExhausted({
+	upcoming,
+	undatedFalse,
+	undatedTrue,
+	bundles,
+}: {
+	upcoming: number;
+	undatedFalse: number;
+	undatedTrue: number;
+	bundles: boolean;
+}): boolean {
+	if (upcoming >= COMING_CAP) {
+		return false;
+	}
+	if (undatedFalse >= SEASON_FILL_CAP) {
+		return false;
+	}
+	if (bundles && undatedTrue >= SEASON_FILL_CAP) {
+		return false;
+	}
+	return true;
+}
+
 async function loadComingCandidates(
 	ctx: QueryCtx,
 	now: number,
@@ -721,7 +744,15 @@ async function loadComingCandidates(
 	);
 
 	const releases = unionById([...upcoming, ...undatedComing]);
-	return { releases, exhausted: upcoming.length < COMING_CAP };
+	return {
+		releases,
+		exhausted: comingPathExhausted({
+			upcoming: upcoming.length,
+			undatedFalse: undatedFalse.length,
+			undatedTrue: undatedTrue.length,
+			bundles: filters.bundles,
+		}),
+	};
 }
 
 async function loadThisYearCandidates(

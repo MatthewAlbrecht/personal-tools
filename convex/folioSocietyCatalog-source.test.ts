@@ -134,3 +134,52 @@ test("omitCappedTailSeason keeps sole season when hit cap", async () => {
 	assert.equal(trimmed.length, 1);
 	assert.equal(trimmed[0]?.seasonSortKey, "2026-06");
 });
+
+test("comingPathExhausted requires all takes below cap", async () => {
+	const { comingPathExhausted } = await import("./folioSocietyCatalog.js");
+	assert.equal(
+		comingPathExhausted({
+			upcoming: 199,
+			undatedFalse: 199,
+			undatedTrue: 0,
+			bundles: false,
+		}),
+		true,
+	);
+	assert.equal(
+		comingPathExhausted({
+			upcoming: 200,
+			undatedFalse: 199,
+			undatedTrue: 0,
+			bundles: false,
+		}),
+		false,
+	);
+	assert.equal(
+		comingPathExhausted({
+			upcoming: 199,
+			undatedFalse: 200,
+			undatedTrue: 0,
+			bundles: false,
+		}),
+		false,
+	);
+	assert.equal(
+		comingPathExhausted({
+			upcoming: 199,
+			undatedFalse: 199,
+			undatedTrue: 200,
+			bundles: true,
+		}),
+		false,
+	);
+	assert.equal(
+		comingPathExhausted({
+			upcoming: 199,
+			undatedFalse: 199,
+			undatedTrue: 200,
+			bundles: false,
+		}),
+		true,
+	);
+});
