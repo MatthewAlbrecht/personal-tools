@@ -443,7 +443,7 @@ async function fetchFolioProducts(ids: number[]): Promise<unknown[]> {
 	throw new Error("Folio load chunk exceeds 50 ids");
 }
 
-function catalogFieldsFromProduct(product: Record<string, unknown>): {
+export function catalogFieldsFromProduct(product: Record<string, unknown>): {
 	productId: number;
 	name: string;
 	authorName?: string;

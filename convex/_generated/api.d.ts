@@ -73,6 +73,7 @@ import type * as concertActions from "../concertActions.js";
 import type * as concerts from "../concerts.js";
 import type * as crons from "../crons.js";
 import type * as folioSociety from "../folioSociety.js";
+import type * as folioSocietyBackfill from "../folioSocietyBackfill.js";
 import type * as folioSocietyCatalog from "../folioSocietyCatalog.js";
 import type * as folioSocietyDetails from "../folioSocietyDetails.js";
 import type * as folioSocietyImages from "../folioSocietyImages.js";
@@ -174,6 +175,7 @@ declare const fullApi: ApiFromModules<{
   concerts: typeof concerts;
   crons: typeof crons;
   folioSociety: typeof folioSociety;
+  folioSocietyBackfill: typeof folioSocietyBackfill;
   folioSocietyCatalog: typeof folioSocietyCatalog;
   folioSocietyDetails: typeof folioSocietyDetails;
   folioSocietyImages: typeof folioSocietyImages;
