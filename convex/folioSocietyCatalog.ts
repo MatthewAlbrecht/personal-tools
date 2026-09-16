@@ -458,9 +458,16 @@ function isBundleRow(release: ReleaseDoc): boolean {
 	return release.isBundle === true;
 }
 
-function seasonLabelFromKey(seasonKey: string): string {
-	if (seasonKey === "undated") {
+export function seasonLabelFromKeys(
+	seasonKey: string,
+	seasonSortKey: string,
+): string {
+	if (seasonKey === "undated" || seasonSortKey === "0000-00") {
 		return undatedSeason().label;
+	}
+	const december = seasonSortKey.match(/^(\d{4})-12$/);
+	if (december) {
+		return `Winter ${Number(december[1]) + 1}`;
 	}
 	const dash = seasonKey.lastIndexOf("-");
 	if (dash <= 0) {
@@ -470,6 +477,9 @@ function seasonLabelFromKey(seasonKey: string): string {
 	const name = seasonKey.slice(dash + 1);
 	if (!year || !name) {
 		return undatedSeason().label;
+	}
+	if (name === "winter") {
+		return `Winter ${year}`;
 	}
 	return `${name.charAt(0).toUpperCase()}${name.slice(1)} ${year}`;
 }
@@ -1014,7 +1024,7 @@ function groupIntoSeasons(
 			seasons.set(seasonSortKey, {
 				seasonKey,
 				seasonSortKey,
-				label: seasonLabelFromKey(seasonKey),
+				label: seasonLabelFromKeys(seasonKey, seasonSortKey),
 				cards: [card],
 			});
 		}

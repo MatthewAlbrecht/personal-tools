@@ -90,3 +90,13 @@ test("search uses search_title_author and caps at 64", () => {
 test("listCatalogPage uses custom beforeSeasonSortKey cursor", () => {
 	assert.match(source, /beforeSeasonSortKey:\s*v\.string\(\)/);
 });
+
+test("seasonLabelFromKeys uses seasonSortKey for December winter year+1", async () => {
+	const { seasonLabelFromKeys } = await import("./folioSocietyCatalog.js");
+	assert.equal(seasonLabelFromKeys("2026-winter", "2026-12"), "Winter 2027");
+	assert.equal(seasonLabelFromKeys("2026-winter", "2026-01"), "Winter 2026");
+	assert.equal(seasonLabelFromKeys("2026-winter", "2026-02"), "Winter 2026");
+	assert.equal(seasonLabelFromKeys("2026-spring", "2026-03"), "Spring 2026");
+	assert.equal(seasonLabelFromKeys("2026-fall", "2026-09"), "Fall 2026");
+	assert.equal(seasonLabelFromKeys("undated", "0000-00"), "Undated");
+});
