@@ -107,7 +107,10 @@ export const runBatch = internalAction({
 		const config: { startId: number; endId: number } | null =
 			await ctx.runQuery(internal.folioSocietyBackfill.getConfigInternal, {});
 		if (!config) {
-			await ctx.runMutation(internal.folioSocietyBackfill.markBackfillError, {});
+			await ctx.runMutation(
+				internal.folioSocietyBackfill.markBackfillError,
+				{},
+			);
 			return null;
 		}
 
@@ -148,7 +151,10 @@ export const runBatch = internalAction({
 			});
 		} catch (error) {
 			console.error("Folio catalog backfill batch failed:", error);
-			await ctx.runMutation(internal.folioSocietyBackfill.markBackfillError, {});
+			await ctx.runMutation(
+				internal.folioSocietyBackfill.markBackfillError,
+				{},
+			);
 		}
 		return null;
 	},

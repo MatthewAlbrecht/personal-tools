@@ -66,9 +66,16 @@ export function parsePublicationDateToMs(
 		return undefined;
 	}
 
-	const day = Number.parseInt(match[1]!, 10);
-	const month = Number.parseInt(match[2]!, 10);
-	let year = Number.parseInt(match[3]!, 10);
+	const dayStr = match[1];
+	const monthStr = match[2];
+	const yearStr = match[3];
+	if (!dayStr || !monthStr || !yearStr) {
+		return undefined;
+	}
+
+	const day = Number.parseInt(dayStr, 10);
+	const month = Number.parseInt(monthStr, 10);
+	let year = Number.parseInt(yearStr, 10);
 
 	if (Number.isNaN(day) || Number.isNaN(month) || Number.isNaN(year)) {
 		return undefined;

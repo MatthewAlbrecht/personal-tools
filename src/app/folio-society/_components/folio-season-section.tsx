@@ -1,19 +1,14 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import {
-	type ReactNode,
-	useEffect,
-	useMemo,
-	useState,
-} from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Skeleton } from "~/components/ui/skeleton";
 import { api } from "../../../../convex/_generated/api";
 import {
-	type FolioCatalogCard,
 	FolioBookCard,
 	FolioBookCardSkeleton,
 	FolioBookDetail,
+	type FolioCatalogCard,
 	type FolioFamilyEdition,
 	type FolioProductImage,
 } from "./folio-book-card";
@@ -28,10 +23,7 @@ export function FolioSeasonSection({
 	label: string;
 	cards: FolioCatalogCard[];
 	now: number;
-	onSetOwnership: (
-		productId: number,
-		status: "owned" | "want" | null,
-	) => void;
+	onSetOwnership: (productId: number, status: "owned" | "want" | null) => void;
 	marksFor: (
 		productId: number,
 		fallback: FolioCatalogCard,

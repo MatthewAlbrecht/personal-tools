@@ -86,12 +86,8 @@ export function FolioBookCard({
 						</div>
 					)}
 					<div className="absolute bottom-1.5 left-1.5 flex flex-wrap gap-1">
-						{card.edition === "limited" ? (
-							<CoverChip>LE</CoverChip>
-						) : null}
-						{card.edition === "signed" ? (
-							<CoverChip>Signed</CoverChip>
-						) : null}
+						{card.edition === "limited" ? <CoverChip>LE</CoverChip> : null}
+						{card.edition === "signed" ? <CoverChip>Signed</CoverChip> : null}
 						{coming ? <CoverChip>Coming</CoverChip> : null}
 						{showAlsoLe ? <CoverChip>Also LE</CoverChip> : null}
 						{showAlsoSigned ? <CoverChip>Also signed</CoverChip> : null}
@@ -171,10 +167,7 @@ export function FolioBookDetail({
 	selectedProductId: number;
 	onSelectProduct: (productId: number) => void;
 	onClose: () => void;
-	onSetOwnership: (
-		productId: number,
-		status: "owned" | "want" | null,
-	) => void;
+	onSetOwnership: (productId: number, status: "owned" | "want" | null) => void;
 	owned: boolean;
 	want: boolean;
 }): ReactNode {
@@ -194,13 +187,13 @@ export function FolioBookDetail({
 	const [showAll, setShowAll] = useState(false);
 	const [coverUrl, setCoverUrl] = useState<string | null>(null);
 	const visibleThumbs = showAll ? thumbs : thumbs.slice(0, 4);
-	const cover =
-		coverUrl ?? selected.heroImageUrl ?? thumbs[0]?.blobUrl ?? null;
+	const cover = coverUrl ?? selected.heroImageUrl ?? thumbs[0]?.blobUrl ?? null;
 	const initial = selected.name.trim().charAt(0).toUpperCase() || "F";
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: reset cover when edition selection changes
 	useEffect(() => {
 		setCoverUrl(null);
-	}, [selectedProductId]);
+	}, [selected.productId]);
 
 	return (
 		<div className="grid gap-6 py-4 md:grid-cols-[minmax(0,16rem)_minmax(0,1fr)]">
@@ -296,7 +289,9 @@ export function FolioBookDetail({
 						type="button"
 						aria-label="Owned"
 						aria-pressed={owned}
-						onClick={() => onSetOwnership(selected.productId, owned ? null : "owned")}
+						onClick={() =>
+							onSetOwnership(selected.productId, owned ? null : "owned")
+						}
 						className={cn(
 							"flex h-8 w-8 items-center justify-center rounded-full border",
 							owned
@@ -310,7 +305,9 @@ export function FolioBookDetail({
 						type="button"
 						aria-label="Want"
 						aria-pressed={want}
-						onClick={() => onSetOwnership(selected.productId, want ? null : "want")}
+						onClick={() =>
+							onSetOwnership(selected.productId, want ? null : "want")
+						}
 						className={cn(
 							"flex h-8 w-8 items-center justify-center rounded-full border",
 							want
@@ -469,4 +466,3 @@ function sortImages(images: FolioProductImage[]): FolioProductImage[] {
 		return (a.position ?? 0) - (b.position ?? 0);
 	});
 }
-

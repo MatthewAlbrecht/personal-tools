@@ -330,7 +330,9 @@ export const syncReleases = action({
 
 				await ctx.runMutation(
 					internal.folioSocietyCatalog.applyCatalogFields,
-					catalogFieldsFromProduct(product as unknown as Record<string, unknown>),
+					catalogFieldsFromProduct(
+						product as unknown as Record<string, unknown>,
+					),
 				);
 			}
 

@@ -22,9 +22,7 @@ export function parseFolioFilters(params: URLSearchParams): FolioFilters {
 	};
 }
 
-export function serializeFolioFilters(
-	filters: FolioFilters,
-): URLSearchParams {
+export function serializeFolioFilters(filters: FolioFilters): URLSearchParams {
 	const params = new URLSearchParams();
 	setIfPresent(params, "q", filters.search);
 	setFlagIfTrue(params, "owned", filters.owned);

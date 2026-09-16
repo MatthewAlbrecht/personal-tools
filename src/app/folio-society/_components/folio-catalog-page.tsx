@@ -3,13 +3,7 @@
 import { useMutation, useQuery } from "convex/react";
 import { SlidersHorizontal } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import {
-	type ReactNode,
-	useEffect,
-	useMemo,
-	useRef,
-	useState,
-} from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { badgeVariants } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -27,12 +21,12 @@ import {
 	parseFolioFilters,
 	serializeFolioFilters,
 } from "../_utils/filter-state";
-import type {
-	FolioCatalogCard,
-	FolioFamilyEdition,
-} from "./folio-book-card";
+import type { FolioCatalogCard, FolioFamilyEdition } from "./folio-book-card";
 import { FolioFilters as FolioFiltersControls } from "./folio-filters";
-import { FolioSeasonSection, FolioSeasonSectionSkeleton } from "./folio-season-section";
+import {
+	FolioSeasonSection,
+	FolioSeasonSectionSkeleton,
+} from "./folio-season-section";
 import { FolioSettingsSheet } from "./folio-settings-sheet";
 
 type CatalogSeason = {
@@ -108,6 +102,7 @@ export function FolioCatalogPage(): ReactNode {
 		});
 	}, [debouncedSearch, filters, pathname, router, searchParamsString]);
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: reset catalog pagination when filter key changes
 	useEffect(() => {
 		setNow(Date.now());
 		setCursor(null);
@@ -260,10 +255,13 @@ export function FolioCatalogPage(): ReactNode {
 	}
 
 	const filterControls = (
-		<FolioFiltersControls filters={{
-			...filters,
-			search: searchInput || undefined,
-		}} onChange={handleFiltersChange} />
+		<FolioFiltersControls
+			filters={{
+				...filters,
+				search: searchInput || undefined,
+			}}
+			onChange={handleFiltersChange}
+		/>
 	);
 
 	return (
