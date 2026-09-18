@@ -1,8 +1,8 @@
 {
 	"manifest_version": 3,
 	"name": "RYM & Bandcamp release capture",
-	"version": "0.2.0",
-	"description": "Locally saves Rate Your Music release metadata and captures Bandcamp albums to your library via a floating capture button.",
+	"version": "0.3.1",
+	"description": "Locally saves Rate Your Music release and charts metadata and captures Bandcamp albums to your library via a floating capture button.",
 	"permissions": ["storage"],
 	"optional_host_permissions": ["http://*/*", "https://*/*"],
 	"host_permissions": [
@@ -34,6 +34,14 @@
 				"https://www.rateyourmusic.com/release/additional/*"
 			],
 			"js": ["content.js"],
+			"run_at": "document_idle"
+		},
+		{
+			"matches": [
+				"https://rateyourmusic.com/charts/*",
+				"https://www.rateyourmusic.com/charts/*"
+			],
+			"js": ["charts-content.js"],
 			"run_at": "document_idle"
 		},
 		{

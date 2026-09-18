@@ -121,7 +121,193 @@ async function forwardCaptureToBackend(payload) {
 	}
 }
 
+async function forwardCoversToBackend(origin, secret, payloads) {
+	const covers = [];
+	for (const payload of payloads) {
+		if (
+			payload &&
+			typeof payload.rymUrl === "string" &&
+			typeof payload.coverJpegBase64 === "string" &&
+			payload.coverJpegBase64.length > 0
+		) {
+			covers.push({
+				rymUrl: payload.rymUrl,
+				jpegBase64: payload.coverJpegBase64,
+			});
+		}
+	}
+	if (covers.length === 0) {
+		return { uploaded: 0, failed: 0 };
+	}
+
+	const url = `${origin}/api/rate-your-music/covers`;
+	let uploaded = 0;
+	let failed = 0;
+	const chunkSize = 10;
+
+	for (let i = 0; i < covers.length; i += chunkSize) {
+		const chunk = covers.slice(i, i + chunkSize);
+		try {
+			const res = await fetch(url, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					Authorization: `Bearer ${secret}`,
+				},
+				body: JSON.stringify({ covers: chunk }),
+			});
+			if (!res.ok) {
+				failed += chunk.length;
+				continue;
+			}
+			const json = await res.json().catch(function ignoreJson() {
+				return {};
+			});
+			uploaded += typeof json.uploaded === "number" ? json.uploaded : 0;
+			failed += typeof json.failed === "number" ? json.failed : 0;
+		} catch (error) {
+			console.error("[rym-release-scraper] cover upload error", error);
+			failed += chunk.length;
+		}
+	}
+
+	return { uploaded, failed };
+}
+
+/**
+ * POST a charts page of scrapes in one request.
+ */
+async function forwardCapturesToBackend(payloads) {
+	const cfg = await chrome.storage.sync.get([
+		SETTINGS_BACKEND_ORIGIN,
+		SETTINGS_BACKEND_SECRET,
+	]);
+
+	const originRaw =
+		(typeof cfg[SETTINGS_BACKEND_ORIGIN] === "string" &&
+			cfg[SETTINGS_BACKEND_ORIGIN].trim()) ||
+		"https://www.moooose.dev";
+	const origin = originRaw.replace(/\/+$/, "");
+	const secret =
+		typeof cfg[SETTINGS_BACKEND_SECRET] === "string"
+			? cfg[SETTINGS_BACKEND_SECRET].trim()
+			: "";
+
+	if (!secret) {
+		console.info(
+			"[rym-release-scraper] backend sync skipped — set ingest secret in extension options",
+		);
+		return { synced: false, skipped: true };
+	}
+
+	const permitted = await ensureHostPermissionForBackend(origin);
+	if (!permitted) {
+		console.warn(
+			"[rym-release-scraper] backend sync blocked — host permission denied",
+		);
+		return {
+			synced: false,
+			skipped: false,
+			error: "Host permission denied — allow access when Chrome prompts",
+		};
+	}
+
+	const url = `${origin}/api/rate-your-music/scrape`;
+
+	try {
+		const res = await fetch(url, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				Authorization: `Bearer ${secret}`,
+			},
+			body: JSON.stringify({
+				items: payloads.map(function stripCover(p) {
+					const { coverJpegBase64: _cover, ...rest } = p;
+					return rest;
+				}),
+			}),
+		});
+
+		if (!res.ok) {
+			const text = await res.text();
+			let errorMessage = text;
+			try {
+				const parsed = JSON.parse(text);
+				if (typeof parsed?.error === "string" && parsed.error.trim()) {
+					errorMessage = parsed.error.trim();
+				}
+			} catch {
+				// keep raw response text
+			}
+			console.error(
+				"[rym-release-scraper] charts backend sync failed",
+				res.status,
+				errorMessage,
+			);
+			return {
+				synced: false,
+				skipped: false,
+				status: res.status,
+				error: errorMessage,
+			};
+		}
+
+		const json = await res.json().catch(function ignoreJson() {
+			return {};
+		});
+		const covers = await forwardCoversToBackend(origin, secret, payloads);
+		return {
+			synced: true,
+			skipped: false,
+			upserted: typeof json?.upserted === "number" ? json.upserted : undefined,
+			failed: typeof json?.failed === "number" ? json.failed : undefined,
+			coversUploaded: covers.uploaded,
+			coversFailed: covers.failed,
+		};
+	} catch (error) {
+		console.error("[rym-release-scraper] charts backend sync error", error);
+		return {
+			synced: false,
+			skipped: false,
+			error: error instanceof Error ? error.message : String(error),
+		};
+	}
+}
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+	if (message && message.type === "RYM_CHARTS_CAPTURE") {
+		void (async function persistChartCaptures() {
+			try {
+				const payloads = Array.isArray(message.payloads)
+					? message.payloads
+					: [];
+				const prev = await chrome.storage.local.get(STORAGE_KEY);
+				const map =
+					prev[STORAGE_KEY] && typeof prev[STORAGE_KEY] === "object"
+						? prev[STORAGE_KEY]
+						: {};
+				for (const payload of payloads) {
+					if (payload?.canonicalPath) {
+						const { coverJpegBase64: _cover, ...rest } = payload;
+						map[payload.canonicalPath] = rest;
+					}
+				}
+				await chrome.storage.local.set({ [STORAGE_KEY]: map });
+
+				const backend = await forwardCapturesToBackend(payloads);
+				sendResponse({ ok: true, backend });
+			} catch (error) {
+				console.error(
+					"[rym-release-scraper] failed to save charts capture",
+					error,
+				);
+				sendResponse({ ok: false });
+			}
+		})();
+		return true;
+	}
+
 	if (!message || message.type !== "RYM_RELEASE_CAPTURE") {
 		return;
 	}

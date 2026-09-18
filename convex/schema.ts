@@ -1566,6 +1566,14 @@ export default defineSchema({
 		spotifyAlbumConvexId: v.optional(v.id("spotifyAlbums")),
 		/** Sum of track lengths from RYM track listing (seconds); optional if DOM lacked durations */
 		tracklistingTotalSeconds: v.optional(v.number()),
+		/** RYM chart average, e.g. 3.74 */
+		averageRating: v.optional(v.number()),
+		ratingsCount: v.optional(v.number()),
+		reviewsCount: v.optional(v.number()),
+		/** Display date from charts/release, e.g. "20 March 2026" */
+		releaseDateLabel: v.optional(v.string()),
+		/** Our CloudFront copy of the 300px cover (never a RYM/sonemic URL). */
+		coverImageUrl: v.optional(v.string()),
 		lastScrapedAt: v.number(),
 		createdAt: v.number(),
 		updatedAt: v.number(),

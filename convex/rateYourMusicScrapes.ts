@@ -167,6 +167,11 @@ export const upsertRateYourMusicScrape = mutation({
 		spotifyAlbumUrl: v.optional(v.string()),
 		spotifyAlbumConvexId: v.optional(v.id("spotifyAlbums")),
 		tracklistingTotalSeconds: v.optional(v.number()),
+		averageRating: v.optional(v.number()),
+		ratingsCount: v.optional(v.number()),
+		reviewsCount: v.optional(v.number()),
+		releaseDateLabel: v.optional(v.string()),
+		coverImageUrl: v.optional(v.string()),
 		lastScrapedAt: v.optional(v.number()),
 	},
 	handler: async (ctx, args): Promise<Id<"rateYourMusicScrapes">> => {
@@ -176,6 +181,8 @@ export const upsertRateYourMusicScrape = mutation({
 		const releaseKind = releaseKindFromPathname(new URL(rymUrl).pathname);
 		const now = Date.now();
 		const lastScrapedAt = args.lastScrapedAt ?? now;
+		const spotifyAlbumId = args.spotifyAlbumId?.trim() || undefined;
+		const spotifyAlbumUrl = args.spotifyAlbumUrl?.trim() || undefined;
 
 		const shared = {
 			rymUrl,
@@ -183,10 +190,25 @@ export const upsertRateYourMusicScrape = mutation({
 			releaseTypeLabel: args.releaseTypeLabel?.trim() || undefined,
 			albumTitle: args.albumTitle.trim(),
 			artists: args.artists,
-			spotifyAlbumId: args.spotifyAlbumId?.trim() || undefined,
-			spotifyAlbumUrl: args.spotifyAlbumUrl?.trim() || undefined,
+			...(spotifyAlbumId !== undefined ? { spotifyAlbumId } : {}),
+			...(spotifyAlbumUrl !== undefined ? { spotifyAlbumUrl } : {}),
 			...(args.tracklistingTotalSeconds !== undefined
 				? { tracklistingTotalSeconds: args.tracklistingTotalSeconds }
+				: {}),
+			...(args.averageRating !== undefined
+				? { averageRating: args.averageRating }
+				: {}),
+			...(args.ratingsCount !== undefined
+				? { ratingsCount: args.ratingsCount }
+				: {}),
+			...(args.reviewsCount !== undefined
+				? { reviewsCount: args.reviewsCount }
+				: {}),
+			...(args.releaseDateLabel?.trim()
+				? { releaseDateLabel: args.releaseDateLabel.trim() }
+				: {}),
+			...(args.coverImageUrl?.trim()
+				? { coverImageUrl: args.coverImageUrl.trim() }
 				: {}),
 			lastScrapedAt,
 			updatedAt: now,
@@ -219,7 +241,7 @@ export const upsertRateYourMusicScrape = mutation({
 
 		await matchRymScrapeToSpotifyAlbums(ctx, {
 			scrapeId,
-			spotifyAlbumId: args.spotifyAlbumId?.trim() || undefined,
+			spotifyAlbumId,
 			albumTitle: args.albumTitle,
 			artists: args.artists,
 			now,
@@ -335,6 +357,36 @@ export const getRateYourMusicScrapeByUrl = query({
 			.query("rateYourMusicScrapes")
 			.withIndex("by_rymUrl", (q) => q.eq("rymUrl", normalized))
 			.first();
+	},
+});
+
+export const setRateYourMusicScrapeCover = mutation({
+	args: {
+		rymUrl: v.string(),
+		coverImageUrl: v.string(),
+	},
+	returns: v.union(v.id("rateYourMusicScrapes"), v.null()),
+	handler: async (ctx, args): Promise<Id<"rateYourMusicScrapes"> | null> => {
+		requireAuth(ctx);
+		const rymUrl = normalizeRateYourMusicReleaseUrl(args.rymUrl);
+		const coverImageUrl = args.coverImageUrl.trim();
+		if (!coverImageUrl) {
+			return null;
+		}
+
+		const existing = await ctx.db
+			.query("rateYourMusicScrapes")
+			.withIndex("by_rymUrl", (q) => q.eq("rymUrl", rymUrl))
+			.first();
+		if (!existing) {
+			return null;
+		}
+
+		await ctx.db.patch(existing._id, {
+			coverImageUrl,
+			updatedAt: Date.now(),
+		});
+		return existing._id;
 	},
 });
 
