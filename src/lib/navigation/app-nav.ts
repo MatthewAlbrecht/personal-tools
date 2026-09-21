@@ -83,6 +83,7 @@ export const APP_NAV_GROUPS: AppNavGroup[] = [
 			{ id: "rooleases", label: "Rooleases", href: "/rooleases" },
 			{ id: "articles", label: "Articles", href: "/articles" },
 			{ id: "books", label: "Books", href: "/books" },
+			{ id: "bookcase", label: "Bookcase", href: "/bookcase" },
 		],
 	},
 ];
