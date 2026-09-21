@@ -24,7 +24,16 @@ export async function POST(request: NextRequest) {
 		const devClient = new ConvexHttpClient(devUrl);
 		const prodClient = new ConvexHttpClient(prodUrl);
 
-		console.log("Fetching playlist lyrics from dev...");
+		console.log("Fetching credit defaults from destin...");
+		const creditLabels = await devClient.query(
+			api.geniusCreditLabels.listCreditLabelsForSync,
+		);
+		const creditLabelSync = await prodClient.mutation(
+			api.geniusCreditLabels.upsertCreditLabelsForSync,
+			{ labels: creditLabels },
+		);
+
+		console.log("Fetching playlist lyrics from destin...");
 		const playlists = await devClient.query(api.playlistLyrics.listForSync);
 
 		let playlistsSynced = 0;
@@ -64,6 +73,8 @@ export async function POST(request: NextRequest) {
 						albumTitleOverride: song.albumTitleOverride,
 						albumArtUrlOverride: song.albumArtUrlOverride,
 						durationSecondsOverride: song.durationSecondsOverride,
+						hiddenCreditLabels: song.hiddenCreditLabels,
+						shownCreditLabels: song.shownCreditLabels,
 						pendingUrl: song.pendingUrl,
 						scrapeState: song.scrapeState,
 						createdAt: song.createdAt,
@@ -102,6 +113,7 @@ export async function POST(request: NextRequest) {
 			success: failed === 0,
 			playlistsSynced,
 			scrapesSynced,
+			creditLabelsSynced: creditLabelSync.upsertedCount,
 			failed,
 			total: playlists.length,
 		});

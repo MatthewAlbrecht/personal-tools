@@ -26,6 +26,7 @@ type Playlist = Doc<"playlistLyrics">;
 type SyncResult = {
 	playlistsSynced?: number;
 	scrapesSynced?: number;
+	creditLabelsSynced?: number;
 	failed?: number;
 	total?: number;
 	error?: string;
@@ -285,6 +286,7 @@ function formatSyncToast(result: SyncResult): string {
 	const counts = [
 		formatCount("playlists", result.playlistsSynced),
 		formatCount("scrapes", result.scrapesSynced),
+		formatCount("credit labels", result.creditLabelsSynced),
 		formatCount("failed", result.failed),
 		formatCount("total", result.total),
 	].filter(Boolean);

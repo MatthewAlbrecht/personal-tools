@@ -323,6 +323,78 @@ export const setCreditLabelHiddenByDefault = mutation({
 	},
 });
 
+const creditLabelSyncRowValidator = v.object({
+	key: v.string(),
+	label: v.string(),
+	hiddenByDefault: v.boolean(),
+	ignored: v.boolean(),
+	createdAt: v.number(),
+	updatedAt: v.number(),
+});
+
+export const listCreditLabelsForSync = query({
+	args: {},
+	returns: v.array(creditLabelSyncRowValidator),
+	handler: async (ctx) => {
+		requireAuth(ctx);
+
+		const rows = await ctx.db.query("geniusCreditLabels").collect();
+		return rows.map((row) => ({
+			key: row.key,
+			label: row.label,
+			hiddenByDefault: row.hiddenByDefault,
+			ignored: row.ignored === true,
+			createdAt: row.createdAt,
+			updatedAt: row.updatedAt,
+		}));
+	},
+});
+
+export const upsertCreditLabelsForSync = mutation({
+	args: {
+		labels: v.array(creditLabelSyncRowValidator),
+	},
+	returns: v.object({
+		upsertedCount: v.number(),
+	}),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+
+		let upsertedCount = 0;
+
+		for (const label of args.labels) {
+			const key = normalizeCreditLabelKey(label.key);
+			if (!key) continue;
+
+			const existing = await ctx.db
+				.query("geniusCreditLabels")
+				.withIndex("by_key", (q) => q.eq("key", key))
+				.first();
+
+			const next = {
+				key,
+				label: label.label.trim() || key,
+				hiddenByDefault: label.ignored ? false : label.hiddenByDefault,
+				ignored: label.ignored,
+				updatedAt: label.updatedAt,
+			};
+
+			if (existing) {
+				await ctx.db.patch(existing._id, next);
+			} else {
+				await ctx.db.insert("geniusCreditLabels", {
+					...next,
+					createdAt: label.createdAt,
+				});
+			}
+
+			upsertedCount += 1;
+		}
+
+		return { upsertedCount };
+	},
+});
+
 export type CreditLabelRow = Doc<"geniusCreditLabels">;
 
 export type { GeniusCredit };
