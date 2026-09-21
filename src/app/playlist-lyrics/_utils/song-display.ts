@@ -44,6 +44,7 @@ export function buildZineSongDisplayInput({
 	durationSecondsOverride,
 	hiddenCreditLabels,
 	shownCreditLabels,
+	pageRecommendations,
 	scrape,
 }: {
 	id: string;
@@ -67,6 +68,7 @@ export function buildZineSongDisplayInput({
 	};
 	hiddenCreditLabels?: string[];
 	shownCreditLabels?: string[];
+	pageRecommendations?: ZineSongDisplayInput["pageRecommendations"];
 }): ZineSongDisplayInput {
 	const albumMetadata = splitAlbumTitleAndYear(
 		albumTitleOverride ?? scrape?.albumTitle,
@@ -88,6 +90,7 @@ export function buildZineSongDisplayInput({
 		credits: scrape?.credits,
 		hiddenCreditLabels,
 		shownCreditLabels,
+		pageRecommendations,
 	};
 }
 

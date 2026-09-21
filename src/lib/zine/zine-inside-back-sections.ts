@@ -65,7 +65,7 @@ export function getVisibleDiscographyItems(
 
 export const ZINE_INSIDE_BACK_DEFAULT_TITLES = {
 	discography: "Discography",
-	recommendations: "If you liked this album, check out",
+	recommendations: "If you liked this, check out",
 } as const;
 
 export function hasInsideBackContent(

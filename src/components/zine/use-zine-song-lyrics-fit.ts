@@ -23,17 +23,18 @@ export function useZineSongLyricsFit({
 	targetFontSizePt = ZINE_LYRICS_SIZE_SLIDER.defaultPt,
 	contentKey,
 	lyricsColumnMode,
-	showCredits = true,
+	hasFooter = true,
 }: {
 	lyrics: string;
 	/** Slider target/max; fit shrinks down to slider min pt if overflowing. */
 	targetFontSizePt?: number;
 	contentKey: string;
 	lyricsColumnMode: ZineLyricsColumnMode;
-	showCredits?: boolean;
+	hasFooter?: boolean;
 }): {
 	pageRef: RefObject<HTMLElement | null>;
 	headerRef: RefObject<HTMLDivElement | null>;
+	footerRef: RefObject<HTMLDivElement | null>;
 	/** Outer clip shell (height constrained). */
 	lyricsClipRef: RefObject<HTMLDivElement | null>;
 	/** Column + font-size layer; passed to vertical fit helpers. */
@@ -44,6 +45,7 @@ export function useZineSongLyricsFit({
 } {
 	const pageRef = useRef<HTMLElement | null>(null);
 	const headerRef = useRef<HTMLDivElement | null>(null);
+	const footerRef = useRef<HTMLDivElement | null>(null);
 	const lyricsClipRef = useRef<HTMLDivElement | null>(null);
 	const lyricsScaledContentRef = useRef<HTMLDivElement | null>(null);
 	const [lyricsHeightPx, setLyricsHeightPx] = useState(0);
@@ -53,6 +55,7 @@ export function useZineSongLyricsFit({
 	const remeasure = useCallback(() => {
 		const page = pageRef.current;
 		const header = headerRef.current;
+		const footer = footerRef.current;
 		const lyricsClip = lyricsClipRef.current;
 		const lyricsMeasuring = lyricsScaledContentRef.current;
 		if (!page || !header || !lyricsClip || !lyricsMeasuring) {
@@ -64,7 +67,11 @@ export function useZineSongLyricsFit({
 		const paddingBottom = Number.parseFloat(pageStyles.paddingBottom) || 0;
 		const innerHeight = page.clientHeight - paddingTop - paddingBottom;
 		const headerHeight = header.getBoundingClientRect().height;
-		const footerReservePx = showCredits ? ZINE_FOOTER_ZONE_CSS_PX : 0;
+		const footerReservePx = footer
+			? footer.getBoundingClientRect().height
+			: hasFooter
+				? ZINE_FOOTER_ZONE_CSS_PX
+				: 0;
 		const nextLyricsHeightPx = Math.max(
 			24,
 			Math.floor(innerHeight - headerHeight - footerReservePx),
@@ -83,7 +90,7 @@ export function useZineSongLyricsFit({
 		});
 
 		setFontSizePt(nextFontSizePt);
-	}, [contentKey, lyrics, lyricsColumnMode, showCredits, targetFontSizePt]);
+	}, [contentKey, hasFooter, lyrics, lyricsColumnMode, targetFontSizePt]);
 
 	useLayoutEffect(() => {
 		remeasure();
@@ -94,6 +101,7 @@ export function useZineSongLyricsFit({
 	return {
 		pageRef,
 		headerRef,
+		footerRef,
 		lyricsClipRef,
 		lyricsScaledContentRef,
 		lyricsHeightPx,

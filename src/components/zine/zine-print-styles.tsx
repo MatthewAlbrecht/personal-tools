@@ -546,6 +546,84 @@ export function ZinePrintStyles() {
 						justify-content: flex-end;
 					}
 
+					.zine-song-page-footer-with-recommendations {
+						height: auto;
+						min-height: 0;
+						max-height: none;
+					}
+
+					.zine-page-recommendations {
+						display: flex;
+						flex-direction: column;
+						gap: 4pt;
+						margin: 0 0 5pt;
+						padding: 4pt 0 0;
+						list-style: none;
+						border-top: 0.5pt solid #cccccc;
+					}
+
+					.zine-page-recommendations-pair {
+						flex-direction: row;
+						align-items: flex-start;
+						gap: 8pt;
+					}
+
+					.zine-page-recommendation {
+						display: flex;
+						min-width: 0;
+						flex: 1 1 0;
+						align-items: flex-start;
+						gap: 5pt;
+					}
+
+					.zine-page-recommendation-art {
+						width: 0.28in;
+						height: 0.28in;
+						flex-shrink: 0;
+						object-fit: cover;
+						border-radius: 1.5pt;
+					}
+
+					.zine-page-recommendations-pair .zine-page-recommendation-art {
+						width: 0.32in;
+						height: 0.32in;
+					}
+
+					.zine-page-recommendation-art-placeholder {
+						background: #e5e5e5;
+						-webkit-print-color-adjust: exact;
+						print-color-adjust: exact;
+					}
+
+					.zine-page-recommendation-text {
+						min-width: 0;
+						flex: 1;
+					}
+
+					.zine-page-recommendation-title {
+						margin: 0;
+						font-size: 6.5pt;
+						font-style: italic;
+						font-weight: 600;
+						line-height: 1.15;
+					}
+
+					.zine-page-recommendation-artist {
+						margin: 0;
+						font-size: 5.5pt;
+						font-weight: 500;
+						letter-spacing: 0.04em;
+						line-height: 1.15;
+						text-transform: uppercase;
+					}
+
+					.zine-page-recommendation-pitch {
+						margin: 0;
+						font-size: 5.5pt;
+						line-height: 1.2;
+						color: #555;
+					}
+
 					.zine-song-footer {
 						flex: 0 0 auto;
 						min-height: 0;

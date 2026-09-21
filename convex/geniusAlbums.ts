@@ -40,6 +40,10 @@ import {
 	normalizeZineInsideBackSections,
 	zineInsideBackSectionsValidator,
 } from "./_utils/zineInsideBackSections";
+import {
+	normalizeZinePageRecommendations,
+	zinePageRecommendationsValidator,
+} from "./_utils/zinePageRecommendations";
 import { requireAuth } from "./auth";
 import {
 	ensureCreditLabelHiddenByDefault,
@@ -278,6 +282,7 @@ export const updateAlbumOverrides = mutation({
 		frontPageImageUrlOverride: v.optional(v.string()),
 		introPageContent: v.optional(v.string()),
 		zineInsideBackSections: v.optional(zineInsideBackSectionsValidator),
+		zinePageRecommendations: v.optional(zinePageRecommendationsValidator),
 	},
 	returns: v.id("geniusAlbums"),
 	handler: async (ctx, args) => {
@@ -294,21 +299,45 @@ export const updateAlbumOverrides = mutation({
 			zineInsideBackSections?: ReturnType<
 				typeof normalizeZineInsideBackSections
 			>;
+			zinePageRecommendations?: ReturnType<
+				typeof normalizeZinePageRecommendations
+			>;
 			updatedAt: number;
 		} = {
-			albumTitleOverride: normalizeOptionalString(args.albumTitleOverride),
-			artistNameOverride: normalizeOptionalString(args.artistNameOverride),
-			summaryOverride: normalizeOptionalString(args.summaryOverride),
-			frontPageImageUrlOverride: normalizeOptionalString(
-				args.frontPageImageUrlOverride,
-			),
-			introPageContent: normalizeOptionalString(args.introPageContent),
 			updatedAt: Date.now(),
 		};
+
+		if (args.albumTitleOverride !== undefined) {
+			patch.albumTitleOverride = normalizeOptionalString(
+				args.albumTitleOverride,
+			);
+		}
+		if (args.artistNameOverride !== undefined) {
+			patch.artistNameOverride = normalizeOptionalString(
+				args.artistNameOverride,
+			);
+		}
+		if (args.summaryOverride !== undefined) {
+			patch.summaryOverride = normalizeOptionalString(args.summaryOverride);
+		}
+		if (args.frontPageImageUrlOverride !== undefined) {
+			patch.frontPageImageUrlOverride = normalizeOptionalString(
+				args.frontPageImageUrlOverride,
+			);
+		}
+		if (args.introPageContent !== undefined) {
+			patch.introPageContent = normalizeOptionalString(args.introPageContent);
+		}
 
 		if (args.zineInsideBackSections !== undefined) {
 			patch.zineInsideBackSections = normalizeZineInsideBackSections(
 				args.zineInsideBackSections,
+			);
+		}
+
+		if (args.zinePageRecommendations !== undefined) {
+			patch.zinePageRecommendations = normalizeZinePageRecommendations(
+				args.zinePageRecommendations,
 			);
 		}
 
@@ -457,6 +486,7 @@ export const updateSongOverrides = mutation({
 		durationSecondsOverride: v.optional(v.union(v.number(), v.null())),
 		hiddenCreditLabels: v.optional(v.array(v.string())),
 		shownCreditLabels: v.optional(v.array(v.string())),
+		zinePageRecommendations: v.optional(zinePageRecommendationsValidator),
 	},
 	returns: v.id("geniusSongs"),
 	handler: async (ctx, args) => {
@@ -464,17 +494,50 @@ export const updateSongOverrides = mutation({
 		const song = await ctx.db.get(args.songId);
 		if (!song) throw new Error("Song not found");
 
-		await ctx.db.patch(args.songId, {
-			songTitleOverride: normalizeOptionalString(args.songTitleOverride),
-			lyricsOverride: normalizeOptionalString(args.lyricsOverride),
-			aboutOverride: normalizeOptionalString(args.aboutOverride),
-			durationSecondsOverride:
+		const patch: {
+			songTitleOverride?: string;
+			lyricsOverride?: string;
+			aboutOverride?: string;
+			durationSecondsOverride?: number;
+			hiddenCreditLabels?: string[];
+			shownCreditLabels?: string[];
+			zinePageRecommendations?: ReturnType<
+				typeof normalizeZinePageRecommendations
+			>;
+		} = {};
+
+		if (args.songTitleOverride !== undefined) {
+			patch.songTitleOverride = normalizeOptionalString(args.songTitleOverride);
+		}
+		if (args.lyricsOverride !== undefined) {
+			patch.lyricsOverride = normalizeOptionalString(args.lyricsOverride);
+		}
+		if (args.aboutOverride !== undefined) {
+			patch.aboutOverride = normalizeOptionalString(args.aboutOverride);
+		}
+		if (args.durationSecondsOverride !== undefined) {
+			patch.durationSecondsOverride =
 				args.durationSecondsOverride === null
 					? undefined
-					: args.durationSecondsOverride,
-			hiddenCreditLabels: normalizeCreditLabelList(args.hiddenCreditLabels),
-			shownCreditLabels: normalizeCreditLabelList(args.shownCreditLabels),
-		});
+					: args.durationSecondsOverride;
+		}
+		if (args.hiddenCreditLabels !== undefined) {
+			patch.hiddenCreditLabels = normalizeCreditLabelList(
+				args.hiddenCreditLabels,
+			);
+		}
+		if (args.shownCreditLabels !== undefined) {
+			patch.shownCreditLabels = normalizeCreditLabelList(
+				args.shownCreditLabels,
+			);
+		}
+		if (args.zinePageRecommendations !== undefined) {
+			patch.zinePageRecommendations = normalizeZinePageRecommendations(
+				args.zinePageRecommendations,
+			);
+		}
+
+		await ctx.db.patch(args.songId, patch);
 
 		return args.songId;
 	},

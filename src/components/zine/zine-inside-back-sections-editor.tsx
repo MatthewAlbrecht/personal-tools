@@ -450,7 +450,7 @@ function InsideBackSectionCard({
 						</Button>
 						{!spotifyDiscographySource?.spotifyAlbumId ? (
 							<p className="text-muted-foreground text-xs">
-								Map a Spotify album below to enable import.
+								Map a Spotify album in Tracks to enable import.
 							</p>
 						) : (
 							<p className="text-muted-foreground text-xs">
@@ -729,9 +729,7 @@ function RecommendationItemEditor({
 					}
 				/>
 				<div className="space-y-2 sm:col-span-2">
-					<Label htmlFor={`${idPrefix}-similarity-blurb`}>
-						Similarity blurb
-					</Label>
+					<Label htmlFor={`${idPrefix}-similarity-blurb`}>Shared vibe</Label>
 					<Textarea
 						id={`${idPrefix}-similarity-blurb`}
 						className="min-h-20"

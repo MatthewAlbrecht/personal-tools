@@ -8,8 +8,12 @@ import { LyricsZine, LyricsZineSkeleton } from "~/components/zine/lyrics-zine";
 import { buildAlbumZineSongInput } from "~/lib/zine/album-song-input";
 import { coverTextLayoutFromStoredFields } from "~/lib/zine/zine-cover-text-layout";
 import { insideBackLayoutFromStoredFields } from "~/lib/zine/zine-inside-back-layout";
-import { hasInsideBackContent, coerceZineInsideBackSections } from "~/lib/zine/zine-inside-back-sections";
+import {
+	coerceZineInsideBackSections,
+	hasInsideBackContent,
+} from "~/lib/zine/zine-inside-back-sections";
 import { resolveAlbumIntroContent } from "~/lib/zine/zine-intro-content";
+import { getVisiblePageRecommendations } from "~/lib/zine/zine-page-recommendations";
 import type { ZineItemSettings } from "~/lib/zine/zine-types";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
@@ -79,7 +83,7 @@ export function AlbumLyricsZine({ slug, variant }: AlbumLyricsZineProps) {
 	const canEdit = variant === "private";
 	const albumId = albumData.album._id;
 	const backHref =
-		variant === "public" ? `/public/lyrics/${slug}` : `/lyrics/${slug}`;
+		variant === "public" ? `/public/lyrics/${slug}` : `/lyrics/${slug}/edit`;
 	const displayAlbumTitle =
 		albumData.album.albumTitleOverride?.trim() || albumData.album.albumTitle;
 	const displayArtistName =
@@ -104,6 +108,7 @@ export function AlbumLyricsZine({ slug, variant }: AlbumLyricsZineProps) {
 				durationSecondsOverride: song.durationSecondsOverride,
 				hiddenCreditLabels: song.hiddenCreditLabels,
 				shownCreditLabels: song.shownCreditLabels,
+				zinePageRecommendations: song.zinePageRecommendations,
 			},
 		}),
 	);
@@ -156,11 +161,12 @@ export function AlbumLyricsZine({ slug, variant }: AlbumLyricsZineProps) {
 								albumData.album.zineInsideBackSections,
 							)
 						: undefined
-					: coerceZineInsideBackSections(
-							albumData.album.zineInsideBackSections,
-						)
+					: coerceZineInsideBackSections(albumData.album.zineInsideBackSections)
 			}
 			insideBackLayout={insideBackLayoutFromStoredFields(albumData.album)}
+			pageRecommendations={getVisiblePageRecommendations(
+				albumData.album.zinePageRecommendations,
+			)}
 			siteWideHiddenCreditLabelKeys={albumData.siteWideHiddenCreditLabelKeys}
 			ignoredCreditLabelKeys={albumData.ignoredCreditLabelKeys}
 			songs={songs}

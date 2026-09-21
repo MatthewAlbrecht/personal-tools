@@ -62,6 +62,7 @@ import type * as _utils_upsertSpotifyAlbumRecord from "../_utils/upsertSpotifyAl
 import type * as _utils_zineCoverTextLayout from "../_utils/zineCoverTextLayout.js";
 import type * as _utils_zineInsideBackLayout from "../_utils/zineInsideBackLayout.js";
 import type * as _utils_zineInsideBackSections from "../_utils/zineInsideBackSections.js";
+import type * as _utils_zinePageRecommendations from "../_utils/zinePageRecommendations.js";
 import type * as albumDuels from "../albumDuels.js";
 import type * as albumEnrichment from "../albumEnrichment.js";
 import type * as albumEnrichmentTrials from "../albumEnrichmentTrials.js";
@@ -164,6 +165,7 @@ declare const fullApi: ApiFromModules<{
   "_utils/zineCoverTextLayout": typeof _utils_zineCoverTextLayout;
   "_utils/zineInsideBackLayout": typeof _utils_zineInsideBackLayout;
   "_utils/zineInsideBackSections": typeof _utils_zineInsideBackSections;
+  "_utils/zinePageRecommendations": typeof _utils_zinePageRecommendations;
   albumDuels: typeof albumDuels;
   albumEnrichment: typeof albumEnrichment;
   albumEnrichmentTrials: typeof albumEnrichmentTrials;

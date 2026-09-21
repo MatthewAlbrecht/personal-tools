@@ -5,6 +5,8 @@ import {
 	ZINE_LYRICS_SIZE_SLIDER,
 	ZINE_TEXT_CONDENSE,
 } from "~/lib/zine/zine-layout";
+import type { ZinePageRecommendation } from "~/lib/zine/zine-page-recommendations";
+import { getVisiblePageRecommendations } from "~/lib/zine/zine-page-recommendations";
 import type { ZineSongPageData } from "~/lib/zine/zine-pages";
 import {
 	filterVisibleCredits,
@@ -15,6 +17,7 @@ import { LyricsRenderer } from "./lyrics-renderer";
 import type { ZineDisplayOptions } from "./zine-song-header";
 import { ZineSongHeader } from "./zine-song-header";
 import { ZineSongPageFooterCredits } from "./zine-song-page-footer-credits";
+import { ZineSongPageRecommendations } from "./zine-song-page-recommendations";
 
 export function ZineSongGroupPage({
 	songs,
@@ -22,6 +25,7 @@ export function ZineSongGroupPage({
 	getTitleCondenseScale,
 	getLyricsFontSizePt,
 	getShowCredits,
+	pageRecommendations,
 	creditVisibility,
 	canEditCredits,
 	onHideCreditLabel,
@@ -31,10 +35,14 @@ export function ZineSongGroupPage({
 	getTitleCondenseScale: (songId: string) => number;
 	getLyricsFontSizePt: (songId: string) => number;
 	getShowCredits: (songId: string) => boolean;
+	pageRecommendations?: ZinePageRecommendation[];
 	creditVisibility?: CreditVisibilityState;
 	canEditCredits?: boolean;
 	onHideCreditLabel?: (songId: string, label: string) => void;
 }) {
+	const visibleRecommendations =
+		getVisiblePageRecommendations(pageRecommendations);
+	const lastSongId = songs.at(-1)?.songId;
 	return (
 		<section className="zine-page zine-page-preview zine-page-song zine-page-song-group">
 			{songs.map((song) => {
@@ -53,6 +61,8 @@ export function ZineSongGroupPage({
 					: undefined;
 				const lyricsFontSizePt =
 					getLyricsFontSizePt(song.songId) ?? ZINE_LYRICS_SIZE_SLIDER.defaultPt;
+				const showRecommendations =
+					song.songId === lastSongId && visibleRecommendations.length > 0;
 
 				return (
 					<div key={song.songId} className="zine-song-group-block">
@@ -74,23 +84,28 @@ export function ZineSongGroupPage({
 								/>
 							</div>
 						) : null}
-						{visibleCredits?.length ? (
+						{showRecommendations || visibleCredits?.length ? (
 							<div
 								className={cn(
 									"zine-song-group-credits",
 									hasLyrics && "zine-song-group-credits-with-lyrics",
 								)}
 							>
-								<ZineSongPageFooterCredits
-									canEditCredits={canEditCredits ?? false}
-									credits={visibleCredits}
-									onHideCreditLabel={
-										canEditCredits && onHideCreditLabel
-											? (label) => onHideCreditLabel(song.songId, label)
-											: undefined
-									}
-									showRule={displayOptions.showCreditsRule}
-								/>
+								{showRecommendations ? (
+									<ZineSongPageRecommendations items={visibleRecommendations} />
+								) : null}
+								{visibleCredits?.length ? (
+									<ZineSongPageFooterCredits
+										canEditCredits={canEditCredits ?? false}
+										credits={visibleCredits}
+										onHideCreditLabel={
+											canEditCredits && onHideCreditLabel
+												? (label) => onHideCreditLabel(song.songId, label)
+												: undefined
+										}
+										showRule={displayOptions.showCreditsRule}
+									/>
+								) : null}
 							</div>
 						) : null}
 					</div>

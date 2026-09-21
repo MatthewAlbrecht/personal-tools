@@ -1,3 +1,5 @@
+import type { ZinePageRecommendation } from "./zine-page-recommendations";
+
 export type ZineCreditContributor = {
 	name: string;
 	url?: string;
@@ -26,6 +28,8 @@ export type ZineSongDisplayInput = {
 	shownCreditLabels?: string[];
 	/** When true, this track shares a page with the track above it. */
 	collapseWithPrevious?: boolean;
+	/** Per-track lyric-page recommendations (falls back to playlist/album defaults). */
+	pageRecommendations?: ZinePageRecommendation[];
 };
 
 export type ZineItemSettings = {

@@ -1,3 +1,4 @@
+import type { ZinePageRecommendation } from "./zine-page-recommendations";
 import type { ZineCredit, ZineSongDisplayInput } from "./zine-types";
 
 export function buildAlbumZineSongInput({
@@ -18,6 +19,7 @@ export function buildAlbumZineSongInput({
 		durationSecondsOverride?: number;
 		hiddenCreditLabels?: string[];
 		shownCreditLabels?: string[];
+		zinePageRecommendations?: ZinePageRecommendation[];
 	};
 }): ZineSongDisplayInput {
 	const trackIntro =
@@ -38,5 +40,6 @@ export function buildAlbumZineSongInput({
 		credits: song.credits,
 		hiddenCreditLabels: song.hiddenCreditLabels,
 		shownCreditLabels: song.shownCreditLabels,
+		pageRecommendations: song.zinePageRecommendations,
 	};
 }

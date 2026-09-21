@@ -5,6 +5,8 @@ import {
 	ZINE_LYRICS_SIZE_SLIDER,
 	ZINE_TEXT_CONDENSE,
 } from "~/lib/zine/zine-layout";
+import type { ZinePageRecommendation } from "~/lib/zine/zine-page-recommendations";
+import { getVisiblePageRecommendations } from "~/lib/zine/zine-page-recommendations";
 import type { ZineCredit } from "~/lib/zine/zine-types";
 import {
 	filterVisibleCredits,
@@ -19,6 +21,7 @@ import {
 import type { ZineDisplayOptions } from "./zine-song-header";
 import { ZineSongHeader } from "./zine-song-header";
 import { ZineSongPageFooterCredits } from "./zine-song-page-footer-credits";
+import { ZineSongPageRecommendations } from "./zine-song-page-recommendations";
 
 export type { ZineDisplayOptions } from "./zine-song-header";
 export type { ZineLyricsColumnMode } from "./use-zine-song-lyrics-fit";
@@ -48,6 +51,7 @@ export function ZineSongPage({
 	lyricsTargetFontSizePt,
 	titleCondenseScale = ZINE_TEXT_CONDENSE.default,
 	showCredits = true,
+	pageRecommendations,
 	creditVisibility,
 	canEditCredits = false,
 	onHideCreditLabel,
@@ -58,6 +62,7 @@ export function ZineSongPage({
 	lyricsTargetFontSizePt?: number;
 	titleCondenseScale?: number;
 	showCredits?: boolean;
+	pageRecommendations?: ZinePageRecommendation[];
 	creditVisibility?: CreditVisibilityState;
 	canEditCredits?: boolean;
 	onHideCreditLabel?: (label: string) => void;
@@ -74,6 +79,11 @@ export function ZineSongPage({
 		displayOptions.showSectionLabels,
 		displayOptions.showUserNote,
 		showCredits,
+		pageRecommendations
+			?.map(
+				(item) => `${item.albumTitle}|${item.artistName}|${item.pitch ?? ""}`,
+			)
+			.join("||") ?? "",
 		song.hiddenCreditLabels?.join("|") ?? "",
 		song.shownCreditLabels?.join("|") ?? "",
 		creditVisibility?.siteWideHiddenLabelKeys?.join("|") ?? "",
@@ -89,6 +99,7 @@ export function ZineSongPage({
 			lyricsColumnMode={lyricsColumnMode}
 			lyricsTargetFontSizePt={lyricsTargetFontSizePt}
 			onHideCreditLabel={onHideCreditLabel}
+			pageRecommendations={pageRecommendations}
 			showCredits={showCredits}
 			song={song}
 			titleCondenseScale={titleCondenseScale}
@@ -104,6 +115,7 @@ function ZineSongPageContent({
 	lyricsTargetFontSizePt,
 	titleCondenseScale,
 	showCredits,
+	pageRecommendations,
 	creditVisibility,
 	canEditCredits,
 	onHideCreditLabel,
@@ -115,6 +127,7 @@ function ZineSongPageContent({
 	lyricsTargetFontSizePt?: number;
 	titleCondenseScale: number;
 	showCredits: boolean;
+	pageRecommendations?: ZinePageRecommendation[];
 	creditVisibility?: CreditVisibilityState;
 	canEditCredits: boolean;
 	onHideCreditLabel?: (label: string) => void;
@@ -122,11 +135,15 @@ function ZineSongPageContent({
 	const resolvedLyricsTargetPt =
 		lyricsTargetFontSizePt ?? ZINE_LYRICS_SIZE_SLIDER.defaultPt;
 
+	const visibleRecommendations =
+		getVisiblePageRecommendations(pageRecommendations);
+	const hasRecommendations = visibleRecommendations.length > 0;
+
 	const lyricsFit = useZineSongLyricsFit({
 		contentKey: `${displayKey}:${lyricsColumnMode}:condense${titleCondenseScale}:lyrics${resolvedLyricsTargetPt}`,
+		hasFooter: showCredits || hasRecommendations,
 		lyrics: song.lyrics,
 		lyricsColumnMode,
-		showCredits,
 		targetFontSizePt: resolvedLyricsTargetPt,
 	});
 
@@ -185,10 +202,19 @@ function ZineSongPageContent({
 					)}
 				</div>
 			</div>
-			{showCredits ? (
-				<div className="zine-song-page-footer">
+			{showCredits || hasRecommendations ? (
+				<div
+					ref={lyricsFit.footerRef}
+					className={cn(
+						"zine-song-page-footer",
+						hasRecommendations && "zine-song-page-footer-with-recommendations",
+					)}
+				>
 					<div className="zine-song-footer">
-						{visibleCredits ? (
+						{hasRecommendations ? (
+							<ZineSongPageRecommendations items={visibleRecommendations} />
+						) : null}
+						{showCredits && visibleCredits ? (
 							<ZineSongPageFooterCredits
 								canEditCredits={canEditCredits}
 								credits={visibleCredits}

@@ -48,6 +48,11 @@ import {
 	ZINE_LYRICS_SIZE_SLIDER,
 	ZINE_TEXT_CONDENSE,
 } from "~/lib/zine/zine-layout";
+import type { ZinePageRecommendation } from "~/lib/zine/zine-page-recommendations";
+import {
+	getVisiblePageRecommendations,
+	resolveSongPageRecommendations,
+} from "~/lib/zine/zine-page-recommendations";
 import { buildZinePages } from "~/lib/zine/zine-pages";
 import type {
 	ZineBackCoverQrCodes,
@@ -112,6 +117,7 @@ export function LyricsZine({
 	coverReleaseYear: coverReleaseYearProp,
 	insideBackSections,
 	insideBackLayout: insideBackLayoutProp,
+	pageRecommendations,
 }: {
 	collectionTitle: string;
 	coverArtistName?: string;
@@ -133,6 +139,7 @@ export function LyricsZine({
 	coverReleaseYear?: number;
 	insideBackSections?: ZineInsideBackSection[];
 	insideBackLayout?: Partial<ZineInsideBackLayoutSettings> | null;
+	pageRecommendations?: ZinePageRecommendation[];
 }) {
 	const [duplexBinding, setDuplexBinding] =
 		useState<ZineDuplexBinding>("short-edge");
@@ -668,6 +675,14 @@ export function LyricsZine({
 					getTitleCondenseScale={(songId) =>
 						getCondenseScaleForSong(songTextCondenseScales, songId)
 					}
+					pageRecommendations={resolveSongPageRecommendations(
+						page.songs.find(
+							(song) =>
+								getVisiblePageRecommendations(song.pageRecommendations).length >
+								0,
+						)?.pageRecommendations ?? page.songs[0]?.pageRecommendations,
+						pageRecommendations,
+					)}
 					onHideCreditLabel={
 						canEdit && persistence?.hideCreditLabel
 							? (songId, label) => persistence.hideCreditLabel?.(songId, label)
@@ -692,6 +707,14 @@ export function LyricsZine({
 					getTitleCondenseScale={(songId) =>
 						getCondenseScaleForSong(songTextCondenseScales, songId)
 					}
+					pageRecommendations={resolveSongPageRecommendations(
+						page.songs.find(
+							(song) =>
+								getVisiblePageRecommendations(song.pageRecommendations).length >
+								0,
+						)?.pageRecommendations ?? page.songs[0]?.pageRecommendations,
+						pageRecommendations,
+					)}
 					onHideCreditLabel={
 						canEdit && persistence?.hideCreditLabel
 							? (songId, label) => persistence.hideCreditLabel?.(songId, label)
@@ -727,6 +750,10 @@ export function LyricsZine({
 							? (label) => persistence.hideCreditLabel?.(page.songId, label)
 							: undefined
 					}
+					pageRecommendations={resolveSongPageRecommendations(
+						page.pageRecommendations,
+						pageRecommendations,
+					)}
 					showCredits={showCredits}
 					song={{
 						songId: page.songId,
@@ -797,7 +824,7 @@ export function LyricsZine({
 						<Button asChild variant="ghost" className="self-start">
 							<Link href={backHref}>
 								<ArrowLeft className="mr-2 h-4 w-4" />
-								Back to Reader
+								{canEdit ? "Back to Edit" : "Back"}
 							</Link>
 						</Button>
 						<div className="flex flex-wrap gap-2">
@@ -1484,8 +1511,8 @@ function ZineIntroPageContentDialog({
 				<DialogHeader>
 					<DialogTitle>Album intro</DialogTitle>
 					<DialogDescription>
-						Appears on the page after the cover. Use *bold*, _italic_, and
-						blank lines for paragraphs.
+						Appears on the page after the cover. Use *bold*, _italic_, and blank
+						lines for paragraphs.
 					</DialogDescription>
 				</DialogHeader>
 				<IntroContentEditor

@@ -7,7 +7,11 @@ import { Button } from "~/components/ui/button";
 import { LyricsZine, LyricsZineSkeleton } from "~/components/zine/lyrics-zine";
 import { coverTextLayoutFromStoredFields } from "~/lib/zine/zine-cover-text-layout";
 import { insideBackLayoutFromStoredFields } from "~/lib/zine/zine-inside-back-layout";
-import { coerceZineInsideBackSections, hasInsideBackContent } from "~/lib/zine/zine-inside-back-sections";
+import {
+	coerceZineInsideBackSections,
+	hasInsideBackContent,
+} from "~/lib/zine/zine-inside-back-sections";
+import { getVisiblePageRecommendations } from "~/lib/zine/zine-page-recommendations";
 import type { ZineItemSettings } from "~/lib/zine/zine-types";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
@@ -89,7 +93,7 @@ export function PlaylistLyricsZine({ slug, variant }: PlaylistLyricsZineProps) {
 	const backHref =
 		variant === "public"
 			? `/public/playlist-lyrics/${slug}`
-			: `/playlist-lyrics/${slug}`;
+			: `/playlist-lyrics/${slug}/edit`;
 
 	const songs = playlistData.songs.map((song, index) =>
 		buildZineSongDisplayInput({
@@ -104,6 +108,7 @@ export function PlaylistLyricsZine({ slug, variant }: PlaylistLyricsZineProps) {
 			durationSecondsOverride: song.durationSecondsOverride,
 			hiddenCreditLabels: song.hiddenCreditLabels,
 			shownCreditLabels: song.shownCreditLabels,
+			pageRecommendations: song.zinePageRecommendations,
 			scrape: song.scrape,
 		}),
 	);
@@ -136,6 +141,9 @@ export function PlaylistLyricsZine({ slug, variant }: PlaylistLyricsZineProps) {
 			collectionTitle={playlist.title}
 			insideBackSections={insideBackSections}
 			insideBackLayout={insideBackLayoutFromStoredFields(playlist)}
+			pageRecommendations={getVisiblePageRecommendations(
+				playlist.zinePageRecommendations,
+			)}
 			backCoverQrCodes={{
 				spotify: {
 					imageUrl: playlist.zineSpotifyQrImageUrl,

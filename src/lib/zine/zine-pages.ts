@@ -33,6 +33,7 @@ export type ZineSongPageData = {
 	hiddenCreditLabels?: string[];
 	shownCreditLabels?: string[];
 	collapseWithPrevious?: boolean;
+	pageRecommendations?: ZineSongDisplayInput["pageRecommendations"];
 };
 
 export type ZineSongPage = {
@@ -97,6 +98,7 @@ function mapSongInputToPageData(song: ZineSongInput): ZineSongPageData {
 		hiddenCreditLabels: song.hiddenCreditLabels,
 		shownCreditLabels: song.shownCreditLabels,
 		collapseWithPrevious: song.collapseWithPrevious,
+		pageRecommendations: song.pageRecommendations,
 	};
 }
 

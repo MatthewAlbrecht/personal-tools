@@ -21,6 +21,7 @@ import {
 	zineInsideBackRecommendationRowAlignValidator,
 } from "./_utils/zineInsideBackLayout";
 import { zineInsideBackSectionsValidator } from "./_utils/zineInsideBackSections";
+import { zinePageRecommendationsValidator } from "./_utils/zinePageRecommendations";
 
 const geniusCreditValidator = v.object({
 	label: v.string(),
@@ -241,6 +242,7 @@ export default defineSchema({
 		zineInsideBackRecommendationRowAlign: v.optional(
 			zineInsideBackRecommendationRowAlignValidator,
 		),
+		zinePageRecommendations: v.optional(zinePageRecommendationsValidator),
 		albumTitleOverride: v.optional(v.string()),
 		artistNameOverride: v.optional(v.string()),
 		summaryOverride: v.optional(v.string()),
@@ -282,6 +284,7 @@ export default defineSchema({
 		zineTitleCondenseScale: v.optional(v.number()),
 		zineShowCredits: v.optional(v.boolean()),
 		zineCollapseWithPrevious: v.optional(v.boolean()),
+		zinePageRecommendations: v.optional(zinePageRecommendationsValidator),
 		createdAt: v.number(), // Unix timestamp
 	})
 		.index("by_albumId", ["albumId"]) // For fetching songs by album
@@ -323,6 +326,7 @@ export default defineSchema({
 		zineInsideBackRecommendationRowAlign: v.optional(
 			zineInsideBackRecommendationRowAlignValidator,
 		),
+		zinePageRecommendations: v.optional(zinePageRecommendationsValidator),
 		status: v.union(v.literal("draft"), v.literal("ready")),
 		createdAt: v.number(),
 		updatedAt: v.number(),
@@ -368,6 +372,7 @@ export default defineSchema({
 		durationSecondsOverride: v.optional(v.number()),
 		hiddenCreditLabels: v.optional(v.array(v.string())),
 		shownCreditLabels: v.optional(v.array(v.string())),
+		zinePageRecommendations: v.optional(zinePageRecommendationsValidator),
 		pendingUrl: v.optional(v.string()),
 		scrapeState: v.union(
 			v.literal("scraping"),

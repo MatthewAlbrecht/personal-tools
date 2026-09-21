@@ -24,6 +24,10 @@ import {
 	normalizeZineInsideBackSections,
 	zineInsideBackSectionsValidator,
 } from "./_utils/zineInsideBackSections";
+import {
+	normalizeZinePageRecommendations,
+	zinePageRecommendationsValidator,
+} from "./_utils/zinePageRecommendations";
 import { requireAuth } from "./auth";
 import {
 	ensureCreditLabelHiddenByDefault,
@@ -79,6 +83,7 @@ const playlistValidator = v.object({
 	zineCoverTextAlign: v.optional(zineCoverTextAlignValidator),
 	zineCoverTextOffsetXIn: v.optional(v.number()),
 	zineCoverTextOffsetYIn: v.optional(v.number()),
+	zineCoverShowTitle: v.optional(v.boolean()),
 	zineCoverReleaseYear: v.optional(v.number()),
 	zineSpotifyQrStorageId: v.optional(v.id("_storage")),
 	zineSpotifyQrImageUrl: v.optional(v.string()),
@@ -101,6 +106,7 @@ const playlistValidator = v.object({
 	zineInsideBackRecommendationRowAlign: v.optional(
 		v.union(v.literal("top"), v.literal("center")),
 	),
+	zinePageRecommendations: v.optional(zinePageRecommendationsValidator),
 	status: playlistStatusValidator,
 	createdAt: v.number(),
 	updatedAt: v.number(),
@@ -137,6 +143,7 @@ const publicPlaylistValidator = v.object({
 	zineInsideBackRecommendationRowAlign: v.optional(
 		v.union(v.literal("top"), v.literal("center")),
 	),
+	zinePageRecommendations: v.optional(zinePageRecommendationsValidator),
 });
 
 const scrapeValidator = v.object({
@@ -188,6 +195,7 @@ const itemWithScrapeValidator = v.object({
 	durationSecondsOverride: v.optional(v.number()),
 	hiddenCreditLabels: v.optional(v.array(v.string())),
 	shownCreditLabels: v.optional(v.array(v.string())),
+	zinePageRecommendations: v.optional(zinePageRecommendationsValidator),
 	pendingUrl: v.optional(v.string()),
 	scrapeState: itemScrapeStateValidator,
 	createdAt: v.number(),
@@ -212,6 +220,7 @@ const publicItemWithScrapeValidator = v.object({
 	durationSecondsOverride: v.optional(v.number()),
 	hiddenCreditLabels: v.optional(v.array(v.string())),
 	shownCreditLabels: v.optional(v.array(v.string())),
+	zinePageRecommendations: v.optional(zinePageRecommendationsValidator),
 	scrape: v.optional(publicScrapeValidator),
 });
 
@@ -680,6 +689,28 @@ export const updateZineInsideBackSections = mutation({
 	},
 });
 
+export const updateZinePageRecommendations = mutation({
+	args: {
+		playlistId: v.id("playlistLyrics"),
+		recommendations: zinePageRecommendationsValidator,
+	},
+	returns: v.null(),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+		const playlist = await ctx.db.get(args.playlistId);
+		if (!playlist) throw new Error("Playlist not found");
+
+		await ctx.db.patch(args.playlistId, {
+			zinePageRecommendations: normalizeZinePageRecommendations(
+				args.recommendations,
+			),
+			updatedAt: Date.now(),
+		});
+
+		return null;
+	},
+});
+
 export const updateZineInsideBackLayoutSettings = mutation({
 	args: {
 		playlistId: v.id("playlistLyrics"),
@@ -900,6 +931,7 @@ export const updateItem = mutation({
 		durationSecondsOverride: v.optional(v.union(v.number(), v.null())),
 		hiddenCreditLabels: v.optional(v.array(v.string())),
 		shownCreditLabels: v.optional(v.array(v.string())),
+		zinePageRecommendations: v.optional(zinePageRecommendationsValidator),
 	},
 	returns: v.id("playlistLyricsItems"),
 	handler: async (ctx, args) => {
@@ -920,6 +952,9 @@ export const updateItem = mutation({
 			durationSecondsOverride?: number;
 			hiddenCreditLabels?: string[];
 			shownCreditLabels?: string[];
+			zinePageRecommendations?: ReturnType<
+				typeof normalizeZinePageRecommendations
+			>;
 			updatedAt: number;
 		} = {
 			updatedAt: Date.now(),
@@ -973,6 +1008,11 @@ export const updateItem = mutation({
 		if (args.shownCreditLabels !== undefined) {
 			updates.shownCreditLabels = normalizeCreditLabelList(
 				args.shownCreditLabels,
+			);
+		}
+		if (args.zinePageRecommendations !== undefined) {
+			updates.zinePageRecommendations = normalizeZinePageRecommendations(
+				args.zinePageRecommendations,
 			);
 		}
 
@@ -1478,6 +1518,7 @@ function toPublicPlaylist(ctx: QueryCtx, playlist: Doc<"playlistLyrics">) {
 			zineInsideBackArtistDisplay: playlist.zineInsideBackArtistDisplay,
 			zineInsideBackRecommendationRowAlign:
 				playlist.zineInsideBackRecommendationRowAlign,
+			zinePageRecommendations: playlist.zinePageRecommendations,
 		}),
 	);
 }
@@ -1596,6 +1637,7 @@ function toPublicItemWithScrape(item: ItemWithScrape) {
 		durationSecondsOverride: item.durationSecondsOverride,
 		hiddenCreditLabels: item.hiddenCreditLabels,
 		shownCreditLabels: item.shownCreditLabels,
+		zinePageRecommendations: item.zinePageRecommendations,
 		scrape: item.scrape
 			? {
 					songTitle: item.scrape.songTitle,

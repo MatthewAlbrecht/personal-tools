@@ -2,38 +2,49 @@
 
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import {
-	ArrowLeft,
-	Clock3,
-	Link2,
-	RefreshCw,
-	Save,
-	Unlink,
-} from "lucide-react";
+import { Clock3, Link2, RefreshCw, Unlink } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import {
+	type ReactElement,
+	type ReactNode,
+	useCallback,
+	useEffect,
+	useMemo,
+	useState,
+} from "react";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
-import {
-	Card,
-	CardContent,
-	CardDescription,
-	CardHeader,
-	CardTitle,
-} from "~/components/ui/card";
-import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
 import { Skeleton } from "~/components/ui/skeleton";
-import { Textarea } from "~/components/ui/textarea";
+import {
+	type ZineEditorPersistStatus,
+	mergePersistStatuses,
+	useZineEditorPersist,
+} from "~/components/zine/editor/use-zine-editor-persist";
+import { ZineEditorChapter } from "~/components/zine/editor/zine-editor-chapter";
+import {
+	type ZineEditorNavItem,
+	ZineEditorShell,
+} from "~/components/zine/editor/zine-editor-shell";
+import { ZineField } from "~/components/zine/editor/zine-field";
+import {
+	ZineTrackRow,
+	type ZineTrackRowFields,
+} from "~/components/zine/editor/zine-track-row";
 import { IntroContentEditor } from "~/components/zine/intro-content-editor";
 import { ZineInsideBackSectionsEditor } from "~/components/zine/zine-inside-back-sections-editor";
 import { useAuthToken } from "~/lib/hooks/use-auth-token";
 import { useSpotifyAuth } from "~/lib/hooks/use-spotify-auth";
+import { mapDiscographyReleasesToAlbumUpserts } from "~/lib/zine/spotify-discography-import";
 import type { ZineInsideBackSection } from "~/lib/zine/zine-inside-back-sections";
 import { coerceZineInsideBackSections } from "~/lib/zine/zine-inside-back-sections";
 import { resolveAlbumIntroContent } from "~/lib/zine/zine-intro-content";
-import { mapDiscographyReleasesToAlbumUpserts } from "~/lib/zine/spotify-discography-import";
+import { coerceZinePageRecommendations } from "~/lib/zine/zine-page-recommendations";
+import {
+	formatTrackDuration,
+	formatTrackDurationInput,
+	parseTrackDurationInput,
+} from "~/lib/zine/zine-song-header-content";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { SpotifyAlbumMapDrawer } from "./spotify-album-map-drawer";
@@ -41,24 +52,20 @@ import { SpotifyAlbumMapDrawer } from "./spotify-album-map-drawer";
 type AlbumLyricsData = NonNullable<
 	FunctionReturnType<typeof api.geniusAlbums.getAlbumBySlug>
 >;
-
 type Album = AlbumLyricsData["album"];
-
-type AlbumFormState = {
-	albumTitleOverride: string;
-	artistNameOverride: string;
-	frontPageImageUrlOverride: string;
-	introPageContent: string;
-	zineInsideBackSections: ZineInsideBackSection[];
-};
-
 type Song = AlbumLyricsData["songs"][number];
 
-type SongFormState = {
-	songTitleOverride: string;
-	durationSecondsOverride: string;
-	aboutOverride: string;
-	hiddenCreditLabels: string[];
+type CoverFields = {
+	albumTitleOverride: string;
+	artistNameOverride: string;
+};
+
+type IntroFields = {
+	introPageContent: string;
+};
+
+type EditorNotesFields = {
+	frontPageImageUrlOverride: string;
 };
 
 type MatchedSongDuration = {
@@ -66,15 +73,7 @@ type MatchedSongDuration = {
 	durationSeconds: number;
 };
 
-const emptyAlbumForm: AlbumFormState = {
-	albumTitleOverride: "",
-	artistNameOverride: "",
-	frontPageImageUrlOverride: "",
-	introPageContent: "",
-	zineInsideBackSections: [],
-};
-
-export function AlbumLyricsEditor({ slug }: { slug: string }) {
+export function AlbumLyricsEditor({ slug }: { slug: string }): ReactElement {
 	const { userId } = useAuthToken();
 	const { getValidAccessToken } = useSpotifyAuth();
 	const albumData = useQuery(api.geniusAlbums.getAlbumBySlug, { slug });
@@ -101,84 +100,176 @@ export function AlbumLyricsEditor({ slug }: { slug: string }) {
 		api.spotify.bulkUpsertDiscographyAlbums,
 	);
 
-	const [albumForm, setAlbumForm] = useState<AlbumFormState>(emptyAlbumForm);
-	const [songForms, setSongForms] = useState<Record<string, SongFormState>>({});
-	const [initializedAlbumId, setInitializedAlbumId] =
-		useState<Id<"geniusAlbums"> | null>(null);
-	const [isSavingAlbum, setIsSavingAlbum] = useState(false);
 	const [isAutoMatching, setIsAutoMatching] = useState(false);
 	const [isMappingSpotifyAlbum, setIsMappingSpotifyAlbum] = useState(false);
 	const [isClearingMapping, setIsClearingMapping] = useState(false);
 	const [isSyncingTrackDurations, setIsSyncingTrackDurations] = useState(false);
 	const [spotifyMapDrawerOpen, setSpotifyMapDrawerOpen] = useState(false);
-	const [savingSongIds, setSavingSongIds] = useState<Record<string, boolean>>(
+	const [expandedTrackId, setExpandedTrackId] = useState<string | null>(null);
+	const [visibleTrackId, setVisibleTrackId] = useState<string | null>(null);
+	const [editorNotesOpen, setEditorNotesOpen] = useState(false);
+	const [trackStatuses, setTrackStatuses] = useState<
+		Record<string, ZineEditorPersistStatus>
+	>({});
+	const [durationBoosts, setDurationBoosts] = useState<Record<string, number>>(
 		{},
 	);
 
-	useEffect(() => {
-		if (!albumData) return;
-		if (initializedAlbumId === albumData.album._id) return;
+	const coverServer = useMemo((): CoverFields => {
+		if (!albumData) return { albumTitleOverride: "", artistNameOverride: "" };
+		return {
+			albumTitleOverride: albumData.album.albumTitleOverride ?? "",
+			artistNameOverride: albumData.album.artistNameOverride ?? "",
+		};
+	}, [albumData]);
 
-		setAlbumForm(buildAlbumForm(albumData.album));
-		setSongForms(buildSongForms(albumData.songs));
-		setInitializedAlbumId(albumData.album._id);
-	}, [albumData, initializedAlbumId]);
-
-	useEffect(() => {
-		if (!albumData) return;
-		if (initializedAlbumId !== albumData.album._id) return;
-
-		setSongForms((current) => {
-			let changed = false;
-			const next = { ...current };
-
-			for (const song of albumData.songs) {
-				const form = next[song._id];
-				if (!form) continue;
-
-				const serverDuration =
-					song.durationSecondsOverride === undefined
-						? ""
-						: String(song.durationSecondsOverride);
-
-				if (form.durationSecondsOverride !== serverDuration) {
-					next[song._id] = {
-						...form,
-						durationSecondsOverride: serverDuration,
-					};
-					changed = true;
-				}
-			}
-
-			return changed ? next : current;
-		});
-	}, [albumData, initializedAlbumId]);
-
-	async function handleSaveAlbumOverrides() {
-		if (!albumData) return;
-
-		setIsSavingAlbum(true);
-		try {
+	const coverPersist = useZineEditorPersist(
+		coverServer,
+		async (fields) => {
+			if (!albumData) return;
 			await updateAlbumOverrides({
 				albumId: albumData.album._id,
-				albumTitleOverride: albumForm.albumTitleOverride,
-				artistNameOverride: albumForm.artistNameOverride,
-				summaryOverride: albumForm.introPageContent,
-				frontPageImageUrlOverride: albumForm.frontPageImageUrlOverride,
-				introPageContent: albumForm.introPageContent,
-				zineInsideBackSections: albumForm.zineInsideBackSections,
+				albumTitleOverride: fields.albumTitleOverride,
+				artistNameOverride: fields.artistNameOverride,
 			});
-			toast.success("Album overrides saved");
-		} catch (error) {
-			toast.error(getErrorMessage(error, "Failed to save album overrides"));
-		} finally {
-			setIsSavingAlbum(false);
-		}
+		},
+		{ enabled: Boolean(albumData) },
+	);
+
+	const introServer = useMemo((): IntroFields => {
+		if (!albumData) return { introPageContent: "" };
+		return {
+			introPageContent: resolveAlbumIntroContent(
+				albumData.album.introPageContent,
+				albumData.album.summaryOverride,
+			),
+		};
+	}, [albumData]);
+
+	const introPersist = useZineEditorPersist(
+		introServer,
+		async (fields) => {
+			if (!albumData) return;
+			await updateAlbumOverrides({
+				albumId: albumData.album._id,
+				introPageContent: fields.introPageContent,
+				summaryOverride: fields.introPageContent,
+			});
+		},
+		{ enabled: Boolean(albumData) },
+	);
+
+	const notesServer = useMemo((): EditorNotesFields => {
+		if (!albumData) return { frontPageImageUrlOverride: "" };
+		return {
+			frontPageImageUrlOverride:
+				albumData.album.frontPageImageUrlOverride ?? "",
+		};
+	}, [albumData]);
+
+	const notesPersist = useZineEditorPersist(
+		notesServer,
+		async (fields) => {
+			if (!albumData) return;
+			await updateAlbumOverrides({
+				albumId: albumData.album._id,
+				frontPageImageUrlOverride: fields.frontPageImageUrlOverride,
+			});
+		},
+		{ enabled: Boolean(albumData) },
+	);
+
+	const insideBackServer = useMemo(
+		() => coerceZineInsideBackSections(albumData?.album.zineInsideBackSections),
+		[albumData?.album.zineInsideBackSections],
+	);
+	const insideBackPersist = useZineEditorPersist(
+		insideBackServer,
+		async (sections: ZineInsideBackSection[]) => {
+			if (!albumData) return;
+			await updateAlbumOverrides({
+				albumId: albumData.album._id,
+				zineInsideBackSections: sections,
+			});
+		},
+		{ enabled: Boolean(albumData) },
+	);
+
+	const overallStatus = mergePersistStatuses([
+		coverPersist.status,
+		introPersist.status,
+		notesPersist.status,
+		insideBackPersist.status,
+		...Object.values(trackStatuses),
+	]);
+	const persistError =
+		coverPersist.errorMessage ??
+		introPersist.errorMessage ??
+		notesPersist.errorMessage ??
+		insideBackPersist.errorMessage ??
+		null;
+
+	const handleTrackStatus = useCallback(
+		(trackId: string, status: ZineEditorPersistStatus) => {
+			setTrackStatuses((current) => {
+				if (current[trackId] === status) return current;
+				return { ...current, [trackId]: status };
+			});
+		},
+		[],
+	);
+
+	function applyMatchedDurations(matchedSongs: MatchedSongDuration[]): void {
+		if (matchedSongs.length === 0) return;
+		setDurationBoosts((current) => {
+			const next = { ...current };
+			for (const matched of matchedSongs) {
+				next[matched.songId] = matched.durationSeconds;
+			}
+			return next;
+		});
 	}
 
-	async function handleAutoMatchSpotifyAlbum() {
-		if (!albumData) return;
+	async function ensureSpotifyTrackData(spotifyAlbumId: string): Promise<void> {
+		const accessToken = await getValidAccessToken();
+		if (!accessToken) {
+			throw new Error("Connect Spotify to fetch track times");
+		}
+		const response = await fetch(
+			`/api/spotify/album/${spotifyAlbumId}/tracks`,
+			{
+				method: "POST",
+				headers: { "X-Access-Token": accessToken },
+			},
+		);
+		if (!response.ok) {
+			throw new Error("Failed to fetch track details from Spotify");
+		}
+		const payload = (await response.json()) as {
+			spotifyAlbumId: string;
+			albumName: string;
+			albumImageUrl?: string;
+			rawData?: string;
+			tracks: Array<{
+				spotifyTrackId: string;
+				trackName: string;
+				artistName: string;
+				artistIds: string[];
+				trackNumber: number;
+				durationMs: number;
+			}>;
+		};
+		await ingestSpotifyAlbumTracksForLyrics({
+			spotifyAlbumId: payload.spotifyAlbumId,
+			albumName: payload.albumName,
+			albumImageUrl: payload.albumImageUrl,
+			rawData: payload.rawData,
+			tracks: payload.tracks,
+		});
+	}
 
+	async function handleAutoMatchSpotifyAlbum(): Promise<void> {
+		if (!albumData) return;
 		setIsAutoMatching(true);
 		try {
 			const result = await autoMatchSpotifyAlbum({
@@ -190,7 +281,7 @@ export function AlbumLyricsEditor({ slug }: { slug: string }) {
 					const syncResult = await syncTrackDurationsFromSpotify({
 						albumId: albumData.album._id,
 					});
-					applyMatchedDurationsToSongForms(syncResult.matchedSongs);
+					applyMatchedDurations(syncResult.matchedSongs);
 					toast.success(syncResult.reason);
 				} else {
 					toast.success(result.reason);
@@ -205,9 +296,8 @@ export function AlbumLyricsEditor({ slug }: { slug: string }) {
 		}
 	}
 
-	async function handleMapSpotifyAlbum(spotifyAlbumId: string) {
+	async function handleMapSpotifyAlbum(spotifyAlbumId: string): Promise<void> {
 		if (!albumData) return;
-
 		setIsMappingSpotifyAlbum(true);
 		try {
 			const result = await setSpotifyAlbumMapping({
@@ -219,7 +309,7 @@ export function AlbumLyricsEditor({ slug }: { slug: string }) {
 				const syncResult = await syncTrackDurationsFromSpotify({
 					albumId: albumData.album._id,
 				});
-				applyMatchedDurationsToSongForms(syncResult.matchedSongs);
+				applyMatchedDurations(syncResult.matchedSongs);
 				toast.success(syncResult.reason || result.reason);
 				setSpotifyMapDrawerOpen(false);
 			} else {
@@ -232,9 +322,8 @@ export function AlbumLyricsEditor({ slug }: { slug: string }) {
 		}
 	}
 
-	async function handleClearSpotifyMapping() {
+	async function handleClearSpotifyMapping(): Promise<void> {
 		if (!albumData) return;
-
 		setIsClearingMapping(true);
 		try {
 			await clearSpotifyAlbumMapping({ albumId: albumData.album._id });
@@ -246,16 +335,15 @@ export function AlbumLyricsEditor({ slug }: { slug: string }) {
 		}
 	}
 
-	async function handleSyncTrackDurationsFromSpotify() {
+	async function handleSyncTrackDurationsFromSpotify(): Promise<void> {
 		if (!albumData?.album.spotifyAlbumId) return;
-
 		setIsSyncingTrackDurations(true);
 		try {
 			await ensureSpotifyTrackData(albumData.album.spotifyAlbumId);
 			const result = await syncTrackDurationsFromSpotify({
 				albumId: albumData.album._id,
 			});
-			applyMatchedDurationsToSongForms(result.matchedSongs);
+			applyMatchedDurations(result.matchedSongs);
 			if (result.updatedCount > 0) {
 				toast.success(result.reason);
 			} else if (result.matchedSongs.length > 0) {
@@ -276,365 +364,288 @@ export function AlbumLyricsEditor({ slug }: { slug: string }) {
 		}
 	}
 
-	async function ensureSpotifyTrackData(spotifyAlbumId: string) {
-		const accessToken = await getValidAccessToken();
-		if (!accessToken) {
-			throw new Error("Connect Spotify to fetch track times");
-		}
-
-		const response = await fetch(
-			`/api/spotify/album/${spotifyAlbumId}/tracks`,
-			{
-				method: "POST",
-				headers: {
-					"X-Access-Token": accessToken,
-				},
-			},
-		);
-
-		if (!response.ok) {
-			throw new Error("Failed to fetch track details from Spotify");
-		}
-
-		const payload = (await response.json()) as {
-			spotifyAlbumId: string;
-			albumName: string;
-			albumImageUrl?: string;
-			rawData?: string;
-			tracks: Array<{
-				spotifyTrackId: string;
-				trackName: string;
-				artistName: string;
-				artistIds: string[];
-				trackNumber: number;
-				durationMs: number;
-			}>;
-		};
-
-		await ingestSpotifyAlbumTracksForLyrics({
-			spotifyAlbumId: payload.spotifyAlbumId,
-			albumName: payload.albumName,
-			albumImageUrl: payload.albumImageUrl,
-			rawData: payload.rawData,
-			tracks: payload.tracks,
-		});
-	}
-
-	function applyMatchedDurationsToSongForms(
-		matchedSongs: MatchedSongDuration[],
-	) {
-		if (matchedSongs.length === 0) return;
-
-		setSongForms((current) => {
-			const next = { ...current };
-			for (const matchedSong of matchedSongs) {
-				const form = next[matchedSong.songId];
-				if (!form) continue;
-				next[matchedSong.songId] = {
-					...form,
-					durationSecondsOverride: String(matchedSong.durationSeconds),
-				};
-			}
-			return next;
-		});
-	}
-
-	async function handleSaveSong(song: Song) {
-		const songForm = songForms[song._id] ?? buildSongForm(song);
-
-		const durationSecondsOverride = parseDurationSeconds(
-			songForm.durationSecondsOverride,
-		);
-		if (durationSecondsOverride === "invalid") {
-			toast.error("Track length must be a valid number of seconds");
-			return;
-		}
-
-		setSongSaving(song._id, true);
-		try {
-			await updateSongOverrides({
-				songId: song._id,
-				songTitleOverride: resolveSongTitleOverride(
-					songForm.songTitleOverride,
-					song.songTitle,
-				),
-				aboutOverride: songForm.aboutOverride,
-				durationSecondsOverride,
-				hiddenCreditLabels: songForm.hiddenCreditLabels,
-			});
-			toast.success("Track overrides saved");
-		} catch (error) {
-			toast.error(getErrorMessage(error, "Failed to save track overrides"));
-		} finally {
-			setSongSaving(song._id, false);
-		}
-	}
-
-	function updateAlbumFormField(field: keyof AlbumFormState, value: string) {
-		setAlbumForm((current) => ({ ...current, [field]: value }));
-	}
-
-	function updateSongFormField(
-		song: Song,
-		field: keyof Omit<SongFormState, "hiddenCreditLabels">,
-		value: string,
-	) {
-		setSongForms((current) => ({
-			...current,
-			[song._id]: {
-				...getSongForm(current, song),
-				[field]: value,
-			},
-		}));
-	}
-
-	function setCreditVisible(song: Song, label: string, isVisible: boolean) {
-		setSongForms((current) => {
-			const songForm = getSongForm(current, song);
-			const hiddenLabels = new Set(songForm.hiddenCreditLabels);
-			if (isVisible) {
-				hiddenLabels.delete(label);
-			} else {
-				hiddenLabels.add(label);
-			}
-
-			return {
-				...current,
-				[song._id]: {
-					...songForm,
-					hiddenCreditLabels: Array.from(hiddenLabels),
-				},
-			};
-		});
-	}
-
-	function setSongSaving(songId: Id<"geniusSongs">, isSaving: boolean) {
-		setSavingSongIds((current) => ({ ...current, [songId]: isSaving }));
-	}
-
 	if (albumData === undefined) {
 		return <AlbumLyricsEditorSkeleton />;
 	}
 
 	if (!albumData) {
 		return (
-			<div className="mx-auto max-w-4xl px-4 py-10 text-center">
-				<h1 className="mb-4 font-bold text-2xl">Album Not Found</h1>
-				<p className="mb-6 text-muted-foreground">
-					The album you're looking for doesn't exist or has been deleted.
+			<main className="mx-auto max-w-3xl px-4 py-10">
+				<p className="font-[family-name:var(--font-display)] text-2xl tracking-tight">
+					Album not found
 				</p>
-				<Button asChild>
-					<Link href="/lyrics">
-						<ArrowLeft className="mr-2 h-4 w-4" />
-						Back to Search
-					</Link>
+				<p className="mt-2 text-muted-foreground text-sm">
+					The album you&apos;re looking for doesn&apos;t exist or has been
+					deleted.
+				</p>
+				<Button asChild className="mt-6">
+					<Link href="/lyrics">Back to search</Link>
 				</Button>
-			</div>
+			</main>
 		);
 	}
 
 	const { album, songs } = albumData;
+	const displayTitle =
+		coverPersist.value.albumTitleOverride.trim() || album.albumTitle;
+	const displayArtist =
+		coverPersist.value.artistNameOverride.trim() || album.artistName;
+
+	const stickySong = songs.find((song) => song._id === visibleTrackId);
+	const stickyDuration =
+		stickySong !== undefined
+			? (durationBoosts[stickySong._id] ?? stickySong.durationSecondsOverride)
+			: undefined;
+	const stickyTrackLabel = stickySong
+		? `${String(stickySong.trackNumber).padStart(2, "0")}  ${
+				stickySong.songTitleOverride?.trim() ||
+				stickySong.songTitle ||
+				"Untitled song"
+			}${
+				stickyDuration !== undefined
+					? ` · ${formatTrackDuration(stickyDuration)}`
+					: ""
+			}`
+		: undefined;
+
+	const navItems: ZineEditorNavItem[] = [
+		{ id: "cover", label: "Cover" },
+		{ id: "intro", label: "Intro" },
+		{
+			id: "tracks",
+			label: "Tracks",
+			children: songs.map((song) => ({
+				id: `track-${song._id}`,
+				label: `${String(song.trackNumber).padStart(2, "0")} ${
+					song.songTitleOverride?.trim() || song.songTitle || "Untitled"
+				}`,
+			})),
+		},
+		{ id: "inside-back", label: "Inside back" },
+	];
 
 	return (
-		<div className="mx-auto max-w-5xl space-y-6 px-4 py-10">
-			<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-				<div>
-					<Button asChild variant="ghost">
-						<Link href={`/lyrics/${slug}`}>
-							<ArrowLeft className="mr-2 h-4 w-4" />
-							Back to album
-						</Link>
-					</Button>
-					<h1 className="mt-4 font-bold text-3xl">Edit album data</h1>
-					<p className="text-muted-foreground">
-						Override display data without changing scraped Genius fields.
-					</p>
-				</div>
-			</div>
-
-			<Card>
-				<CardHeader>
-					<CardTitle>Album overrides</CardTitle>
-					<CardDescription>
-						Scraped: {album.albumTitle} by {album.artistName}
-					</CardDescription>
-				</CardHeader>
-				<CardContent className="space-y-5">
-					<div className="grid gap-4 md:grid-cols-2">
-						<div className="space-y-2">
-							<Label htmlFor="album-title-override">Album title override</Label>
-							<Input
-								id="album-title-override"
-								value={albumForm.albumTitleOverride}
-								onChange={(event) =>
-									updateAlbumFormField("albumTitleOverride", event.target.value)
-								}
-							/>
-						</div>
-						<div className="space-y-2">
-							<Label htmlFor="artist-name-override">
-								Artist name(s) override
-							</Label>
-							<Input
-								id="artist-name-override"
-								value={albumForm.artistNameOverride}
-								onChange={(event) =>
-									updateAlbumFormField("artistNameOverride", event.target.value)
-								}
-							/>
-						</div>
-					</div>
-
-					<IntroContentEditor
-						id="intro-page-content"
-						value={albumForm.introPageContent}
-						label="Album intro"
-						placeholder="Intro for the zine page after the cover"
-						onChange={(value) =>
-							updateAlbumFormField("introPageContent", value)
-						}
-					/>
-				</CardContent>
-			</Card>
-
-			<Card>
-				<CardHeader>
-					<CardTitle>Zine inside back cover</CardTitle>
-					<CardDescription>
-						Discography and recommendation sections on the page before the back
-						cover.
-					</CardDescription>
-				</CardHeader>
-				<CardContent className="space-y-5">
-					<ZineInsideBackSectionsEditor
-						sections={albumForm.zineInsideBackSections}
-						userId={userId ?? undefined}
-						onChange={(sections) =>
-							setAlbumForm((current) => ({
-								...current,
-								zineInsideBackSections: sections,
-							}))
-						}
-						disabled={isSavingAlbum}
-						spotifyDiscographySource={
-							album.spotifyAlbumId && userId
-								? {
-										spotifyAlbumId: album.spotifyAlbumId,
-										getAccessToken: getValidAccessToken,
-										persistReleases: async (releases, sourceSpotifyAlbumId) => {
-											return await bulkUpsertDiscographyAlbums({
-												userId,
-												albums: mapDiscographyReleasesToAlbumUpserts(
-													releases,
-													sourceSpotifyAlbumId,
-												),
-											});
-										},
-									}
-								: undefined
-						}
-					/>
-
-					<div className="space-y-2">
-						<Label htmlFor="front-page-image-url-override">
-							Front page image URL override
-						</Label>
+		<ZineEditorShell
+			eyebrow="Album lyrics"
+			title={`${displayTitle} · ${displayArtist}`}
+			persistStatus={overallStatus}
+			persistError={persistError ?? undefined}
+			zineHref={`/lyrics/${slug}/zine`}
+			backHref={`/lyrics/${slug}`}
+			backLabel="Back to album"
+			navItems={navItems}
+			stickyTrackLabel={stickyTrackLabel}
+			showStickyTrack={Boolean(stickyTrackLabel)}
+		>
+			<ZineEditorChapter
+				id="cover"
+				title="Cover"
+				description={`Scraped: ${album.albumTitle} by ${album.artistName}`}
+			>
+				<div className="grid gap-4 sm:grid-cols-2">
+					<ZineField
+						label="Album title"
+						htmlFor="album-title"
+						placement="Front cover."
+					>
 						<Input
-							id="front-page-image-url-override"
-							value={albumForm.frontPageImageUrlOverride}
+							id="album-title"
+							value={coverPersist.value.albumTitleOverride}
+							placeholder={album.albumTitle}
 							onChange={(event) =>
-								updateAlbumFormField(
-									"frontPageImageUrlOverride",
-									event.target.value,
-								)
+								coverPersist.setValue((current) => ({
+									...current,
+									albumTitleOverride: event.currentTarget.value,
+								}))
 							}
 						/>
-					</div>
+					</ZineField>
+					<ZineField
+						label="Artist"
+						htmlFor="album-artist"
+						placement="Front cover."
+					>
+						<Input
+							id="album-artist"
+							value={coverPersist.value.artistNameOverride}
+							placeholder={album.artistName}
+							onChange={(event) =>
+								coverPersist.setValue((current) => ({
+									...current,
+									artistNameOverride: event.currentTarget.value,
+								}))
+							}
+						/>
+					</ZineField>
+				</div>
 
-					<div className="flex justify-end">
-						<Button onClick={handleSaveAlbumOverrides} disabled={isSavingAlbum}>
-							<Save className="mr-2 h-4 w-4" />
-							{isSavingAlbum ? "Saving..." : "Save album overrides"}
-						</Button>
-					</div>
-				</CardContent>
-			</Card>
-
-			<Card>
-				<CardHeader>
-					<CardTitle>Spotify mapping</CardTitle>
-					<CardDescription>
-						Map this Genius album to an existing local Spotify album. Track
-						times are pulled from Spotify when you map or sync.
-					</CardDescription>
-				</CardHeader>
-				<CardContent className="space-y-5">
-					{album.spotifyAlbumId ? (
-						<div className="rounded-lg border bg-muted/30 p-4 text-sm">
-							<p>
-								<span className="font-medium">Current Spotify album ID:</span>{" "}
-								{album.spotifyAlbumId}
-							</p>
-							{album.spotifyAlbumMatchMethod && (
-								<p className="mt-1 text-muted-foreground">
-									Match method: {album.spotifyAlbumMatchMethod}
-								</p>
-							)}
+				<div className="border-border/40 border-t pt-4">
+					<button
+						type="button"
+						className="font-medium text-sm text-teal-800 underline-offset-4 hover:underline"
+						onClick={() => setEditorNotesOpen((open) => !open)}
+					>
+						{editorNotesOpen ? "Hide editor notes" : "Editor notes"}
+					</button>
+					<p className="mt-1 text-muted-foreground text-xs">
+						Not in the booklet — HTML reader cover image.
+					</p>
+					{editorNotesOpen ? (
+						<div className="mt-4">
+							<ZineField
+								label="Reader cover image URL"
+								htmlFor="front-page-image"
+								placement="Not in the booklet. Used on the HTML reader, not the zine cover."
+							>
+								<Input
+									id="front-page-image"
+									value={notesPersist.value.frontPageImageUrlOverride}
+									onChange={(event) =>
+										notesPersist.setValue({
+											frontPageImageUrlOverride: event.currentTarget.value,
+										})
+									}
+								/>
+							</ZineField>
 						</div>
-					) : (
-						<p className="text-muted-foreground text-sm">
-							No Spotify album mapping is set.
-						</p>
-					)}
+					) : null}
+				</div>
+			</ZineEditorChapter>
 
-					<div className="flex flex-wrap gap-2">
-						<Button
-							onClick={() => setSpotifyMapDrawerOpen(true)}
-							disabled={isMappingSpotifyAlbum}
-						>
-							<Link2 className="mr-2 h-4 w-4" />
-							{album.spotifyAlbumId
-								? "Change Spotify album"
-								: "Map Spotify album"}
-						</Button>
-						<Button
-							onClick={handleAutoMatchSpotifyAlbum}
-							disabled={isAutoMatching}
-							variant="outline"
-						>
-							<RefreshCw className="mr-2 h-4 w-4" />
-							{isAutoMatching ? "Matching..." : "Auto-match Spotify album"}
-						</Button>
-						{album.spotifyAlbumId && (
-							<>
-								<Button
-									onClick={handleSyncTrackDurationsFromSpotify}
-									disabled={isSyncingTrackDurations}
-									variant="outline"
-								>
-									<Clock3 className="mr-2 h-4 w-4" />
-									{isSyncingTrackDurations
-										? "Syncing track times..."
-										: "Sync track times from Spotify"}
-								</Button>
-								<Button
-									onClick={handleClearSpotifyMapping}
-									disabled={isClearingMapping}
-									variant="outline"
-								>
-									<Unlink className="mr-2 h-4 w-4" />
-									{isClearingMapping ? "Clearing..." : "Clear mapping"}
-								</Button>
-							</>
-						)}
+			<ZineEditorChapter
+				id="intro"
+				title="Intro"
+				description="Page after the cover."
+			>
+				<IntroContentEditor
+					id="album-intro"
+					value={introPersist.value.introPageContent}
+					label="Album intro"
+					placeholder="Intro for the page after the cover"
+					helperText="Page after the cover. Use *bold*, _italic_, and blank lines for paragraphs."
+					onChange={(value) =>
+						introPersist.setValue({ introPageContent: value })
+					}
+				/>
+			</ZineEditorChapter>
+
+			<ZineEditorChapter
+				id="tracks"
+				title="Tracks"
+				description={`${songs.length} ${songs.length === 1 ? "track" : "tracks"}.`}
+			>
+				{songs.length === 0 ? (
+					<p className="text-muted-foreground text-sm">
+						No songs found for this album.
+					</p>
+				) : (
+					<div className="border-border/40 border-t">
+						{songs.map((song) => (
+							<AlbumTrackEditor
+								key={song._id}
+								song={song}
+								boostedDuration={durationBoosts[song._id]}
+								expanded={expandedTrackId === song._id}
+								onToggle={() =>
+									setExpandedTrackId((current) =>
+										current === song._id ? null : song._id,
+									)
+								}
+								onVisible={(visible) => {
+									if (visible) {
+										setVisibleTrackId(song._id);
+									} else if (visibleTrackId === song._id) {
+										setVisibleTrackId(null);
+									}
+								}}
+								onStatusChange={handleTrackStatus}
+								updateSongOverrides={updateSongOverrides}
+								recommendationsUserId={userId ?? undefined}
+							/>
+						))}
 					</div>
-				</CardContent>
-			</Card>
+				)}
+
+				<details className="mt-8 border-border/40 border-t pt-4">
+					<summary className="cursor-pointer font-medium text-sm text-teal-800">
+						Spotify mapping
+					</summary>
+					<p className="mt-1 text-muted-foreground text-xs">
+						Used to fill track times and import discography.
+					</p>
+					<div className="mt-4 space-y-4">
+						{album.spotifyAlbumId ? (
+							<p className="text-sm">
+								<span className="font-medium">Mapped:</span>{" "}
+								{album.spotifyAlbumId}
+								{album.spotifyAlbumMatchMethod
+									? ` · ${album.spotifyAlbumMatchMethod}`
+									: ""}
+							</p>
+						) : (
+							<p className="text-muted-foreground text-sm">
+								No Spotify album mapped yet.
+							</p>
+						)}
+						<div className="flex flex-wrap gap-2">
+							<Button
+								type="button"
+								size="sm"
+								onClick={() => setSpotifyMapDrawerOpen(true)}
+								disabled={isMappingSpotifyAlbum}
+							>
+								<Link2 className="mr-1.5 h-3.5 w-3.5" />
+								{album.spotifyAlbumId ? "Change mapping" : "Map album"}
+							</Button>
+							<Button
+								type="button"
+								size="sm"
+								variant="outline"
+								onClick={() => {
+									void handleAutoMatchSpotifyAlbum();
+								}}
+								disabled={isAutoMatching}
+							>
+								<RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+								{isAutoMatching ? "Matching…" : "Auto-match"}
+							</Button>
+							{album.spotifyAlbumId ? (
+								<>
+									<Button
+										type="button"
+										size="sm"
+										variant="outline"
+										onClick={() => {
+											void handleSyncTrackDurationsFromSpotify();
+										}}
+										disabled={isSyncingTrackDurations}
+									>
+										<Clock3 className="mr-1.5 h-3.5 w-3.5" />
+										{isSyncingTrackDurations ? "Syncing…" : "Sync track times"}
+									</Button>
+									<Button
+										type="button"
+										size="sm"
+										variant="outline"
+										onClick={() => {
+											void handleClearSpotifyMapping();
+										}}
+										disabled={isClearingMapping}
+									>
+										<Unlink className="mr-1.5 h-3.5 w-3.5" />
+										{isClearingMapping ? "Clearing…" : "Clear"}
+									</Button>
+								</>
+							) : null}
+						</div>
+					</div>
+				</details>
+			</ZineEditorChapter>
 
 			<SpotifyAlbumMapDrawer
 				album={{
-					albumTitle: albumForm.albumTitleOverride.trim() || album.albumTitle,
-					artistName: albumForm.artistNameOverride.trim() || album.artistName,
+					albumTitle: displayTitle,
+					artistName: displayArtist,
 				}}
 				open={spotifyMapDrawerOpen}
 				onOpenChange={setSpotifyMapDrawerOpen}
@@ -642,224 +653,241 @@ export function AlbumLyricsEditor({ slug }: { slug: string }) {
 				isMapping={isMappingSpotifyAlbum}
 			/>
 
-			<div className="space-y-4">
-				<h2 className="font-semibold text-2xl">Track overrides</h2>
-				{songs.length === 0 ? (
-					<p className="text-muted-foreground">
-						No songs found for this album.
-					</p>
-				) : (
-					songs.map((song) => (
-						<SongOverrideCard
-							key={song._id}
-							song={song}
-							form={songForms[song._id] ?? buildSongForm(song)}
-							isSaving={savingSongIds[song._id] === true}
-							onFieldChange={updateSongFormField}
-							onCreditVisibilityChange={setCreditVisible}
-							onSave={handleSaveSong}
-						/>
-					))
-				)}
-			</div>
-		</div>
+			<ZineEditorChapter
+				id="inside-back"
+				title="Inside back"
+				description="Discography and recommendations on the page before the back cover."
+			>
+				<ZineInsideBackSectionsEditor
+					sections={insideBackPersist.value}
+					onChange={insideBackPersist.setValue}
+					userId={userId ?? undefined}
+					spotifyDiscographySource={
+						album.spotifyAlbumId && userId
+							? {
+									spotifyAlbumId: album.spotifyAlbumId,
+									getAccessToken: getValidAccessToken,
+									persistReleases: async (releases, sourceSpotifyAlbumId) => {
+										return await bulkUpsertDiscographyAlbums({
+											userId,
+											albums: mapDiscographyReleasesToAlbumUpserts(
+												releases,
+												sourceSpotifyAlbumId,
+											),
+										});
+									},
+								}
+							: undefined
+					}
+				/>
+			</ZineEditorChapter>
+		</ZineEditorShell>
 	);
 }
 
-function SongOverrideCard({
+function AlbumTrackEditor({
 	song,
-	form,
-	isSaving,
-	onFieldChange,
-	onCreditVisibilityChange,
-	onSave,
+	boostedDuration,
+	expanded,
+	onToggle,
+	onVisible,
+	onStatusChange,
+	updateSongOverrides,
+	recommendationsUserId,
 }: {
 	song: Song;
-	form: SongFormState;
-	isSaving: boolean;
-	onFieldChange: (
-		song: Song,
-		field: keyof Omit<SongFormState, "hiddenCreditLabels">,
-		value: string,
-	) => void;
-	onCreditVisibilityChange: (
-		song: Song,
+	boostedDuration?: number;
+	expanded: boolean;
+	onToggle: () => void;
+	onVisible: (visible: boolean) => void;
+	onStatusChange: (trackId: string, status: ZineEditorPersistStatus) => void;
+	updateSongOverrides: ReturnType<
+		typeof useMutation<typeof api.geniusAlbums.updateSongOverrides>
+	>;
+	recommendationsUserId?: string;
+}): ReactNode {
+	const effectiveDuration = boostedDuration ?? song.durationSecondsOverride;
+
+	const serverFields = useMemo((): ZineTrackRowFields => {
+		const titleValue = song.songTitleOverride ?? song.songTitle;
+		return {
+			title: titleValue,
+			artist: "",
+			album: "",
+			durationInput: formatTrackDurationInput(effectiveDuration),
+			albumArtUrl: "",
+			intro: song.aboutOverride ?? "",
+			note: "",
+		};
+	}, [song, effectiveDuration]);
+
+	const [hiddenCreditLabels, setHiddenCreditLabels] = useState(
+		song.hiddenCreditLabels ?? [],
+	);
+
+	useEffect(() => {
+		setHiddenCreditLabels(song.hiddenCreditLabels ?? []);
+	}, [song.hiddenCreditLabels]);
+
+	const persist = useZineEditorPersist(serverFields, async (fields) => {
+		let durationSecondsOverride: number | null | undefined;
+		const trimmedDuration = fields.durationInput.trim();
+		if (!trimmedDuration) {
+			durationSecondsOverride =
+				effectiveDuration === undefined ? undefined : null;
+		} else {
+			try {
+				durationSecondsOverride = parseTrackDurationInput(trimmedDuration);
+			} catch {
+				durationSecondsOverride = undefined;
+			}
+		}
+
+		const patch: {
+			songId: Id<"geniusSongs">;
+			songTitleOverride: string;
+			aboutOverride: string;
+			durationSecondsOverride?: number | null;
+		} = {
+			songId: song._id,
+			songTitleOverride: resolveSongTitleOverride(fields.title, song.songTitle),
+			aboutOverride: fields.intro,
+		};
+
+		if (durationSecondsOverride !== undefined) {
+			patch.durationSecondsOverride = durationSecondsOverride;
+		}
+
+		await updateSongOverrides(patch);
+	});
+
+	const recsServer = useMemo(
+		() => coerceZinePageRecommendations(song.zinePageRecommendations),
+		[song.zinePageRecommendations],
+	);
+	const recsPersist = useZineEditorPersist(
+		recsServer,
+		async (recommendations) => {
+			await updateSongOverrides({
+				songId: song._id,
+				zinePageRecommendations: recommendations,
+			});
+		},
+	);
+
+	useEffect(() => {
+		onStatusChange(
+			song._id,
+			mergePersistStatuses([persist.status, recsPersist.status]),
+		);
+	}, [song._id, onStatusChange, persist.status, recsPersist.status]);
+
+	const displayTitle =
+		persist.value.title.trim() || song.songTitle || "Untitled song";
+	const displayDuration =
+		persist.value.durationInput.trim() ||
+		(effectiveDuration !== undefined
+			? formatTrackDuration(effectiveDuration)
+			: "");
+
+	async function handleCreditVisibilityChange(
 		label: string,
-		isVisible: boolean,
-	) => void;
-	onSave: (song: Song) => void;
-}) {
+		visible: boolean,
+	): Promise<void> {
+		const next = new Set(hiddenCreditLabels);
+		if (visible) {
+			next.delete(label);
+		} else {
+			next.add(label);
+		}
+		const nextList = Array.from(next);
+		setHiddenCreditLabels(nextList);
+		try {
+			await updateSongOverrides({
+				songId: song._id,
+				hiddenCreditLabels: nextList,
+			});
+		} catch (error) {
+			setHiddenCreditLabels(song.hiddenCreditLabels ?? []);
+			toast.error(getErrorMessage(error, "Failed to save credits"));
+		}
+	}
+
+	const scrapeDetails = [
+		{ label: "Scraped title", value: song.songTitle || "Unavailable" },
+		{
+			label: "Genius about",
+			value: song.about?.trim() || "None",
+		},
+		{
+			label: "Duration",
+			value:
+				effectiveDuration !== undefined
+					? formatTrackDuration(effectiveDuration)
+					: "Not set",
+		},
+	];
+	if (song.geniusSongUrl) {
+		scrapeDetails.push({
+			label: "Source",
+			value: song.geniusSongUrl,
+			href: song.geniusSongUrl,
+		} as { label: string; value: string; href?: string });
+	}
+
 	return (
-		<Card>
-			<CardHeader>
-				<CardTitle>Track {song.trackNumber}</CardTitle>
-			</CardHeader>
-			<CardContent className="space-y-5">
-				<div className="grid gap-4 md:grid-cols-[1fr_12rem]">
-					<div className="space-y-2">
-						<Label htmlFor={`song-${song._id}-title`}>Title</Label>
-						<Input
-							id={`song-${song._id}-title`}
-							value={form.songTitleOverride}
-							onChange={(event) =>
-								onFieldChange(song, "songTitleOverride", event.target.value)
-							}
-						/>
-					</div>
-					<div className="space-y-2">
-						<Label htmlFor={`song-${song._id}-duration`}>
-							Track length override
-						</Label>
-						<Input
-							id={`song-${song._id}-duration`}
-							inputMode="numeric"
-							placeholder="Seconds"
-							value={form.durationSecondsOverride}
-							onChange={(event) =>
-								onFieldChange(
-									song,
-									"durationSecondsOverride",
-									event.target.value,
-								)
-							}
-						/>
-					</div>
-				</div>
-
-				<div className="space-y-2">
-					<Label htmlFor={`song-${song._id}-about`}>Track intro</Label>
-					<Textarea
-						id={`song-${song._id}-about`}
-						className="min-h-28"
-						value={form.aboutOverride}
-						onChange={(event) =>
-							onFieldChange(song, "aboutOverride", event.target.value)
-						}
-					/>
-				</div>
-
-				<div className="space-y-3">
-					<Label>Credit visibility</Label>
-					{song.credits && song.credits.length > 0 ? (
-						<div className="grid gap-3 md:grid-cols-2">
-							{song.credits.map((credit, index) => {
-								const isVisible = !form.hiddenCreditLabels.includes(
-									credit.label,
-								);
-								const checkboxId = `song-${song._id}-credit-${index}`;
-
-								return (
-									<div
-										key={credit.label}
-										className="flex items-start gap-3 rounded-lg border p-3"
-									>
-										<Checkbox
-											id={checkboxId}
-											checked={isVisible}
-											onCheckedChange={(checked) =>
-												onCreditVisibilityChange(
-													song,
-													credit.label,
-													checked === true,
-												)
-											}
-										/>
-										<Label
-											htmlFor={checkboxId}
-											className="space-y-1 text-sm leading-normal"
-										>
-											<span className="block font-medium">{credit.label}</span>
-											<span className="block text-muted-foreground">
-												{credit.contributors
-													.map((contributor) => contributor.name)
-													.join(", ")}
-											</span>
-										</Label>
-									</div>
-								);
-							})}
-						</div>
-					) : (
-						<p className="text-muted-foreground text-sm">
-							No credits were scraped for this track.
-						</p>
-					)}
-				</div>
-
-				<div className="flex justify-end">
-					<Button onClick={() => onSave(song)} disabled={isSaving}>
-						<Save className="mr-2 h-4 w-4" />
-						{isSaving ? "Saving..." : "Save track"}
-					</Button>
-				</div>
-			</CardContent>
-		</Card>
+		<ZineTrackRow
+			id={`track-${song._id}`}
+			trackNumber={song.trackNumber}
+			displayTitle={displayTitle}
+			displayArtist=""
+			displayDuration={displayDuration}
+			status="none"
+			expanded={expanded}
+			onToggle={onToggle}
+			onVisible={onVisible}
+			fields={persist.value}
+			onFieldChange={(field, value) =>
+				persist.setValue((current) => ({ ...current, [field]: value }))
+			}
+			placeholders={{
+				title: song.songTitle,
+				intro: song.about?.trim() || undefined,
+			}}
+			showArtistAlbumArt={false}
+			showNote={false}
+			credits={song.credits ?? []}
+			hiddenCreditLabels={hiddenCreditLabels}
+			onCreditVisibilityChange={(label, visible) => {
+				void handleCreditVisibilityChange(label, visible);
+			}}
+			scrapeDetails={scrapeDetails}
+			recommendations={recsPersist.value}
+			onRecommendationsChange={recsPersist.setValue}
+			recommendationsUserId={recommendationsUserId}
+		/>
 	);
 }
 
-function AlbumLyricsEditorSkeleton() {
+function AlbumLyricsEditorSkeleton(): ReactElement {
 	return (
-		<div className="mx-auto max-w-5xl space-y-6 px-4 py-10">
-			<div className="space-y-3">
-				<Skeleton className="h-9 w-36" />
-				<Skeleton className="h-10 w-72" />
-				<Skeleton className="h-5 w-96 max-w-full" />
+		<main className="mx-auto max-w-6xl space-y-8 px-4 py-8">
+			<div className="space-y-2">
+				<Skeleton className="h-3 w-28" />
+				<Skeleton className="h-9 w-48" />
+				<Skeleton className="h-4 w-64" />
 			</div>
-			<Skeleton className="h-96 w-full" />
-			<Skeleton className="h-64 w-full" />
-			<Skeleton className="h-96 w-full" />
-		</div>
+			<div className="space-y-4">
+				<Skeleton className="h-8 w-32" />
+				<Skeleton className="h-10 w-full" />
+			</div>
+			<div className="space-y-3">
+				<Skeleton className="h-8 w-28" />
+				<Skeleton className="h-12 w-full" />
+				<Skeleton className="h-12 w-full" />
+			</div>
+		</main>
 	);
-}
-
-function buildAlbumForm(album: Album): AlbumFormState {
-	return {
-		albumTitleOverride: album.albumTitleOverride ?? "",
-		artistNameOverride: album.artistNameOverride ?? "",
-		frontPageImageUrlOverride: album.frontPageImageUrlOverride ?? "",
-		introPageContent: resolveAlbumIntroContent(
-			album.introPageContent,
-			album.summaryOverride,
-		),
-		zineInsideBackSections: coerceZineInsideBackSections(
-			album.zineInsideBackSections,
-		),
-	};
-}
-
-function buildSongForms(songs: Song[]): Record<string, SongFormState> {
-	return Object.fromEntries(
-		songs.map((song) => [song._id, buildSongForm(song)]),
-	);
-}
-
-function buildSongForm(song: Song): SongFormState {
-	return {
-		songTitleOverride: song.songTitleOverride ?? song.songTitle,
-		durationSecondsOverride:
-			song.durationSecondsOverride === undefined
-				? ""
-				: String(song.durationSecondsOverride),
-		aboutOverride: song.aboutOverride ?? "",
-		hiddenCreditLabels: song.hiddenCreditLabels ?? [],
-	};
-}
-
-function getSongForm(
-	songForms: Record<string, SongFormState>,
-	song: Song,
-): SongFormState {
-	return songForms[song._id] ?? buildSongForm(song);
-}
-
-function parseDurationSeconds(value: string): number | null | "invalid" {
-	const trimmed = value.trim();
-	if (!trimmed) return null;
-
-	const seconds = Number(trimmed);
-	if (!Number.isFinite(seconds) || seconds < 0) return "invalid";
-
-	return seconds;
 }
 
 function resolveSongTitleOverride(
@@ -870,7 +898,6 @@ function resolveSongTitleOverride(
 	if (!trimmed || trimmed === scrapedTitle.trim()) {
 		return "";
 	}
-
 	return trimmed;
 }
 
