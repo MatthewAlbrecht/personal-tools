@@ -42,6 +42,7 @@ import {
 import { api } from "../../../../convex/_generated/api";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import { getPlaylistDisplayTrackNumber } from "../_utils/song-display";
+import { SyncSpotifyPlaylistDialog } from "./sync-spotify-playlist-dialog";
 
 type PlaylistFields = {
 	title: string;
@@ -82,6 +83,7 @@ export function PlaylistLyricsEditor({ slug }: { slug: string }): ReactElement {
 	const [expandedTrackId, setExpandedTrackId] = useState<string | null>(null);
 	const [visibleTrackId, setVisibleTrackId] = useState<string | null>(null);
 	const [editorNotesOpen, setEditorNotesOpen] = useState(false);
+	const [spotifySyncOpen, setSpotifySyncOpen] = useState(false);
 	const [trackStatuses, setTrackStatuses] = useState<
 		Record<string, ZineEditorPersistStatus>
 	>({});
@@ -415,341 +417,371 @@ export function PlaylistLyricsEditor({ slug }: { slug: string }): ReactElement {
 	];
 
 	return (
-		<ZineEditorShell
-			eyebrow="Playlist lyrics"
-			title={playlistPersist.value.title || playlist.title}
-			persistStatus={overallStatus}
-			persistError={persistError ?? undefined}
-			zineHref={`/playlist-lyrics/${playlist.slug}/zine`}
-			backHref="/lyrics/playlists"
-			backLabel="Back"
-			navItems={navItems}
-			stickyTrackLabel={stickyTrackLabel}
-			showStickyTrack={Boolean(stickyTrackLabel)}
-			headerActions={
-				<>
-					<Button
-						type="button"
-						variant="outline"
-						size="sm"
-						onClick={() => {
-							void handleTogglePublicStatus();
-						}}
-						disabled={isUpdatingStatus}
-					>
-						{isUpdatingStatus
-							? "Saving…"
-							: isPublic
-								? "Make draft"
-								: "Make public"}
-					</Button>
-					{isPublic ? (
+		<>
+			<ZineEditorShell
+				eyebrow="Playlist lyrics"
+				title={playlistPersist.value.title || playlist.title}
+				persistStatus={overallStatus}
+				persistError={persistError ?? undefined}
+				zineHref={`/playlist-lyrics/${playlist.slug}/zine`}
+				backHref="/lyrics/playlists"
+				backLabel="Back"
+				navItems={navItems}
+				stickyTrackLabel={stickyTrackLabel}
+				showStickyTrack={Boolean(stickyTrackLabel)}
+				headerActions={
+					<>
 						<Button
 							type="button"
 							variant="outline"
 							size="sm"
-							onClick={handleCopyPublicZineLink}
+							onClick={() => {
+								void handleTogglePublicStatus();
+							}}
+							disabled={isUpdatingStatus}
 						>
-							<LinkIcon className="mr-1.5 h-3.5 w-3.5" />
-							Copy zine link
+							{isUpdatingStatus
+								? "Saving…"
+								: isPublic
+									? "Make draft"
+									: "Make public"}
 						</Button>
-					) : null}
-					<Button
-						type="button"
-						variant="ghost"
-						size="sm"
-						onClick={handleCopyPublicLink}
-					>
-						Copy reader link
-					</Button>
-				</>
-			}
-		>
-			<ZineEditorChapter
-				id="cover"
-				title="Cover"
-				description="What appears on the front of the booklet."
-			>
-				<ZineField
-					label="Title"
-					htmlFor="playlist-title"
-					placement="Front cover."
-				>
-					<Input
-						id="playlist-title"
-						value={playlistPersist.value.title}
-						onChange={(event) =>
-							playlistPersist.setValue((current) => ({
-								...current,
-								title: event.currentTarget.value,
-							}))
-						}
-					/>
-				</ZineField>
-
-				<div className="border-border/40 border-t pt-4">
-					<button
-						type="button"
-						className="font-medium text-sm text-teal-800 underline-offset-4 hover:underline"
-						onClick={() => setEditorNotesOpen((open) => !open)}
-					>
-						{editorNotesOpen ? "Hide editor notes" : "Editor notes"}
-					</button>
-					<p className="mt-1 text-muted-foreground text-xs">
-						Not in the booklet — theme, description, and private notes.
-					</p>
-					{editorNotesOpen ? (
-						<div className="mt-4 space-y-4">
-							<ZineField
-								label="Theme"
-								htmlFor="playlist-theme"
-								placement="Not in the booklet."
-							>
-								<Input
-									id="playlist-theme"
-									value={playlistPersist.value.theme}
-									placeholder="Optional theme or occasion"
-									onChange={(event) =>
-										playlistPersist.setValue((current) => ({
-											...current,
-											theme: event.currentTarget.value,
-										}))
-									}
-								/>
-							</ZineField>
-							<ZineField
-								label="Description"
-								htmlFor="playlist-description"
-								placement="Not in the booklet."
-							>
-								<Textarea
-									id="playlist-description"
-									value={playlistPersist.value.description}
-									placeholder="Short intro for the playlist"
-									onChange={(event) =>
-										playlistPersist.setValue((current) => ({
-											...current,
-											description: event.currentTarget.value,
-										}))
-									}
-								/>
-							</ZineField>
-							<ZineField
-								label="Notes"
-								htmlFor="playlist-notes"
-								placement="Not in the booklet. Private editing notes."
-							>
-								<Textarea
-									id="playlist-notes"
-									value={playlistPersist.value.notes}
-									placeholder="Private editing notes"
-									onChange={(event) =>
-										playlistPersist.setValue((current) => ({
-											...current,
-											notes: event.currentTarget.value,
-										}))
-									}
-								/>
-							</ZineField>
-						</div>
-					) : null}
-				</div>
-			</ZineEditorChapter>
-
-			<ZineEditorChapter
-				id="tracks"
-				title="Tracks"
-				description={`${songs.length} ${songs.length === 1 ? "song" : "songs"} in this playlist.`}
-			>
-				<div className="space-y-6">
-					<form
-						onSubmit={handleAddSong}
-						className="flex flex-col gap-3 sm:flex-row sm:items-end"
-					>
-						<ZineField
-							label="Genius URL"
-							htmlFor="genius-song-url"
-							className="flex-1"
-						>
-							<Input
-								id="genius-song-url"
-								type="url"
-								value={songUrl}
-								onChange={(event) => setSongUrl(event.currentTarget.value)}
-								onPaste={(event) => {
-									void handleSongUrlPaste(event);
-								}}
-								placeholder="https://genius.com/..."
-								disabled={isAddingSong}
-							/>
-						</ZineField>
-						<Button type="submit" disabled={isAddingSong}>
-							{isAddingSong ? "Adding…" : "Add song"}
-						</Button>
-					</form>
-
-					<details className="group border-border/40 border-t pt-4">
-						<summary className="cursor-pointer font-medium text-sm text-teal-800">
-							Add instrumental track
-						</summary>
-						<form
-							onSubmit={handleAddManualSong}
-							className="mt-4 grid gap-3 sm:grid-cols-2"
-						>
-							<ZineField
-								label="Track title"
-								htmlFor="manual-song-title"
-								className="sm:col-span-2"
-							>
-								<Input
-									id="manual-song-title"
-									value={manualSongTitle}
-									onChange={(event) =>
-										setManualSongTitle(event.currentTarget.value)
-									}
-									placeholder="Intro"
-									disabled={isAddingManualSong}
-									required
-								/>
-							</ZineField>
-							<ZineField label="Artist" htmlFor="manual-artist-name">
-								<Input
-									id="manual-artist-name"
-									value={manualArtistName}
-									onChange={(event) =>
-										setManualArtistName(event.currentTarget.value)
-									}
-									placeholder="Optional"
-									disabled={isAddingManualSong}
-								/>
-							</ZineField>
-							<ZineField label="Album" htmlFor="manual-album-title">
-								<Input
-									id="manual-album-title"
-									value={manualAlbumTitle}
-									onChange={(event) =>
-										setManualAlbumTitle(event.currentTarget.value)
-									}
-									placeholder="Optional"
-									disabled={isAddingManualSong}
-								/>
-							</ZineField>
-							<div className="sm:col-span-2">
-								<IntroContentEditor
-									id="manual-intro-content"
-									value={manualIntroContent}
-									disabled={isAddingManualSong}
-									label="Intro"
-									placeholder="Optional intro text"
-									helperText="INTRO block on this song’s page."
-									onChange={setManualIntroContent}
-								/>
-							</div>
-							<div className="sm:col-span-2">
-								<Button type="submit" disabled={isAddingManualSong}>
-									{isAddingManualSong ? "Adding…" : "Add instrumental"}
-								</Button>
-							</div>
-						</form>
-					</details>
-
-					{songs.length > 0 ? (
-						<div className="flex justify-end">
+						{isPublic ? (
 							<Button
 								type="button"
 								variant="outline"
 								size="sm"
-								disabled={isRescrapingAll || rescrapableSongCount === 0}
-								onClick={() => {
-									void handleRescrapeAll();
-								}}
+								onClick={handleCopyPublicZineLink}
 							>
-								{isRescrapingAll
-									? "Rescraping all…"
-									: `Rescrape all (${rescrapableSongCount})`}
+								<LinkIcon className="mr-1.5 h-3.5 w-3.5" />
+								Copy zine link
 							</Button>
-						</div>
-					) : null}
+						) : null}
+						<Button
+							type="button"
+							variant="ghost"
+							size="sm"
+							onClick={handleCopyPublicLink}
+						>
+							Copy reader link
+						</Button>
+					</>
+				}
+			>
+				<ZineEditorChapter
+					id="cover"
+					title="Cover"
+					description="What appears on the front of the booklet."
+				>
+					<ZineField
+						label="Title"
+						htmlFor="playlist-title"
+						placement="Front cover."
+					>
+						<Input
+							id="playlist-title"
+							value={playlistPersist.value.title}
+							onChange={(event) =>
+								playlistPersist.setValue((current) => ({
+									...current,
+									title: event.currentTarget.value,
+								}))
+							}
+						/>
+					</ZineField>
 
-					{songs.length === 0 ? (
-						<p className="text-muted-foreground text-sm">
-							No songs yet. Add a Genius URL or an instrumental track above.
+					<div className="border-border/40 border-t pt-4">
+						<button
+							type="button"
+							className="font-medium text-sm text-teal-800 underline-offset-4 hover:underline"
+							onClick={() => setEditorNotesOpen((open) => !open)}
+						>
+							{editorNotesOpen ? "Hide editor notes" : "Editor notes"}
+						</button>
+						<p className="mt-1 text-muted-foreground text-xs">
+							Not in the booklet — theme, description, and private notes.
 						</p>
-					) : (
-						<div className="divide-y-0 border-border/40 border-t">
-							{songs.map((item, index) => (
-								<PlaylistTrackEditor
-									key={item._id}
-									item={item}
-									trackNumber={getPlaylistDisplayTrackNumber(index)}
-									expanded={expandedTrackId === item._id}
-									onToggle={() =>
-										setExpandedTrackId((current) =>
-											current === item._id ? null : item._id,
-										)
-									}
-									onVisible={(visible) => {
-										if (visible) {
-											setVisibleTrackId(item._id);
-										} else if (visibleTrackId === item._id) {
-											setVisibleTrackId(null);
+						{editorNotesOpen ? (
+							<div className="mt-4 space-y-4">
+								<ZineField
+									label="Theme"
+									htmlFor="playlist-theme"
+									placement="Not in the booklet."
+								>
+									<Input
+										id="playlist-theme"
+										value={playlistPersist.value.theme}
+										placeholder="Optional theme or occasion"
+										onChange={(event) =>
+											playlistPersist.setValue((current) => ({
+												...current,
+												theme: event.currentTarget.value,
+											}))
 										}
+									/>
+								</ZineField>
+								<ZineField
+									label="Description"
+									htmlFor="playlist-description"
+									placement="Not in the booklet."
+								>
+									<Textarea
+										id="playlist-description"
+										value={playlistPersist.value.description}
+										placeholder="Short intro for the playlist"
+										onChange={(event) =>
+											playlistPersist.setValue((current) => ({
+												...current,
+												description: event.currentTarget.value,
+											}))
+										}
+									/>
+								</ZineField>
+								<ZineField
+									label="Notes"
+									htmlFor="playlist-notes"
+									placement="Not in the booklet. Private editing notes."
+								>
+									<Textarea
+										id="playlist-notes"
+										value={playlistPersist.value.notes}
+										placeholder="Private editing notes"
+										onChange={(event) =>
+											playlistPersist.setValue((current) => ({
+												...current,
+												notes: event.currentTarget.value,
+											}))
+										}
+									/>
+								</ZineField>
+							</div>
+						) : null}
+					</div>
+				</ZineEditorChapter>
+
+				<ZineEditorChapter
+					id="tracks"
+					title="Tracks"
+					description={`${songs.length} ${songs.length === 1 ? "song" : "songs"} in this playlist.`}
+				>
+					<div className="space-y-6">
+						<form
+							onSubmit={handleAddSong}
+							className="flex flex-col gap-3 sm:flex-row sm:items-end"
+						>
+							<ZineField
+								label="Genius URL"
+								htmlFor="genius-song-url"
+								className="flex-1"
+							>
+								<Input
+									id="genius-song-url"
+									type="url"
+									value={songUrl}
+									onChange={(event) => setSongUrl(event.currentTarget.value)}
+									onPaste={(event) => {
+										void handleSongUrlPaste(event);
 									}}
-									busyAction={busyItems[item._id]}
-									onStatusChange={handleTrackStatus}
-									onCreditVisibilityChange={handleCreditVisibilityChange}
-									onDelete={() => {
-										void handleDeleteItem(item._id);
-									}}
-									onRescrape={() => {
-										void handleRescrapeItem(item._id);
-									}}
-									updateItem={updateItem}
-									recommendationsUserId={userId ?? undefined}
+									placeholder="https://genius.com/..."
+									disabled={isAddingSong}
 								/>
-							))}
-						</div>
-					)}
-				</div>
-			</ZineEditorChapter>
+							</ZineField>
+							<Button type="submit" disabled={isAddingSong}>
+								{isAddingSong ? "Adding…" : "Add song"}
+							</Button>
+						</form>
 
-			<ZineEditorChapter
-				id="inside-back"
-				title="Inside back"
-				description="Optional discography and recommendations on the page before the back cover."
-			>
-				<ZineInsideBackSectionsEditor
-					sections={insideBackPersist.value}
-					onChange={insideBackPersist.setValue}
-					userId={userId ?? undefined}
-				/>
-			</ZineEditorChapter>
+						<details className="group border-border/40 border-t pt-4">
+							<summary className="cursor-pointer font-medium text-sm text-teal-800">
+								Add instrumental track
+							</summary>
+							<form
+								onSubmit={handleAddManualSong}
+								className="mt-4 grid gap-3 sm:grid-cols-2"
+							>
+								<ZineField
+									label="Track title"
+									htmlFor="manual-song-title"
+									className="sm:col-span-2"
+								>
+									<Input
+										id="manual-song-title"
+										value={manualSongTitle}
+										onChange={(event) =>
+											setManualSongTitle(event.currentTarget.value)
+										}
+										placeholder="Intro"
+										disabled={isAddingManualSong}
+										required
+									/>
+								</ZineField>
+								<ZineField label="Artist" htmlFor="manual-artist-name">
+									<Input
+										id="manual-artist-name"
+										value={manualArtistName}
+										onChange={(event) =>
+											setManualArtistName(event.currentTarget.value)
+										}
+										placeholder="Optional"
+										disabled={isAddingManualSong}
+									/>
+								</ZineField>
+								<ZineField label="Album" htmlFor="manual-album-title">
+									<Input
+										id="manual-album-title"
+										value={manualAlbumTitle}
+										onChange={(event) =>
+											setManualAlbumTitle(event.currentTarget.value)
+										}
+										placeholder="Optional"
+										disabled={isAddingManualSong}
+									/>
+								</ZineField>
+								<div className="sm:col-span-2">
+									<IntroContentEditor
+										id="manual-intro-content"
+										value={manualIntroContent}
+										disabled={isAddingManualSong}
+										label="Intro"
+										placeholder="Optional intro text"
+										helperText="INTRO block on this song’s page."
+										onChange={setManualIntroContent}
+									/>
+								</div>
+								<div className="sm:col-span-2">
+									<Button type="submit" disabled={isAddingManualSong}>
+										{isAddingManualSong ? "Adding…" : "Add instrumental"}
+									</Button>
+								</div>
+							</form>
+						</details>
 
-			<ZineEditorChapter
-				id="back-cover"
-				title="Back cover"
-				description="Bottom-left of the back cover, only when uploaded and shown."
-			>
-				<div className="grid gap-8 sm:grid-cols-2">
-					<PlaylistQrSlotEditor
-						playlistId={playlist._id}
-						service="spotify"
-						label="Spotify"
-						initialImageUrl={playlist.zineSpotifyQrImageUrl}
-						initialShow={playlist.zineShowSpotifyQr === true}
-						onStatusChange={handleTrackStatus}
+						{songs.length > 0 ? (
+							<div className="flex flex-wrap items-center justify-between gap-2">
+								{playlist.spotifyPlaylistId ? (
+									<p className="text-muted-foreground text-xs">
+										Linked Spotify playlist: {playlist.spotifyPlaylistId}
+									</p>
+								) : (
+									<span />
+								)}
+								<div className="flex flex-wrap justify-end gap-2">
+									<Button
+										type="button"
+										variant="outline"
+										size="sm"
+										onClick={() => setSpotifySyncOpen(true)}
+									>
+										Sync Spotify playlist
+									</Button>
+									<Button
+										type="button"
+										variant="outline"
+										size="sm"
+										disabled={isRescrapingAll || rescrapableSongCount === 0}
+										onClick={() => {
+											void handleRescrapeAll();
+										}}
+									>
+										{isRescrapingAll
+											? "Rescraping all…"
+											: `Rescrape all (${rescrapableSongCount})`}
+									</Button>
+								</div>
+							</div>
+						) : null}
+
+						{songs.length === 0 ? (
+							<p className="text-muted-foreground text-sm">
+								No songs yet. Add a Genius URL or an instrumental track above.
+							</p>
+						) : (
+							<div className="divide-y-0 border-border/40 border-t">
+								{songs.map((item, index) => (
+									<PlaylistTrackEditor
+										key={item._id}
+										item={item}
+										trackNumber={getPlaylistDisplayTrackNumber(index)}
+										expanded={expandedTrackId === item._id}
+										onToggle={() =>
+											setExpandedTrackId((current) =>
+												current === item._id ? null : item._id,
+											)
+										}
+										onVisible={(visible) => {
+											if (visible) {
+												setVisibleTrackId(item._id);
+											} else if (visibleTrackId === item._id) {
+												setVisibleTrackId(null);
+											}
+										}}
+										busyAction={busyItems[item._id]}
+										onStatusChange={handleTrackStatus}
+										onCreditVisibilityChange={handleCreditVisibilityChange}
+										onDelete={() => {
+											void handleDeleteItem(item._id);
+										}}
+										onRescrape={() => {
+											void handleRescrapeItem(item._id);
+										}}
+										updateItem={updateItem}
+										recommendationsUserId={userId ?? undefined}
+									/>
+								))}
+							</div>
+						)}
+					</div>
+				</ZineEditorChapter>
+
+				<ZineEditorChapter
+					id="inside-back"
+					title="Inside back"
+					description="Optional discography and recommendations on the page before the back cover."
+				>
+					<ZineInsideBackSectionsEditor
+						sections={insideBackPersist.value}
+						onChange={insideBackPersist.setValue}
+						userId={userId ?? undefined}
 					/>
-					<PlaylistQrSlotEditor
-						playlistId={playlist._id}
-						service="appleMusic"
-						label="Apple Music"
-						initialImageUrl={playlist.zineAppleMusicQrImageUrl}
-						initialShow={playlist.zineShowAppleMusicQr === true}
-						onStatusChange={handleTrackStatus}
-					/>
-				</div>
-			</ZineEditorChapter>
-		</ZineEditorShell>
+				</ZineEditorChapter>
+
+				<ZineEditorChapter
+					id="back-cover"
+					title="Back cover"
+					description="Bottom-left of the back cover, only when uploaded and shown."
+				>
+					<div className="grid gap-8 sm:grid-cols-2">
+						<PlaylistQrSlotEditor
+							playlistId={playlist._id}
+							service="spotify"
+							label="Spotify"
+							initialImageUrl={playlist.zineSpotifyQrImageUrl}
+							initialShow={playlist.zineShowSpotifyQr === true}
+							onStatusChange={handleTrackStatus}
+						/>
+						<PlaylistQrSlotEditor
+							playlistId={playlist._id}
+							service="appleMusic"
+							label="Apple Music"
+							initialImageUrl={playlist.zineAppleMusicQrImageUrl}
+							initialShow={playlist.zineShowAppleMusicQr === true}
+							onStatusChange={handleTrackStatus}
+						/>
+					</div>
+				</ZineEditorChapter>
+			</ZineEditorShell>
+
+			<SyncSpotifyPlaylistDialog
+				open={spotifySyncOpen}
+				onOpenChange={setSpotifySyncOpen}
+				playlistId={playlist._id}
+				initialSpotifyPlaylistId={playlist.spotifyPlaylistId}
+				items={songs.map((song) => ({
+					itemId: song._id,
+					title: getDisplayTitle(song),
+				}))}
+			/>
+		</>
 	);
 }
 

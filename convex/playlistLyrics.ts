@@ -107,6 +107,7 @@ const playlistValidator = v.object({
 		v.union(v.literal("top"), v.literal("center")),
 	),
 	zinePageRecommendations: v.optional(zinePageRecommendationsValidator),
+	spotifyPlaylistId: v.optional(v.string()),
 	status: playlistStatusValidator,
 	createdAt: v.number(),
 	updatedAt: v.number(),
@@ -708,6 +709,80 @@ export const updateZinePageRecommendations = mutation({
 		});
 
 		return null;
+	},
+});
+
+export const applySpotifyPlaylistTrackMetadata = mutation({
+	args: {
+		playlistId: v.id("playlistLyrics"),
+		spotifyPlaylistId: v.string(),
+		updates: v.array(
+			v.object({
+				itemId: v.id("playlistLyricsItems"),
+				durationSeconds: v.number(),
+				albumArtUrl: v.optional(v.string()),
+			}),
+		),
+	},
+	returns: v.object({
+		updatedCount: v.number(),
+		spotifyPlaylistId: v.string(),
+	}),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+
+		const playlist = await ctx.db.get(args.playlistId);
+		if (!playlist) {
+			throw new Error("Playlist not found");
+		}
+
+		const spotifyPlaylistId = args.spotifyPlaylistId.trim();
+		if (!spotifyPlaylistId) {
+			throw new Error("Spotify playlist ID is required");
+		}
+
+		const now = Date.now();
+		let updatedCount = 0;
+
+		for (const update of args.updates) {
+			const item = await ctx.db.get(update.itemId);
+			if (!item || item.playlistId !== args.playlistId) {
+				throw new Error("All items must belong to the playlist");
+			}
+
+			if (
+				!Number.isFinite(update.durationSeconds) ||
+				update.durationSeconds < 0
+			) {
+				throw new Error("Duration must be a non-negative number of seconds");
+			}
+
+			const patch: {
+				durationSecondsOverride: number;
+				albumArtUrlOverride?: string;
+				updatedAt: number;
+			} = {
+				durationSecondsOverride: Math.round(update.durationSeconds),
+				updatedAt: now,
+			};
+
+			if (update.albumArtUrl !== undefined) {
+				patch.albumArtUrlOverride = normalizeOptionalString(update.albumArtUrl);
+			}
+
+			await ctx.db.patch(update.itemId, patch);
+			updatedCount += 1;
+		}
+
+		await ctx.db.patch(args.playlistId, {
+			spotifyPlaylistId,
+			updatedAt: now,
+		});
+
+		return {
+			updatedCount,
+			spotifyPlaylistId,
+		};
 	},
 });
 

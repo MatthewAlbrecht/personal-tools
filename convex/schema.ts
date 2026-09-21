@@ -327,6 +327,7 @@ export default defineSchema({
 			zineInsideBackRecommendationRowAlignValidator,
 		),
 		zinePageRecommendations: v.optional(zinePageRecommendationsValidator),
+		spotifyPlaylistId: v.optional(v.string()),
 		status: v.union(v.literal("draft"), v.literal("ready")),
 		createdAt: v.number(),
 		updatedAt: v.number(),
