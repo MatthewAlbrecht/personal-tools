@@ -78,6 +78,7 @@ export async function POST(request: NextRequest) {
 									albumArtUrl: song.scrape.albumArtUrl,
 									lyrics: song.scrape.lyrics,
 									about: song.scrape.about,
+									credits: song.scrape.credits,
 									lastScrapedAt: song.scrape.lastScrapedAt,
 									createdAt: song.scrape.createdAt,
 									updatedAt: song.scrape.updatedAt,

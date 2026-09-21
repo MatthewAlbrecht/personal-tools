@@ -1790,6 +1790,11 @@ async function upsertScrapeRow(
 		)
 		.first();
 
+	const credits =
+		input.credits !== undefined
+			? normalizeCredits(input.credits)
+			: existing?.credits;
+
 	const scrape = {
 		canonicalUrl: input.canonicalUrl,
 		songTitle: input.songTitle,
@@ -1799,7 +1804,7 @@ async function upsertScrapeRow(
 		albumArtUrl: normalizeOptionalString(input.albumArtUrl),
 		lyrics: input.lyrics,
 		about: normalizeOptionalString(input.about),
-		credits: normalizeCredits(input.credits),
+		credits,
 		scrapeStatus: "ready" as const,
 		lastScrapedAt: input.lastScrapedAt ?? now,
 		updatedAt: input.updatedAt ?? now,
