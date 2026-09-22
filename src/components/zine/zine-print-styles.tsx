@@ -204,7 +204,10 @@ export function ZinePrintStyles() {
 						print-color-adjust: exact;
 					}
 
-					.zine-booklet-cover-spread .zine-booklet-panel {
+					.zine-booklet-cover-spread .zine-booklet-panel,
+					.zine-booklet-cover-spread .zine-booklet-panel[data-booklet-panel="left"],
+					.zine-booklet-cover-spread
+						.zine-booklet-panel[data-booklet-panel="right"] {
 						padding: 0;
 						background: transparent;
 					}
@@ -464,6 +467,21 @@ export function ZinePrintStyles() {
 						max-height: 8.5in;
 						padding: ${ZINE_BOOKLET_PANEL_PADDING_CSS};
 						overflow: hidden;
+					}
+
+					/* Outer sheet edges (printer clip risk): mirror left↔right panels. */
+					.zine-booklet-panel[data-booklet-panel="left"] {
+						padding-left: calc(
+							${ZINE_BOOKLET_PANEL_PADDING_CSS} +
+								var(--zine-booklet-outer-pad-in, 0in)
+						);
+					}
+
+					.zine-booklet-panel[data-booklet-panel="right"] {
+						padding-right: calc(
+							${ZINE_BOOKLET_PANEL_PADDING_CSS} +
+								var(--zine-booklet-outer-pad-in, 0in)
+						);
 					}
 
 					.zine-booklet-panel .zine-page {

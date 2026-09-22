@@ -7,6 +7,27 @@ export const ZINE_PAGE = {
 /** Uniform inset (inches) on all sides inside each booklet half-panel (`border-box` keeps panel 5.5in × 8.5in). */
 export const ZINE_BOOKLET_PANEL_PADDING_IN = 0.15;
 
+/**
+ * Extra inset on the sheet’s outer edges only (left of left panel, right of right panel).
+ * Printers often clip those edges; gutter (inner) sides stay at base padding.
+ */
+export const ZINE_BOOKLET_OUTER_PADDING = {
+	minIn: 0,
+	maxIn: 0.35,
+	stepIn: 0.05,
+	defaultIn: 0,
+} as const;
+
+export function clampZineBookletOuterPaddingIn(value: number): number {
+	const stepped =
+		Math.round(value / ZINE_BOOKLET_OUTER_PADDING.stepIn) *
+		ZINE_BOOKLET_OUTER_PADDING.stepIn;
+	return Math.min(
+		ZINE_BOOKLET_OUTER_PADDING.maxIn,
+		Math.max(ZINE_BOOKLET_OUTER_PADDING.minIn, Number(stepped.toFixed(2))),
+	);
+}
+
 export const ZINE_ALBUM_ART_IN = 1.7;
 
 /** Bottom band for cliffnotes/credits lines; half of album-art height. */

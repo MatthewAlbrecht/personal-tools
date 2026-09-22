@@ -2,7 +2,7 @@
 
 import { ArrowLeft, Pencil, Printer } from "lucide-react";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
@@ -49,8 +49,11 @@ import {
 	resolveZineIntroSettings,
 } from "~/lib/zine/zine-intro-layout";
 import {
+	ZINE_BOOKLET_OUTER_PADDING,
+	ZINE_BOOKLET_PANEL_PADDING_IN,
 	ZINE_LYRICS_SIZE_SLIDER,
 	ZINE_TEXT_CONDENSE,
+	clampZineBookletOuterPaddingIn,
 } from "~/lib/zine/zine-layout";
 import type { ZinePageRecommendation } from "~/lib/zine/zine-page-recommendations";
 import {
@@ -158,6 +161,13 @@ export function LyricsZine({
 }) {
 	const [duplexBinding, setDuplexBinding] =
 		useState<ZineDuplexBinding>("short-edge");
+	const [bookletOuterPaddingIn, setBookletOuterPaddingIn] = useState(
+		ZINE_BOOKLET_OUTER_PADDING.defaultIn,
+	);
+
+	useEffect(() => {
+		triggerZinePrintRemeasure();
+	}, [bookletOuterPaddingIn]);
 	const [displaySettings, setDisplaySettings] = useState<ZineDisplaySettings>(
 		() => resolveZineDisplaySettings(displaySettingsProp),
 	);
@@ -909,6 +919,60 @@ export function LyricsZine({
 						</div>
 					</fieldset>
 
+					<fieldset className="no-print mt-3 space-y-2 rounded-lg border bg-card px-4 py-3 shadow-sm">
+						<legend className="px-1 font-medium text-sm">
+							Outer edge padding (print)
+						</legend>
+						<p className="text-muted-foreground text-xs leading-snug">
+							Extra inset on the sheet’s left and right edges only (left of the
+							left page, right of the right page)—helps when printers clip the
+							first letter. Gutter side stays at the base inset.
+						</p>
+						<div className="flex flex-wrap items-center gap-3">
+							<Button
+								disabled={
+									bookletOuterPaddingIn <= ZINE_BOOKLET_OUTER_PADDING.minIn
+								}
+								onClick={() => {
+									setBookletOuterPaddingIn((current) =>
+										clampZineBookletOuterPaddingIn(
+											current - ZINE_BOOKLET_OUTER_PADDING.stepIn,
+										),
+									);
+								}}
+								type="button"
+								variant="outline"
+								size="sm"
+							>
+								−
+							</Button>
+							<span className="min-w-[4.5rem] text-center font-medium text-sm tabular-nums">
+								+{bookletOuterPaddingIn.toFixed(2)} in
+							</span>
+							<Button
+								disabled={
+									bookletOuterPaddingIn >= ZINE_BOOKLET_OUTER_PADDING.maxIn
+								}
+								onClick={() => {
+									setBookletOuterPaddingIn((current) =>
+										clampZineBookletOuterPaddingIn(
+											current + ZINE_BOOKLET_OUTER_PADDING.stepIn,
+										),
+									);
+								}}
+								type="button"
+								variant="outline"
+								size="sm"
+							>
+								+
+							</Button>
+							<span className="text-muted-foreground text-xs">
+								step {ZINE_BOOKLET_OUTER_PADDING.stepIn} in · base panel inset{" "}
+								{ZINE_BOOKLET_PANEL_PADDING_IN} in
+							</span>
+						</div>
+					</fieldset>
+
 					{canEdit ? (
 						<div className="no-print mt-4 rounded-lg border bg-card p-4 shadow-sm">
 							<p className="mb-1 font-medium text-sm">Cover image</p>
@@ -1174,6 +1238,11 @@ export function LyricsZine({
 					className="zine-print-booklet-root zine-document"
 					data-zine-duplex-binding={duplexBinding}
 					aria-hidden="true"
+					style={
+						{
+							"--zine-booklet-outer-pad-in": `${bookletOuterPaddingIn}in`,
+						} as CSSProperties
+					}
 				>
 					{bookletSheets.map((sheet, sheetIndex) => (
 						<Fragment key={`booklet-sheet-${sheetIndex}`}>
@@ -1196,7 +1265,7 @@ export function LyricsZine({
 										: undefined
 								}
 							>
-								<div className="zine-booklet-panel">
+								<div className="zine-booklet-panel" data-booklet-panel="left">
 									{renderPageByReadingIndex(
 										sheet.front.leftIndex,
 										`b${sheetIndex}-ff-l`,
@@ -1206,7 +1275,7 @@ export function LyricsZine({
 										},
 									)}
 								</div>
-								<div className="zine-booklet-panel">
+								<div className="zine-booklet-panel" data-booklet-panel="right">
 									{renderPageByReadingIndex(
 										sheet.front.rightIndex,
 										`b${sheetIndex}-ff-r`,
@@ -1221,13 +1290,13 @@ export function LyricsZine({
 								className="zine-booklet-sheet"
 								data-booklet-sheet-side="back"
 							>
-								<div className="zine-booklet-panel">
+								<div className="zine-booklet-panel" data-booklet-panel="left">
 									{renderPageByReadingIndex(
 										sheet.back.leftIndex,
 										`b${sheetIndex}-fb-l`,
 									)}
 								</div>
-								<div className="zine-booklet-panel">
+								<div className="zine-booklet-panel" data-booklet-panel="right">
 									{renderPageByReadingIndex(
 										sheet.back.rightIndex,
 										`b${sheetIndex}-fb-r`,
