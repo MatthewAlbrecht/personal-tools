@@ -161,7 +161,7 @@ export function LyricsZine({
 }) {
 	const [duplexBinding, setDuplexBinding] =
 		useState<ZineDuplexBinding>("short-edge");
-	const [bookletOuterPaddingIn, setBookletOuterPaddingIn] = useState(
+	const [bookletOuterPaddingIn, setBookletOuterPaddingIn] = useState<number>(
 		ZINE_BOOKLET_OUTER_PADDING.defaultIn,
 	);
 
