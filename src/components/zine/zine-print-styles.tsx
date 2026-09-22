@@ -556,7 +556,7 @@ export function ZinePrintStyles() {
 						display: flex;
 						flex-direction: column;
 						gap: 4pt;
-						margin: 5pt 0 0;
+						margin: 0;
 						padding: 0;
 						list-style: none;
 					}
@@ -624,9 +624,13 @@ export function ZinePrintStyles() {
 					}
 
 					.zine-song-footer {
+						display: flex;
+						flex-direction: column;
 						flex: 0 0 auto;
+						gap: 0.11in;
 						min-height: 0;
 						overflow: hidden;
+						padding-top: 0.11in;
 					}
 
 					.zine-footer-credits {
@@ -746,12 +750,15 @@ export function ZinePrintStyles() {
 					}
 
 					.zine-song-group-credits {
-						margin-top: 0.06in;
+						display: flex;
+						flex-direction: column;
+						gap: 0.11in;
+						margin-top: 0.11in;
 					}
 
 					.zine-song-group-credits-with-lyrics {
-						margin-top: 0.08in;
-						padding-top: 0.06in;
+						margin-top: 0.11in;
+						padding-top: 0;
 					}
 
 					.print-only {
