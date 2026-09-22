@@ -91,9 +91,6 @@ export function ZineSongGroupPage({
 									hasLyrics && "zine-song-group-credits-with-lyrics",
 								)}
 							>
-								{showRecommendations ? (
-									<ZineSongPageRecommendations items={visibleRecommendations} />
-								) : null}
 								{visibleCredits?.length ? (
 									<ZineSongPageFooterCredits
 										canEditCredits={canEditCredits ?? false}
@@ -105,6 +102,9 @@ export function ZineSongGroupPage({
 										}
 										showRule={displayOptions.showCreditsRule}
 									/>
+								) : null}
+								{showRecommendations ? (
+									<ZineSongPageRecommendations items={visibleRecommendations} />
 								) : null}
 							</div>
 						) : null}

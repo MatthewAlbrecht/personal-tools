@@ -42,7 +42,7 @@ export function ZinePageRecommendationsEditor({
 		<div className="space-y-4">
 			{items.length === 0 ? (
 				<p className="text-muted-foreground text-sm">
-					No recommendations yet. Add up to four albums to show above the
+					No recommendations yet. Add up to four albums to show under the
 					credits on this lyric page.
 				</p>
 			) : null}

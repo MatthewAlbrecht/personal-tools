@@ -211,9 +211,6 @@ function ZineSongPageContent({
 					)}
 				>
 					<div className="zine-song-footer">
-						{hasRecommendations ? (
-							<ZineSongPageRecommendations items={visibleRecommendations} />
-						) : null}
 						{showCredits && visibleCredits ? (
 							<ZineSongPageFooterCredits
 								canEditCredits={canEditCredits}
@@ -221,6 +218,9 @@ function ZineSongPageContent({
 								onHideCreditLabel={onHideCreditLabel}
 								showRule={displayOptions.showCreditsRule}
 							/>
+						) : null}
+						{hasRecommendations ? (
+							<ZineSongPageRecommendations items={visibleRecommendations} />
 						) : null}
 					</div>
 				</div>

@@ -348,7 +348,7 @@ export function ZineTrackRow({
 									Lyric-page recommendations
 								</p>
 								<p className="text-muted-foreground text-xs">
-									Up to four albums above the credits on this track’s lyric
+									Up to four albums under the credits on this track’s lyric
 									page.
 								</p>
 							</div>

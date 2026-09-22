@@ -556,10 +556,9 @@ export function ZinePrintStyles() {
 						display: flex;
 						flex-direction: column;
 						gap: 4pt;
-						margin: 0 0 5pt;
-						padding: 4pt 0 0;
+						margin: 5pt 0 0;
+						padding: 0;
 						list-style: none;
-						border-top: 0.5pt solid #cccccc;
 					}
 
 					.zine-page-recommendations-pair {
@@ -577,16 +576,16 @@ export function ZinePrintStyles() {
 					}
 
 					.zine-page-recommendation-art {
-						width: 0.28in;
-						height: 0.28in;
+						width: calc(0.28in + 12px);
+						height: calc(0.28in + 12px);
 						flex-shrink: 0;
 						object-fit: cover;
 						border-radius: 1.5pt;
 					}
 
 					.zine-page-recommendations-pair .zine-page-recommendation-art {
-						width: 0.32in;
-						height: 0.32in;
+						width: calc(0.32in + 12px);
+						height: calc(0.32in + 12px);
 					}
 
 					.zine-page-recommendation-art-placeholder {

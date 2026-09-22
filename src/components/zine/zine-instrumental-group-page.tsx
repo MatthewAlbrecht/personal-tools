@@ -60,9 +60,6 @@ export function ZineInstrumentalGroupPage({
 						/>
 						{showRecommendations || visibleCredits?.length ? (
 							<div className="zine-instrumental-group-track-credits">
-								{showRecommendations ? (
-									<ZineSongPageRecommendations items={visibleRecommendations} />
-								) : null}
 								{visibleCredits?.length ? (
 									<ZineSongPageFooterCredits
 										canEditCredits={canEditCredits ?? false}
@@ -74,6 +71,9 @@ export function ZineInstrumentalGroupPage({
 										}
 										showRule={displayOptions.showCreditsRule}
 									/>
+								) : null}
+								{showRecommendations ? (
+									<ZineSongPageRecommendations items={visibleRecommendations} />
 								) : null}
 							</div>
 						) : null}
