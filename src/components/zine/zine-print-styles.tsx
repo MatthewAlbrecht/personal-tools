@@ -942,7 +942,8 @@ export function ZinePrintStyles() {
 							display: none !important;
 						}
 
-						header.sticky {
+						header.sticky,
+						aside.sticky {
 							display: none !important;
 						}
 

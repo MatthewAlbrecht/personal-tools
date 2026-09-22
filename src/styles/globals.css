@@ -139,6 +139,11 @@
 		display: none !important;
 	}
 
+	/* App shell left nav — otherwise it leaks into PDF when print margins shrink the page. */
+	aside.sticky {
+		display: none !important;
+	}
+
 	/* Prevent page breaks inside article elements */
 	.page-break-inside-avoid {
 		page-break-inside: avoid;
