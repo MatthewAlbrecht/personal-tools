@@ -8,6 +8,10 @@ import {
 	resolveZineCoverTextLayout,
 	type ZineCoverTextLayout,
 } from "~/lib/zine/zine-cover-text-layout";
+import {
+	type ZineDrcLogoCorner,
+	ZINE_DRC_LOGO_SRC,
+} from "~/lib/zine/zine-drc-logo";
 import { cn } from "~/lib/utils";
 import { useAutoFitText } from "./use-auto-fit-text";
 
@@ -21,6 +25,7 @@ export function ZineCoverPage({
 	coverSide = "front",
 	useSheetSpreadBackground = false,
 	backCoverQrCodes,
+	drcLogoCorner,
 }: {
 	playlistTitle: string;
 	artistName?: string;
@@ -31,6 +36,7 @@ export function ZineCoverPage({
 	coverSide?: "front" | "back";
 	useSheetSpreadBackground?: boolean;
 	backCoverQrCodes?: ZineBackCoverQrCodes;
+	drcLogoCorner?: ZineDrcLogoCorner;
 }) {
 	const isBack = coverSide === "back";
 	const hasCoverImage = Boolean(coverImageUrl?.trim());
@@ -107,6 +113,16 @@ export function ZineCoverPage({
 						) : null}
 					</div>
 				</div>
+			) : null}
+			{drcLogoCorner ? (
+				<img
+					alt="Denver Record Club"
+					className={cn(
+						"zine-cover-drc-logo",
+						`zine-cover-drc-logo-${drcLogoCorner}`,
+					)}
+					src={ZINE_DRC_LOGO_SRC}
+				/>
 			) : null}
 			{showBackCoverQrs ? (
 				<div className="zine-back-cover-qrs" aria-label="Playlist QR codes">

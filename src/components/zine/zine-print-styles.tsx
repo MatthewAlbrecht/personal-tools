@@ -105,6 +105,42 @@ export function ZinePrintStyles() {
 						font-size: 9pt;
 					}
 
+					.zine-cover-drc-logo {
+						position: absolute;
+						z-index: 2;
+						width: 0.78in;
+						height: auto;
+						object-fit: contain;
+						pointer-events: none;
+						-webkit-print-color-adjust: exact;
+						print-color-adjust: exact;
+					}
+
+					.zine-cover-drc-logo-top-left {
+						top: 0.2in;
+						left: 0.2in;
+					}
+
+					.zine-cover-drc-logo-top-right {
+						top: 0.2in;
+						right: 0.2in;
+					}
+
+					.zine-cover-drc-logo-bottom-left {
+						bottom: 0.2in;
+						left: 0.2in;
+					}
+
+					.zine-cover-drc-logo-bottom-right {
+						bottom: 0.2in;
+						right: 0.2in;
+					}
+
+					.zine-cover-back .zine-cover-drc-logo-bottom-left,
+					.zine-cover-back .zine-cover-drc-logo-bottom-right {
+						bottom: 1.35in;
+					}
+
 					.zine-back-cover-qrs {
 						position: absolute;
 						right: 0.35in;

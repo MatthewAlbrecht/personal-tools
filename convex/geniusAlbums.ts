@@ -44,6 +44,7 @@ import {
 	normalizeZinePageRecommendations,
 	zinePageRecommendationsValidator,
 } from "./_utils/zinePageRecommendations";
+import { zineDrcLogoCornerValidator } from "./_utils/zineDrcLogo";
 import { requireAuth } from "./auth";
 import {
 	ensureCreditLabelHiddenByDefault,
@@ -437,6 +438,28 @@ export const updateZineCoverReleaseYear = mutation({
 
 		await ctx.db.patch(args.albumId, {
 			zineCoverReleaseYear: args.releaseYear,
+			updatedAt: Date.now(),
+		});
+
+		return args.albumId;
+	},
+});
+
+export const updateZineDrcLogoCorners = mutation({
+	args: {
+		albumId: v.id("geniusAlbums"),
+		frontCorner: v.union(zineDrcLogoCornerValidator, v.null()),
+		backCorner: v.union(zineDrcLogoCornerValidator, v.null()),
+	},
+	returns: v.id("geniusAlbums"),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+		const album = await ctx.db.get(args.albumId);
+		if (!album) throw new Error("Album not found");
+
+		await ctx.db.patch(args.albumId, {
+			zineDrcLogoFrontCorner: args.frontCorner ?? undefined,
+			zineDrcLogoBackCorner: args.backCorner ?? undefined,
 			updatedAt: Date.now(),
 		});
 

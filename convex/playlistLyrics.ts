@@ -28,6 +28,7 @@ import {
 	normalizeZinePageRecommendations,
 	zinePageRecommendationsValidator,
 } from "./_utils/zinePageRecommendations";
+import { zineDrcLogoCornerValidator } from "./_utils/zineDrcLogo";
 import { requireAuth } from "./auth";
 import {
 	ensureCreditLabelHiddenByDefault,
@@ -87,6 +88,8 @@ const playlistValidator = v.object({
 	zineCoverTextOffsetYIn: v.optional(v.number()),
 	zineCoverShowTitle: v.optional(v.boolean()),
 	zineCoverReleaseYear: v.optional(v.number()),
+	zineDrcLogoFrontCorner: v.optional(zineDrcLogoCornerValidator),
+	zineDrcLogoBackCorner: v.optional(zineDrcLogoCornerValidator),
 	zineSpotifyQrStorageId: v.optional(v.id("_storage")),
 	zineSpotifyQrImageUrl: v.optional(v.string()),
 	zineAppleMusicQrStorageId: v.optional(v.id("_storage")),
@@ -127,6 +130,8 @@ const publicPlaylistValidator = v.object({
 	zineCoverTextOffsetXIn: v.optional(v.number()),
 	zineCoverTextOffsetYIn: v.optional(v.number()),
 	zineCoverReleaseYear: v.optional(v.number()),
+	zineDrcLogoFrontCorner: v.optional(zineDrcLogoCornerValidator),
+	zineDrcLogoBackCorner: v.optional(zineDrcLogoCornerValidator),
 	zineSpotifyQrImageUrl: v.optional(v.string()),
 	zineAppleMusicQrImageUrl: v.optional(v.string()),
 	zineShowSpotifyQr: v.optional(v.boolean()),
@@ -633,6 +638,27 @@ export const updateZineCoverReleaseYear = mutation({
 
 		await ctx.db.patch(args.playlistId, {
 			zineCoverReleaseYear: args.releaseYear,
+			updatedAt: Date.now(),
+		});
+
+		return args.playlistId;
+	},
+});
+
+export const updateZineDrcLogoCorners = mutation({
+	args: {
+		playlistId: v.id("playlistLyrics"),
+		frontCorner: v.union(zineDrcLogoCornerValidator, v.null()),
+		backCorner: v.union(zineDrcLogoCornerValidator, v.null()),
+	},
+	returns: v.id("playlistLyrics"),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+		await requirePlaylist(ctx, args.playlistId);
+
+		await ctx.db.patch(args.playlistId, {
+			zineDrcLogoFrontCorner: args.frontCorner ?? undefined,
+			zineDrcLogoBackCorner: args.backCorner ?? undefined,
 			updatedAt: Date.now(),
 		});
 
@@ -1587,6 +1613,8 @@ function toPublicPlaylist(ctx: QueryCtx, playlist: Doc<"playlistLyrics">) {
 			zineCoverTextOffsetXIn: playlist.zineCoverTextOffsetXIn,
 			zineCoverTextOffsetYIn: playlist.zineCoverTextOffsetYIn,
 			zineCoverReleaseYear: playlist.zineCoverReleaseYear,
+			zineDrcLogoFrontCorner: playlist.zineDrcLogoFrontCorner,
+			zineDrcLogoBackCorner: playlist.zineDrcLogoBackCorner,
 			zineSpotifyQrImageUrl,
 			zineAppleMusicQrImageUrl,
 			zineShowSpotifyQr: playlist.zineShowSpotifyQr,

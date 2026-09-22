@@ -48,6 +48,9 @@ export function PlaylistLyricsZine({ slug, variant }: PlaylistLyricsZineProps) {
 	const updateZineCoverReleaseYear = useMutation(
 		api.playlistLyrics.updateZineCoverReleaseYear,
 	);
+	const updateZineDrcLogoCorners = useMutation(
+		api.playlistLyrics.updateZineDrcLogoCorners,
+	);
 	const updateZineInsideBackLayoutSettings = useMutation(
 		api.playlistLyrics.updateZineInsideBackLayoutSettings,
 	);
@@ -158,6 +161,8 @@ export function PlaylistLyricsZine({ slug, variant }: PlaylistLyricsZineProps) {
 				imageUrl: playlist.zineCoverImageUrl,
 				greyscale: playlist.zineCoverGreyscale === true,
 			}}
+			drcLogoFrontCorner={playlist.zineDrcLogoFrontCorner}
+			drcLogoBackCorner={playlist.zineDrcLogoBackCorner}
 			coverTextLayout={coverTextLayoutFromStoredFields(playlist)}
 			coverReleaseYear={playlist.zineCoverReleaseYear}
 			itemSettingsById={itemSettingsById}
@@ -207,6 +212,13 @@ export function PlaylistLyricsZine({ slug, variant }: PlaylistLyricsZineProps) {
 							},
 							saveCoverReleaseYear: (releaseYear) => {
 								void updateZineCoverReleaseYear({ playlistId, releaseYear });
+							},
+							saveDrcLogoCorners: ({ frontCorner, backCorner }) => {
+								void updateZineDrcLogoCorners({
+									playlistId,
+									frontCorner: frontCorner ?? null,
+									backCorner: backCorner ?? null,
+								});
 							},
 							saveInsideBackLayoutSettings: (layout) => {
 								void updateZineInsideBackLayoutSettings({ playlistId, layout });

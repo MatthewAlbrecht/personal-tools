@@ -20,6 +20,7 @@ import {
 	zineInsideBackContentAlignStoredValidator,
 	zineInsideBackRecommendationRowAlignValidator,
 } from "./_utils/zineInsideBackLayout";
+import { zineDrcLogoCornerValidator } from "./_utils/zineDrcLogo";
 import { zineInsideBackSectionsValidator } from "./_utils/zineInsideBackSections";
 import { zinePageRecommendationsValidator } from "./_utils/zinePageRecommendations";
 
@@ -221,6 +222,8 @@ export default defineSchema({
 		zineCoverTextOffsetYIn: v.optional(v.number()),
 		zineCoverShowTitle: v.optional(v.boolean()),
 		zineCoverReleaseYear: v.optional(v.number()),
+		zineDrcLogoFrontCorner: v.optional(zineDrcLogoCornerValidator),
+		zineDrcLogoBackCorner: v.optional(zineDrcLogoCornerValidator),
 		introPageContent: v.optional(v.string()),
 		zineIntroParagraphSpacingPt: v.optional(v.number()),
 		zineIntroMarginPt: v.optional(v.number()),
@@ -307,6 +310,8 @@ export default defineSchema({
 		zineCoverTextOffsetYIn: v.optional(v.number()),
 		zineCoverShowTitle: v.optional(v.boolean()),
 		zineCoverReleaseYear: v.optional(v.number()),
+		zineDrcLogoFrontCorner: v.optional(zineDrcLogoCornerValidator),
+		zineDrcLogoBackCorner: v.optional(zineDrcLogoCornerValidator),
 		zineSpotifyQrStorageId: v.optional(v.id("_storage")),
 		zineSpotifyQrImageUrl: v.optional(v.string()),
 		zineAppleMusicQrStorageId: v.optional(v.id("_storage")),

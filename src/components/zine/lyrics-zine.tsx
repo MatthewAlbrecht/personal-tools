@@ -32,6 +32,10 @@ import {
 	resolveZineDisplaySettings,
 } from "~/lib/zine/zine-display-settings";
 import {
+	type ZineDrcLogoCorner,
+	ZINE_DRC_LOGO_CORNER_OPTIONS,
+} from "~/lib/zine/zine-drc-logo";
+import {
 	ZINE_INSIDE_BACK_MARGIN_SLIDER,
 	type ZineInsideBackLayoutSettings,
 	resolveZineInsideBackLayoutSettings,
@@ -95,6 +99,10 @@ export type LyricsZinePersistence = {
 	saveSongIntroContent?(songId: string, content: string): void;
 	saveCoverTextLayout?(layout: ZineCoverTextLayout): void;
 	saveCoverReleaseYear?(releaseYear: number | undefined): void;
+	saveDrcLogoCorners?(corners: {
+		frontCorner?: ZineDrcLogoCorner;
+		backCorner?: ZineDrcLogoCorner;
+	}): void;
 };
 
 type ZineDuplexBinding = "long-edge" | "short-edge";
@@ -106,6 +114,8 @@ export function LyricsZine({
 	songs,
 	cover,
 	backCoverQrCodes,
+	drcLogoFrontCorner: drcLogoFrontCornerProp,
+	drcLogoBackCorner: drcLogoBackCornerProp,
 	itemSettingsById,
 	siteWideHiddenCreditLabelKeys = [],
 	ignoredCreditLabelKeys = [],
@@ -125,6 +135,8 @@ export function LyricsZine({
 	songs: ZineSongDisplayInput[];
 	cover: { imageUrl?: string; greyscale: boolean };
 	backCoverQrCodes?: ZineBackCoverQrCodes;
+	drcLogoFrontCorner?: ZineDrcLogoCorner;
+	drcLogoBackCorner?: ZineDrcLogoCorner;
 	itemSettingsById: Record<string, ZineItemSettings>;
 	siteWideHiddenCreditLabelKeys?: string[];
 	ignoredCreditLabelKeys?: string[];
@@ -215,6 +227,12 @@ export function LyricsZine({
 	});
 	const [coverImageUrl, setCoverImageUrl] = useState(cover.imageUrl ?? "");
 	const [coverGreyscale, setCoverGreyscale] = useState(cover.greyscale);
+	const [drcLogoFrontCorner, setDrcLogoFrontCorner] = useState<
+		ZineDrcLogoCorner | undefined
+	>(drcLogoFrontCornerProp);
+	const [drcLogoBackCorner, setDrcLogoBackCorner] = useState<
+		ZineDrcLogoCorner | undefined
+	>(drcLogoBackCornerProp);
 	const [coverTextLayout, setCoverTextLayout] = useState<ZineCoverTextLayout>(
 		() => resolveZineCoverTextLayout(coverTextLayoutProp),
 	);
@@ -648,6 +666,7 @@ export function LyricsZine({
 					coverImageUrl={resolvedCoverImageUrl}
 					coverSide="front"
 					coverTextLayout={coverTextLayout}
+					drcLogoCorner={drcLogoFrontCorner}
 					playlistTitle={page.playlistTitle}
 					releaseYear={resolvedCoverReleaseYear}
 					useSheetSpreadBackground={options?.useSheetSpreadBackground}
@@ -798,6 +817,7 @@ export function LyricsZine({
 					coverGreyscale={resolvedCoverGreyscale}
 					coverImageUrl={resolvedCoverImageUrl}
 					coverSide="back"
+					drcLogoCorner={drcLogoBackCorner}
 					playlistTitle={collectionTitle}
 					useSheetSpreadBackground={options?.useSheetSpreadBackground}
 				/>
@@ -947,6 +967,34 @@ export function LyricsZine({
 										persistence?.saveGreyscale(checked);
 									}}
 								/>
+								{persistence?.saveDrcLogoCorners ? (
+									<div className="grid gap-3 sm:grid-cols-2">
+										<ZineDrcLogoCornerSelect
+											id="zine-drc-logo-front"
+											label="Front DRC logo"
+											value={drcLogoFrontCorner}
+											onChange={(next) => {
+												setDrcLogoFrontCorner(next);
+												persistence.saveDrcLogoCorners?.({
+													frontCorner: next,
+													backCorner: drcLogoBackCorner,
+												});
+											}}
+										/>
+										<ZineDrcLogoCornerSelect
+											id="zine-drc-logo-back"
+											label="Back DRC logo"
+											value={drcLogoBackCorner}
+											onChange={(next) => {
+												setDrcLogoBackCorner(next);
+												persistence.saveDrcLogoCorners?.({
+													frontCorner: drcLogoFrontCorner,
+													backCorner: next,
+												});
+											}}
+										/>
+									</div>
+								) : null}
 							</div>
 						</div>
 					) : null}
@@ -2018,6 +2066,41 @@ function ZineDuplexBindingOptionRow({
 				{label}
 			</span>
 		</label>
+	);
+}
+
+function ZineDrcLogoCornerSelect({
+	id,
+	label,
+	value,
+	onChange,
+}: {
+	id: string;
+	label: string;
+	value: ZineDrcLogoCorner | undefined;
+	onChange: (value: ZineDrcLogoCorner | undefined) => void;
+}) {
+	return (
+		<div className="space-y-2">
+			<Label htmlFor={id} className="text-sm">
+				{label}
+			</Label>
+			<select
+				id={id}
+				className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+				value={value ?? "off"}
+				onChange={(event) => {
+					const next = event.target.value;
+					onChange(next === "off" ? undefined : (next as ZineDrcLogoCorner));
+				}}
+			>
+				{ZINE_DRC_LOGO_CORNER_OPTIONS.map((option) => (
+					<option key={option.value} value={option.value}>
+						{option.label}
+					</option>
+				))}
+			</select>
+		</div>
 	);
 }
 
