@@ -306,6 +306,8 @@ export function LyricsZine({
 		showSectionLabels: displaySettings.showSectionLabels,
 		showUserNote: canEdit && displaySettings.showUserNote,
 		showCreditsRule: displaySettings.showCreditsRule,
+		showRecommendationsLabel: displaySettings.showRecommendationsLabel,
+		showRecommendationsPadding: displaySettings.showRecommendationsPadding,
 	};
 
 	const resolvedCoverImageUrl = coverImageUrl.trim() || undefined;
@@ -1023,6 +1025,24 @@ export function LyricsZine({
 									updateDisplaySettings({ showCreditsRule: checked })
 								}
 								label="Line above credits"
+							/>
+							<ZineToggleControl
+								id="zine-show-recommendations-label"
+								checked={displaySettings.showRecommendationsLabel}
+								onCheckedChange={(checked) =>
+									updateDisplaySettings({ showRecommendationsLabel: checked })
+								}
+								label="Recommendations label"
+							/>
+							<ZineToggleControl
+								id="zine-show-recommendations-padding"
+								checked={displaySettings.showRecommendationsPadding}
+								onCheckedChange={(checked) =>
+									updateDisplaySettings({
+										showRecommendationsPadding: checked,
+									})
+								}
+								label="Recommendations padding"
 							/>
 							{canEdit ? (
 								<ZineToggleControl

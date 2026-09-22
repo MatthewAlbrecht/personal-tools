@@ -17,6 +17,8 @@ export type ZineDisplayOptions = {
 	showSectionLabels: boolean;
 	showUserNote: boolean;
 	showCreditsRule: boolean;
+	showRecommendationsLabel: boolean;
+	showRecommendationsPadding: boolean;
 };
 
 export function ZineSongHeader({

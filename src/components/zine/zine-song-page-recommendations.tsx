@@ -6,8 +6,12 @@ import {
 
 export function ZineSongPageRecommendations({
 	items,
+	showLabel = true,
+	showPadding = true,
 }: {
 	items: ZinePageRecommendation[];
+	showLabel?: boolean;
+	showPadding?: boolean;
 }) {
 	if (items.length === 0) {
 		return null;
@@ -16,19 +20,32 @@ export function ZineSongPageRecommendations({
 	const layout = getPageRecommendationLayout(items.length);
 
 	return (
-		<ul
+		<div
 			className={cn(
-				"zine-page-recommendations",
-				layout === "pair" && "zine-page-recommendations-pair",
+				"zine-page-recommendations-block",
+				showPadding && "zine-page-recommendations-padded",
+				showLabel && "zine-page-recommendations-with-label",
 			)}
 		>
-			{items.map((item, index) => (
-				<PageRecommendationItem
-					key={`${item.albumTitle}-${item.artistName}-${index}`}
-					item={item}
-				/>
-			))}
-		</ul>
+			{showLabel ? (
+				<p className="zine-page-recommendations-label">
+					Additional Recommendations
+				</p>
+			) : null}
+			<ul
+				className={cn(
+					"zine-page-recommendations",
+					layout === "pair" && "zine-page-recommendations-pair",
+				)}
+			>
+				{items.map((item, index) => (
+					<PageRecommendationItem
+						key={`${item.albumTitle}-${item.artistName}-${index}`}
+						item={item}
+					/>
+				))}
+			</ul>
+		</div>
 	);
 }
 

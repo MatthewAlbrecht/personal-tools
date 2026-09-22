@@ -455,6 +455,8 @@ const zineDisplaySettingsMutationValidator = v.object({
 	showUserNote: v.boolean(),
 	separateInstrumentalPages: v.boolean(),
 	showCreditsRule: v.boolean(),
+	showRecommendationsLabel: v.boolean(),
+	showRecommendationsPadding: v.boolean(),
 });
 
 export const updateZineDisplaySettings = mutation({
@@ -1255,6 +1257,8 @@ const zineDisplaySettingsSyncValidator = v.object({
 	showUserNote: v.optional(v.boolean()),
 	separateInstrumentalPages: v.optional(v.boolean()),
 	showCreditsRule: v.optional(v.boolean()),
+	showRecommendationsLabel: v.optional(v.boolean()),
+	showRecommendationsPadding: v.optional(v.boolean()),
 });
 
 const syncAlbumSongInputValidator = v.object({

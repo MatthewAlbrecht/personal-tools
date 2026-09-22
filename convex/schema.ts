@@ -44,6 +44,8 @@ const zineDisplaySettingsValidator = v.object({
 	showUserNote: v.optional(v.boolean()),
 	separateInstrumentalPages: v.optional(v.boolean()),
 	showCreditsRule: v.optional(v.boolean()),
+	showRecommendationsLabel: v.optional(v.boolean()),
+	showRecommendationsPadding: v.optional(v.boolean()),
 });
 
 export default defineSchema({

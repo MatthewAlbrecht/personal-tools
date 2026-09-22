@@ -220,7 +220,11 @@ function ZineSongPageContent({
 							/>
 						) : null}
 						{hasRecommendations ? (
-							<ZineSongPageRecommendations items={visibleRecommendations} />
+							<ZineSongPageRecommendations
+								items={visibleRecommendations}
+								showLabel={displayOptions.showRecommendationsLabel}
+								showPadding={displayOptions.showRecommendationsPadding}
+							/>
 						) : null}
 					</div>
 				</div>

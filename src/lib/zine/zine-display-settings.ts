@@ -9,6 +9,8 @@ export type ZineDisplaySettings = {
 	showUserNote: boolean;
 	separateInstrumentalPages: boolean;
 	showCreditsRule: boolean;
+	showRecommendationsLabel: boolean;
+	showRecommendationsPadding: boolean;
 };
 
 export const ZINE_DISPLAY_DEFAULTS: ZineDisplaySettings = {
@@ -22,6 +24,8 @@ export const ZINE_DISPLAY_DEFAULTS: ZineDisplaySettings = {
 	showUserNote: true,
 	separateInstrumentalPages: false,
 	showCreditsRule: false,
+	showRecommendationsLabel: true,
+	showRecommendationsPadding: true,
 };
 
 export function resolveZineDisplaySettings(

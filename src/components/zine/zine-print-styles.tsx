@@ -552,14 +552,38 @@ export function ZinePrintStyles() {
 						max-height: none;
 					}
 
+					.zine-page-recommendations-block {
+						margin: 0.05in 0 0;
+						padding: 0.05in 0 0;
+						border-top: 0.5pt solid #cccccc;
+					}
+
+					.zine-page-recommendations-padded {
+						margin-top: 0.09in;
+						padding-top: 0.09in;
+					}
+
+					.zine-page-recommendations-with-label.zine-page-recommendations-padded {
+						padding-top: 0.08in;
+					}
+
+					.zine-page-recommendations-label {
+						margin: 0 0 5pt;
+						font-size: 6pt;
+						font-weight: 600;
+						letter-spacing: 0.1em;
+						line-height: 1.2;
+						text-transform: uppercase;
+						color: #666666;
+					}
+
 					.zine-page-recommendations {
 						display: flex;
 						flex-direction: column;
 						gap: 4pt;
 						margin: 0;
-						padding: 0.09in 0 0;
+						padding: 0;
 						list-style: none;
-						border-top: 0.5pt solid #cccccc;
 					}
 
 					.zine-page-recommendations-pair {
@@ -628,7 +652,7 @@ export function ZinePrintStyles() {
 						display: flex;
 						flex-direction: column;
 						flex: 0 0 auto;
-						gap: 0.09in;
+						gap: 0;
 						min-height: 0;
 						overflow: hidden;
 						padding-top: 0.11in;
@@ -753,7 +777,7 @@ export function ZinePrintStyles() {
 					.zine-song-group-credits {
 						display: flex;
 						flex-direction: column;
-						gap: 0.09in;
+						gap: 0;
 						margin-top: 0.11in;
 					}
 

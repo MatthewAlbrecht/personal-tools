@@ -104,7 +104,11 @@ export function ZineSongGroupPage({
 									/>
 								) : null}
 								{showRecommendations ? (
-									<ZineSongPageRecommendations items={visibleRecommendations} />
+									<ZineSongPageRecommendations
+										items={visibleRecommendations}
+										showLabel={displayOptions.showRecommendationsLabel}
+										showPadding={displayOptions.showRecommendationsPadding}
+									/>
 								) : null}
 							</div>
 						) : null}
