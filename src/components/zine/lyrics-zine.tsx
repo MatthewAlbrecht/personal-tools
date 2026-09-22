@@ -91,6 +91,7 @@ export type LyricsZinePersistence = {
 		storageId?: string,
 	): Promise<{ coverImageUrl?: string }>;
 	saveGreyscale(on: boolean): void;
+	saveShowCoverTitle?(on: boolean): void;
 	generateUploadUrl(): Promise<string>;
 	saveIntroSettings?(settings: ZineIntroSettings): void;
 	saveInsideBackLayoutSettings?(settings: ZineInsideBackLayoutSettings): void;
@@ -116,6 +117,7 @@ export function LyricsZine({
 	backCoverQrCodes,
 	drcLogoFrontCorner: drcLogoFrontCornerProp,
 	drcLogoBackCorner: drcLogoBackCornerProp,
+	showCoverTitle: showCoverTitleProp = true,
 	itemSettingsById,
 	siteWideHiddenCreditLabelKeys = [],
 	ignoredCreditLabelKeys = [],
@@ -137,6 +139,7 @@ export function LyricsZine({
 	backCoverQrCodes?: ZineBackCoverQrCodes;
 	drcLogoFrontCorner?: ZineDrcLogoCorner;
 	drcLogoBackCorner?: ZineDrcLogoCorner;
+	showCoverTitle?: boolean;
 	itemSettingsById: Record<string, ZineItemSettings>;
 	siteWideHiddenCreditLabelKeys?: string[];
 	ignoredCreditLabelKeys?: string[];
@@ -227,6 +230,9 @@ export function LyricsZine({
 	});
 	const [coverImageUrl, setCoverImageUrl] = useState(cover.imageUrl ?? "");
 	const [coverGreyscale, setCoverGreyscale] = useState(cover.greyscale);
+	const [showCoverTitle, setShowCoverTitle] = useState(
+		showCoverTitleProp !== false,
+	);
 	const [drcLogoFrontCorner, setDrcLogoFrontCorner] = useState<
 		ZineDrcLogoCorner | undefined
 	>(drcLogoFrontCornerProp);
@@ -669,6 +675,7 @@ export function LyricsZine({
 					drcLogoCorner={drcLogoFrontCorner}
 					playlistTitle={page.playlistTitle}
 					releaseYear={resolvedCoverReleaseYear}
+					showTitle={showCoverTitle}
 					useSheetSpreadBackground={options?.useSheetSpreadBackground}
 				/>
 			);
@@ -965,6 +972,15 @@ export function LyricsZine({
 									onCheckedChange={(checked) => {
 										setCoverGreyscale(checked);
 										persistence?.saveGreyscale(checked);
+									}}
+								/>
+								<ZineToggleControl
+									checked={showCoverTitle}
+									id="zine-cover-show-title"
+									label="Show title on cover"
+									onCheckedChange={(checked) => {
+										setShowCoverTitle(checked);
+										persistence?.saveShowCoverTitle?.(checked);
 									}}
 								/>
 								{persistence?.saveDrcLogoCorners ? (

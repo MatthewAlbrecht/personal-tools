@@ -26,6 +26,7 @@ export function ZineCoverPage({
 	useSheetSpreadBackground = false,
 	backCoverQrCodes,
 	drcLogoCorner,
+	showTitle = true,
 }: {
 	playlistTitle: string;
 	artistName?: string;
@@ -37,15 +38,21 @@ export function ZineCoverPage({
 	useSheetSpreadBackground?: boolean;
 	backCoverQrCodes?: ZineBackCoverQrCodes;
 	drcLogoCorner?: ZineDrcLogoCorner;
+	showTitle?: boolean;
 }) {
 	const isBack = coverSide === "back";
 	const hasCoverImage = Boolean(coverImageUrl?.trim());
 	const showPerPanelBackground = hasCoverImage && !useSheetSpreadBackground;
 	const displayArtistName = artistName?.trim() ?? "";
-	const showArtistName = !isBack && displayArtistName !== "";
+	const showArtistName = !isBack && showTitle && displayArtistName !== "";
 	const displayReleaseYear =
-		!isBack && releaseYear !== undefined ? String(releaseYear) : "";
+		!isBack && showTitle && releaseYear !== undefined
+			? String(releaseYear)
+			: "";
 	const showReleaseYear = displayReleaseYear !== "";
+	const showTitleText = !isBack && showTitle;
+	const showCoverTextStack =
+		showTitleText || showArtistName || showReleaseYear;
 	const resolvedCoverTextLayout = resolveZineCoverTextLayout(coverTextLayout);
 	const coverTextStyle = coverTextLayoutToStyleProperties(resolvedCoverTextLayout);
 	const { containerRef: titleRef, fontSizePt: titleFontSizePt } = useAutoFitText({
@@ -84,7 +91,7 @@ export function ZineCoverPage({
 					: undefined
 			}
 		>
-			{!isBack ? (
+			{showCoverTextStack ? (
 				<div
 					className="zine-cover-title-wrap"
 					style={coverTextStyle as CSSProperties}
@@ -95,13 +102,15 @@ export function ZineCoverPage({
 								{displayReleaseYear}
 							</div>
 						) : null}
-						<div
-							ref={titleRef}
-							className="zine-cover-title-pill overflow-hidden whitespace-nowrap font-bold leading-none"
-							style={{ fontSize: `${titleFontSizePt}pt` }}
-						>
-							{playlistTitle}
-						</div>
+						{showTitleText ? (
+							<div
+								ref={titleRef}
+								className="zine-cover-title-pill overflow-hidden whitespace-nowrap font-bold leading-none"
+								style={{ fontSize: `${titleFontSizePt}pt` }}
+							>
+								{playlistTitle}
+							</div>
+						) : null}
 						{showArtistName ? (
 							<div
 								ref={artistRef}

@@ -1211,6 +1211,21 @@ export const updateZineCoverGreyscale = mutation({
 	},
 });
 
+export const updateZineCoverShowTitle = mutation({
+	args: { albumId: v.id("geniusAlbums"), showTitle: v.boolean() },
+	returns: v.null(),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+		const album = await ctx.db.get(args.albumId);
+		if (!album) throw new Error("Album not found");
+		await ctx.db.patch(args.albumId, {
+			zineCoverShowTitle: args.showTitle ? undefined : false,
+			updatedAt: Date.now(),
+		});
+		return null;
+	},
+});
+
 export const updateZineSongSettings = mutation({
 	args: {
 		songId: v.id("geniusSongs"),

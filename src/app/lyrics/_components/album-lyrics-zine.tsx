@@ -33,6 +33,9 @@ export function AlbumLyricsZine({ slug, variant }: AlbumLyricsZineProps) {
 	const updateCoverGreyscale = useMutation(
 		api.geniusAlbums.updateZineCoverGreyscale,
 	);
+	const updateCoverShowTitle = useMutation(
+		api.geniusAlbums.updateZineCoverShowTitle,
+	);
 	const updateZineIntroSettings = useMutation(
 		api.geniusAlbums.updateZineIntroSettings,
 	);
@@ -139,6 +142,7 @@ export function AlbumLyricsZine({ slug, variant }: AlbumLyricsZineProps) {
 			}}
 			drcLogoFrontCorner={albumData.album.zineDrcLogoFrontCorner}
 			drcLogoBackCorner={albumData.album.zineDrcLogoBackCorner}
+			showCoverTitle={albumData.album.zineCoverShowTitle !== false}
 			coverTextLayout={coverTextLayoutFromStoredFields(albumData.album)}
 			coverReleaseYear={albumData.album.zineCoverReleaseYear}
 			itemSettingsById={itemSettingsById}
@@ -208,6 +212,9 @@ export function AlbumLyricsZine({ slug, variant }: AlbumLyricsZineProps) {
 								}),
 							saveGreyscale: (on) => {
 								void updateCoverGreyscale({ albumId, greyscale: on });
+							},
+							saveShowCoverTitle: (on) => {
+								void updateCoverShowTitle({ albumId, showTitle: on });
 							},
 							saveIntroSettings: (settings) => {
 								void updateZineIntroSettings({

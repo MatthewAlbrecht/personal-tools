@@ -132,6 +132,7 @@ const publicPlaylistValidator = v.object({
 	zineCoverReleaseYear: v.optional(v.number()),
 	zineDrcLogoFrontCorner: v.optional(zineDrcLogoCornerValidator),
 	zineDrcLogoBackCorner: v.optional(zineDrcLogoCornerValidator),
+	zineCoverShowTitle: v.optional(v.boolean()),
 	zineSpotifyQrImageUrl: v.optional(v.string()),
 	zineAppleMusicQrImageUrl: v.optional(v.string()),
 	zineShowSpotifyQr: v.optional(v.boolean()),
@@ -597,6 +598,27 @@ export const updateZineCoverGreyscale = mutation({
 
 		await ctx.db.patch(args.playlistId, {
 			zineCoverGreyscale: args.greyscale ? true : undefined,
+			updatedAt: Date.now(),
+		});
+
+		return null;
+	},
+});
+
+export const updateZineCoverShowTitle = mutation({
+	args: {
+		playlistId: v.id("playlistLyrics"),
+		showTitle: v.boolean(),
+	},
+	returns: v.null(),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+
+		await requirePlaylist(ctx, args.playlistId);
+
+		await ctx.db.patch(args.playlistId, {
+			// undefined = show (default); false = hide overlaid title
+			zineCoverShowTitle: args.showTitle ? undefined : false,
 			updatedAt: Date.now(),
 		});
 
@@ -1608,6 +1630,7 @@ function toPublicPlaylist(ctx: QueryCtx, playlist: Doc<"playlistLyrics">) {
 			description: playlist.description,
 			zineCoverImageUrl,
 			zineCoverGreyscale: playlist.zineCoverGreyscale,
+			zineCoverShowTitle: playlist.zineCoverShowTitle,
 			zineCoverTextAnchor: playlist.zineCoverTextAnchor,
 			zineCoverTextAlign: playlist.zineCoverTextAlign,
 			zineCoverTextOffsetXIn: playlist.zineCoverTextOffsetXIn,
