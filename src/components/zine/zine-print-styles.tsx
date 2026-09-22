@@ -557,8 +557,9 @@ export function ZinePrintStyles() {
 						flex-direction: column;
 						gap: 4pt;
 						margin: 0;
-						padding: 0;
+						padding: 0.09in 0 0;
 						list-style: none;
+						border-top: 0.5pt solid #cccccc;
 					}
 
 					.zine-page-recommendations-pair {
@@ -627,7 +628,7 @@ export function ZinePrintStyles() {
 						display: flex;
 						flex-direction: column;
 						flex: 0 0 auto;
-						gap: 0.11in;
+						gap: 0.09in;
 						min-height: 0;
 						overflow: hidden;
 						padding-top: 0.11in;
@@ -752,7 +753,7 @@ export function ZinePrintStyles() {
 					.zine-song-group-credits {
 						display: flex;
 						flex-direction: column;
-						gap: 0.11in;
+						gap: 0.09in;
 						margin-top: 0.11in;
 					}
 
