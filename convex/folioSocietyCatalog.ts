@@ -29,6 +29,7 @@ export const applyCatalogFields = internalMutation({
 	args: {
 		productId: v.number(),
 		name: v.string(),
+		productType: v.optional(v.string()),
 		authorName: v.optional(v.string()),
 		launchTimeIso: v.optional(v.string()),
 		publicationDateText: v.optional(v.string()),
@@ -56,7 +57,11 @@ export const applyCatalogFields = internalMutation({
 			launchTime !== undefined ||
 			publicationDateTime !== undefined ||
 			Boolean(args.publicationDateText?.trim());
-		const edition = inferEdition(args.name, hasLaunchOrPublication);
+		const edition = inferEdition(
+			args.name,
+			hasLaunchOrPublication,
+			args.productType,
+		);
 		const isBundle = edition === "bundle";
 		const titleKey = makeTitleKey(args.name, args.authorName);
 		const searchText = buildSearchText(args.name, args.authorName);
@@ -174,7 +179,7 @@ export const listCatalogPage = query({
 			matchesRemainingFilters(release, filters, args.now),
 		);
 		const ownershipByProduct = loaded.ownershipByProduct;
-		const grouped = groupIntoSeasons(filtered, ownershipByProduct, filters);
+		const grouped = groupIntoSeasons(filtered);
 		const trimmed = omitCappedTailSeason(grouped, !loaded.exhausted);
 		const paged = pageCompleteSeasons(
 			trimmed,
@@ -459,10 +464,6 @@ function seasonSortOf(release: ReleaseDoc): string {
 	return release.seasonSortKey ?? "0000-00";
 }
 
-function seasonKeyOf(release: ReleaseDoc): string {
-	return release.seasonKey ?? "undated";
-}
-
 function titleKeyOf(release: ReleaseDoc): string {
 	return release.titleKey ?? `__id:${release.id}`;
 }
@@ -508,19 +509,6 @@ function unionById(rows: ReleaseDoc[]): ReleaseDoc[] {
 		out.push(row);
 	}
 	return out;
-}
-
-function editionRank(edition: FolioEdition): number {
-	if (edition === "limited") {
-		return 0;
-	}
-	if (edition === "signed") {
-		return 1;
-	}
-	if (edition === "standard") {
-		return 2;
-	}
-	return 3;
 }
 
 function matchesRemainingFilters(
@@ -1035,109 +1023,83 @@ async function walkIndexedSeasons(
 	};
 }
 
-function groupIntoSeasons(
-	releases: ReleaseDoc[],
-	ownershipByProduct: OwnershipMap | null,
-	filters: CatalogFilters,
-): CatalogSeason[] {
-	const groups = new Map<string, ReleaseDoc[]>();
-	for (const release of releases) {
-		const key = `${titleKeyOf(release)}::${seasonKeyOf(release)}`;
-		const list = groups.get(key);
-		if (list) {
-			list.push(release);
-		} else {
-			groups.set(key, [release]);
-		}
-	}
-
+function groupIntoSeasons(releases: ReleaseDoc[]): CatalogSeason[] {
 	const seasons = new Map<string, CatalogSeason>();
-	for (const skus of groups.values()) {
-		const visible = pickVisibleSku(skus, ownershipByProduct, filters);
-		const sample = visible;
-		const seasonKey = seasonKeyOf(sample);
-		const seasonSortKey = seasonSortOf(sample);
+	for (const release of releases) {
+		const seasonSortKey = seasonSortOf(release);
+		const catalogTime = release.catalogLaunchTime ?? 0;
+		const seasonKey = exactDateKey(catalogTime);
 		const card: CatalogCard = {
-			titleKey: titleKeyOf(sample),
-			productId: sample.id,
-			name: sample.name,
-			authorName: sample.authorName ?? null,
-			url: sample.url,
-			price: sample.price ?? null,
-			catalogLaunchTime: sample.catalogLaunchTime ?? 0,
-			edition: sample.edition ?? "standard",
-			isComingSoon: sample.isComingSoon === true,
-			heroImageUrl: sample.heroImageUrl ?? null,
-			familyHasLimited: sample.familyHasLimited === true,
-			familyHasSigned: sample.familyHasSigned === true,
+			titleKey: titleKeyOf(release),
+			productId: release.id,
+			name: release.name,
+			authorName: release.authorName ?? null,
+			url: release.url,
+			price: release.price ?? null,
+			catalogLaunchTime: release.catalogLaunchTime ?? 0,
+			edition: release.edition ?? "standard",
+			isComingSoon: release.isComingSoon === true,
+			heroImageUrl: release.heroImageUrl ?? null,
+			familyHasLimited: release.familyHasLimited === true,
+			familyHasSigned: release.familyHasSigned === true,
 			owned: false,
 			want: false,
 		};
-		const existing = seasons.get(seasonSortKey);
+		const existing = seasons.get(seasonKey);
 		if (existing) {
 			existing.cards.push(card);
 		} else {
-			seasons.set(seasonSortKey, {
+			seasons.set(seasonKey, {
 				seasonKey,
 				seasonSortKey,
-				label: seasonLabelFromKeys(seasonKey, seasonSortKey),
+				label: "",
 				cards: [card],
 			});
 		}
 	}
 
-	return [...seasons.values()].sort((a, b) =>
-		b.seasonSortKey.localeCompare(a.seasonSortKey),
-	);
+	return [...seasons.values()]
+		.map((season) => ({
+			...season,
+			label:
+				season.seasonKey === "undated"
+					? undatedSeason().label
+					: releaseSectionLabel(
+							season.cards[0]?.catalogLaunchTime ?? 0,
+							season.cards.length,
+						),
+		}))
+		.sort((a, b) => {
+			const coarse = b.seasonSortKey.localeCompare(a.seasonSortKey);
+			return coarse !== 0 ? coarse : b.seasonKey.localeCompare(a.seasonKey);
+		});
 }
 
-function pickVisibleSku(
-	skus: ReleaseDoc[],
-	ownershipByProduct: OwnershipMap | null,
-	filters: CatalogFilters,
-): ReleaseDoc {
-	function byEdition(rows: ReleaseDoc[]): ReleaseDoc {
-		const sorted = [...rows].sort((a, b) => {
-			const rank =
-				editionRank(a.edition ?? "standard") -
-				editionRank(b.edition ?? "standard");
-			if (rank !== 0) {
-				return rank;
-			}
-			return a.id - b.id;
-		});
-		const first = sorted[0];
-		if (!first) {
-			throw new Error("empty sku group");
-		}
-		return first;
+function exactDateKey(catalogTime: number): string {
+	if (catalogTime <= 0) {
+		return "undated";
 	}
+	return new Date(catalogTime).toISOString().slice(0, 10);
+}
 
-	if (filters.owned && ownershipByProduct) {
-		const owned = skus.filter(
-			(sku) => ownershipByProduct.get(sku.id) === "owned",
-		);
-		if (owned.length > 0) {
-			return byEdition(owned);
-		}
-		if (filters.want) {
-			const wanted = skus.filter(
-				(sku) => ownershipByProduct.get(sku.id) === "want",
-			);
-			if (wanted.length > 0) {
-				return byEdition(wanted);
-			}
-		}
-	} else if (filters.want && ownershipByProduct) {
-		const wanted = skus.filter(
-			(sku) => ownershipByProduct.get(sku.id) === "want",
-		);
-		if (wanted.length > 0) {
-			return byEdition(wanted);
-		}
+export function releaseSectionLabel(
+	catalogTime: number,
+	visibleCardCount: number,
+): string {
+	if (catalogTime <= 0) {
+		return undatedSeason().label;
 	}
-
-	return byEdition(skus);
+	if (visibleCardCount >= 4) {
+		return seasonFromTimestamp(catalogTime).label.replace(
+			/ (\d{4})$/,
+			" Collection $1",
+		);
+	}
+	const date = new Date(catalogTime);
+	return `${date.getUTCDate()} ${date.toLocaleString("en-GB", {
+		month: "long",
+		timeZone: "UTC",
+	})} ${date.getUTCFullYear()}`;
 }
 
 export function omitCappedTailSeason(
@@ -1147,7 +1109,10 @@ export function omitCappedTailSeason(
 	if (!hitCap || seasons.length <= 1) {
 		return seasons;
 	}
-	return seasons.slice(0, -1);
+	const oldestCoarseSeason = seasons[seasons.length - 1]?.seasonSortKey;
+	return seasons.filter(
+		(season) => season.seasonSortKey !== oldestCoarseSeason,
+	);
 }
 
 export function pageCompleteSeasons(
@@ -1166,12 +1131,19 @@ export function pageCompleteSeasons(
 		}
 		return season.seasonSortKey < beforeSeasonSortKey;
 	});
-	const page = eligible.slice(0, pageSize);
+	const selectedCoarseSeasons = [
+		...new Set(eligible.map((season) => season.seasonSortKey)),
+	].slice(0, pageSize);
+	const page = eligible.filter((season) =>
+		selectedCoarseSeasons.includes(season.seasonSortKey),
+	);
 	if (page.length === 0) {
 		return { seasons: [], continueCursor: null, isDone: true };
 	}
 	const oldest = page[page.length - 1];
-	const remaining = eligible.length > page.length;
+	const remaining = eligible.some(
+		(season) => !selectedCoarseSeasons.includes(season.seasonSortKey),
+	);
 	const isDone = !remaining && exhausted;
 	return {
 		seasons: page,

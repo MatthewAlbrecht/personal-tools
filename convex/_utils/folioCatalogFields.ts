@@ -23,6 +23,7 @@ function normalizeTitle(name: string): string {
 export function inferEdition(
 	name: string,
 	hasLaunchOrPublication: boolean,
+	productType?: string,
 ): FolioEdition {
 	const lower = name.toLowerCase();
 
@@ -35,6 +36,10 @@ export function inferEdition(
 
 	if (lower.includes("(signed edition)") || lower.includes("signed edition")) {
 		return "signed";
+	}
+
+	if (productType === "bundle") {
+		return "bundle";
 	}
 
 	if (/collection\s*$/i.test(name.trim()) && !hasLaunchOrPublication) {

@@ -9,7 +9,6 @@ import {
 	FolioBookCardSkeleton,
 	FolioBookDetail,
 	type FolioCatalogCard,
-	type FolioFamilyEdition,
 	type FolioProductImage,
 } from "./folio-book-card";
 
@@ -27,79 +26,67 @@ export function FolioSeasonSection({
 	marksFor: (
 		productId: number,
 		fallback: FolioCatalogCard,
-		family?: FolioFamilyEdition[],
 	) => {
 		owned: boolean;
 		want: boolean;
 	};
 }): ReactNode {
 	const cols = useGridColumnCount();
-	const [openTitleKey, setOpenTitleKey] = useState<string | null>(null);
-	const [selectedProductId, setSelectedProductId] = useState<number | null>(
-		null,
-	);
+	const [openProductId, setOpenProductId] = useState<number | null>(null);
 
 	const openIndex = useMemo(() => {
-		if (!openTitleKey) {
+		if (openProductId === null) {
 			return null;
 		}
-		const index = cards.findIndex((card) => card.titleKey === openTitleKey);
+		const index = cards.findIndex((card) => card.productId === openProductId);
 		return index >= 0 ? index : null;
-	}, [cards, openTitleKey]);
+	}, [cards, openProductId]);
 
 	const openCard = openIndex === null ? null : (cards[openIndex] ?? null);
 	const insertAfter =
 		openIndex === null ? null : rowEndIndex(openIndex, cols, cards.length);
 
-	const family = useQuery(
-		api.folioSocietyCatalog.getFamilyByTitleKey,
-		openCard ? { titleKey: openCard.titleKey } : "skip",
-	);
-	const selectedId = selectedProductId ?? openCard?.productId ?? 0;
 	const images = useQuery(
 		api.folioSocietyImages.getActiveImagesByProduct,
-		openCard ? { productId: selectedId } : "skip",
+		openCard ? { productId: openCard.productId } : "skip",
 	);
 
 	useEffect(() => {
-		if (!openTitleKey) {
+		if (openProductId === null) {
 			return;
 		}
 		function onKey(event: KeyboardEvent): void {
 			if (event.key === "Escape") {
-				setOpenTitleKey(null);
-				setSelectedProductId(null);
+				setOpenProductId(null);
 			}
 		}
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
-	}, [openTitleKey]);
+	}, [openProductId]);
 
 	function toggleCard(card: FolioCatalogCard): void {
-		if (openTitleKey === card.titleKey) {
-			setOpenTitleKey(null);
-			setSelectedProductId(null);
+		if (openProductId === card.productId) {
+			setOpenProductId(null);
 			return;
 		}
-		setOpenTitleKey(card.titleKey);
-		setSelectedProductId(card.productId);
+		setOpenProductId(card.productId);
 	}
 
 	return (
-		<section className="mb-12">
-			<h2 className="mb-6 font-[family-name:var(--font-display)] text-3xl tracking-tight">
+		<section className="mb-16">
+			<h2 className="mb-3 font-[family-name:var(--font-display)] text-3xl tracking-tight">
 				{label}
 			</h2>
-			<div className="mb-8 border-border/40 border-b" />
-			<div className="grid grid-cols-2 gap-x-4 gap-y-8 md:grid-cols-3 xl:grid-cols-4">
+			<div className="mb-7 h-px bg-gradient-to-r from-stone-400/60 via-stone-300/30 to-transparent" />
+			<div className="grid grid-cols-2 gap-x-5 gap-y-10 md:grid-cols-3 xl:grid-cols-4">
 				{cards.flatMap((card, index) => {
 					const marks = marksFor(card.productId, card);
 					const tile = (
 						<FolioBookCard
-							key={card.titleKey}
+							key={card.productId}
 							card={{ ...card, ...marks }}
 							now={now}
-							expanded={openTitleKey === card.titleKey}
+							expanded={openProductId === card.productId}
 							onToggleExpand={() => toggleCard(card)}
 							onSetOwnership={(status) =>
 								onSetOwnership(card.productId, status)
@@ -109,25 +96,16 @@ export function FolioSeasonSection({
 					if (insertAfter !== index || !openCard) {
 						return [tile];
 					}
-					const selectedMarks = marksFor(
-						selectedId,
-						openCard,
-						family as FolioFamilyEdition[] | undefined,
-					);
+					const selectedMarks = marksFor(openCard.productId, openCard);
 					return [
 						tile,
-						<FolioExpandRow key={`${openCard.titleKey}-detail`}>
+						<FolioExpandRow key={`${openCard.productId}-detail`}>
 							<FolioBookDetail
+								key={openCard.productId}
 								card={openCard}
 								now={now}
-								family={family as FolioFamilyEdition[] | undefined}
 								images={images as FolioProductImage[] | undefined}
-								selectedProductId={selectedId}
-								onSelectProduct={setSelectedProductId}
-								onClose={() => {
-									setOpenTitleKey(null);
-									setSelectedProductId(null);
-								}}
+								onClose={() => setOpenProductId(null)}
 								onSetOwnership={onSetOwnership}
 								owned={selectedMarks.owned}
 								want={selectedMarks.want}

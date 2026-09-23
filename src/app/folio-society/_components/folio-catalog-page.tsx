@@ -21,7 +21,7 @@ import {
 	parseFolioFilters,
 	serializeFolioFilters,
 } from "../_utils/filter-state";
-import type { FolioCatalogCard, FolioFamilyEdition } from "./folio-book-card";
+import type { FolioCatalogCard } from "./folio-book-card";
 import { FolioFilters as FolioFiltersControls } from "./folio-filters";
 import {
 	FolioSeasonSection,
@@ -82,7 +82,6 @@ export function FolioCatalogPage(): ReactNode {
 	>({});
 	const setOwnership = useMutation(api.folioSocietyCatalog.setOwnership);
 	const sentinelRef = useRef<HTMLDivElement | null>(null);
-	const lastFamilyRef = useRef<FolioFamilyEdition[] | undefined>(undefined);
 
 	useEffect(() => {
 		setSearchInput(filters.search ?? "");
@@ -187,21 +186,10 @@ export function FolioCatalogPage(): ReactNode {
 	function marksFor(
 		productId: number,
 		fallback: FolioCatalogCard,
-		family?: FolioFamilyEdition[],
 	): OwnershipMarks {
-		if (family) {
-			lastFamilyRef.current = family;
-		}
 		const optimistic = optimisticMarks[productId];
 		if (optimistic) {
 			return optimistic;
-		}
-		if (productId !== fallback.productId) {
-			const row = family?.find((item) => item.productId === productId);
-			return {
-				owned: row?.owned ?? false,
-				want: row?.want ?? false,
-			};
 		}
 		return {
 			owned: fallback.owned,
@@ -237,7 +225,6 @@ export function FolioCatalogPage(): ReactNode {
 					owned: false,
 					want: false,
 				},
-				lastFamilyRef.current,
 			);
 		const next: OwnershipMarks =
 			status === "owned"
@@ -315,7 +302,7 @@ export function FolioCatalogPage(): ReactNode {
 						<>
 							{seasons.map((season) => (
 								<FolioSeasonSection
-									key={season.seasonSortKey}
+									key={season.seasonKey}
 									label={season.label}
 									cards={season.cards}
 									now={now}
@@ -405,7 +392,7 @@ function emptyCopy(filters: FolioFilters): string {
 		return "No signed editions.";
 	}
 	if (filters.bundles && !folioFiltersActive({ ...filters, bundles: false })) {
-		return "No bundles.";
+		return "No collections.";
 	}
 	if (folioFiltersActive(filters)) {
 		return "No books match.";

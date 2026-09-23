@@ -20,6 +20,8 @@ test("inferEdition bundle only without dates", () => {
 		inferEdition("The Shirley Jackson Collection", true),
 		"standard",
 	);
+	assert.equal(inferEdition("The Border Trilogy", false, "bundle"), "bundle");
+	assert.equal(inferEdition("The Border Trilogy", true, "bundle"), "bundle");
 });
 
 test("makeTitleKey requires author to join", () => {

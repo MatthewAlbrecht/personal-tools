@@ -13,7 +13,7 @@ const BOOLEAN_FILTERS = [
 	{ key: "signed", label: "Signed" },
 	{ key: "thisYear", label: "This year" },
 	{ key: "coming", label: "Coming" },
-	{ key: "bundles", label: "Bundles" },
+	{ key: "bundles", label: "Collections" },
 ] as const;
 
 export function FolioFilters({

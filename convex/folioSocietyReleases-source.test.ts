@@ -28,6 +28,14 @@ test("sync applies catalog fields after write", () => {
 	assert.match(source, /applyCatalogFields/);
 });
 
+test("catalog fields forward Folio bundle product type", () => {
+	assert.match(source, /const productType = product\.type_id/);
+	assert.match(
+		source,
+		/typeof productType === "string" \? \{ productType \} : \{\}/,
+	);
+});
+
 test("sync action does not call getAllReleases", () => {
 	assert.ok(syncHandler);
 	assert.doesNotMatch(syncHandler, /getAllReleases/);

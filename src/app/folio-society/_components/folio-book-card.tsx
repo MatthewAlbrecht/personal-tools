@@ -1,7 +1,7 @@
 "use client";
 
-import { Bookmark, Check } from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
+import { BookOpen, Check, ExternalLink, X } from "lucide-react";
+import { type ReactNode, useState } from "react";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
@@ -20,20 +20,6 @@ export type FolioCatalogCard = {
 	heroImageUrl: string | null;
 	familyHasLimited: boolean;
 	familyHasSigned: boolean;
-	owned: boolean;
-	want: boolean;
-};
-
-export type FolioFamilyEdition = {
-	productId: number;
-	name: string;
-	edition: "standard" | "limited" | "signed" | "bundle";
-	price: number | null;
-	catalogLaunchTime: number;
-	url: string;
-	heroImageUrl: string | null;
-	isComingSoon: boolean;
-	authorName: string | null;
 	owned: boolean;
 	want: boolean;
 };
@@ -59,56 +45,59 @@ export function FolioBookCard({
 	onSetOwnership: (status: "owned" | "want" | null) => void;
 }): ReactNode {
 	const coming = isComing(card.isComingSoon, card.catalogLaunchTime, now);
-	const showAlsoLe = card.familyHasLimited && card.edition !== "limited";
-	const showAlsoSigned = card.familyHasSigned && card.edition !== "signed";
 	const initial = card.name.trim().charAt(0).toUpperCase() || "F";
 
 	return (
-		<div className="relative">
+		<article className="group relative h-full">
 			<button
 				type="button"
 				onClick={onToggleExpand}
 				aria-expanded={expanded}
-				className="w-full text-left"
+				aria-label={`${expanded ? "Close" : "View"} details for ${card.name}`}
+				className="h-full w-full cursor-pointer rounded-sm text-left outline-none transition focus-visible:ring-2 focus-visible:ring-teal-700 focus-visible:ring-offset-4"
 			>
-				<div className="relative mb-3 aspect-[3/4] w-[70%] overflow-hidden border border-stone-400/40 bg-stone-200">
+				<div
+					className={cn(
+						"group-hover:-translate-y-0.5 relative aspect-[4/5] w-full overflow-hidden border bg-[#eeeee9] transition-all duration-300 group-hover:border-stone-400 group-hover:shadow-[0_14px_30px_-20px_rgba(28,25,23,0.55)]",
+						expanded ? "border-teal-800/60 shadow-sm" : "border-stone-300/80",
+					)}
+				>
 					{card.heroImageUrl ? (
 						<img
 							src={card.heroImageUrl}
-							alt=""
-							className="h-full w-full object-cover"
+							alt={`Cover of ${card.name}`}
+							className="h-full w-full object-contain p-3 transition-transform duration-500 group-hover:scale-[1.025]"
 						/>
 					) : (
-						<div className="flex h-full w-full items-center justify-center bg-stone-200">
+						<div className="flex h-full w-full items-center justify-center bg-stone-200/70">
 							<span className="font-[family-name:var(--font-display)] text-4xl text-stone-500">
 								{initial}
 							</span>
 						</div>
 					)}
-					<div className="absolute bottom-1.5 left-1.5 flex flex-wrap gap-1">
-						{card.edition === "limited" ? <CoverChip>LE</CoverChip> : null}
+					<div className="absolute bottom-2 left-2 flex flex-wrap gap-1">
+						{card.edition === "limited" ? (
+							<CoverChip>Limited edition</CoverChip>
+						) : null}
 						{card.edition === "signed" ? <CoverChip>Signed</CoverChip> : null}
 						{coming ? <CoverChip>Coming</CoverChip> : null}
-						{showAlsoLe ? <CoverChip>Also LE</CoverChip> : null}
-						{showAlsoSigned ? <CoverChip>Also signed</CoverChip> : null}
 					</div>
-					{card.owned ? (
-						<span className="absolute top-1.5 left-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-teal-800 text-teal-50">
-							<Check className="h-3.5 w-3.5" strokeWidth={2.5} />
-						</span>
-					) : null}
 				</div>
-				{card.authorName ? (
-					<p className="text-muted-foreground text-xs">{card.authorName}</p>
-				) : null}
-				<p className="line-clamp-2 font-[family-name:var(--font-display)] text-sm leading-snug">
-					{card.name}
-				</p>
-				<p className="mt-1 text-muted-foreground text-xs">
-					{formatPriceDate(card.price, card.catalogLaunchTime)}
-				</p>
+				<div className="pt-3 pr-9">
+					{card.authorName ? (
+						<p className="mb-1 truncate text-[0.67rem] text-muted-foreground uppercase tracking-[0.13em]">
+							{card.authorName}
+						</p>
+					) : null}
+					<h3 className="line-clamp-2 font-[family-name:var(--font-display)] text-[1.05rem] leading-[1.2]">
+						{card.name}
+					</h3>
+					<p className="mt-1.5 text-muted-foreground text-xs tabular-nums">
+						{formatPriceDate(card.price, card.catalogLaunchTime)}
+					</p>
+				</div>
 			</button>
-			<div className="absolute top-1.5 right-[32%] flex flex-col gap-1">
+			<div className="absolute top-2 right-2 flex flex-col gap-1.5">
 				<button
 					type="button"
 					aria-label="Owned"
@@ -118,10 +107,10 @@ export function FolioBookCard({
 						onSetOwnership(card.owned ? null : "owned");
 					}}
 					className={cn(
-						"flex h-7 w-7 items-center justify-center rounded-full border",
+						"flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border shadow-sm backdrop-blur-sm transition hover:scale-105 hover:border-teal-800 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700",
 						card.owned
 							? "border-teal-800 bg-teal-800 text-teal-50"
-							: "border-stone-400/50 bg-background/80 text-stone-500",
+							: "border-stone-300 bg-background/90 text-stone-600",
 					)}
 				>
 					<Check className="h-3.5 w-3.5" />
@@ -135,26 +124,23 @@ export function FolioBookCard({
 						onSetOwnership(card.want ? null : "want");
 					}}
 					className={cn(
-						"flex h-7 w-7 items-center justify-center rounded-full border",
+						"flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border shadow-sm backdrop-blur-sm transition hover:scale-105 hover:border-teal-800 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700",
 						card.want
-							? "border-teal-800 text-teal-800"
-							: "border-stone-400/50 bg-background/80 text-stone-500",
+							? "border-teal-800 bg-teal-50 text-teal-800"
+							: "border-stone-300 bg-background/90 text-stone-600",
 					)}
 				>
-					<Bookmark className="h-3.5 w-3.5" />
+					<BookOpen className="h-3.5 w-3.5" />
 				</button>
 			</div>
-		</div>
+		</article>
 	);
 }
 
 export function FolioBookDetail({
 	card,
 	now,
-	family,
 	images,
-	selectedProductId,
-	onSelectProduct,
 	onClose,
 	onSetOwnership,
 	owned,
@@ -162,45 +148,30 @@ export function FolioBookDetail({
 }: {
 	card: FolioCatalogCard;
 	now: number;
-	family: FolioFamilyEdition[] | undefined;
 	images: FolioProductImage[] | undefined;
-	selectedProductId: number;
-	onSelectProduct: (productId: number) => void;
 	onClose: () => void;
 	onSetOwnership: (productId: number, status: "owned" | "want" | null) => void;
 	owned: boolean;
 	want: boolean;
 }): ReactNode {
-	const selected =
-		family?.find((row) => row.productId === selectedProductId) ??
-		familyMemberFromCard(card);
-	const showSwitcher =
-		(card.familyHasLimited && card.edition !== "limited") ||
-		(card.familyHasSigned && card.edition !== "signed");
-	const editions = editionsPresent(family ?? [familyMemberFromCard(card)]);
-	const coming = isComing(
-		selected.isComingSoon,
-		selected.catalogLaunchTime,
-		now,
-	);
+	const coming = isComing(card.isComingSoon, card.catalogLaunchTime, now);
 	const thumbs = sortImages(images ?? []);
 	const [showAll, setShowAll] = useState(false);
 	const [coverUrl, setCoverUrl] = useState<string | null>(null);
 	const visibleThumbs = showAll ? thumbs : thumbs.slice(0, 4);
-	const cover = coverUrl ?? selected.heroImageUrl ?? thumbs[0]?.blobUrl ?? null;
-	const initial = selected.name.trim().charAt(0).toUpperCase() || "F";
-
-	// biome-ignore lint/correctness/useExhaustiveDependencies: reset cover when edition selection changes
-	useEffect(() => {
-		setCoverUrl(null);
-	}, [selected.productId]);
+	const cover = coverUrl ?? card.heroImageUrl ?? thumbs[0]?.blobUrl ?? null;
+	const initial = card.name.trim().charAt(0).toUpperCase() || "F";
 
 	return (
-		<div className="grid gap-6 py-4 md:grid-cols-[minmax(0,16rem)_minmax(0,1fr)]">
+		<div className="my-3 grid gap-7 border-stone-300 border-y bg-stone-50/70 px-4 py-6 md:grid-cols-[minmax(0,18rem)_minmax(0,1fr)] md:px-6 md:py-8">
 			<div>
-				<div className="mb-3 aspect-[3/4] w-full overflow-hidden border border-stone-400/40 bg-stone-200">
+				<div className="mb-3 aspect-[4/5] w-full overflow-hidden border border-stone-300 bg-[#e9e9e4] shadow-sm">
 					{cover ? (
-						<img src={cover} alt="" className="h-full w-full object-cover" />
+						<img
+							src={cover}
+							alt={`Cover of ${card.name}`}
+							className="h-full w-full object-contain p-4"
+						/>
 					) : (
 						<div className="flex h-full w-full items-center justify-center">
 							<span className="font-[family-name:var(--font-display)] text-5xl text-stone-500">
@@ -215,9 +186,10 @@ export function FolioBookDetail({
 							<button
 								key={image._id}
 								type="button"
+								aria-label={`View image ${visibleThumbs.indexOf(image) + 1} of ${card.name}`}
 								onClick={() => setCoverUrl(image.blobUrl)}
 								className={cn(
-									"h-14 w-11 overflow-hidden border",
+									"h-14 w-11 cursor-pointer overflow-hidden border bg-white transition hover:border-stone-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700",
 									cover === image.blobUrl
 										? "border-stone-600"
 										: "border-stone-400/40",
@@ -226,7 +198,7 @@ export function FolioBookDetail({
 								<img
 									src={image.blobUrl}
 									alt=""
-									className="h-full w-full object-cover"
+									className="h-full w-full object-contain"
 								/>
 							</button>
 						))}
@@ -237,63 +209,47 @@ export function FolioBookDetail({
 						type="button"
 						variant="ghost"
 						size="sm"
-						className="mt-2 h-7 px-1 text-xs"
+						className="mt-2 h-7 cursor-pointer px-1 text-xs focus-visible:ring-2 focus-visible:ring-teal-700"
 						onClick={() => setShowAll((value) => !value)}
 					>
 						{showAll ? "Show less" : "Show more"}
 					</Button>
 				) : null}
 			</div>
-			<div className="min-w-0">
-				{showSwitcher && editions.length > 1 ? (
-					<div className="mb-4 flex flex-wrap gap-2">
-						{editions.map((edition) => {
-							const match = (family ?? []).find(
-								(row) => row.edition === edition,
-							);
-							if (!match) {
-								return null;
-							}
-							return (
-								<Button
-									key={edition}
-									type="button"
-									variant={
-										selected.productId === match.productId
-											? "default"
-											: "outline"
-									}
-									size="sm"
-									onClick={() => onSelectProduct(match.productId)}
-								>
-									{editionLabel(edition)}
-								</Button>
-							);
-						})}
-					</div>
-				) : null}
-				{selected.authorName ? (
-					<p className="text-muted-foreground text-sm">{selected.authorName}</p>
-				) : null}
-				<p className="font-[family-name:var(--font-display)] text-xl leading-snug">
-					{selected.name}
+			<div className="relative min-w-0 pt-1">
+				<button
+					type="button"
+					aria-label={`Close details for ${card.name}`}
+					onClick={onClose}
+					className="absolute top-0 right-0 flex h-9 w-9 cursor-pointer items-center justify-center rounded-full text-stone-500 transition hover:bg-stone-200 hover:text-stone-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700"
+				>
+					<X className="h-4 w-4" />
+				</button>
+				<p className="mb-5 text-[0.65rem] text-teal-900 uppercase tracking-[0.18em]">
+					{editionLabel(card.edition)}
 				</p>
-				<p className="mt-2 text-sm">
-					{formatPriceDate(selected.price, selected.catalogLaunchTime)}
+				{card.authorName ? (
+					<p className="text-muted-foreground text-sm">{card.authorName}</p>
+				) : null}
+				<h3 className="mt-1 max-w-2xl font-[family-name:var(--font-display)] text-3xl leading-tight tracking-tight">
+					{card.name}
+				</h3>
+				<p className="mt-3 text-sm tabular-nums">
+					{formatPriceDate(card.price, card.catalogLaunchTime)}
 				</p>
 				{coming ? (
 					<p className="mt-1 text-muted-foreground text-sm">Coming</p>
 				) : null}
-				<div className="mt-4 flex gap-2">
+				<div className="mt-7 flex items-center gap-2">
 					<button
 						type="button"
 						aria-label="Owned"
 						aria-pressed={owned}
 						onClick={() =>
-							onSetOwnership(selected.productId, owned ? null : "owned")
+							onSetOwnership(card.productId, owned ? null : "owned")
 						}
 						className={cn(
-							"flex h-8 w-8 items-center justify-center rounded-full border",
+							"flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border transition hover:border-teal-800 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700",
 							owned
 								? "border-teal-800 bg-teal-800 text-teal-50"
 								: "border-stone-400/50 text-stone-500",
@@ -305,37 +261,28 @@ export function FolioBookDetail({
 						type="button"
 						aria-label="Want"
 						aria-pressed={want}
-						onClick={() =>
-							onSetOwnership(selected.productId, want ? null : "want")
-						}
+						onClick={() => onSetOwnership(card.productId, want ? null : "want")}
 						className={cn(
-							"flex h-8 w-8 items-center justify-center rounded-full border",
+							"flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border transition hover:border-teal-800 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700",
 							want
 								? "border-teal-800 text-teal-800"
 								: "border-stone-400/50 text-stone-500",
 						)}
 					>
-						<Bookmark className="h-4 w-4" />
+						<BookOpen className="h-4 w-4" />
 					</button>
 				</div>
-				<div className="mt-6 flex items-center gap-4">
+				<div className="mt-8 border-stone-300 border-t pt-5">
 					<a
-						href={folioHref(selected.url)}
+						href={folioHref(card.url)}
 						target="_blank"
 						rel="noreferrer"
-						className="text-sm text-teal-800 underline-offset-4 hover:underline"
+						aria-label={`View ${card.name} on Folio Society`}
+						className="inline-flex cursor-pointer items-center gap-1.5 text-sm text-teal-800 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700"
 					>
-						Folio
+						View on Folio
+						<ExternalLink className="h-3.5 w-3.5" />
 					</a>
-					<Button
-						type="button"
-						variant="ghost"
-						size="sm"
-						onClick={onClose}
-						className="h-7 px-1 text-xs"
-					>
-						Close
-					</Button>
 				</div>
 			</div>
 		</div>
@@ -345,7 +292,7 @@ export function FolioBookDetail({
 export function FolioBookCardSkeleton(): ReactNode {
 	return (
 		<div>
-			<Skeleton className="mb-3 aspect-[3/4] w-[70%] rounded-none" />
+			<Skeleton className="mb-3 aspect-[4/5] w-full rounded-none" />
 			<Skeleton className="mb-1 h-3 w-24" />
 			<Skeleton className="mb-1 h-4 w-36" />
 			<Skeleton className="h-3 w-28" />
@@ -408,49 +355,17 @@ function folioHref(url: string): string {
 	return `https://www.foliosociety.com/usa${url.startsWith("/") ? url : `/${url}`}`;
 }
 
-function familyMemberFromCard(card: FolioCatalogCard): FolioFamilyEdition {
-	return {
-		productId: card.productId,
-		name: card.name,
-		edition: card.edition,
-		price: card.price,
-		catalogLaunchTime: card.catalogLaunchTime,
-		url: card.url,
-		heroImageUrl: card.heroImageUrl,
-		isComingSoon: card.isComingSoon,
-		authorName: card.authorName,
-		owned: card.owned,
-		want: card.want,
-	};
-}
-
-function editionsPresent(
-	rows: FolioFamilyEdition[],
-): Array<"standard" | "limited" | "signed"> {
-	const set = new Set<"standard" | "limited" | "signed">();
-	for (const row of rows) {
-		if (
-			row.edition === "standard" ||
-			row.edition === "limited" ||
-			row.edition === "signed"
-		) {
-			set.add(row.edition);
-		}
-	}
-	const order: Array<"standard" | "limited" | "signed"> = [
-		"standard",
-		"limited",
-		"signed",
-	];
-	return order.filter((edition) => set.has(edition));
-}
-
-function editionLabel(edition: "standard" | "limited" | "signed"): string {
+function editionLabel(
+	edition: "standard" | "limited" | "signed" | "bundle",
+): string {
 	if (edition === "limited") {
 		return "Limited";
 	}
 	if (edition === "signed") {
-		return "Signed";
+		return "Signed edition";
+	}
+	if (edition === "bundle") {
+		return "Collection";
 	}
 	return "Standard";
 }

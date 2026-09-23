@@ -100,6 +100,19 @@ test("listCatalogPage uses custom beforeSeasonSortKey cursor", () => {
 	assert.match(source, /beforeSeasonSortKey:\s*v\.string\(\)/);
 });
 
+test("catalog renders every edition as its own card", () => {
+	assert.doesNotMatch(source, /pickVisibleSku/);
+	assert.match(
+		source,
+		/for \(const release of releases\)[\s\S]*productId:\s*release\.id/,
+	);
+});
+
+test("catalog fields use the Folio product type for collections", () => {
+	assert.match(source, /productType:\s*v\.optional\(v\.string\(\)\)/);
+	assert.match(source, /inferEdition\([\s\S]*args\.productType/);
+});
+
 test("seasonLabelFromKeys uses seasonSortKey for December winter year+1", async () => {
 	const { seasonLabelFromKeys } = await import("./folioSocietyCatalog.js");
 	assert.equal(seasonLabelFromKeys("2026-winter", "2026-12"), "Winter 2027");
@@ -110,9 +123,9 @@ test("seasonLabelFromKeys uses seasonSortKey for December winter year+1", async 
 	assert.equal(seasonLabelFromKeys("undated", "0000-00"), "Undated");
 });
 
-function mockSeason(seasonSortKey: string) {
+function mockSeason(seasonSortKey: string, seasonKey = seasonSortKey) {
 	return {
-		seasonKey: seasonSortKey,
+		seasonKey,
 		seasonSortKey,
 		label: seasonSortKey,
 		cards: [],
@@ -141,6 +154,44 @@ test("omitCappedTailSeason keeps sole season when hit cap", async () => {
 	const trimmed = omitCappedTailSeason(seasons, true);
 	assert.equal(trimmed.length, 1);
 	assert.equal(trimmed[0]?.seasonSortKey, "2026-06");
+});
+
+test("omitCappedTailSeason drops every date in capped oldest season", async () => {
+	const { omitCappedTailSeason } = await import("./folioSocietyCatalog.js");
+	const seasons = [
+		mockSeason("2026-09", "2026-09-15"),
+		mockSeason("2026-06", "2026-06-20"),
+		mockSeason("2026-06", "2026-06-19"),
+	];
+	const trimmed = omitCappedTailSeason(seasons, true);
+	assert.deepEqual(
+		trimmed.map((season) => season.seasonKey),
+		["2026-09-15"],
+	);
+});
+
+test("pageCompleteSeasons keeps all exact-date sections in one season page", async () => {
+	const { pageCompleteSeasons } = await import("./folioSocietyCatalog.js");
+	const seasons = [
+		mockSeason("2026-09", "2026-09-15"),
+		mockSeason("2026-09", "2026-09-14"),
+		mockSeason("2026-06", "2026-06-20"),
+	];
+	const result = pageCompleteSeasons(seasons, undefined, 1, true);
+	assert.deepEqual(
+		result.seasons.map((season) => season.seasonKey),
+		["2026-09-15", "2026-09-14"],
+	);
+	assert.deepEqual(result.continueCursor, {
+		beforeSeasonSortKey: "2026-09",
+	});
+});
+
+test("release section labels use exact date until four books", async () => {
+	const { releaseSectionLabel } = await import("./folioSocietyCatalog.js");
+	const date = Date.UTC(2026, 8, 15);
+	assert.equal(releaseSectionLabel(date, 3), "15 September 2026");
+	assert.equal(releaseSectionLabel(date, 4), "Fall Collection 2026");
 });
 
 test("comingPathExhausted requires all takes below cap", async () => {

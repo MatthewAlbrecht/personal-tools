@@ -448,6 +448,7 @@ async function fetchFolioProducts(ids: number[]): Promise<unknown[]> {
 export function catalogFieldsFromProduct(product: Record<string, unknown>): {
 	productId: number;
 	name: string;
+	productType?: string;
 	authorName?: string;
 	launchTimeIso?: string;
 	publicationDateText?: string;
@@ -456,6 +457,7 @@ export function catalogFieldsFromProduct(product: Record<string, unknown>): {
 	isComingSoon?: boolean;
 } {
 	const authorRaw = product.author_name ?? product.authorName;
+	const productType = product.type_id;
 	const launchRaw = product.launch_time;
 	const publicationRaw = product.publication_date;
 	const comingRaw = product.is_coming_soon ?? product.isComingSoon;
@@ -464,6 +466,7 @@ export function catalogFieldsFromProduct(product: Record<string, unknown>): {
 	return {
 		productId: product.id as number,
 		name: product.name as string,
+		...(typeof productType === "string" ? { productType } : {}),
 		...(typeof authorRaw === "string" ? { authorName: authorRaw } : {}),
 		...(typeof launchRaw === "string" ? { launchTimeIso: launchRaw } : {}),
 		...(typeof publicationRaw === "string"
