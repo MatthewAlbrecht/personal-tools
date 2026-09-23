@@ -1,119 +1,4 @@
 const OBSERVE_MS = 12000;
-const TOAST_MS = 3200;
-
-let captureToastDismissTimerId = null;
-let captureToastRemoveTimerId = null;
-
-function truncateLabel(text, maxLen) {
-	if (text.length <= maxLen) {
-		return text;
-	}
-	return `${text.slice(0, Math.max(0, maxLen - 1))}…`;
-}
-
-function clearCaptureToastTimers() {
-	if (captureToastDismissTimerId !== null) {
-		window.clearTimeout(captureToastDismissTimerId);
-		captureToastDismissTimerId = null;
-	}
-	if (captureToastRemoveTimerId !== null) {
-		window.clearTimeout(captureToastRemoveTimerId);
-		captureToastRemoveTimerId = null;
-	}
-}
-
-function toastThemeForKind(kind) {
-	if (kind === "error") {
-		return {
-			background: "rgba(255, 252, 252, 0.97)",
-			color: "#991b1b",
-			border: "1px solid rgba(153, 27, 27, 0.12)",
-		};
-	}
-	if (kind === "warn") {
-		return {
-			background: "rgba(255, 251, 235, 0.97)",
-			color: "#92400e",
-			border: "1px solid rgba(146, 64, 14, 0.15)",
-		};
-	}
-	if (kind === "pending") {
-		return {
-			background: "rgba(252, 252, 251, 0.97)",
-			color: "#3f3f46",
-			border: "1px solid rgba(0, 0, 0, 0.06)",
-		};
-	}
-	return {
-		background: "rgba(254, 254, 253, 0.97)",
-		color: "#27272a",
-		border: "1px solid rgba(0, 0, 0, 0.06)",
-	};
-}
-
-function setCaptureToast(kind, message) {
-	clearCaptureToastTimers();
-
-	let el = document.getElementById("rym-release-scraper-toast");
-	const created = !el;
-
-	if (!el) {
-		el = document.createElement("div");
-		el.id = "rym-release-scraper-toast";
-		el.setAttribute("role", "status");
-		el.setAttribute("aria-live", "polite");
-		Object.assign(el.style, {
-			position: "fixed",
-			top: "20px",
-			left: "50%",
-			transform: "translateX(-50%) translateY(-12px)",
-			zIndex: "2147483647",
-			maxWidth: "min(420px, calc(100vw - 32px))",
-			padding: "12px 20px",
-			borderRadius: "10px",
-			fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif',
-			fontSize: "14px",
-			lineHeight: "1.4",
-			boxShadow:
-				"0 12px 40px rgba(0, 0, 0, 0.14), 0 6px 18px rgba(0, 0, 0, 0.1), 0 2px 6px rgba(0, 0, 0, 0.06)",
-			transition: "opacity 220ms ease, transform 220ms ease",
-			opacity: "0",
-			pointerEvents: "none",
-		});
-		document.body.appendChild(el);
-	}
-
-	el.textContent = message;
-	const theme = toastThemeForKind(kind);
-	el.style.background = theme.background;
-	el.style.color = theme.color;
-	el.style.border = theme.border;
-	el.setAttribute("aria-busy", kind === "pending" ? "true" : "false");
-
-	if (created) {
-		window.requestAnimationFrame(function revealToast() {
-			el.style.opacity = "1";
-			el.style.transform = "translateX(-50%) translateY(0)";
-		});
-	} else {
-		el.style.opacity = "1";
-		el.style.transform = "translateX(-50%) translateY(0)";
-	}
-
-	if (kind === "pending") {
-		return;
-	}
-
-	captureToastDismissTimerId = window.setTimeout(function dismissToast() {
-		el.style.opacity = "0";
-		el.style.transform = "translateX(-50%) translateY(-12px)";
-		captureToastRemoveTimerId = window.setTimeout(function removeToast() {
-			el.remove();
-			captureToastRemoveTimerId = null;
-		}, 240);
-		captureToastDismissTimerId = null;
-	}, TOAST_MS);
-}
 
 function canonicalPathFromLocation() {
 	try {
@@ -376,7 +261,14 @@ function buildPayload(section) {
 }
 
 function sendCapture(payload) {
-	const label = truncateLabel(payload.albumTitle || "Release", 56);
+	const title = payload.albumTitle || "This release";
+	applyDockUpdate({
+		status: "running",
+		headline: "Writing to the library",
+		detail: title,
+		current: 0,
+		total: 1,
+	});
 
 	chrome.runtime.sendMessage(
 		{ type: "RYM_RELEASE_CAPTURE", payload },
@@ -386,27 +278,42 @@ function sendCapture(payload) {
 					"[rym-release-scraper]",
 					chrome.runtime.lastError.message,
 				);
-				setCaptureToast(
-					"error",
-					"RYM capture failed — extension worker unreachable.",
-				);
+				applyDockUpdate({
+					status: "error",
+					headline: "Didn't reach the extension worker",
+					detail: "Reload the extension and run again.",
+					total: 1,
+				});
 				return;
 			}
 			if (!response || !response.ok) {
-				console.warn("[rym-release-scraper] capture was not persisted");
-				setCaptureToast(
-					"error",
-					"RYM capture was not saved to local extension storage.",
-				);
+				applyDockUpdate({
+					status: "error",
+					headline: "Didn't save locally",
+					detail: title,
+					total: 1,
+				});
 				return;
 			}
 			const backend = response.backend;
 			if (backend?.synced) {
-				setCaptureToast("ok", `Saved locally & synced: ${label}`);
+				applyDockUpdate({
+					status: "ok",
+					headline: "This page is in",
+					detail: title,
+					current: 1,
+					total: 1,
+				});
 				return;
 			}
 			if (backend?.skipped) {
-				setCaptureToast("ok", `Saved locally: ${label}`);
+				applyDockUpdate({
+					status: "ok",
+					headline: "Saved on this machine",
+					detail: "Set the ingest secret in extension options to write the library.",
+					current: 1,
+					total: 1,
+				});
 				return;
 			}
 			const detail =
@@ -414,28 +321,46 @@ function sendCapture(payload) {
 					? backend.error.trim()
 					: typeof backend?.status === "number"
 						? `HTTP ${backend.status}`
-						: "network or permission error";
-			setCaptureToast(
-				"warn",
-				`Saved locally — backend sync failed (${detail}). Open extension options.`,
-			);
+						: "Network or permission error";
+			applyDockUpdate({
+				status: "warn",
+				headline: "Saved here, not the library",
+				detail: `${detail}. Open extension options.`,
+				current: 1,
+				total: 1,
+			});
 		},
 	);
 }
 
-void (async function main() {
-	setCaptureToast("pending", "RYM capture: reading release page…");
+async function runReleaseCapture() {
+	applyDockUpdate({
+		status: "running",
+		headline: "Reading the release",
+		detail: "Waiting for the main info block.",
+		current: 0,
+		total: 1,
+	});
 
 	const section = await waitForMainSection(OBSERVE_MS);
 	if (!section) {
 		console.warn("[rym-release-scraper] main section not found");
-		setCaptureToast(
-			"error",
-			"RYM capture failed — release section not found on this page.",
-		);
+		applyDockUpdate({
+			status: "error",
+			headline: "No release block on this page",
+			detail: "Wait for the page to finish, then run again.",
+		});
 		return;
 	}
 
-	setCaptureToast("pending", "RYM capture: saving locally…");
 	sendCapture(buildPayload(section));
-})();
+}
+
+mountScrapeDock({
+	pageKind: "release",
+	onRescrape: function onRescrape() {
+		void runReleaseCapture();
+	},
+});
+
+void runReleaseCapture();

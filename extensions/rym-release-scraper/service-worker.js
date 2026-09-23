@@ -121,7 +121,20 @@ async function forwardCaptureToBackend(payload) {
 	}
 }
 
-async function forwardCoversToBackend(origin, secret, payloads) {
+function notifyScrapeProgress(tabId, payload) {
+	if (typeof tabId !== "number") {
+		return;
+	}
+	chrome.tabs.sendMessage(
+		tabId,
+		{ type: "RYM_SCRAPE_PROGRESS", ...payload },
+		function ignoreMissing() {
+			void chrome.runtime.lastError;
+		},
+	);
+}
+
+async function forwardCoversToBackend(origin, secret, payloads, tabId) {
 	const covers = [];
 	for (const payload of payloads) {
 		if (
@@ -169,6 +182,13 @@ async function forwardCoversToBackend(origin, secret, payloads) {
 			console.error("[rym-release-scraper] cover upload error", error);
 			failed += chunk.length;
 		}
+		notifyScrapeProgress(tabId, {
+			headline: "Filing covers",
+			detail: `${Math.min(i + chunk.length, covers.length)} of ${covers.length} cover batches sent.`,
+			current: Math.min(i + chunk.length, covers.length),
+			total: covers.length,
+			phase: "covers",
+		});
 	}
 
 	return { uploaded, failed };
@@ -177,7 +197,7 @@ async function forwardCoversToBackend(origin, secret, payloads) {
 /**
  * POST a charts page of scrapes in one request.
  */
-async function forwardCapturesToBackend(payloads) {
+async function forwardCapturesToBackend(payloads, tabId) {
 	const cfg = await chrome.storage.sync.get([
 		SETTINGS_BACKEND_ORIGIN,
 		SETTINGS_BACKEND_SECRET,
@@ -213,55 +233,86 @@ async function forwardCapturesToBackend(payloads) {
 	}
 
 	const url = `${origin}/api/rate-your-music/scrape`;
+	const items = payloads.map(function stripCover(p) {
+		const { coverJpegBase64: _cover, ...rest } = p;
+		return rest;
+	});
+	const chunkSize = 8;
+	let upserted = 0;
+	let failed = 0;
 
 	try {
-		const res = await fetch(url, {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				Authorization: `Bearer ${secret}`,
-			},
-			body: JSON.stringify({
-				items: payloads.map(function stripCover(p) {
-					const { coverJpegBase64: _cover, ...rest } = p;
-					return rest;
-				}),
-			}),
-		});
+		for (let i = 0; i < items.length; i += chunkSize) {
+			const chunk = items.slice(i, i + chunkSize);
+			notifyScrapeProgress(tabId, {
+				headline: "Writing to the library",
+				detail: `${Math.min(i + chunk.length, items.length)} of ${items.length} rows.`,
+				current: i,
+				total: items.length,
+				phase: "save",
+			});
+			const res = await fetch(url, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					Authorization: `Bearer ${secret}`,
+				},
+				body: JSON.stringify({ items: chunk }),
+			});
 
-		if (!res.ok) {
-			const text = await res.text();
-			let errorMessage = text;
-			try {
-				const parsed = JSON.parse(text);
-				if (typeof parsed?.error === "string" && parsed.error.trim()) {
-					errorMessage = parsed.error.trim();
+			if (!res.ok) {
+				const text = await res.text();
+				let errorMessage = text;
+				try {
+					const parsed = JSON.parse(text);
+					if (typeof parsed?.error === "string" && parsed.error.trim()) {
+						errorMessage = parsed.error.trim();
+					}
+				} catch {
+					// keep raw response text
 				}
-			} catch {
-				// keep raw response text
+				console.error(
+					"[rym-release-scraper] charts backend sync failed",
+					res.status,
+					errorMessage,
+				);
+				if (i === 0) {
+					return {
+						synced: false,
+						skipped: false,
+						status: res.status,
+						error: errorMessage,
+					};
+				}
+				failed += chunk.length;
+				continue;
 			}
-			console.error(
-				"[rym-release-scraper] charts backend sync failed",
-				res.status,
-				errorMessage,
-			);
-			return {
-				synced: false,
-				skipped: false,
-				status: res.status,
-				error: errorMessage,
-			};
+
+			const json = await res.json().catch(function ignoreJson() {
+				return {};
+			});
+			upserted += typeof json?.upserted === "number" ? json.upserted : 0;
+			failed += typeof json?.failed === "number" ? json.failed : 0;
+			notifyScrapeProgress(tabId, {
+				headline: "Writing to the library",
+				detail: `${Math.min(i + chunk.length, items.length)} of ${items.length} rows.`,
+				current: Math.min(i + chunk.length, items.length),
+				total: items.length,
+				phase: "save",
+			});
 		}
 
-		const json = await res.json().catch(function ignoreJson() {
-			return {};
-		});
-		const covers = await forwardCoversToBackend(origin, secret, payloads);
+		const covers = await forwardCoversToBackend(
+			origin,
+			secret,
+			payloads,
+			tabId,
+		);
 		return {
 			synced: true,
 			skipped: false,
-			upserted: typeof json?.upserted === "number" ? json.upserted : undefined,
-			failed: typeof json?.failed === "number" ? json.failed : undefined,
+			upserted,
+			failed,
 			coversUploaded: covers.uploaded,
 			coversFailed: covers.failed,
 		};
@@ -275,7 +326,7 @@ async function forwardCapturesToBackend(payloads) {
 	}
 }
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 	if (message && message.type === "RYM_CHARTS_CAPTURE") {
 		void (async function persistChartCaptures() {
 			try {
@@ -295,7 +346,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 				}
 				await chrome.storage.local.set({ [STORAGE_KEY]: map });
 
-				const backend = await forwardCapturesToBackend(payloads);
+				const backend = await forwardCapturesToBackend(
+					payloads,
+					sender.tab?.id,
+				);
 				sendResponse({ ok: true, backend });
 			} catch (error) {
 				console.error(

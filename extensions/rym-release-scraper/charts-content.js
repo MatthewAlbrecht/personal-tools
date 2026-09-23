@@ -1,119 +1,4 @@
 const OBSERVE_MS = 12000;
-const TOAST_MS = 3200;
-
-let captureToastDismissTimerId = null;
-let captureToastRemoveTimerId = null;
-
-function truncateLabel(text, maxLen) {
-	if (text.length <= maxLen) {
-		return text;
-	}
-	return `${text.slice(0, Math.max(0, maxLen - 1))}…`;
-}
-
-function clearCaptureToastTimers() {
-	if (captureToastDismissTimerId !== null) {
-		window.clearTimeout(captureToastDismissTimerId);
-		captureToastDismissTimerId = null;
-	}
-	if (captureToastRemoveTimerId !== null) {
-		window.clearTimeout(captureToastRemoveTimerId);
-		captureToastRemoveTimerId = null;
-	}
-}
-
-function toastThemeForKind(kind) {
-	if (kind === "error") {
-		return {
-			background: "rgba(255, 252, 252, 0.97)",
-			color: "#991b1b",
-			border: "1px solid rgba(153, 27, 27, 0.12)",
-		};
-	}
-	if (kind === "warn") {
-		return {
-			background: "rgba(255, 251, 235, 0.97)",
-			color: "#92400e",
-			border: "1px solid rgba(146, 64, 14, 0.15)",
-		};
-	}
-	if (kind === "pending") {
-		return {
-			background: "rgba(252, 252, 251, 0.97)",
-			color: "#3f3f46",
-			border: "1px solid rgba(0, 0, 0, 0.06)",
-		};
-	}
-	return {
-		background: "rgba(254, 254, 253, 0.97)",
-		color: "#27272a",
-		border: "1px solid rgba(0, 0, 0, 0.06)",
-	};
-}
-
-function setCaptureToast(kind, message) {
-	clearCaptureToastTimers();
-
-	let el = document.getElementById("rym-release-scraper-toast");
-	const created = !el;
-
-	if (!el) {
-		el = document.createElement("div");
-		el.id = "rym-release-scraper-toast";
-		el.setAttribute("role", "status");
-		el.setAttribute("aria-live", "polite");
-		Object.assign(el.style, {
-			position: "fixed",
-			top: "20px",
-			left: "50%",
-			transform: "translateX(-50%) translateY(-12px)",
-			zIndex: "2147483647",
-			maxWidth: "min(420px, calc(100vw - 32px))",
-			padding: "12px 20px",
-			borderRadius: "10px",
-			fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif',
-			fontSize: "14px",
-			lineHeight: "1.4",
-			boxShadow:
-				"0 12px 40px rgba(0, 0, 0, 0.14), 0 6px 18px rgba(0, 0, 0, 0.1), 0 2px 6px rgba(0, 0, 0, 0.06)",
-			transition: "opacity 220ms ease, transform 220ms ease",
-			opacity: "0",
-			pointerEvents: "none",
-		});
-		document.body.appendChild(el);
-	}
-
-	el.textContent = message;
-	const theme = toastThemeForKind(kind);
-	el.style.background = theme.background;
-	el.style.color = theme.color;
-	el.style.border = theme.border;
-	el.setAttribute("aria-busy", kind === "pending" ? "true" : "false");
-
-	if (created) {
-		window.requestAnimationFrame(function revealToast() {
-			el.style.opacity = "1";
-			el.style.transform = "translateX(-50%) translateY(0)";
-		});
-	} else {
-		el.style.opacity = "1";
-		el.style.transform = "translateX(-50%) translateY(0)";
-	}
-
-	if (kind === "pending") {
-		return;
-	}
-
-	captureToastDismissTimerId = window.setTimeout(function dismissToast() {
-		el.style.opacity = "0";
-		el.style.transform = "translateX(-50%) translateY(-12px)";
-		captureToastRemoveTimerId = window.setTimeout(function removeToast() {
-			el.remove();
-			captureToastRemoveTimerId = null;
-		}, 240);
-		captureToastDismissTimerId = null;
-	}, TOAST_MS);
-}
 
 function collapseText(value) {
 	return value.replace(/\s+/g, " ").trim();
@@ -458,68 +343,118 @@ function payloadFromChartRow(row, capturedAt) {
 	};
 }
 
-function sendCaptures(payloads) {
-	const label = `${payloads.length} chart release${payloads.length === 1 ? "" : "s"}`;
+function finishChartBackend(response, payloads) {
+	if (chrome.runtime.lastError) {
+		console.error("[rym-release-scraper]", chrome.runtime.lastError.message);
+		applyDockUpdate({
+			status: "error",
+			headline: "Didn't reach the extension worker",
+			detail: "Reload the extension and run again.",
+			current: 0,
+			total: payloads.length,
+		});
+		return;
+	}
+	if (!response || !response.ok) {
+		applyDockUpdate({
+			status: "error",
+			headline: "Didn't save locally",
+			detail: "Chrome storage rejected the capture.",
+			total: payloads.length,
+		});
+		return;
+	}
+	const backend = response.backend;
+	const upserted =
+		typeof backend?.upserted === "number" ? backend.upserted : 0;
+	const failed = typeof backend?.failed === "number" ? backend.failed : 0;
+	const coversUploaded =
+		typeof backend?.coversUploaded === "number" ? backend.coversUploaded : 0;
+	const coversFailed =
+		typeof backend?.coversFailed === "number" ? backend.coversFailed : 0;
 
+	if (backend?.synced) {
+		applyDockUpdate({
+			status: failed > 0 || coversFailed > 0 ? "warn" : "ok",
+			headline: failed > 0 ? "Most of the page is in" : "This page is in",
+			detail: `${upserted} saved · ${failed} missed · ${coversUploaded} covers${
+				coversFailed ? ` · ${coversFailed} covers skipped` : ""
+			}.`,
+			current: upserted,
+			total: payloads.length,
+		});
+		return;
+	}
+	if (backend?.skipped) {
+		applyDockUpdate({
+			status: "ok",
+			headline: "Saved on this machine",
+			detail: "Set the ingest secret in extension options to write the library.",
+			current: payloads.length,
+			total: payloads.length,
+		});
+		return;
+	}
+	const detail =
+		typeof backend?.error === "string" && backend.error.trim()
+			? backend.error.trim()
+			: typeof backend?.status === "number"
+				? `HTTP ${backend.status}`
+				: "Network or permission error";
+	applyDockUpdate({
+		status: "warn",
+		headline: "Saved here, not the library",
+		detail: `${detail}. Open extension options.`,
+		current: payloads.length,
+		total: payloads.length,
+	});
+}
+
+function sendCaptures(payloads) {
+	applyDockUpdate({
+		status: "running",
+		headline: "Writing to the library",
+		detail: `Sending ${payloads.length} rows, then filing covers.`,
+		current: 0,
+		total: payloads.length,
+		phase: "save",
+	});
 	chrome.runtime.sendMessage(
 		{ type: "RYM_CHARTS_CAPTURE", payloads },
 		function handleResponse(response) {
-			if (chrome.runtime.lastError) {
-				console.error(
-					"[rym-release-scraper]",
-					chrome.runtime.lastError.message,
-				);
-				setCaptureToast(
-					"error",
-					"RYM charts capture failed — extension worker unreachable.",
-				);
-				return;
-			}
-			if (!response || !response.ok) {
-				console.warn("[rym-release-scraper] charts capture was not persisted");
-				setCaptureToast(
-					"error",
-					"RYM charts capture was not saved to local extension storage.",
-				);
-				return;
-			}
-			const backend = response.backend;
-			if (backend?.synced) {
-				const upserted =
-					typeof backend.upserted === "number" ? backend.upserted : payloads.length;
-				setCaptureToast(
-					"ok",
-					`Saved locally & synced ${upserted}: ${truncateLabel(label, 40)}`,
-				);
-				return;
-			}
-			if (backend?.skipped) {
-				setCaptureToast("ok", `Saved locally: ${truncateLabel(label, 40)}`);
-				return;
-			}
-			const detail =
-				typeof backend?.error === "string" && backend.error.trim()
-					? backend.error.trim()
-					: typeof backend?.status === "number"
-						? `HTTP ${backend.status}`
-						: "network or permission error";
-			setCaptureToast(
-				"warn",
-				`Saved locally — backend sync failed (${detail}). Open extension options.`,
-			);
+			finishChartBackend(response, payloads);
 		},
 	);
 }
 
-void (async function main() {
-	setCaptureToast("pending", "RYM capture: reading charts page…");
+async function runChartCapture() {
+	applyDockUpdate({
+		status: "running",
+		headline: "Finding rows",
+		detail: "Waiting for the chart list.",
+		current: 0,
+		total: 0,
+		phase: "read",
+	});
 
 	const nodes = await waitForChartItems(OBSERVE_MS);
 	const capturedAt = Date.now();
 	const payloads = [];
 	const seen = new Set();
+	const totalGuess = nodes.length;
 
+	let index = 0;
 	for (const row of nodes) {
+		index += 1;
+		applyDockUpdate({
+			status: "running",
+			headline: "Reading the list",
+			detail: `Row ${index} of ${totalGuess}. Covers come from what's already on screen.`,
+			current: index,
+			total: totalGuess,
+			phase: "read",
+		});
+
 		const payload = payloadFromChartRow(row, capturedAt);
 		if (!payload) {
 			continue;
@@ -545,16 +480,22 @@ void (async function main() {
 
 	if (payloads.length === 0) {
 		console.warn("[rym-release-scraper] no chart rows found");
-		setCaptureToast(
-			"error",
-			"RYM charts capture failed — no chart rows found on this page.",
-		);
+		applyDockUpdate({
+			status: "error",
+			headline: "No rows on this chart",
+			detail: "Wait for the list to finish loading, then run again.",
+		});
 		return;
 	}
 
-	setCaptureToast(
-		"pending",
-		`RYM capture: saving ${payloads.length} chart rows…`,
-	);
 	sendCaptures(payloads);
-})();
+}
+
+mountScrapeDock({
+	pageKind: "charts",
+	onRescrape: function onRescrape() {
+		void runChartCapture();
+	},
+});
+
+void runChartCapture();
