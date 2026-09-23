@@ -173,6 +173,38 @@ export function applyShowCreditLabel(
 	return { hiddenCreditLabels, shownCreditLabels };
 }
 
+/**
+ * Reset a song/item's stored credit visibility to current site-wide defaults:
+ * hide every credit label that is hidden-by-default, clear show overrides.
+ */
+export function materializeCreditDefaultsForCredits(
+	credits: GeniusCredit[] | undefined,
+	siteWideHiddenLabelKeys: string[],
+	ignoredLabelKeys?: string[],
+): {
+	hiddenCreditLabels: string[] | undefined;
+	shownCreditLabels: undefined;
+} {
+	const siteWideKeys = buildHiddenCreditLabelKeys({
+		siteWideHiddenLabelKeys,
+	});
+	const hidden: string[] = [];
+
+	for (const credit of credits ?? []) {
+		const label = credit.label.trim();
+		if (!label) continue;
+		if (isCreditLabelIgnored(label, ignoredLabelKeys)) continue;
+		if (siteWideKeys.has(normalizeCreditLabelKey(label))) {
+			hidden.push(label);
+		}
+	}
+
+	return {
+		hiddenCreditLabels: normalizeCreditLabelList(hidden),
+		shownCreditLabels: undefined,
+	};
+}
+
 export function collectCreditLabelsFromCredits(
 	credits: GeniusCredit[] | undefined,
 	ignoredLabelKeys?: string[],

@@ -61,6 +61,9 @@ export function PlaylistLyricsEditor({ slug }: { slug: string }): ReactElement {
 	const data = useQuery(api.playlistLyrics.getBySlug, { slug });
 	const updatePlaylist = useMutation(api.playlistLyrics.updatePlaylist);
 	const updateItem = useMutation(api.playlistLyrics.updateItem);
+	const applyCreditDefaultsToPlaylist = useMutation(
+		api.playlistLyrics.applyCreditDefaultsToPlaylist,
+	);
 	const deleteItem = useMutation(api.playlistLyrics.deleteItem);
 	const createManualItem = useMutation(api.playlistLyrics.createManualItem);
 	const updateZineInsideBackSections = useMutation(
@@ -76,6 +79,8 @@ export function PlaylistLyricsEditor({ slug }: { slug: string }): ReactElement {
 	const [manualIntroContent, setManualIntroContent] = useState("");
 	const [isAddingManualSong, setIsAddingManualSong] = useState(false);
 	const [isRescrapingAll, setIsRescrapingAll] = useState(false);
+	const [isApplyingCreditDefaults, setIsApplyingCreditDefaults] =
+		useState(false);
 	const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 	const [busyItems, setBusyItems] = useState<Record<string, TrackActionBusy>>(
 		{},
@@ -341,6 +346,27 @@ export function PlaylistLyricsEditor({ slug }: { slug: string }): ReactElement {
 			return;
 		}
 		toast.success(`Rescraped ${succeeded} songs`);
+	}
+
+	async function handleApplyCreditDefaults(): Promise<void> {
+		if (!data) return;
+		setIsApplyingCreditDefaults(true);
+		try {
+			const result = await applyCreditDefaultsToPlaylist({
+				playlistId: data.playlist._id,
+			});
+			toast.success(
+				`Applied credit defaults to ${result.updatedCount} of ${result.itemCount} tracks`,
+			);
+		} catch (error) {
+			toast.error(
+				error instanceof Error
+					? error.message
+					: "Failed to apply credit defaults",
+			);
+		} finally {
+			setIsApplyingCreditDefaults(false);
+		}
 	}
 
 	async function handleCreditVisibilityChange(
@@ -673,6 +699,19 @@ export function PlaylistLyricsEditor({ slug }: { slug: string }): ReactElement {
 										onClick={() => setSpotifySyncOpen(true)}
 									>
 										Sync Spotify playlist
+									</Button>
+									<Button
+										type="button"
+										variant="outline"
+										size="sm"
+										disabled={isApplyingCreditDefaults}
+										onClick={() => {
+											void handleApplyCreditDefaults();
+										}}
+									>
+										{isApplyingCreditDefaults
+											? "Applying credit defaults…"
+											: "Apply credit defaults"}
 									</Button>
 									<Button
 										type="button"

@@ -81,6 +81,9 @@ export function AlbumLyricsEditor({ slug }: { slug: string }): ReactElement {
 		api.geniusAlbums.updateAlbumOverrides,
 	);
 	const updateSongOverrides = useMutation(api.geniusAlbums.updateSongOverrides);
+	const applyCreditDefaultsToAlbum = useMutation(
+		api.geniusAlbums.applyCreditDefaultsToAlbum,
+	);
 	const autoMatchSpotifyAlbum = useMutation(
 		api.geniusAlbums.autoMatchSpotifyAlbum,
 	);
@@ -104,6 +107,8 @@ export function AlbumLyricsEditor({ slug }: { slug: string }): ReactElement {
 	const [isMappingSpotifyAlbum, setIsMappingSpotifyAlbum] = useState(false);
 	const [isClearingMapping, setIsClearingMapping] = useState(false);
 	const [isSyncingTrackDurations, setIsSyncingTrackDurations] = useState(false);
+	const [isApplyingCreditDefaults, setIsApplyingCreditDefaults] =
+		useState(false);
 	const [spotifyMapDrawerOpen, setSpotifyMapDrawerOpen] = useState(false);
 	const [expandedTrackId, setExpandedTrackId] = useState<string | null>(null);
 	const [visibleTrackId, setVisibleTrackId] = useState<string | null>(null);
@@ -364,6 +369,27 @@ export function AlbumLyricsEditor({ slug }: { slug: string }): ReactElement {
 		}
 	}
 
+	async function handleApplyCreditDefaults(): Promise<void> {
+		if (!albumData) return;
+		setIsApplyingCreditDefaults(true);
+		try {
+			const result = await applyCreditDefaultsToAlbum({
+				albumId: albumData.album._id,
+			});
+			toast.success(
+				`Applied credit defaults to ${result.updatedCount} of ${result.songCount} tracks`,
+			);
+		} catch (error) {
+			toast.error(
+				error instanceof Error
+					? error.message
+					: "Failed to apply credit defaults",
+			);
+		} finally {
+			setIsApplyingCreditDefaults(false);
+		}
+	}
+
 	if (albumData === undefined) {
 		return <AlbumLyricsEditorSkeleton />;
 	}
@@ -534,6 +560,23 @@ export function AlbumLyricsEditor({ slug }: { slug: string }): ReactElement {
 				title="Tracks"
 				description={`${songs.length} ${songs.length === 1 ? "track" : "tracks"}.`}
 			>
+				{songs.length > 0 ? (
+					<div className="mb-3 flex flex-wrap justify-end gap-2">
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							disabled={isApplyingCreditDefaults}
+							onClick={() => {
+								void handleApplyCreditDefaults();
+							}}
+						>
+							{isApplyingCreditDefaults
+								? "Applying credit defaults…"
+								: "Apply credit defaults"}
+						</Button>
+					</div>
+				) : null}
 				{songs.length === 0 ? (
 					<p className="text-muted-foreground text-sm">
 						No songs found for this album.

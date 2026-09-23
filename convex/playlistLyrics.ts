@@ -5,6 +5,7 @@ import { mutation, query } from "./_generated/server";
 import {
 	applyHideCreditLabel,
 	applyShowCreditLabel,
+	materializeCreditDefaultsForCredits,
 	normalizeCreditLabelList,
 } from "./_utils/geniusCreditVisibility";
 import {
@@ -1224,6 +1225,47 @@ export const showItemCreditLabel = mutation({
 
 		await ctx.db.patch(args.itemId, next);
 		return args.itemId;
+	},
+});
+
+export const applyCreditDefaultsToPlaylist = mutation({
+	args: {
+		playlistId: v.id("playlistLyrics"),
+	},
+	returns: v.object({
+		updatedCount: v.number(),
+		itemCount: v.number(),
+	}),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+
+		await requirePlaylist(ctx, args.playlistId);
+
+		const [siteWideHiddenLabelKeys, ignoredLabelKeys, items] =
+			await Promise.all([
+				getSiteWideHiddenCreditLabelKeys(ctx),
+				getIgnoredCreditLabelKeys(ctx),
+				ctx.db
+					.query("playlistLyricsItems")
+					.withIndex("by_playlistId", (q) => q.eq("playlistId", args.playlistId))
+					.collect(),
+			]);
+
+		let updatedCount = 0;
+		for (const item of items) {
+			const scrape = item.lyricScrapeId
+				? await ctx.db.get(item.lyricScrapeId)
+				: null;
+			const next = materializeCreditDefaultsForCredits(
+				scrape?.credits,
+				siteWideHiddenLabelKeys,
+				ignoredLabelKeys,
+			);
+			await ctx.db.patch(item._id, next);
+			updatedCount += 1;
+		}
+
+		return { updatedCount, itemCount: items.length };
 	},
 });
 

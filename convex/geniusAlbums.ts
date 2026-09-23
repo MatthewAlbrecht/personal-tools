@@ -12,6 +12,7 @@ import { buildAlbumSongRecordInput } from "./_utils/geniusAlbumLyrics";
 import {
 	applyHideCreditLabel,
 	applyShowCreditLabel,
+	materializeCreditDefaultsForCredits,
 	normalizeCreditLabelList,
 } from "./_utils/geniusCreditVisibility";
 import {
@@ -618,6 +619,45 @@ export const showSongCreditLabel = mutation({
 
 		await ctx.db.patch(args.songId, next);
 		return args.songId;
+	},
+});
+
+export const applyCreditDefaultsToAlbum = mutation({
+	args: {
+		albumId: v.id("geniusAlbums"),
+	},
+	returns: v.object({
+		updatedCount: v.number(),
+		songCount: v.number(),
+	}),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+
+		const album = await ctx.db.get(args.albumId);
+		if (!album) throw new Error("Album not found");
+
+		const [siteWideHiddenLabelKeys, ignoredLabelKeys, songs] =
+			await Promise.all([
+				getSiteWideHiddenCreditLabelKeys(ctx),
+				getIgnoredCreditLabelKeys(ctx),
+				ctx.db
+					.query("geniusSongs")
+					.withIndex("by_albumId", (q) => q.eq("albumId", args.albumId))
+					.collect(),
+			]);
+
+		let updatedCount = 0;
+		for (const song of songs) {
+			const next = materializeCreditDefaultsForCredits(
+				song.credits,
+				siteWideHiddenLabelKeys,
+				ignoredLabelKeys,
+			);
+			await ctx.db.patch(song._id, next);
+			updatedCount += 1;
+		}
+
+		return { updatedCount, songCount: songs.length };
 	},
 });
 

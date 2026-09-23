@@ -6,6 +6,7 @@ import {
 	filterVisibleCredits,
 	getHiddenCreditLabelsForRestore,
 	isCreditLabelIgnored,
+	materializeCreditDefaultsForCredits,
 	sortCreditLabelsForAdminList,
 } from "./geniusCreditVisibility";
 
@@ -152,5 +153,38 @@ test("getHiddenCreditLabelsForRestore excludes ignored labels", () => {
 			},
 		),
 		["Producer"],
+	);
+});
+
+test("materializeCreditDefaultsForCredits hides defaults and clears show overrides", () => {
+	assert.deepEqual(
+		materializeCreditDefaultsForCredits(
+			[producerCredit, writerCredit],
+			["producer"],
+		),
+		{
+			hiddenCreditLabels: ["Producer"],
+			shownCreditLabels: undefined,
+		},
+	);
+});
+
+test("materializeCreditDefaultsForCredits skips ignored labels", () => {
+	assert.deepEqual(
+		materializeCreditDefaultsForCredits(
+			[
+				producerCredit,
+				{
+					label: "Spanish Translation",
+					contributors: [{ name: "Someone" }],
+				},
+			],
+			["producer", "spanish translation"],
+			["translation"],
+		),
+		{
+			hiddenCreditLabels: ["Producer"],
+			shownCreditLabels: undefined,
+		},
 	);
 });
