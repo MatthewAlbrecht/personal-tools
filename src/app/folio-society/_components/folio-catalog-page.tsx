@@ -259,7 +259,7 @@ export function FolioCatalogPage(): ReactNode {
 
 	return (
 		<div className="w-full p-6 pt-4">
-			<div className="xl:flex xl:items-stretch xl:gap-8">
+			<div className="mx-auto max-w-6xl xl:flex xl:items-stretch xl:gap-8">
 				<main className="min-w-0 flex-1">
 					<div className="mb-8 flex flex-wrap items-center justify-between gap-3">
 						<div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">

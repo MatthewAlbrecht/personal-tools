@@ -31,6 +31,9 @@ export type FolioProductImage = {
 	position?: number;
 };
 
+export const FOLIO_GRID_CLASS =
+	"grid grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] gap-x-5 gap-y-10 xl:grid-cols-4";
+
 export function FolioBookCard({
 	card,
 	now,
@@ -46,30 +49,35 @@ export function FolioBookCard({
 }): ReactNode {
 	const coming = isComing(card.isComingSoon, card.catalogLaunchTime, now);
 	const initial = card.name.trim().charAt(0).toUpperCase() || "F";
+	const priceLabel = card.price !== null ? formatUsd(card.price) : null;
+	const dateLabel =
+		card.catalogLaunchTime > 0
+			? formatCatalogDay(card.catalogLaunchTime)
+			: null;
 
 	return (
-		<article className="group relative h-full">
+		<article className="group relative">
 			<button
 				type="button"
 				onClick={onToggleExpand}
 				aria-expanded={expanded}
 				aria-label={`${expanded ? "Close" : "View"} details for ${card.name}`}
-				className="h-full w-full cursor-pointer rounded-sm text-left outline-none transition focus-visible:ring-2 focus-visible:ring-teal-700 focus-visible:ring-offset-4"
+				className="block w-full cursor-pointer rounded-sm text-left outline-none transition focus-visible:ring-2 focus-visible:ring-teal-700 focus-visible:ring-offset-4"
 			>
 				<div
 					className={cn(
-						"group-hover:-translate-y-0.5 relative aspect-[4/5] w-full overflow-hidden border bg-[#eeeee9] transition-all duration-300 group-hover:border-stone-400 group-hover:shadow-[0_14px_30px_-20px_rgba(28,25,23,0.55)]",
-						expanded ? "border-teal-800/60 shadow-sm" : "border-stone-300/80",
+						"relative aspect-[4/5] w-full overflow-hidden border bg-[#f2efe8] transition-[border-color] duration-300 group-hover:border-stone-500",
+						expanded ? "border-teal-800/55" : "border-stone-300/70",
 					)}
 				>
 					{card.heroImageUrl ? (
 						<img
 							src={card.heroImageUrl}
 							alt={`Cover of ${card.name}`}
-							className="h-full w-full object-contain p-3 transition-transform duration-500 group-hover:scale-[1.025]"
+							className="h-full w-full object-contain p-1.5 transition-transform duration-500 group-hover:scale-[1.02]"
 						/>
 					) : (
-						<div className="flex h-full w-full items-center justify-center bg-stone-200/70">
+						<div className="flex h-full w-full items-center justify-center bg-stone-200/50">
 							<span className="font-[family-name:var(--font-display)] text-4xl text-stone-500">
 								{initial}
 							</span>
@@ -83,21 +91,30 @@ export function FolioBookCard({
 						{coming ? <CoverChip>Coming</CoverChip> : null}
 					</div>
 				</div>
-				<div className="pt-3 pr-9">
-					{card.authorName ? (
-						<p className="mb-1 truncate text-[0.67rem] text-muted-foreground uppercase tracking-[0.13em]">
-							{card.authorName}
-						</p>
-					) : null}
-					<h3 className="line-clamp-2 font-[family-name:var(--font-display)] text-[1.05rem] leading-[1.2]">
+				<div className="grid grid-rows-[1.25rem_2.5rem_1.25rem] gap-y-0.5 pt-3">
+					<p className="min-h-[1.25rem] truncate text-[0.67rem] text-muted-foreground uppercase tracking-[0.13em]">
+						{card.authorName ?? "\u00a0"}
+					</p>
+					<h3 className="line-clamp-2 min-h-[2.5rem] font-[family-name:var(--font-display)] text-[1.02rem] leading-[1.25]">
 						{card.name}
 					</h3>
-					<p className="mt-1.5 text-muted-foreground text-xs tabular-nums">
-						{formatPriceDate(card.price, card.catalogLaunchTime)}
+					<p className="flex min-h-[1.25rem] items-baseline gap-x-1.5 text-xs tabular-nums">
+						{priceLabel ? (
+							<span className="text-stone-700">{priceLabel}</span>
+						) : null}
+						{priceLabel && dateLabel ? (
+							<span className="text-stone-400">·</span>
+						) : null}
+						{dateLabel ? (
+							<span className="text-muted-foreground/80">{dateLabel}</span>
+						) : null}
+						{!priceLabel && !dateLabel ? (
+							<span className="text-muted-foreground/60">&nbsp;</span>
+						) : null}
 					</p>
 				</div>
 			</button>
-			<div className="absolute top-2 right-2 flex flex-col gap-1.5">
+			<div className="absolute top-1.5 right-1.5 flex flex-col gap-1">
 				<button
 					type="button"
 					aria-label="Owned"
@@ -107,10 +124,10 @@ export function FolioBookCard({
 						onSetOwnership(card.owned ? null : "owned");
 					}}
 					className={cn(
-						"flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border shadow-sm backdrop-blur-sm transition hover:scale-105 hover:border-teal-800 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700",
+						"flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border backdrop-blur-sm transition hover:border-teal-800 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700",
 						card.owned
-							? "border-teal-800 bg-teal-800 text-teal-50"
-							: "border-stone-300 bg-background/90 text-stone-600",
+							? "border-teal-800 bg-teal-800 text-teal-50 shadow-sm"
+							: "border-stone-300/60 bg-background/80 text-stone-500",
 					)}
 				>
 					<Check className="h-3.5 w-3.5" />
@@ -124,10 +141,10 @@ export function FolioBookCard({
 						onSetOwnership(card.want ? null : "want");
 					}}
 					className={cn(
-						"flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border shadow-sm backdrop-blur-sm transition hover:scale-105 hover:border-teal-800 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700",
+						"flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border backdrop-blur-sm transition hover:border-teal-800 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700",
 						card.want
-							? "border-teal-800 bg-teal-50 text-teal-800"
-							: "border-stone-300 bg-background/90 text-stone-600",
+							? "border-teal-800 bg-teal-50 text-teal-800 shadow-sm"
+							: "border-stone-300/60 bg-background/80 text-stone-500",
 					)}
 				>
 					<BookOpen className="h-3.5 w-3.5" />
@@ -234,8 +251,18 @@ export function FolioBookDetail({
 				<h3 className="mt-1 max-w-2xl font-[family-name:var(--font-display)] text-3xl leading-tight tracking-tight">
 					{card.name}
 				</h3>
-				<p className="mt-3 text-sm tabular-nums">
-					{formatPriceDate(card.price, card.catalogLaunchTime)}
+				<p className="mt-3 flex items-baseline gap-x-1.5 text-sm tabular-nums">
+					{card.price !== null ? (
+						<span className="text-stone-700">{formatUsd(card.price)}</span>
+					) : null}
+					{card.price !== null && card.catalogLaunchTime > 0 ? (
+						<span className="text-stone-400">·</span>
+					) : null}
+					{card.catalogLaunchTime > 0 ? (
+						<span className="text-muted-foreground">
+							{formatCatalogDay(card.catalogLaunchTime)}
+						</span>
+					) : null}
 				</p>
 				{coming ? (
 					<p className="mt-1 text-muted-foreground text-sm">Coming</p>
@@ -292,10 +319,12 @@ export function FolioBookDetail({
 export function FolioBookCardSkeleton(): ReactNode {
 	return (
 		<div>
-			<Skeleton className="mb-3 aspect-[4/5] w-full rounded-none" />
-			<Skeleton className="mb-1 h-3 w-24" />
-			<Skeleton className="mb-1 h-4 w-36" />
-			<Skeleton className="h-3 w-28" />
+			<Skeleton className="aspect-[4/5] w-full rounded-none" />
+			<div className="grid grid-rows-[1.25rem_2.5rem_1.25rem] gap-y-0.5 pt-3">
+				<Skeleton className="h-3 w-24" />
+				<Skeleton className="h-4 w-36" />
+				<Skeleton className="h-3 w-28" />
+			</div>
 		</div>
 	);
 }

@@ -5,6 +5,7 @@ import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Skeleton } from "~/components/ui/skeleton";
 import { api } from "../../../../convex/_generated/api";
 import {
+	FOLIO_GRID_CLASS,
 	FolioBookCard,
 	FolioBookCardSkeleton,
 	FolioBookDetail,
@@ -74,11 +75,11 @@ export function FolioSeasonSection({
 
 	return (
 		<section className="mb-16">
-			<h2 className="mb-3 font-[family-name:var(--font-display)] text-3xl tracking-tight">
+			<h2 className="mb-3 font-[family-name:var(--font-display)] text-stone-800 text-xl tracking-tight md:text-2xl">
 				{label}
 			</h2>
 			<div className="mb-7 h-px bg-gradient-to-r from-stone-400/60 via-stone-300/30 to-transparent" />
-			<div className="grid grid-cols-2 gap-x-5 gap-y-10 md:grid-cols-3 xl:grid-cols-4">
+			<div className={FOLIO_GRID_CLASS}>
 				{cards.flatMap((card, index) => {
 					const marks = marksFor(card.productId, card);
 					const tile = (
@@ -121,9 +122,9 @@ export function FolioSeasonSection({
 export function FolioSeasonSectionSkeleton(): ReactNode {
 	return (
 		<section className="mb-12">
-			<Skeleton className="mb-6 h-9 w-40" />
+			<Skeleton className="mb-6 h-7 w-40" />
 			<div className="mb-8 border-border/40 border-b" />
-			<div className="grid grid-cols-2 gap-x-4 gap-y-8 md:grid-cols-3 xl:grid-cols-4">
+			<div className={FOLIO_GRID_CLASS}>
 				{Array.from({ length: 8 }).map((_, index) => (
 					<FolioBookCardSkeleton key={index} />
 				))}
