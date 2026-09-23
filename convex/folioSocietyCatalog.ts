@@ -77,6 +77,17 @@ export const applyCatalogFields = internalMutation({
 		const soloLimited = edition === "limited";
 		const soloSigned = edition === "signed";
 
+		const config = await ctx.db.query("folioSocietyConfig").first();
+		const rebuilding = config?.backfillStatus === "running";
+		const beforeIndexed =
+			!rebuilding &&
+			release.isActive === true &&
+			Boolean(release.seasonSortKey);
+		const beforeBundle = release.isBundle === true;
+		const afterIndexed =
+			release.isActive === true && Boolean(season.seasonSortKey);
+		const afterBundle = isBundle;
+
 		await ctx.db.patch(release._id, {
 			catalogLaunchTime: catalogTime,
 			isComingSoon,
@@ -96,6 +107,25 @@ export const applyCatalogFields = internalMutation({
 			...(args.authorName !== undefined ? { authorName: args.authorName } : {}),
 			...(heroImageUrl !== undefined ? { heroImageUrl } : {}),
 		});
+
+		const beforeBook = beforeIndexed && !beforeBundle ? 1 : 0;
+		const beforeCollection = beforeIndexed && beforeBundle ? 1 : 0;
+		const afterBook = afterIndexed && !afterBundle ? 1 : 0;
+		const afterCollection = afterIndexed && afterBundle ? 1 : 0;
+		const deltaBook = afterBook - beforeBook;
+		const deltaCollection = afterCollection - beforeCollection;
+		if (config && (deltaBook !== 0 || deltaCollection !== 0)) {
+			await ctx.db.patch(config._id, {
+				catalogIndexedBookCount: Math.max(
+					0,
+					(config.catalogIndexedBookCount ?? 0) + deltaBook,
+				),
+				catalogIndexedCollectionCount: Math.max(
+					0,
+					(config.catalogIndexedCollectionCount ?? 0) + deltaCollection,
+				),
+			});
+		}
 
 		if (!isFamily) {
 			return null;
@@ -158,7 +188,9 @@ export const listCatalogPage = query({
 			v.null(),
 		),
 		isDone: v.boolean(),
-		bookCount: v.number(),
+		loadedCount: v.number(),
+		totalCount: v.number(),
+		pageKey: v.string(),
 	}),
 	handler: async (ctx, args) => {
 		requireAuth(ctx);
@@ -206,15 +238,24 @@ export const listCatalogPage = query({
 				};
 			}),
 		}));
-		const bookCount = seasons.reduce(
+		const loadedCount = seasons.reduce(
 			(count, season) => count + season.cards.length,
 			0,
 		);
+		const totalCount = await resolveTotalCount(ctx, {
+			filters,
+			loadedCount,
+			filteredCount: filtered.length,
+			exhausted: loaded.exhausted,
+			ownershipSize: ownershipByProduct?.size ?? null,
+		});
 		return {
 			seasons,
 			continueCursor: paged.continueCursor,
 			isDone: paged.isDone,
-			bookCount,
+			loadedCount,
+			totalCount,
+			pageKey: args.cursor?.beforeSeasonSortKey ?? "first",
 		};
 	},
 });
@@ -452,6 +493,89 @@ const SEASON_FILL_CAP = 200;
 const COMING_CAP = 200;
 const THIS_YEAR_CAP = 200;
 const INDEX_LOOPS = 12;
+const EDITION_COUNT_CAP = 1000;
+
+function isDefaultCatalogFilters(filters: CatalogFilters): boolean {
+	return (
+		!filters.search?.trim() &&
+		!filters.owned &&
+		!filters.want &&
+		!filters.le &&
+		!filters.signed &&
+		!filters.thisYear &&
+		!filters.coming
+	);
+}
+
+function isEditionOnlyFilters(filters: CatalogFilters): boolean {
+	return (
+		(filters.le || filters.signed) &&
+		!filters.search?.trim() &&
+		!filters.owned &&
+		!filters.want &&
+		!filters.thisYear &&
+		!filters.coming
+	);
+}
+
+async function countEditionIndexed(
+	ctx: QueryCtx,
+	edition: FolioEdition,
+): Promise<number> {
+	const rows = await ctx.db
+		.query("folioSocietyReleases")
+		.withIndex("by_isActive_edition_seasonSortKey", (q) =>
+			q.eq("isActive", true).eq("edition", edition),
+		)
+		.take(EDITION_COUNT_CAP);
+	return rows.length;
+}
+
+async function resolveTotalCount(
+	ctx: QueryCtx,
+	opts: {
+		filters: CatalogFilters;
+		loadedCount: number;
+		filteredCount: number;
+		exhausted: boolean;
+		ownershipSize: number | null;
+	},
+): Promise<number> {
+	const { filters, loadedCount, filteredCount, exhausted, ownershipSize } =
+		opts;
+
+	if (isDefaultCatalogFilters(filters)) {
+		const config = await ctx.db.query("folioSocietyConfig").first();
+		const books = config?.catalogIndexedBookCount ?? 0;
+		const collections = config?.catalogIndexedCollectionCount ?? 0;
+		const total = filters.bundles ? books + collections : books;
+		return Math.max(loadedCount, total);
+	}
+
+	if (filters.owned || filters.want) {
+		const fromOwnership = ownershipSize ?? filteredCount;
+		const estimate = exhausted
+			? filteredCount
+			: Math.max(filteredCount, fromOwnership);
+		return Math.max(loadedCount, estimate);
+	}
+
+	if (isEditionOnlyFilters(filters)) {
+		let total = 0;
+		if (filters.le) {
+			total += await countEditionIndexed(ctx, "limited");
+		}
+		if (filters.signed) {
+			total += await countEditionIndexed(ctx, "signed");
+		}
+		return Math.max(loadedCount, total);
+	}
+
+	if (exhausted) {
+		return Math.max(loadedCount, filteredCount);
+	}
+	return Math.max(loadedCount, filteredCount);
+}
 
 function clampPageSize(pageSizeSeasons: number | undefined): number {
 	if (pageSizeSeasons === undefined) {

@@ -44,3 +44,14 @@ test("folioSocietyConfig has optional backfill fields", () => {
 	);
 	assert.match(schema, /backfillStatus:\s*v\.optional\(v\.string\(\)\)/);
 });
+
+test("folioSocietyConfig has optional catalogIndexed counters", () => {
+	assert.match(
+		schema,
+		/catalogIndexedBookCount:\s*v\.optional\(v\.number\(\)\)/,
+	);
+	assert.match(
+		schema,
+		/catalogIndexedCollectionCount:\s*v\.optional\(v\.number\(\)\)/,
+	);
+});

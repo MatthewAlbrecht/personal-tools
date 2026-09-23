@@ -58,6 +58,8 @@ async function beginStoredCatalogBackfill(ctx: MutationCtx): Promise<null> {
 		backfillStatus: "running",
 		backfillCursor: null,
 		backfillProcessedCount: 0,
+		catalogIndexedBookCount: 0,
+		catalogIndexedCollectionCount: 0,
 	});
 	await ctx.scheduler.runAfter(0, internal.folioSocietyBackfill.runBatch, {
 		cursor: null,

@@ -40,7 +40,9 @@ type CatalogPage = {
 	seasons: CatalogSeason[];
 	continueCursor: { beforeSeasonSortKey: string } | null;
 	isDone: boolean;
-	bookCount: number;
+	loadedCount: number;
+	totalCount: number;
+	pageKey: string;
 };
 
 type OwnershipMarks = {
@@ -127,11 +129,14 @@ export function FolioCatalogPage(): ReactNode {
 		if (!page) {
 			return;
 		}
-		const key = cursor?.beforeSeasonSortKey ?? "first";
-		if (appliedCursorRef.current === key) {
+		const expectedKey = cursor?.beforeSeasonSortKey ?? "first";
+		if (page.pageKey !== expectedKey) {
 			return;
 		}
-		appliedCursorRef.current = key;
+		if (appliedCursorRef.current === expectedKey) {
+			return;
+		}
+		appliedCursorRef.current = expectedKey;
 		setSeasons((prev) =>
 			cursor === null ? page.seasons : [...prev, ...page.seasons],
 		);
@@ -140,7 +145,8 @@ export function FolioCatalogPage(): ReactNode {
 	const isDone = page?.isDone === true;
 	const continueCursor = page?.continueCursor ?? null;
 	const firstPageLoading = cursor === null && page === undefined;
-	const bookCount = seasons.reduce(
+	const totalCount = page?.totalCount ?? 0;
+	const loadedBookCount = seasons.reduce(
 		(count, season) => count + season.cards.length,
 		0,
 	);
@@ -261,7 +267,7 @@ export function FolioCatalogPage(): ReactNode {
 								Folio Society
 							</h1>
 							<span className="text-muted-foreground text-sm">
-								{bookCount} books
+								{totalCount} books
 							</span>
 						</div>
 						<div className="flex items-center gap-2">
@@ -294,7 +300,7 @@ export function FolioCatalogPage(): ReactNode {
 
 					{firstPageLoading ? (
 						<FolioSeasonSectionSkeleton />
-					) : bookCount === 0 ? (
+					) : loadedBookCount === 0 ? (
 						<p className="text-muted-foreground text-sm">
 							{emptyCopy(queryFilters)}
 						</p>

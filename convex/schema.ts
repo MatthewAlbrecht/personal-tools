@@ -15,12 +15,12 @@ import {
 	zineCoverTextAlignValidator,
 	zineCoverTextAnchorValidator,
 } from "./_utils/zineCoverTextLayout";
+import { zineDrcLogoCornerValidator } from "./_utils/zineDrcLogo";
 import {
 	zineInsideBackArtistDisplayValidator,
 	zineInsideBackContentAlignStoredValidator,
 	zineInsideBackRecommendationRowAlignValidator,
 } from "./_utils/zineInsideBackLayout";
-import { zineDrcLogoCornerValidator } from "./_utils/zineDrcLogo";
 import { zineInsideBackSectionsValidator } from "./_utils/zineInsideBackSections";
 import { zinePageRecommendationsValidator } from "./_utils/zinePageRecommendations";
 
@@ -58,6 +58,8 @@ export default defineSchema({
 		backfillCursor: v.optional(v.union(v.string(), v.null())),
 		backfillProcessedCount: v.optional(v.number()),
 		backfillStatus: v.optional(v.string()),
+		catalogIndexedBookCount: v.optional(v.number()),
+		catalogIndexedCollectionCount: v.optional(v.number()),
 	}),
 
 	folioSocietyReleases: defineTable({
@@ -589,11 +591,7 @@ export default defineSchema({
 		spotifyAlbumId: v.optional(v.string()), // Spotify's album ID
 		// Temporary optional for prod gate: backfill then re-require.
 		source: v.optional(
-			v.union(
-				v.literal("spotify"),
-				v.literal("manual"),
-				v.literal("bandcamp"),
-			),
+			v.union(v.literal("spotify"), v.literal("manual"), v.literal("bandcamp")),
 		),
 		bandcampUrl: v.optional(v.string()),
 		name: v.string(),

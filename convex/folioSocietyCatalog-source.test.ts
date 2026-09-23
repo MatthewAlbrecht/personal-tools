@@ -100,6 +100,43 @@ test("listCatalogPage uses custom beforeSeasonSortKey cursor", () => {
 	assert.match(source, /beforeSeasonSortKey:\s*v\.string\(\)/);
 });
 
+test("listCatalogPage returns loadedCount, totalCount, and pageKey", () => {
+	assert.match(
+		source,
+		/export const listCatalogPage = query\(\{[\s\S]*?returns:\s*v\.object\(\{[\s\S]*?loadedCount:\s*v\.number\(\)[\s\S]*?totalCount:\s*v\.number\(\)[\s\S]*?pageKey:\s*v\.string\(\)/,
+	);
+	assert.match(
+		source,
+		/pageKey:\s*args\.cursor\?\.beforeSeasonSortKey\s*\?\?\s*"first"/,
+	);
+	assert.doesNotMatch(
+		source,
+		/export const listCatalogPage = query\(\{[\s\S]*?returns:\s*v\.object\(\{[\s\S]*?bookCount:\s*v\.number\(\)/,
+	);
+});
+
+test("applyCatalogFields updates catalogIndexed counters on folioSocietyConfig", () => {
+	assert.match(source, /catalogIndexedBookCount/);
+	assert.match(source, /catalogIndexedCollectionCount/);
+	const applyBlock = source.match(
+		/export const applyCatalogFields = internalMutation\(\{[\s\S]*?\n\}\);/,
+	)?.[0];
+	assert.ok(applyBlock);
+	assert.match(applyBlock, /catalogIndexedBookCount/);
+	assert.match(applyBlock, /folioSocietyConfig/);
+});
+
+test("listCatalogPage does not full-collect folioSocietyReleases for totals", () => {
+	const listBlock = source.match(
+		/export const listCatalogPage = query\(\{[\s\S]*?\n\}\);/,
+	)?.[0];
+	assert.ok(listBlock);
+	assert.doesNotMatch(
+		listBlock,
+		/query\("folioSocietyReleases"\)[\s\S]{0,400}\.collect\(\)/,
+	);
+});
+
 test("catalog renders every edition as its own card", () => {
 	assert.doesNotMatch(source, /pickVisibleSku/);
 	assert.match(
