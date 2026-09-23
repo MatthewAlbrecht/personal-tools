@@ -79,10 +79,20 @@ export function ZinePrintStyles() {
 						padding: 0 !important;
 					}
 
-					.zine-cover-has-image.zine-cover-spread-half:not(
+					/* Screen preview: inset only the sheet’s outer edges (gutter stays flush). */
+					.zine-cover-back.zine-cover-has-image.zine-cover-spread-half:not(
 							.zine-cover-full-bleed
 						) {
-						padding: calc(
+						padding-top: calc(
+							${ZINE_BOOKLET_PANEL_PADDING_CSS} +
+								var(--zine-booklet-outer-pad-in, 0in)
+						);
+						padding-right: 0;
+						padding-bottom: calc(
+							${ZINE_BOOKLET_PANEL_PADDING_CSS} +
+								var(--zine-booklet-outer-pad-in, 0in)
+						);
+						padding-left: calc(
 							${ZINE_BOOKLET_PANEL_PADDING_CSS} +
 								var(--zine-booklet-outer-pad-in, 0in)
 						);
@@ -90,14 +100,62 @@ export function ZinePrintStyles() {
 						background-origin: content-box;
 					}
 
-					.zine-cover-has-image.zine-cover-spread-half:not(
+					.zine-cover-front.zine-cover-has-image.zine-cover-spread-half:not(
 							.zine-cover-full-bleed
-						)
-						.zine-cover-title-wrap {
-						inset: calc(
+						) {
+						padding-top: calc(
 							${ZINE_BOOKLET_PANEL_PADDING_CSS} +
 								var(--zine-booklet-outer-pad-in, 0in)
 						);
+						padding-right: calc(
+							${ZINE_BOOKLET_PANEL_PADDING_CSS} +
+								var(--zine-booklet-outer-pad-in, 0in)
+						);
+						padding-bottom: calc(
+							${ZINE_BOOKLET_PANEL_PADDING_CSS} +
+								var(--zine-booklet-outer-pad-in, 0in)
+						);
+						padding-left: 0;
+						background-clip: content-box;
+						background-origin: content-box;
+					}
+
+					.zine-cover-back.zine-cover-has-image.zine-cover-spread-half:not(
+							.zine-cover-full-bleed
+						)
+						.zine-cover-title-wrap {
+						top: calc(
+							${ZINE_BOOKLET_PANEL_PADDING_CSS} +
+								var(--zine-booklet-outer-pad-in, 0in)
+						);
+						right: 0;
+						bottom: calc(
+							${ZINE_BOOKLET_PANEL_PADDING_CSS} +
+								var(--zine-booklet-outer-pad-in, 0in)
+						);
+						left: calc(
+							${ZINE_BOOKLET_PANEL_PADDING_CSS} +
+								var(--zine-booklet-outer-pad-in, 0in)
+						);
+					}
+
+					.zine-cover-front.zine-cover-has-image.zine-cover-spread-half:not(
+							.zine-cover-full-bleed
+						)
+						.zine-cover-title-wrap {
+						top: calc(
+							${ZINE_BOOKLET_PANEL_PADDING_CSS} +
+								var(--zine-booklet-outer-pad-in, 0in)
+						);
+						right: calc(
+							${ZINE_BOOKLET_PANEL_PADDING_CSS} +
+								var(--zine-booklet-outer-pad-in, 0in)
+						);
+						bottom: calc(
+							${ZINE_BOOKLET_PANEL_PADDING_CSS} +
+								var(--zine-booklet-outer-pad-in, 0in)
+						);
+						left: 0;
 					}
 
 					.zine-cover-front.zine-cover-has-image {
@@ -221,6 +279,19 @@ export function ZinePrintStyles() {
 					}
 
 					.zine-booklet-sheet.zine-booklet-cover-spread {
+						position: relative;
+						-webkit-print-color-adjust: exact;
+						print-color-adjust: exact;
+					}
+
+					/* Continuous wraparound image across front+back; inset only the sheet perimeter. */
+					.zine-booklet-cover-spread::before {
+						content: "";
+						position: absolute;
+						z-index: 0;
+						inset: 0;
+						pointer-events: none;
+						background-image: var(--zine-cover-image);
 						background-repeat: no-repeat;
 						background-size: cover;
 						background-position: center center;
@@ -228,13 +299,55 @@ export function ZinePrintStyles() {
 						print-color-adjust: exact;
 					}
 
-					/* Cover stays image-full-bleed on the sheet; outer pad insets chrome only. */
+					.zine-booklet-cover-spread.zine-cover-inset::before {
+						inset: calc(
+							${ZINE_BOOKLET_PANEL_PADDING_CSS} +
+								var(--zine-booklet-outer-pad-in, 0in)
+						);
+					}
+
 					.zine-booklet-cover-spread .zine-booklet-panel,
 					.zine-booklet-cover-spread .zine-booklet-panel[data-booklet-panel="left"],
 					.zine-booklet-cover-spread
 						.zine-booklet-panel[data-booklet-panel="right"] {
+						position: relative;
+						z-index: 1;
 						padding: var(--zine-booklet-outer-pad-in, 0in);
 						background: transparent;
+					}
+
+					.zine-booklet-cover-spread.zine-cover-inset
+						.zine-booklet-panel[data-booklet-panel="left"] {
+						padding-top: calc(
+							${ZINE_BOOKLET_PANEL_PADDING_CSS} +
+								var(--zine-booklet-outer-pad-in, 0in)
+						);
+						padding-right: 0;
+						padding-bottom: calc(
+							${ZINE_BOOKLET_PANEL_PADDING_CSS} +
+								var(--zine-booklet-outer-pad-in, 0in)
+						);
+						padding-left: calc(
+							${ZINE_BOOKLET_PANEL_PADDING_CSS} +
+								var(--zine-booklet-outer-pad-in, 0in)
+						);
+					}
+
+					.zine-booklet-cover-spread.zine-cover-inset
+						.zine-booklet-panel[data-booklet-panel="right"] {
+						padding-top: calc(
+							${ZINE_BOOKLET_PANEL_PADDING_CSS} +
+								var(--zine-booklet-outer-pad-in, 0in)
+						);
+						padding-right: calc(
+							${ZINE_BOOKLET_PANEL_PADDING_CSS} +
+								var(--zine-booklet-outer-pad-in, 0in)
+						);
+						padding-bottom: calc(
+							${ZINE_BOOKLET_PANEL_PADDING_CSS} +
+								var(--zine-booklet-outer-pad-in, 0in)
+						);
+						padding-left: 0;
 					}
 
 					.zine-booklet-cover-spread .zine-page-cover {

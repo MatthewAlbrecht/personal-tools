@@ -351,8 +351,7 @@ export function LyricsZine({
 	const resolvedCoverImageUrl = coverImageUrl.trim() || undefined;
 	const resolvedCoverGreyscale =
 		coverGreyscale && Boolean(resolvedCoverImageUrl);
-	const resolvedCoverFullBleed =
-		coverFullBleed && Boolean(resolvedCoverImageUrl);
+	const hasCoverImage = Boolean(resolvedCoverImageUrl);
 	const resolvedCoverReleaseYear = parseZineCoverReleaseYearInput(
 		coverReleaseYearInput,
 	);
@@ -992,9 +991,11 @@ export function LyricsZine({
 							<p className="mb-1 font-medium text-sm">Cover image</p>
 							<p className="mb-3 text-muted-foreground text-xs leading-snug">
 								One wide image spans the front and back cover on the outer sheet
-								(left = back, right = front). Full bleed fills the sheet; turn it
-								off to keep the same inset as other pages. The playlist title sits
-								on the front cover only, with a translucent white background.
+								(left = back, right = front) as one continuous wraparound. Full
+								bleed fills the sheet edge-to-edge; turn it off to inset only the
+								sheet’s outer edges (the fold stays continuous). The playlist
+								title sits on the front cover only, with a translucent white
+								background.
 							</p>
 							<div className="space-y-3">
 								<div className="space-y-2">
@@ -1269,19 +1270,23 @@ export function LyricsZine({
 							<section
 								className={cn(
 									"zine-booklet-sheet",
-									resolvedCoverFullBleed &&
+									hasCoverImage &&
 										sheetIndex === 0 &&
 										"zine-booklet-cover-spread",
+									hasCoverImage &&
+										!coverFullBleed &&
+										sheetIndex === 0 &&
+										"zine-cover-inset",
 									resolvedCoverGreyscale &&
 										sheetIndex === 0 &&
 										"zine-cover-greyscale",
 								)}
 								data-booklet-sheet-side="front"
 								style={
-									resolvedCoverFullBleed && sheetIndex === 0
-										? {
-												backgroundImage: `url("${resolvedCoverImageUrl}")`,
-											}
+									hasCoverImage && sheetIndex === 0
+										? ({
+												"--zine-cover-image": `url("${resolvedCoverImageUrl}")`,
+											} as CSSProperties)
 										: undefined
 								}
 							>
@@ -1291,7 +1296,7 @@ export function LyricsZine({
 										`b${sheetIndex}-ff-l`,
 										{
 											useSheetSpreadBackground:
-												resolvedCoverFullBleed && sheetIndex === 0,
+												hasCoverImage && sheetIndex === 0,
 										},
 									)}
 								</div>
@@ -1301,7 +1306,7 @@ export function LyricsZine({
 										`b${sheetIndex}-ff-r`,
 										{
 											useSheetSpreadBackground:
-												resolvedCoverFullBleed && sheetIndex === 0,
+												hasCoverImage && sheetIndex === 0,
 										},
 									)}
 								</div>
