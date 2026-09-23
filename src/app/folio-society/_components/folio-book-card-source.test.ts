@@ -61,3 +61,15 @@ test("real and skeleton grids share FOLIO_GRID_CLASS", () => {
 		"expected FOLIO_GRID_CLASS on both live grid and skeleton",
 	);
 });
+
+test("season section does not guess grid columns in JavaScript", () => {
+	assert.doesNotMatch(seasonSource, /useGridColumnCount/);
+	assert.doesNotMatch(seasonSource, /matchMedia/);
+	assert.doesNotMatch(seasonSource, /rowEndIndex/);
+});
+
+test("season section renders detail outside the card grid", () => {
+	assert.doesNotMatch(seasonSource, /\.flatMap\(/);
+	assert.match(seasonSource, /FolioBookDetail/);
+	assert.match(seasonSource, /openProductId/);
+});

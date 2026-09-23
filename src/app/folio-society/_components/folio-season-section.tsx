@@ -32,20 +32,14 @@ export function FolioSeasonSection({
 		want: boolean;
 	};
 }): ReactNode {
-	const cols = useGridColumnCount();
 	const [openProductId, setOpenProductId] = useState<number | null>(null);
 
-	const openIndex = useMemo(() => {
+	const openCard = useMemo(() => {
 		if (openProductId === null) {
 			return null;
 		}
-		const index = cards.findIndex((card) => card.productId === openProductId);
-		return index >= 0 ? index : null;
+		return cards.find((card) => card.productId === openProductId) ?? null;
 	}, [cards, openProductId]);
-
-	const openCard = openIndex === null ? null : (cards[openIndex] ?? null);
-	const insertAfter =
-		openIndex === null ? null : rowEndIndex(openIndex, cols, cards.length);
 
 	const images = useQuery(
 		api.folioSocietyImages.getActiveImagesByProduct,
@@ -73,6 +67,10 @@ export function FolioSeasonSection({
 		setOpenProductId(card.productId);
 	}
 
+	const selectedMarks = openCard
+		? marksFor(openCard.productId, openCard)
+		: null;
+
 	return (
 		<section className="mb-16">
 			<h2 className="mb-3 font-[family-name:var(--font-display)] text-stone-800 text-xl tracking-tight md:text-2xl">
@@ -80,9 +78,9 @@ export function FolioSeasonSection({
 			</h2>
 			<div className="mb-7 h-px bg-gradient-to-r from-stone-400/60 via-stone-300/30 to-transparent" />
 			<div className={FOLIO_GRID_CLASS}>
-				{cards.flatMap((card, index) => {
+				{cards.map((card) => {
 					const marks = marksFor(card.productId, card);
-					const tile = (
+					return (
 						<FolioBookCard
 							key={card.productId}
 							card={{ ...card, ...marks }}
@@ -94,27 +92,22 @@ export function FolioSeasonSection({
 							}
 						/>
 					);
-					if (insertAfter !== index || !openCard) {
-						return [tile];
-					}
-					const selectedMarks = marksFor(openCard.productId, openCard);
-					return [
-						tile,
-						<FolioExpandRow key={`${openCard.productId}-detail`}>
-							<FolioBookDetail
-								key={openCard.productId}
-								card={openCard}
-								now={now}
-								images={images as FolioProductImage[] | undefined}
-								onClose={() => setOpenProductId(null)}
-								onSetOwnership={onSetOwnership}
-								owned={selectedMarks.owned}
-								want={selectedMarks.want}
-							/>
-						</FolioExpandRow>,
-					];
 				})}
 			</div>
+			{openCard && selectedMarks ? (
+				<div className="mt-8">
+					<FolioBookDetail
+						key={openCard.productId}
+						card={openCard}
+						now={now}
+						images={images as FolioProductImage[] | undefined}
+						onClose={() => setOpenProductId(null)}
+						onSetOwnership={onSetOwnership}
+						owned={selectedMarks.owned}
+						want={selectedMarks.want}
+					/>
+				</div>
+			) : null}
 		</section>
 	);
 }
@@ -131,56 +124,4 @@ export function FolioSeasonSectionSkeleton(): ReactNode {
 			</div>
 		</section>
 	);
-}
-
-function FolioExpandRow({
-	children,
-}: {
-	children: ReactNode;
-}): ReactNode {
-	const [open, setOpen] = useState(false);
-
-	useEffect(() => {
-		const frame = requestAnimationFrame(() => {
-			setOpen(true);
-		});
-		return () => cancelAnimationFrame(frame);
-	}, []);
-
-	return (
-		<div
-			className="col-span-full grid transition-[grid-template-rows] duration-[240ms] ease-out"
-			style={{ gridTemplateRows: open ? "1fr" : "0fr" }}
-		>
-			<div className="min-h-0 overflow-hidden">{children}</div>
-		</div>
-	);
-}
-
-function useGridColumnCount(): number {
-	const [cols, setCols] = useState(2);
-
-	useEffect(() => {
-		function update(): void {
-			if (window.matchMedia("(min-width: 1280px)").matches) {
-				setCols(4);
-				return;
-			}
-			if (window.matchMedia("(min-width: 768px)").matches) {
-				setCols(3);
-				return;
-			}
-			setCols(2);
-		}
-		update();
-		window.addEventListener("resize", update);
-		return () => window.removeEventListener("resize", update);
-	}, []);
-
-	return cols;
-}
-
-function rowEndIndex(openIndex: number, cols: number, total: number): number {
-	const row = Math.floor(openIndex / cols);
-	return Math.min(total - 1, (row + 1) * cols - 1);
 }

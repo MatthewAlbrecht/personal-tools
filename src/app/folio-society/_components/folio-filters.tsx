@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { Button } from "~/components/ui/button";
+import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { cn } from "~/lib/utils";
 import type { FolioFilters as FolioFiltersState } from "../_utils/filter-state";
@@ -60,19 +61,22 @@ export function FolioFilters({
 				/>
 			</div>
 
-			{BOOLEAN_FILTERS.map((field) => (
-				<SegmentedField
-					key={field.key}
-					legend={field.label}
-					value={filters[field.key]}
-					onChange={(next) =>
-						onChange({
-							...filters,
-							[field.key]: next,
-						})
-					}
-				/>
-			))}
+			<div className="flex flex-col gap-0.5">
+				{BOOLEAN_FILTERS.map((field) => (
+					<ToggleRow
+						key={field.key}
+						id={`folio-filter-${field.key}`}
+						label={field.label}
+						checked={filters[field.key]}
+						onCheckedChange={(next) =>
+							onChange({
+								...filters,
+								[field.key]: next,
+							})
+						}
+					/>
+				))}
+			</div>
 
 			<Button
 				type="button"
@@ -99,43 +103,29 @@ export function FolioFilters({
 	);
 }
 
-function SegmentedField({
-	legend,
-	value,
-	onChange,
+function ToggleRow({
+	id,
+	label,
+	checked,
+	onCheckedChange,
 }: {
-	legend: string;
-	value: boolean;
-	onChange: (value: boolean) => void;
+	id: string;
+	label: string;
+	checked: boolean;
+	onCheckedChange: (value: boolean) => void;
 }): ReactNode {
 	return (
-		<fieldset className="m-0 min-w-0 border-0 p-0">
-			<legend className="mb-1.5 font-medium text-[0.65rem] text-muted-foreground uppercase tracking-[0.14em]">
-				{legend}
-			</legend>
-			<div className="flex rounded-md bg-muted/80 p-0.5">
-				{(
-					[
-						{ value: false, label: "Off" },
-						{ value: true, label: "On" },
-					] as const
-				).map((option) => (
-					<button
-						key={option.label}
-						type="button"
-						aria-pressed={value === option.value}
-						onClick={() => onChange(option.value)}
-						className={cn(
-							"flex-1 rounded-[5px] py-1.5 text-xs transition-all",
-							value === option.value
-								? "bg-background font-medium text-foreground shadow-sm"
-								: "text-muted-foreground hover:text-foreground",
-						)}
-					>
-						{option.label}
-					</button>
-				))}
-			</div>
-		</fieldset>
+		<label
+			htmlFor={id}
+			className="flex cursor-pointer items-center justify-between gap-3 rounded-sm px-1 py-1.5 text-sm transition-colors hover:bg-stone-100/70"
+		>
+			<span className="text-foreground/90">{label}</span>
+			<Checkbox
+				id={id}
+				checked={checked}
+				onCheckedChange={(value) => onCheckedChange(value === true)}
+				className="border-stone-400/60 data-[state=checked]:border-teal-800 data-[state=checked]:bg-teal-800"
+			/>
+		</label>
 	);
 }

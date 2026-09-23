@@ -180,136 +180,142 @@ export function FolioBookDetail({
 	const initial = card.name.trim().charAt(0).toUpperCase() || "F";
 
 	return (
-		<div className="my-3 grid gap-7 border-stone-300 border-y bg-stone-50/70 px-4 py-6 md:grid-cols-[minmax(0,18rem)_minmax(0,1fr)] md:px-6 md:py-8">
-			<div>
-				<div className="mb-3 aspect-[4/5] w-full overflow-hidden border border-stone-300 bg-[#e9e9e4] shadow-sm">
-					{cover ? (
-						<img
-							src={cover}
-							alt={`Cover of ${card.name}`}
-							className="h-full w-full object-contain p-4"
-						/>
-					) : (
-						<div className="flex h-full w-full items-center justify-center">
-							<span className="font-[family-name:var(--font-display)] text-5xl text-stone-500">
-								{initial}
-							</span>
-						</div>
-					)}
-				</div>
-				{thumbs.length > 0 ? (
-					<div className="flex flex-wrap gap-2">
-						{visibleThumbs.map((image) => (
-							<button
-								key={image._id}
-								type="button"
-								aria-label={`View image ${visibleThumbs.indexOf(image) + 1} of ${card.name}`}
-								onClick={() => setCoverUrl(image.blobUrl)}
-								className={cn(
-									"h-14 w-11 cursor-pointer overflow-hidden border bg-white transition hover:border-stone-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700",
-									cover === image.blobUrl
-										? "border-stone-600"
-										: "border-stone-400/40",
-								)}
-							>
-								<img
-									src={image.blobUrl}
-									alt=""
-									className="h-full w-full object-contain"
-								/>
-							</button>
-						))}
-					</div>
-				) : null}
-				{thumbs.length > 4 ? (
-					<Button
-						type="button"
-						variant="ghost"
-						size="sm"
-						className="mt-2 h-7 cursor-pointer px-1 text-xs focus-visible:ring-2 focus-visible:ring-teal-700"
-						onClick={() => setShowAll((value) => !value)}
-					>
-						{showAll ? "Show less" : "Show more"}
-					</Button>
-				) : null}
-			</div>
-			<div className="relative min-w-0 pt-1">
+		<div className="overflow-hidden rounded-sm border border-stone-300/80 bg-[#f7f4ee]">
+			<div className="flex items-center justify-between border-stone-300/70 border-b px-4 py-2.5 md:px-6">
+				<p className="text-[0.65rem] text-teal-900 uppercase tracking-[0.18em]">
+					{editionLabel(card.edition)}
+				</p>
 				<button
 					type="button"
 					aria-label={`Close details for ${card.name}`}
 					onClick={onClose}
-					className="absolute top-0 right-0 flex h-9 w-9 cursor-pointer items-center justify-center rounded-full text-stone-500 transition hover:bg-stone-200 hover:text-stone-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700"
+					className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-stone-500 transition hover:bg-stone-200/80 hover:text-stone-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700"
 				>
 					<X className="h-4 w-4" />
 				</button>
-				<p className="mb-5 text-[0.65rem] text-teal-900 uppercase tracking-[0.18em]">
-					{editionLabel(card.edition)}
-				</p>
-				{card.authorName ? (
-					<p className="text-muted-foreground text-sm">{card.authorName}</p>
-				) : null}
-				<h3 className="mt-1 max-w-2xl font-[family-name:var(--font-display)] text-3xl leading-tight tracking-tight">
-					{card.name}
-				</h3>
-				<p className="mt-3 flex items-baseline gap-x-1.5 text-sm tabular-nums">
-					{card.price !== null ? (
-						<span className="text-stone-700">{formatUsd(card.price)}</span>
-					) : null}
-					{card.price !== null && card.catalogLaunchTime > 0 ? (
-						<span className="text-stone-400">·</span>
-					) : null}
-					{card.catalogLaunchTime > 0 ? (
-						<span className="text-muted-foreground">
-							{formatCatalogDay(card.catalogLaunchTime)}
-						</span>
-					) : null}
-				</p>
-				{coming ? (
-					<p className="mt-1 text-muted-foreground text-sm">Coming</p>
-				) : null}
-				<div className="mt-7 flex items-center gap-2">
-					<button
-						type="button"
-						aria-label="Owned"
-						aria-pressed={owned}
-						onClick={() =>
-							onSetOwnership(card.productId, owned ? null : "owned")
-						}
-						className={cn(
-							"flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border transition hover:border-teal-800 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700",
-							owned
-								? "border-teal-800 bg-teal-800 text-teal-50"
-								: "border-stone-400/50 text-stone-500",
+			</div>
+			<div className="grid gap-6 px-4 py-5 sm:grid-cols-[minmax(0,14rem)_minmax(0,1fr)] sm:gap-8 md:px-6 md:py-7">
+				<div className="mx-auto w-full max-w-[14rem] sm:mx-0 sm:max-w-none">
+					<div className="mb-3 aspect-[4/5] w-full overflow-hidden border border-stone-300/80 bg-[#ebe7df]">
+						{cover ? (
+							<img
+								src={cover}
+								alt={`Cover of ${card.name}`}
+								className="h-full w-full object-contain p-3"
+							/>
+						) : (
+							<div className="flex h-full w-full items-center justify-center">
+								<span className="font-[family-name:var(--font-display)] text-5xl text-stone-500">
+									{initial}
+								</span>
+							</div>
 						)}
-					>
-						<Check className="h-4 w-4" />
-					</button>
-					<button
-						type="button"
-						aria-label="Want"
-						aria-pressed={want}
-						onClick={() => onSetOwnership(card.productId, want ? null : "want")}
-						className={cn(
-							"flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border transition hover:border-teal-800 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700",
-							want
-								? "border-teal-800 text-teal-800"
-								: "border-stone-400/50 text-stone-500",
-						)}
-					>
-						<BookOpen className="h-4 w-4" />
-					</button>
+					</div>
+					{thumbs.length > 0 ? (
+						<div className="flex flex-wrap gap-2">
+							{visibleThumbs.map((image) => (
+								<button
+									key={image._id}
+									type="button"
+									aria-label={`View image ${visibleThumbs.indexOf(image) + 1} of ${card.name}`}
+									onClick={() => setCoverUrl(image.blobUrl)}
+									className={cn(
+										"h-14 w-11 cursor-pointer overflow-hidden border bg-white transition hover:border-stone-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700",
+										cover === image.blobUrl
+											? "border-stone-600"
+											: "border-stone-400/40",
+									)}
+								>
+									<img
+										src={image.blobUrl}
+										alt=""
+										className="h-full w-full object-contain"
+									/>
+								</button>
+							))}
+						</div>
+					) : null}
+					{thumbs.length > 4 ? (
+						<Button
+							type="button"
+							variant="ghost"
+							size="sm"
+							className="mt-2 h-7 cursor-pointer px-1 text-xs focus-visible:ring-2 focus-visible:ring-teal-700"
+							onClick={() => setShowAll((value) => !value)}
+						>
+							{showAll ? "Show less" : "Show more"}
+						</Button>
+					) : null}
 				</div>
-				<div className="mt-8 border-stone-300 border-t pt-5">
-					<a
-						href={folioHref(card.url)}
-						target="_blank"
-						rel="noreferrer"
-						aria-label={`View ${card.name} on Folio Society`}
-						className="inline-flex cursor-pointer items-center gap-1.5 text-sm text-teal-800 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700"
-					>
-						View on Folio
-						<ExternalLink className="h-3.5 w-3.5" />
-					</a>
+				<div className="min-w-0 max-w-xl">
+					{card.authorName ? (
+						<p className="text-muted-foreground text-sm">{card.authorName}</p>
+					) : null}
+					<h3 className="mt-1 font-[family-name:var(--font-display)] text-2xl leading-tight tracking-tight md:text-3xl">
+						{card.name}
+					</h3>
+					<p className="mt-3 flex items-baseline gap-x-1.5 text-sm tabular-nums">
+						{card.price !== null ? (
+							<span className="text-stone-700">{formatUsd(card.price)}</span>
+						) : null}
+						{card.price !== null && card.catalogLaunchTime > 0 ? (
+							<span className="text-stone-400">·</span>
+						) : null}
+						{card.catalogLaunchTime > 0 ? (
+							<span className="text-muted-foreground">
+								{formatCatalogDay(card.catalogLaunchTime)}
+							</span>
+						) : null}
+					</p>
+					{coming ? (
+						<p className="mt-1 text-muted-foreground text-sm">Coming</p>
+					) : null}
+					<div className="mt-7 flex items-center gap-2">
+						<button
+							type="button"
+							aria-label="Owned"
+							aria-pressed={owned}
+							onClick={() =>
+								onSetOwnership(card.productId, owned ? null : "owned")
+							}
+							className={cn(
+								"flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border transition hover:border-teal-800 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700",
+								owned
+									? "border-teal-800 bg-teal-800 text-teal-50"
+									: "border-stone-400/50 text-stone-500",
+							)}
+						>
+							<Check className="h-4 w-4" />
+						</button>
+						<button
+							type="button"
+							aria-label="Want"
+							aria-pressed={want}
+							onClick={() =>
+								onSetOwnership(card.productId, want ? null : "want")
+							}
+							className={cn(
+								"flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border transition hover:border-teal-800 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700",
+								want
+									? "border-teal-800 text-teal-800"
+									: "border-stone-400/50 text-stone-500",
+							)}
+						>
+							<BookOpen className="h-4 w-4" />
+						</button>
+					</div>
+					<div className="mt-8 border-stone-300/80 border-t pt-5">
+						<a
+							href={folioHref(card.url)}
+							target="_blank"
+							rel="noreferrer"
+							aria-label={`View ${card.name} on Folio Society`}
+							className="inline-flex cursor-pointer items-center gap-1.5 text-sm text-teal-800 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700"
+						>
+							View on Folio
+							<ExternalLink className="h-3.5 w-3.5" />
+						</a>
+					</div>
 				</div>
 			</div>
 		</div>
