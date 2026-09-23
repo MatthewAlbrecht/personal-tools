@@ -8,13 +8,13 @@ export const ZINE_PAGE = {
 export const ZINE_BOOKLET_PANEL_PADDING_IN = 0.15;
 
 /**
- * Extra inset on the sheet’s outer edges only (left of left panel, right of right panel).
- * Printers often clip those edges; gutter (inner) sides stay at base padding.
+ * Extra inset on all four sides of each booklet panel (and cover panels).
+ * Printers often clip sheet edges; this adds beyond the base panel inset.
  */
 export const ZINE_BOOKLET_OUTER_PADDING = {
 	minIn: 0,
 	maxIn: 0.35,
-	stepIn: 0.05,
+	stepIn: 0.01,
 	defaultIn: 0,
 } as const;
 

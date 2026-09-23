@@ -1211,6 +1211,22 @@ export const updateZineCoverGreyscale = mutation({
 	},
 });
 
+export const updateZineCoverFullBleed = mutation({
+	args: { albumId: v.id("geniusAlbums"), fullBleed: v.boolean() },
+	returns: v.null(),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+		const album = await ctx.db.get(args.albumId);
+		if (!album) throw new Error("Album not found");
+		await ctx.db.patch(args.albumId, {
+			// undefined = full bleed (default); false = inset
+			zineCoverFullBleed: args.fullBleed ? undefined : false,
+			updatedAt: Date.now(),
+		});
+		return null;
+	},
+});
+
 export const updateZineCoverShowTitle = mutation({
 	args: { albumId: v.id("geniusAlbums"), showTitle: v.boolean() },
 	returns: v.null(),
@@ -1333,6 +1349,7 @@ export const listAlbumsForSync = query({
 				totalSongs: v.number(),
 				zineCoverImageUrl: v.optional(v.string()),
 				zineCoverGreyscale: v.optional(v.boolean()),
+				zineCoverFullBleed: v.optional(v.boolean()),
 				zineCoverTextAnchor: v.optional(zineCoverTextAnchorValidator),
 				zineCoverTextAlign: v.optional(zineCoverTextAlignValidator),
 				zineCoverTextOffsetXIn: v.optional(v.number()),
@@ -1391,6 +1408,7 @@ export const listAlbumsForSync = query({
 				totalSongs: number;
 				zineCoverImageUrl?: string;
 				zineCoverGreyscale?: boolean;
+				zineCoverFullBleed?: boolean;
 				zineCoverTextAnchor?: Doc<"geniusAlbums">["zineCoverTextAnchor"];
 				zineCoverTextAlign?: Doc<"geniusAlbums">["zineCoverTextAlign"];
 				zineCoverTextOffsetXIn?: number;
@@ -1459,6 +1477,7 @@ export const listAlbumsForSync = query({
 					totalSongs: album.totalSongs,
 					zineCoverImageUrl: await resolveAlbumCoverImageUrl(ctx, album),
 					zineCoverGreyscale: album.zineCoverGreyscale,
+					zineCoverFullBleed: album.zineCoverFullBleed,
 					zineCoverTextAnchor: album.zineCoverTextAnchor,
 					zineCoverTextAlign: album.zineCoverTextAlign,
 					zineCoverTextOffsetXIn: album.zineCoverTextOffsetXIn,
@@ -1526,6 +1545,7 @@ export const upsertAlbumForSync = mutation({
 		totalSongs: v.number(),
 		zineCoverImageUrl: v.optional(v.string()),
 		zineCoverGreyscale: v.optional(v.boolean()),
+		zineCoverFullBleed: v.optional(v.boolean()),
 		zineCoverTextAnchor: v.optional(zineCoverTextAnchorValidator),
 		zineCoverTextAlign: v.optional(zineCoverTextAlignValidator),
 		zineCoverTextOffsetXIn: v.optional(v.number()),
@@ -1581,6 +1601,8 @@ export const upsertAlbumForSync = mutation({
 			zineCoverImageUrl: normalizeOptionalString(args.zineCoverImageUrl),
 			zineCoverImageStorageId: undefined,
 			zineCoverGreyscale: args.zineCoverGreyscale ? true : undefined,
+			zineCoverFullBleed:
+				args.zineCoverFullBleed === false ? false : undefined,
 			zineCoverTextAnchor: args.zineCoverTextAnchor,
 			zineCoverTextAlign: args.zineCoverTextAlign,
 			zineCoverTextOffsetXIn: args.zineCoverTextOffsetXIn,

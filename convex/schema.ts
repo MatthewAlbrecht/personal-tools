@@ -220,6 +220,8 @@ export default defineSchema({
 		zineCoverImageUrl: v.optional(v.string()),
 		zineCoverImageStorageId: v.optional(v.id("_storage")),
 		zineCoverGreyscale: v.optional(v.boolean()),
+		/** undefined/true = full-bleed cover image; false = inset with panel padding */
+		zineCoverFullBleed: v.optional(v.boolean()),
 		zineCoverTextAnchor: v.optional(zineCoverTextAnchorValidator),
 		zineCoverTextAlign: v.optional(zineCoverTextAlignValidator),
 		zineCoverTextOffsetXIn: v.optional(v.number()),
@@ -308,6 +310,8 @@ export default defineSchema({
 		zineCoverImageUrl: v.optional(v.string()),
 		zineCoverImageStorageId: v.optional(v.id("_storage")),
 		zineCoverGreyscale: v.optional(v.boolean()),
+		/** undefined/true = full-bleed cover image; false = inset with panel padding */
+		zineCoverFullBleed: v.optional(v.boolean()),
 		zineCoverTextAnchor: v.optional(zineCoverTextAnchorValidator),
 		zineCoverTextAlign: v.optional(zineCoverTextAlignValidator),
 		zineCoverTextOffsetXIn: v.optional(v.number()),

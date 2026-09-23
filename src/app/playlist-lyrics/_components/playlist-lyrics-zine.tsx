@@ -39,6 +39,9 @@ export function PlaylistLyricsZine({ slug, variant }: PlaylistLyricsZineProps) {
 	const updateCoverGreyscale = useMutation(
 		api.playlistLyrics.updateZineCoverGreyscale,
 	);
+	const updateCoverFullBleed = useMutation(
+		api.playlistLyrics.updateZineCoverFullBleed,
+	);
 	const updateCoverShowTitle = useMutation(
 		api.playlistLyrics.updateZineCoverShowTitle,
 	);
@@ -163,6 +166,7 @@ export function PlaylistLyricsZine({ slug, variant }: PlaylistLyricsZineProps) {
 			cover={{
 				imageUrl: playlist.zineCoverImageUrl,
 				greyscale: playlist.zineCoverGreyscale === true,
+				fullBleed: playlist.zineCoverFullBleed !== false,
 			}}
 			drcLogoFrontCorner={playlist.zineDrcLogoFrontCorner}
 			drcLogoBackCorner={playlist.zineDrcLogoBackCorner}
@@ -207,6 +211,9 @@ export function PlaylistLyricsZine({ slug, variant }: PlaylistLyricsZineProps) {
 								}),
 							saveGreyscale: (on) => {
 								void updateCoverGreyscale({ playlistId, greyscale: on });
+							},
+							saveCoverFullBleed: (on) => {
+								void updateCoverFullBleed({ playlistId, fullBleed: on });
 							},
 							saveShowCoverTitle: (on) => {
 								void updateCoverShowTitle({ playlistId, showTitle: on });

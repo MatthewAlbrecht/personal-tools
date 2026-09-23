@@ -22,6 +22,7 @@ export function ZineCoverPage({
 	coverTextLayout,
 	coverImageUrl,
 	coverGreyscale = false,
+	coverFullBleed = true,
 	coverSide = "front",
 	useSheetSpreadBackground = false,
 	backCoverQrCodes,
@@ -34,6 +35,7 @@ export function ZineCoverPage({
 	coverTextLayout?: Partial<ZineCoverTextLayout> | null;
 	coverImageUrl?: string;
 	coverGreyscale?: boolean;
+	coverFullBleed?: boolean;
 	coverSide?: "front" | "back";
 	useSheetSpreadBackground?: boolean;
 	backCoverQrCodes?: ZineBackCoverQrCodes;
@@ -43,6 +45,7 @@ export function ZineCoverPage({
 	const isBack = coverSide === "back";
 	const hasCoverImage = Boolean(coverImageUrl?.trim());
 	const showPerPanelBackground = hasCoverImage && !useSheetSpreadBackground;
+	const isFullBleedCover = coverFullBleed && hasCoverImage;
 	const displayArtistName = artistName?.trim() ?? "";
 	const showArtistName = !isBack && showTitle && displayArtistName !== "";
 	const displayReleaseYear =
@@ -83,6 +86,7 @@ export function ZineCoverPage({
 				"zine-page zine-page-preview zine-page-cover",
 				coverSide === "front" ? "zine-cover-front" : "zine-cover-back",
 				showPerPanelBackground && "zine-cover-has-image zine-cover-spread-half",
+				isFullBleedCover && "zine-cover-full-bleed",
 				coverGreyscale && hasCoverImage && "zine-cover-greyscale",
 			)}
 			style={

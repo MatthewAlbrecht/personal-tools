@@ -94,6 +94,7 @@ export type LyricsZinePersistence = {
 		storageId?: string,
 	): Promise<{ coverImageUrl?: string }>;
 	saveGreyscale(on: boolean): void;
+	saveCoverFullBleed?(on: boolean): void;
 	saveShowCoverTitle?(on: boolean): void;
 	generateUploadUrl(): Promise<string>;
 	saveIntroSettings?(settings: ZineIntroSettings): void;
@@ -138,7 +139,7 @@ export function LyricsZine({
 	coverArtistName?: string;
 	backHref: string;
 	songs: ZineSongDisplayInput[];
-	cover: { imageUrl?: string; greyscale: boolean };
+	cover: { imageUrl?: string; greyscale: boolean; fullBleed?: boolean };
 	backCoverQrCodes?: ZineBackCoverQrCodes;
 	drcLogoFrontCorner?: ZineDrcLogoCorner;
 	drcLogoBackCorner?: ZineDrcLogoCorner;
@@ -165,9 +166,6 @@ export function LyricsZine({
 		ZINE_BOOKLET_OUTER_PADDING.defaultIn,
 	);
 
-	useEffect(() => {
-		triggerZinePrintRemeasure();
-	}, [bookletOuterPaddingIn]);
 	const [displaySettings, setDisplaySettings] = useState<ZineDisplaySettings>(
 		() => resolveZineDisplaySettings(displaySettingsProp),
 	);
@@ -240,9 +238,15 @@ export function LyricsZine({
 	});
 	const [coverImageUrl, setCoverImageUrl] = useState(cover.imageUrl ?? "");
 	const [coverGreyscale, setCoverGreyscale] = useState(cover.greyscale);
+	const [coverFullBleed, setCoverFullBleed] = useState(
+		cover.fullBleed !== false,
+	);
 	const [showCoverTitle, setShowCoverTitle] = useState(
 		showCoverTitleProp !== false,
 	);
+	useEffect(() => {
+		triggerZinePrintRemeasure();
+	}, [bookletOuterPaddingIn, coverFullBleed]);
 	const [drcLogoFrontCorner, setDrcLogoFrontCorner] = useState<
 		ZineDrcLogoCorner | undefined
 	>(drcLogoFrontCornerProp);
@@ -347,6 +351,8 @@ export function LyricsZine({
 	const resolvedCoverImageUrl = coverImageUrl.trim() || undefined;
 	const resolvedCoverGreyscale =
 		coverGreyscale && Boolean(resolvedCoverImageUrl);
+	const resolvedCoverFullBleed =
+		coverFullBleed && Boolean(resolvedCoverImageUrl);
 	const resolvedCoverReleaseYear = parseZineCoverReleaseYearInput(
 		coverReleaseYearInput,
 	);
@@ -678,6 +684,7 @@ export function LyricsZine({
 				<ZineCoverPage
 					key={`${keyPrefix}-cover`}
 					artistName={page.artistName}
+					coverFullBleed={coverFullBleed}
 					coverGreyscale={resolvedCoverGreyscale}
 					coverImageUrl={resolvedCoverImageUrl}
 					coverSide="front"
@@ -831,6 +838,7 @@ export function LyricsZine({
 				<ZineCoverPage
 					key={`${keyPrefix}-back`}
 					backCoverQrCodes={backCoverQrCodes}
+					coverFullBleed={coverFullBleed}
 					coverGreyscale={resolvedCoverGreyscale}
 					coverImageUrl={resolvedCoverImageUrl}
 					coverSide="back"
@@ -857,7 +865,14 @@ export function LyricsZine({
 	return (
 		<>
 			<ZinePrintStyles />
-			<div className="zine-layout-shell mx-auto max-w-4xl px-4 pt-6 pb-10">
+			<div
+				className="zine-layout-shell mx-auto max-w-4xl px-4 pt-6 pb-10"
+				style={
+					{
+						"--zine-booklet-outer-pad-in": `${bookletOuterPaddingIn}in`,
+					} as CSSProperties
+				}
+			>
 				<div className="no-print mb-6">
 					<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 						<Button asChild variant="ghost" className="self-start">
@@ -924,9 +939,8 @@ export function LyricsZine({
 							Outer edge padding (print)
 						</legend>
 						<p className="text-muted-foreground text-xs leading-snug">
-							Extra inset on the sheet’s left and right edges only (left of the
-							left page, right of the right page)—helps when printers clip the
-							first letter. Gutter side stays at the base inset.
+							Extra inset on all four sides of each page (and the cover)—helps
+							when printers clip edges. Adds on top of the base panel inset.
 						</p>
 						<div className="flex flex-wrap items-center gap-3">
 							<Button
@@ -978,8 +992,9 @@ export function LyricsZine({
 							<p className="mb-1 font-medium text-sm">Cover image</p>
 							<p className="mb-3 text-muted-foreground text-xs leading-snug">
 								One wide image spans the front and back cover on the outer sheet
-								(left = back, right = front). The playlist title sits on the
-								front cover only, with a translucent white background.
+								(left = back, right = front). Full bleed fills the sheet; turn it
+								off to keep the same inset as other pages. The playlist title sits
+								on the front cover only, with a translucent white background.
 							</p>
 							<div className="space-y-3">
 								<div className="space-y-2">
@@ -1036,6 +1051,16 @@ export function LyricsZine({
 									onCheckedChange={(checked) => {
 										setCoverGreyscale(checked);
 										persistence?.saveGreyscale(checked);
+									}}
+								/>
+								<ZineToggleControl
+									checked={coverFullBleed}
+									disabled={!resolvedCoverImageUrl || isUploadingCover}
+									id="zine-cover-full-bleed"
+									label="Full-bleed cover image"
+									onCheckedChange={(checked) => {
+										setCoverFullBleed(checked);
+										persistence?.saveCoverFullBleed?.(checked);
 									}}
 								/>
 								<ZineToggleControl
@@ -1238,18 +1263,13 @@ export function LyricsZine({
 					className="zine-print-booklet-root zine-document"
 					data-zine-duplex-binding={duplexBinding}
 					aria-hidden="true"
-					style={
-						{
-							"--zine-booklet-outer-pad-in": `${bookletOuterPaddingIn}in`,
-						} as CSSProperties
-					}
 				>
 					{bookletSheets.map((sheet, sheetIndex) => (
 						<Fragment key={`booklet-sheet-${sheetIndex}`}>
 							<section
 								className={cn(
 									"zine-booklet-sheet",
-									resolvedCoverImageUrl &&
+									resolvedCoverFullBleed &&
 										sheetIndex === 0 &&
 										"zine-booklet-cover-spread",
 									resolvedCoverGreyscale &&
@@ -1258,7 +1278,7 @@ export function LyricsZine({
 								)}
 								data-booklet-sheet-side="front"
 								style={
-									resolvedCoverImageUrl && sheetIndex === 0
+									resolvedCoverFullBleed && sheetIndex === 0
 										? {
 												backgroundImage: `url("${resolvedCoverImageUrl}")`,
 											}
@@ -1271,7 +1291,7 @@ export function LyricsZine({
 										`b${sheetIndex}-ff-l`,
 										{
 											useSheetSpreadBackground:
-												Boolean(resolvedCoverImageUrl) && sheetIndex === 0,
+												resolvedCoverFullBleed && sheetIndex === 0,
 										},
 									)}
 								</div>
@@ -1281,7 +1301,7 @@ export function LyricsZine({
 										`b${sheetIndex}-ff-r`,
 										{
 											useSheetSpreadBackground:
-												Boolean(resolvedCoverImageUrl) && sheetIndex === 0,
+												resolvedCoverFullBleed && sheetIndex === 0,
 										},
 									)}
 								</div>

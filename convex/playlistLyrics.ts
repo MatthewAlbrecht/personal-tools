@@ -82,6 +82,7 @@ const playlistValidator = v.object({
 	zineCoverImageUrl: v.optional(v.string()),
 	zineCoverImageStorageId: v.optional(v.id("_storage")),
 	zineCoverGreyscale: v.optional(v.boolean()),
+	zineCoverFullBleed: v.optional(v.boolean()),
 	zineCoverTextAnchor: v.optional(zineCoverTextAnchorValidator),
 	zineCoverTextAlign: v.optional(zineCoverTextAlignValidator),
 	zineCoverTextOffsetXIn: v.optional(v.number()),
@@ -125,6 +126,7 @@ const publicPlaylistValidator = v.object({
 	description: v.optional(v.string()),
 	zineCoverImageUrl: v.optional(v.string()),
 	zineCoverGreyscale: v.optional(v.boolean()),
+	zineCoverFullBleed: v.optional(v.boolean()),
 	zineCoverTextAnchor: v.optional(zineCoverTextAnchorValidator),
 	zineCoverTextAlign: v.optional(zineCoverTextAlignValidator),
 	zineCoverTextOffsetXIn: v.optional(v.number()),
@@ -598,6 +600,27 @@ export const updateZineCoverGreyscale = mutation({
 
 		await ctx.db.patch(args.playlistId, {
 			zineCoverGreyscale: args.greyscale ? true : undefined,
+			updatedAt: Date.now(),
+		});
+
+		return null;
+	},
+});
+
+export const updateZineCoverFullBleed = mutation({
+	args: {
+		playlistId: v.id("playlistLyrics"),
+		fullBleed: v.boolean(),
+	},
+	returns: v.null(),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+
+		await requirePlaylist(ctx, args.playlistId);
+
+		await ctx.db.patch(args.playlistId, {
+			// undefined = full bleed (default); false = inset
+			zineCoverFullBleed: args.fullBleed ? undefined : false,
 			updatedAt: Date.now(),
 		});
 
@@ -1630,6 +1653,7 @@ function toPublicPlaylist(ctx: QueryCtx, playlist: Doc<"playlistLyrics">) {
 			description: playlist.description,
 			zineCoverImageUrl,
 			zineCoverGreyscale: playlist.zineCoverGreyscale,
+			zineCoverFullBleed: playlist.zineCoverFullBleed,
 			zineCoverShowTitle: playlist.zineCoverShowTitle,
 			zineCoverTextAnchor: playlist.zineCoverTextAnchor,
 			zineCoverTextAlign: playlist.zineCoverTextAlign,

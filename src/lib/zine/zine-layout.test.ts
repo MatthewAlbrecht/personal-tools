@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
 	ZINE_ALBUM_ART_IN,
+	ZINE_BOOKLET_OUTER_PADDING,
 	ZINE_CSS_PX_PER_IN,
 	ZINE_FOOTER_ZONE_CSS_PX,
 	ZINE_FOOTER_ZONE_HEIGHT_PT,
@@ -9,6 +10,7 @@ import {
 	ZINE_PAGE,
 	ZINE_TEXT_CONDENSE,
 	type ZineSongLayoutOptions,
+	clampZineBookletOuterPaddingIn,
 	computeLyricsFontSize,
 	computeSingleLineFontSize,
 	countLyricsLines,
@@ -28,6 +30,14 @@ const baseSongHeader = {
 	showAbout: false,
 	showIntro: true,
 } satisfies ZineSongLayoutOptions;
+
+test("ZINE_BOOKLET_OUTER_PADDING steps by 0.01in and clamps", () => {
+	assert.equal(ZINE_BOOKLET_OUTER_PADDING.stepIn, 0.01);
+	assert.equal(clampZineBookletOuterPaddingIn(0.014), 0.01);
+	assert.equal(clampZineBookletOuterPaddingIn(0.016), 0.02);
+	assert.equal(clampZineBookletOuterPaddingIn(-1), 0);
+	assert.equal(clampZineBookletOuterPaddingIn(1), 0.35);
+});
 
 test("ZINE_TEXT_CONDENSE slider matches title width 50–100%", () => {
 	assert.equal(ZINE_TEXT_CONDENSE.min, 0.5);
