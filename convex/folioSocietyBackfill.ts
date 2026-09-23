@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import {
+	type MutationCtx,
 	internalAction,
 	internalMutation,
 	internalQuery,
@@ -21,47 +22,71 @@ const FOLIO_LOAD_HEADERS = {
 	DNT: "1",
 };
 
-const configRangeValidator = v.object({
-	startId: v.number(),
-	endId: v.number(),
+const BATCH_SIZE = 50;
+
+const releaseBatchValidator = v.object({
+	ids: v.array(v.number()),
+	continueCursor: v.union(v.string(), v.null()),
+	isDone: v.boolean(),
 });
 
-export const getConfigInternal = internalQuery({
-	args: {},
-	returns: v.union(configRangeValidator, v.null()),
-	handler: async (ctx) => {
-		const config = await ctx.db.query("folioSocietyConfig").first();
-		if (!config) {
-			return null;
-		}
-		return { startId: config.startId, endId: config.endId };
+export const listStoredReleaseBatch = internalQuery({
+	args: {
+		cursor: v.union(v.string(), v.null()),
+	},
+	returns: releaseBatchValidator,
+	handler: async (ctx, args) => {
+		const page = await ctx.db.query("folioSocietyReleases").paginate({
+			numItems: BATCH_SIZE,
+			cursor: args.cursor,
+		});
+		return {
+			ids: page.page.map((release) => release.id),
+			continueCursor: page.isDone ? null : page.continueCursor,
+			isDone: page.isDone,
+		};
 	},
 });
 
+async function beginStoredCatalogBackfill(ctx: MutationCtx): Promise<null> {
+	requireAuth(ctx);
+	const config = await ctx.db.query("folioSocietyConfig").first();
+	if (!config) {
+		throw new Error("Folio Society config missing");
+	}
+	await ctx.db.patch(config._id, {
+		backfillStatus: "running",
+		backfillCursor: null,
+		backfillProcessedCount: 0,
+	});
+	await ctx.scheduler.runAfter(0, internal.folioSocietyBackfill.runBatch, {
+		cursor: null,
+		processedCount: 0,
+	});
+	return null;
+}
+
+export const startStoredCatalogBackfill = mutation({
+	args: {},
+	returns: v.null(),
+	handler: async (ctx) => {
+		return await beginStoredCatalogBackfill(ctx);
+	},
+});
+
+/** Kept for existing settings UI; prefer startStoredCatalogBackfill. */
 export const startFolioCatalogBackfill = mutation({
 	args: {},
 	returns: v.null(),
 	handler: async (ctx) => {
-		requireAuth(ctx);
-		const config = await ctx.db.query("folioSocietyConfig").first();
-		if (!config) {
-			throw new Error("Folio Society config missing");
-		}
-		const cursor = config.startId - 1;
-		await ctx.db.patch(config._id, {
-			backfillStatus: "running",
-			backfillCursorExternalId: cursor,
-		});
-		await ctx.scheduler.runAfter(0, internal.folioSocietyBackfill.runBatch, {
-			cursor,
-		});
-		return null;
+		return await beginStoredCatalogBackfill(ctx);
 	},
 });
 
 export const applyBatch = internalMutation({
 	args: {
-		cursorAfter: v.number(),
+		cursor: v.union(v.string(), v.null()),
+		processedCount: v.number(),
 		done: v.boolean(),
 	},
 	returns: v.null(),
@@ -71,12 +96,14 @@ export const applyBatch = internalMutation({
 			throw new Error("Folio Society config missing");
 		}
 		await ctx.db.patch(config._id, {
-			backfillCursorExternalId: args.cursorAfter,
+			backfillCursor: args.cursor,
+			backfillProcessedCount: args.processedCount,
 			backfillStatus: args.done ? "done" : "running",
 		});
 		if (!args.done) {
 			await ctx.scheduler.runAfter(0, internal.folioSocietyBackfill.runBatch, {
-				cursor: args.cursorAfter,
+				cursor: args.cursor,
+				processedCount: args.processedCount,
 			});
 		}
 		return null;
@@ -100,37 +127,31 @@ export const markBackfillError = internalMutation({
 
 export const runBatch = internalAction({
 	args: {
-		cursor: v.number(),
+		cursor: v.union(v.string(), v.null()),
+		processedCount: v.number(),
 	},
 	returns: v.null(),
 	handler: async (ctx, args) => {
-		const config: { startId: number; endId: number } | null =
-			await ctx.runQuery(internal.folioSocietyBackfill.getConfigInternal, {});
-		if (!config) {
-			await ctx.runMutation(
-				internal.folioSocietyBackfill.markBackfillError,
-				{},
-			);
-			return null;
-		}
-
-		if (args.cursor >= config.endId) {
-			await ctx.runMutation(internal.folioSocietyBackfill.applyBatch, {
-				cursorAfter: config.endId,
-				done: true,
-			});
-			return null;
-		}
-
-		const firstId = args.cursor + 1;
-		const lastId = Math.min(args.cursor + 25, config.endId);
-		const ids: number[] = [];
-		for (let id = firstId; id <= lastId; id++) {
-			ids.push(id);
-		}
-
 		try {
-			const products = await fetchFolioProducts(ids);
+			const batch: {
+				ids: number[];
+				continueCursor: string | null;
+				isDone: boolean;
+			} = await ctx.runQuery(
+				internal.folioSocietyBackfill.listStoredReleaseBatch,
+				{ cursor: args.cursor },
+			);
+
+			if (batch.ids.length === 0) {
+				await ctx.runMutation(internal.folioSocietyBackfill.applyBatch, {
+					cursor: null,
+					processedCount: args.processedCount,
+					done: true,
+				});
+				return null;
+			}
+
+			const products = await fetchFolioProducts(batch.ids);
 			for (const product of products) {
 				if (
 					typeof product !== "object" ||
@@ -145,9 +166,12 @@ export const runBatch = internalAction({
 					catalogFieldsFromProduct(product as Record<string, unknown>),
 				);
 			}
+
+			const nextProcessed = args.processedCount + batch.ids.length;
 			await ctx.runMutation(internal.folioSocietyBackfill.applyBatch, {
-				cursorAfter: lastId,
-				done: lastId >= config.endId,
+				cursor: batch.continueCursor,
+				processedCount: nextProcessed,
+				done: batch.isDone,
 			});
 		} catch (error) {
 			console.error("Folio catalog backfill batch failed:", error);

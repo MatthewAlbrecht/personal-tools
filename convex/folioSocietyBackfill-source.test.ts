@@ -16,8 +16,8 @@ test("fetches verbosity=3", () => {
 	assert.match(source, /verbosity=3/);
 });
 
-test("batch size is 25", () => {
-	assert.match(source, /cursor \+ 25|25/);
+test("batch size is at most 50 stored releases", () => {
+	assert.match(source, /numItems:\s*50|BATCH_SIZE\s*=\s*50/);
 });
 
 test("schedules internal.folioSocietyBackfill.runBatch", () => {
@@ -27,4 +27,21 @@ test("schedules internal.folioSocietyBackfill.runBatch", () => {
 test("does not call getAllReleases or getAllDetails", () => {
 	assert.doesNotMatch(source, /getAllReleases/);
 	assert.doesNotMatch(source, /getAllDetails/);
+});
+
+test("backfill paginates folioSocietyReleases instead of startId/endId range", () => {
+	assert.match(source, /query\("folioSocietyReleases"\)[\s\S]*\.paginate\(/);
+	assert.doesNotMatch(source, /for \(let id = firstId; id <= lastId; id\+\+\)/);
+	assert.doesNotMatch(source, /cursor \+ 25/);
+	assert.match(source, /startStoredCatalogBackfill|startFolioCatalogBackfill/);
+});
+
+test("persists string pagination cursor and processed count", () => {
+	assert.match(source, /backfillCursor:/);
+	assert.match(source, /backfillProcessedCount:/);
+});
+
+test("does not deactivate or delete releases when Folio omits a product", () => {
+	assert.doesNotMatch(source, /isActive:\s*false/);
+	assert.doesNotMatch(source, /\.delete\(/);
 });

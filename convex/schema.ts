@@ -55,6 +55,8 @@ export default defineSchema({
 		endId: v.number(),
 		updatedAt: v.number(), // Unix timestamp - more efficient for database operations
 		backfillCursorExternalId: v.optional(v.number()),
+		backfillCursor: v.optional(v.union(v.string(), v.null())),
+		backfillProcessedCount: v.optional(v.number()),
 		backfillStatus: v.optional(v.string()),
 	}),
 
