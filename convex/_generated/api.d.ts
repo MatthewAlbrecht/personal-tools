@@ -84,6 +84,7 @@ import type * as forLaterAlbums from "../forLaterAlbums.js";
 import type * as geniusAlbums from "../geniusAlbums.js";
 import type * as geniusCreditLabels from "../geniusCreditLabels.js";
 import type * as home from "../home.js";
+import type * as launch from "../launch.js";
 import type * as migrations_backfillCategorizedAt from "../migrations/backfillCategorizedAt.js";
 import type * as migrations_backfillListenFilterFields from "../migrations/backfillListenFilterFields.js";
 import type * as migrations_backfillSpotifyAlbumId from "../migrations/backfillSpotifyAlbumId.js";
@@ -188,6 +189,7 @@ declare const fullApi: ApiFromModules<{
   geniusAlbums: typeof geniusAlbums;
   geniusCreditLabels: typeof geniusCreditLabels;
   home: typeof home;
+  launch: typeof launch;
   "migrations/backfillCategorizedAt": typeof migrations_backfillCategorizedAt;
   "migrations/backfillListenFilterFields": typeof migrations_backfillListenFilterFields;
   "migrations/backfillSpotifyAlbumId": typeof migrations_backfillSpotifyAlbumId;

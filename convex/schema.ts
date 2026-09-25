@@ -1763,4 +1763,24 @@ export default defineSchema({
 		),
 		sentAt: v.number(),
 	}).index("by_birthday_year_step", ["birthdayId", "occurrenceYear", "step"]),
+
+	launchProjects: defineTable({
+		name: v.string(),
+		createdAt: v.number(),
+	}),
+
+	launchBookmarks: defineTable({
+		title: v.string(),
+		url: v.string(),
+		tags: v.array(v.union(v.literal("top"), v.literal("pinned"))),
+		projects: v.array(
+			v.object({
+				projectId: v.id("launchProjects"),
+				name: v.optional(v.string()),
+			}),
+		),
+		clickCount: v.number(),
+		lastClickedAt: v.optional(v.number()),
+		createdAt: v.number(),
+	}),
 });

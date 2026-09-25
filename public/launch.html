@@ -1,0 +1,1061 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Launch</title>
+		<style>
+			:root {
+				color-scheme: light;
+				--bg: #f4f4f5;
+				--ink: #18181b;
+				--muted: #71717a;
+				--line: #e4e4e7;
+				--card: #ffffff;
+				--hover: #f4f4f5;
+			}
+			* { box-sizing: border-box; }
+			body {
+				margin: 0;
+				background: var(--bg);
+				color: var(--ink);
+				font: 13px/1.35 "SF Pro Text", "Segoe UI", sans-serif;
+			}
+			.board {
+				display: flex;
+				align-items: flex-start;
+				gap: 1.5rem;
+				padding: 1.25rem 0.85rem 3rem;
+			}
+			.column { width: 17.5rem; }
+			.project-head { display: flex; align-items: center; justify-content: space-between; }
+			.plus { border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 1rem; }
+			.plus[aria-pressed="true"] { color: var(--ink); }
+			.add-project {
+				width: 100%;
+				aspect-ratio: 1.4 / 1;
+				margin-top: 0.75rem;
+				border: 1px dashed var(--line);
+				border-radius: 0.75rem;
+				background: transparent;
+				color: var(--muted);
+				cursor: pointer;
+			}
+			input, button { font: inherit; color: inherit; }
+			.add input, .edit input {
+				width: 100%;
+				height: 2rem;
+				border: 1px solid var(--line);
+				background: var(--card);
+				border-radius: 0.5rem;
+				padding: 0 0.6rem;
+			}
+			.add input:focus, .edit input:focus {
+				outline: 2px solid #18181b;
+				outline-offset: 1px;
+				border-color: transparent;
+			}
+			h2 {
+				margin: 1.15rem 0 0.45rem;
+				font-size: 0.68rem;
+				font-weight: 600;
+				letter-spacing: 0.08em;
+				text-transform: uppercase;
+				color: var(--muted);
+			}
+			.top-grid {
+				display: grid;
+				grid-template-columns: repeat(4, 1fr);
+				gap: 0.4rem;
+			}
+			.tile-wrap { position: relative; }
+			.tile {
+				display: grid;
+				place-items: center;
+				width: 100%;
+				aspect-ratio: 1.15 / 1;
+				padding: 0;
+				background: var(--card);
+				border: 1px solid var(--line);
+				border-radius: 0.75rem;
+				text-decoration: none;
+				cursor: pointer;
+			}
+			.tile:hover { background: #fafafa; }
+			.count {
+				position: absolute;
+				top: 0.28rem;
+				right: 0.32rem;
+				font-size: 0.62rem;
+				font-weight: 600;
+				color: var(--muted);
+			}
+			.popover {
+				position: fixed;
+				z-index: 20;
+				width: 18rem;
+				padding: 0.4rem;
+				overflow: hidden;
+				background: var(--card);
+				border: 1px solid var(--line);
+				border-radius: 0.75rem;
+				box-shadow: 0 8px 24px rgb(24 24 27 / 0.08);
+				transform: translate(-50%, -50%);
+			}
+			.popover-grid {
+				display: grid;
+				grid-template-columns: 1fr 1fr;
+				gap: 0.35rem;
+			}
+			.choice {
+				position: relative;
+				min-width: 0;
+				border-radius: 0.55rem;
+				background: var(--bg);
+			}
+			.choice a {
+				display: block;
+				min-height: 3.4rem;
+				padding: 0.45rem 0.4rem 1.15rem;
+				color: inherit;
+				text-decoration: none;
+			}
+			.choice .title {
+				display: -webkit-box;
+				overflow: hidden;
+				-webkit-box-orient: vertical;
+				-webkit-line-clamp: 3;
+				font-size: 0.72rem;
+				font-weight: 550;
+				line-height: 1.25;
+				text-align: center;
+				overflow-wrap: anywhere;
+			}
+			.choice .meatball {
+				position: absolute;
+				z-index: 1;
+				right: 0.05rem;
+				bottom: 0.05rem;
+				opacity: 0;
+			}
+			.choice:hover .meatball,
+			.choice.active .meatball { opacity: 1; }
+			.choice.active { background: #ececee; }
+			.choice .rename {
+				font-size: 0.72rem;
+				text-align: center;
+			}
+			.tile-wrap .meatball {
+				display: none;
+				position: absolute;
+				z-index: 1;
+				right: 0.2rem;
+				bottom: 0.15rem;
+				background: var(--card);
+			}
+			.tile-wrap:hover .meatball { display: grid; }
+			a.pin {
+				display: flex;
+				align-items: center;
+				gap: 0.5rem;
+				min-width: 0;
+				flex: 1;
+				padding: 0.32rem 0.35rem;
+				color: inherit;
+				text-decoration: none;
+				border-radius: 0.45rem;
+			}
+			a.pin .title {
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+				font-weight: 500;
+			}
+			.row:hover a.pin,
+			.row.active a.pin { background: var(--hover); }
+			.url, .meta, .empty, .status {
+				color: var(--muted);
+				font-size: 0.75rem;
+			}
+			.row {
+				display: flex;
+				align-items: center;
+			}
+			.mark {
+				width: 16px;
+				height: 16px;
+				flex: none;
+			}
+			.mark.lg {
+				width: 22px;
+				height: 22px;
+				font-size: 0.75rem;
+			}
+			.mark.letter {
+				display: grid;
+				place-items: center;
+				border-radius: 4px;
+				background: var(--hover);
+				color: var(--muted);
+				font-size: 0.65rem;
+				font-weight: 600;
+			}
+			.actions {
+				display: flex;
+				flex: none;
+				opacity: 0;
+			}
+			.row:hover .actions,
+			.edit .actions { opacity: 1; }
+			.meatball {
+				display: grid;
+				place-items: center;
+				width: 1.35rem;
+				height: 1.35rem;
+				padding: 0;
+				border: 0;
+				border-radius: 0.35rem;
+				background: transparent;
+				color: var(--muted);
+				cursor: pointer;
+			}
+			.meatball:hover { background: var(--hover); color: var(--ink); }
+			.menu {
+				position: fixed;
+				z-index: 30;
+				min-width: 8.75rem;
+				padding: 0.25rem;
+				background: var(--card);
+				border: 1px solid var(--line);
+				border-radius: 0.5rem;
+				box-shadow: 0 8px 24px rgb(24 24 27 / 0.08);
+			}
+			.menu button {
+				display: block;
+				width: 100%;
+				padding: 0.4rem 0.55rem;
+				border: 0;
+				border-radius: 0.35rem;
+				background: transparent;
+				text-align: left;
+				cursor: pointer;
+			}
+			.menu button:hover { background: var(--hover); }
+			.menu button.danger { color: #b91c1c; }
+			.menu button.danger:hover { background: #fef2f2; }
+			.menu hr {
+				margin: 0.25rem 0.2rem;
+				border: 0;
+				border-top: 1px solid var(--line);
+			}
+			.rename {
+				width: 100%;
+				height: auto;
+				margin: 0;
+				padding: 0;
+				border: 0;
+				border-radius: 0;
+				background: transparent;
+				font: inherit;
+				font-weight: 500;
+			}
+			.rename:focus { outline: none; }
+			.actions button, .add button, .edit button {
+				border: 0;
+				background: transparent;
+				padding: 0;
+				color: var(--muted);
+				cursor: pointer;
+			}
+			.actions button:hover, .add button:hover, .edit button:hover { color: var(--ink); }
+			.add, .edit {
+				display: grid;
+				gap: 0.4rem;
+				margin-top: 0.45rem;
+			}
+			.add { margin-top: 1.5rem; }
+			.add button {
+				justify-self: start;
+				height: 2rem;
+				padding: 0 0.75rem;
+				border-radius: 0.5rem;
+				background: var(--ink);
+				color: #fafafa;
+			}
+			.add button:hover { color: #fafafa; }
+			.empty { margin: 0; }
+			.tags { font-size: 0.75rem; color: var(--muted); }
+		</style>
+	</head>
+	<body>
+		<div class="board">
+			<main class="column" id="pad">
+				<div id="list"></div>
+				<p class="status" id="status"></p>
+				<div class="add" id="add">
+					<input name="title" placeholder="Title" />
+					<input name="url" placeholder="URL" />
+					<input name="tags" placeholder="Tags, comma separated" />
+					<button type="button" id="add-button">Add</button>
+				</div>
+			</main>
+			<aside class="column" id="projects"></aside>
+		</div>
+		<script>
+			const STORAGE_KEY = "launch-bookmarks";
+			let bookmarks = load();
+			let editingId = null;
+			let popover = null;
+			let menu = null;
+			let hoveredId = null;
+			let addingProjectId = null;
+
+			document.addEventListener("pointerdown", (event) => {
+				if (menu && !menu.contains(event.target) && !event.target.closest(".meatball")) closeMenu();
+				if (popover && !popover.contains(event.target) && !event.target.closest(".tile")) closePopover();
+			});
+			document.addEventListener("keydown", (event) => {
+				if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
+				if (event.metaKey || event.ctrlKey || event.altKey) return;
+				if (event.key === "a" && (hoveredId || menu)) {
+					event.preventDefault();
+					startRename(hoveredId || menu.dataset.id);
+					return;
+				}
+				if (event.key === "g" && hoveredId) {
+					event.preventDefault();
+					const bookmark = bookmarks.find((item) => item._id === hoveredId);
+					if (bookmark) openGroupPicker(bookmark, document.querySelector(".active"));
+					return;
+				}
+				if (event.key === "Escape") {
+					if (addingProjectId) {
+						addingProjectId = null;
+						renderProjects();
+						return;
+					}
+					if (menu) {
+						closeMenu();
+						return;
+					}
+					closePopover();
+				}
+			});
+
+			render(bookmarks);
+
+			document.getElementById("add").addEventListener("input", (event) => {
+				if (event.target instanceof HTMLInputElement) {
+					event.target.defaultValue = event.target.value;
+				}
+			});
+			document.getElementById("add-button").addEventListener("click", () => {
+				const form = document.getElementById("add");
+				const created = createBookmark({
+					title: form.querySelector("[name=title]").value,
+					url: form.querySelector("[name=url]").value,
+					tags: parseTags(form.querySelector("[name=tags]").value),
+				});
+				if (!created) return;
+				for (const input of form.querySelectorAll("input")) {
+					input.value = input.name === "group" ? "General" : "";
+					input.defaultValue = input.value;
+				}
+			});
+
+			function load() {
+				try {
+					const saved = localStorage.getItem(STORAGE_KEY);
+					return saved ? JSON.parse(saved) : [];
+				} catch {
+					return [];
+				}
+			}
+
+			function save(next) {
+				bookmarks = next;
+				localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+				render(next);
+			}
+
+			function parseTags(value) {
+				return [...new Set(String(value || "").split(",").map((part) => part.trim()).filter(Boolean))];
+			}
+
+			function render(items) {
+				const list = document.getElementById("list");
+				list.replaceChildren();
+				if (items.length === 0) {
+					const empty = document.createElement("p");
+					empty.className = "empty";
+					empty.textContent = "No bookmarks yet.";
+					list.append(empty);
+					return;
+				}
+				const tops = items.filter((bookmark) => (bookmark.tags || []).includes("top"));
+				const pins = items.filter((bookmark) => {
+					const tags = bookmark.tags || [];
+					return tags.includes("pinned") || !tags.includes("top");
+				});
+				if (tops.length > 0) {
+					const grid = document.createElement("div");
+					grid.className = "top-grid";
+					for (const group of groupBySite(tops)) {
+						if (group.length === 1 && editingId === group[0]._id) continue;
+						grid.append(group.length === 1 ? tile(group[0]) : siteTile(group));
+					}
+					list.append(grid);
+					const editingTop = tops.find((bookmark) => bookmark._id === editingId);
+					if (editingTop) list.append(editRow(editingTop));
+				}
+				if (pins.length > 0) {
+					if (tops.length > 0) list.append(heading("Pinned"));
+					for (const bookmark of pins) {
+						list.append(editingId === bookmark._id ? editRow(bookmark) : pin(bookmark));
+					}
+				}
+			}
+
+			function heading(text) {
+				const element = document.createElement("h2");
+				element.textContent = text;
+				return element;
+			}
+
+			function groupBySite(items) {
+				const groups = [];
+				const index = new Map();
+				for (const bookmark of items) {
+					const key = siteKey(bookmark.url);
+					if (!index.has(key)) {
+						index.set(key, groups.length);
+						groups.push([]);
+					}
+					groups[index.get(key)].push(bookmark);
+				}
+				return groups;
+			}
+
+			function siteKey(url) {
+				try {
+					return new URL(url).host;
+				} catch {
+					return url;
+				}
+			}
+
+			function siteTile(group) {
+				const wrap = document.createElement("div");
+				wrap.className = "tile-wrap";
+				const button = document.createElement("button");
+				button.type = "button";
+				button.className = "tile";
+				button.append(favicon(group[0], true));
+				const count = document.createElement("span");
+				count.className = "count";
+				count.textContent = String(group.length);
+				wrap.append(button, count);
+				button.addEventListener("click", (event) => {
+					openPopover(group, event.clientX, event.clientY);
+				});
+				return wrap;
+			}
+
+			function openPopover(group, x, y) {
+				closeMenu();
+				closePopover();
+				const panel = document.createElement("div");
+				panel.className = "popover";
+				const grid = document.createElement("div");
+				grid.className = "popover-grid";
+				for (const bookmark of group) {
+					const cell = document.createElement("div");
+					cell.className = "choice";
+					cell.dataset.id = bookmark._id;
+					const link = document.createElement("a");
+					link.href = bookmark.url;
+					const title = document.createElement("span");
+					title.className = "title";
+					title.textContent = bookmark.title;
+					link.append(title);
+					link.addEventListener("click", (event) => {
+						if (assignIfAdding(event, bookmark)) return;
+						recordClick(bookmark._id);
+					});
+					cell.append(link, menuButton(bookmark));
+					watchHover(cell, bookmark._id);
+					grid.append(cell);
+				}
+				panel.append(grid);
+				document.body.append(panel);
+				const rect = panel.getBoundingClientRect();
+				const left = Math.min(Math.max(rect.width / 2 + 8, x), window.innerWidth - rect.width / 2 - 8);
+				const top = Math.min(Math.max(rect.height / 2 + 8, y), window.innerHeight - rect.height / 2 - 8);
+				panel.style.left = `${left}px`;
+				panel.style.top = `${top}px`;
+				popover = panel;
+			}
+
+			function closePopover() {
+				if (!popover) return;
+				popover.remove();
+				popover = null;
+			}
+
+			function tile(bookmark) {
+				const wrap = document.createElement("div");
+				wrap.className = "tile-wrap";
+				wrap.dataset.id = bookmark._id;
+				const link = document.createElement("a");
+				link.className = "tile";
+				link.href = bookmark.url;
+				link.title = bookmark.title;
+				link.append(favicon(bookmark, true));
+				link.addEventListener("click", (event) => {
+					if (assignIfAdding(event, bookmark)) return;
+					recordClick(bookmark._id);
+				});
+				wrap.append(link, menuButton(bookmark));
+				watchHover(wrap, bookmark._id);
+				return wrap;
+			}
+
+			function pin(bookmark) {
+				const wrap = document.createElement("div");
+				wrap.className = "row";
+				wrap.dataset.id = bookmark._id;
+				const link = document.createElement("a");
+				link.className = "pin";
+				link.href = bookmark.url;
+				link.append(favicon(bookmark, false));
+				const title = document.createElement("span");
+				title.className = "title";
+				title.textContent = bookmark.title;
+				link.append(title);
+				link.addEventListener("click", (event) => {
+					if (assignIfAdding(event, bookmark)) return;
+					recordClick(bookmark._id);
+				});
+				const actions = document.createElement("div");
+				actions.className = "actions";
+				actions.append(menuButton(bookmark));
+				wrap.append(link, actions);
+				watchHover(wrap, bookmark._id);
+				return wrap;
+			}
+
+			function watchHover(element, id) {
+				element.addEventListener("mouseenter", () => {
+					hoveredId = id;
+					for (const active of document.querySelectorAll(".active")) {
+						active.classList.remove("active");
+					}
+					element.classList.add("active");
+				});
+				element.addEventListener("mouseleave", () => {
+					if (hoveredId === id) hoveredId = null;
+					element.classList.remove("active");
+				});
+			}
+
+			function menuButton(bookmark) {
+				const button = document.createElement("button");
+				button.type = "button";
+				button.className = "meatball";
+				button.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><circle cx="2.5" cy="7" r="1.15"/><circle cx="7" cy="7" r="1.15"/><circle cx="11.5" cy="7" r="1.15"/></svg>';
+				button.addEventListener("click", (event) => {
+					event.preventDefault();
+					event.stopPropagation();
+					if (menu && menu.dataset.id === bookmark._id) {
+						closeMenu();
+						return;
+					}
+					openMenu(bookmark, button);
+				});
+				return button;
+			}
+
+			function openMenu(bookmark, anchor) {
+				closePopover();
+				closeMenu();
+				const panel = document.createElement("div");
+				panel.className = "menu";
+				panel.dataset.id = bookmark._id;
+				const divider = document.createElement("hr");
+				panel.append(
+					menuItem("Edit", () => {
+						closeMenu();
+						editingId = bookmark._id;
+						render(bookmarks);
+					}),
+					menuItem("Rename", () => {
+						startRename(bookmark._id);
+					}),
+					divider,
+					menuItem("Delete", () => {
+						closeMenu();
+						removeBookmark(bookmark._id);
+					}, true),
+				);
+				document.body.append(panel);
+				const anchorRect = anchor.getBoundingClientRect();
+				const panelRect = panel.getBoundingClientRect();
+				const left = Math.min(anchorRect.right - panelRect.width, window.innerWidth - panelRect.width - 8);
+				const top = Math.min(anchorRect.bottom + 4, window.innerHeight - panelRect.height - 8);
+				panel.style.left = `${Math.max(8, left)}px`;
+				panel.style.top = `${Math.max(8, top)}px`;
+				menu = panel;
+			}
+
+			function menuItem(label, onClick, danger) {
+				const button = document.createElement("button");
+				button.type = "button";
+				button.textContent = label;
+				if (danger) button.className = "danger";
+				button.addEventListener("click", onClick);
+				return button;
+			}
+
+			function assignIfAdding(event, bookmark) {
+				if (!addingProjectId) return false;
+				event.preventDefault();
+				const next = window.launchModel.addProject(
+					{ title: bookmark.title, projects: bookmark.projects || [] },
+					addingProjectId,
+				);
+				const convex = client();
+				if (convex) {
+					convex.mutation("launch:setProjects", {
+						id: bookmark._id,
+						projects: next.projects,
+					});
+				}
+				return true;
+			}
+
+			function openGroupPicker(bookmark, anchor) {
+				closeMenu();
+				closePopover();
+				const panel = document.createElement("div");
+				panel.className = "popover group-picker";
+				const projects = window.launchModel.projectsNewestFirst(window.launchProjects || []);
+				for (const project of projects) {
+					const member = (bookmark.projects || []).some((item) => item.projectId === project._id);
+					const button = document.createElement("button");
+					button.type = "button";
+					button.textContent = member ? `✓ ${project.name}` : project.name;
+					button.style.display = "block";
+					button.style.width = "100%";
+					button.style.textAlign = "left";
+					button.style.border = "0";
+					button.style.background = "transparent";
+					button.style.padding = "0.45rem 0.7rem";
+					button.style.cursor = "pointer";
+					button.addEventListener("click", () => {
+						const next = window.launchModel.toggleProject(
+							{ title: bookmark.title, projects: bookmark.projects || [] },
+							project._id,
+						);
+						const convex = client();
+						if (convex) {
+							convex.mutation("launch:setProjects", {
+								id: bookmark._id,
+								projects: next.projects,
+							});
+						}
+						closePopover();
+					});
+					panel.append(button);
+				}
+				if (projects.length === 0) {
+					const empty = document.createElement("p");
+					empty.textContent = "No projects yet";
+					empty.style.margin = "0.6rem";
+					panel.append(empty);
+				}
+				document.body.append(panel);
+				const rect = anchor ? anchor.getBoundingClientRect() : { left: 80, top: 80, width: 0, height: 0 };
+				const x = rect.left + rect.width / 2;
+				const y = rect.top + rect.height / 2;
+				const panelRect = panel.getBoundingClientRect();
+				const left = Math.min(Math.max(panelRect.width / 2 + 8, x), window.innerWidth - panelRect.width / 2 - 8);
+				const top = Math.min(Math.max(panelRect.height / 2 + 8, y), window.innerHeight - panelRect.height / 2 - 8);
+				panel.style.left = `${left}px`;
+				panel.style.top = `${top}px`;
+				popover = panel;
+			}
+
+			function renderProjects() {
+				const root = document.getElementById("projects");
+				root.replaceChildren();
+				for (const project of window.launchProjects || []) {
+					const section = document.createElement("section");
+					const head = document.createElement("div");
+					head.className = "project-head";
+					const heading = document.createElement("h2");
+					heading.textContent = project.name;
+					const plus = document.createElement("button");
+					plus.type = "button";
+					plus.className = "plus";
+					plus.textContent = "+";
+					plus.setAttribute("aria-pressed", addingProjectId === project._id ? "true" : "false");
+					plus.addEventListener("click", () => {
+						addingProjectId = addingProjectId === project._id ? null : project._id;
+						renderProjects();
+					});
+					const remove = document.createElement("button");
+					remove.type = "button";
+					remove.className = "meatball";
+					remove.textContent = "···";
+					remove.addEventListener("click", () => {
+						const convex = client();
+						if (!convex) return;
+						convex.mutation("launch:removeProject", { id: project._id });
+					});
+					head.append(heading, plus, remove);
+					section.append(head);
+					for (const bookmark of bookmarks) {
+						const membership = (bookmark.projects || []).find((item) => item.projectId === project._id);
+						if (!membership) continue;
+						const row = document.createElement("div");
+						row.className = "row";
+						row.dataset.id = bookmark._id;
+						row.dataset.projectId = project._id;
+						const link = document.createElement("a");
+						link.className = "pin";
+						link.href = bookmark.url;
+						const title = document.createElement("span");
+						title.className = "title";
+						title.textContent = window.launchModel.displayName(bookmark, membership);
+						link.append(title);
+						link.addEventListener("click", () => recordClick(bookmark._id));
+						row.append(link);
+						watchHover(row, bookmark._id);
+						section.append(row);
+					}
+					root.append(section);
+				}
+				const add = document.createElement("button");
+				add.type = "button";
+				add.className = "add-project";
+				add.id = "add-project";
+				add.textContent = "Add a project";
+				add.addEventListener("click", () => startAddProject(add));
+				root.append(add);
+			}
+
+			function startAddProject(button) {
+				const box = document.createElement("div");
+				box.className = "add-project";
+				box.style.display = "grid";
+				box.style.placeItems = "center";
+				box.style.padding = "0.75rem";
+				const input = document.createElement("input");
+				input.placeholder = "Name";
+				input.style.width = "100%";
+				const confirm = document.createElement("button");
+				confirm.type = "button";
+				confirm.textContent = "Add";
+				function restore() {
+					box.replaceWith(button);
+				}
+				function submit() {
+					const name = input.value.trim();
+					if (!name) return;
+					const convex = client();
+					if (!convex) return;
+					convex.mutation("launch:createProject", { name });
+				}
+				confirm.addEventListener("click", submit);
+				input.addEventListener("keydown", (event) => {
+					if (event.key === "Enter") {
+						event.preventDefault();
+						submit();
+					}
+					if (event.key === "Escape") {
+						event.preventDefault();
+						restore();
+					}
+				});
+				box.append(input, confirm);
+				button.replaceWith(box);
+				input.focus();
+			}
+
+			function startRename(id) {
+				const bookmark = bookmarks.find((item) => item._id === id);
+				closeMenu();
+				if (!bookmark) return;
+				const active = document.querySelector(".active");
+				const projectId = active?.dataset.projectId;
+				if (projectId && active?.dataset.id === id) {
+					const membership = (bookmark.projects || []).find((item) => item.projectId === projectId);
+					const current = window.launchModel.displayName(bookmark, membership || { projectId });
+					const title = active.querySelector(".title");
+					if (!title) return;
+					const input = document.createElement("input");
+					input.className = "rename";
+					input.value = current;
+					input.defaultValue = current;
+					title.replaceWith(input);
+					finishProjectRename(input, bookmark, projectId, current);
+					return;
+				}
+				const title = document.querySelector(`.active[data-id="${id}"] .title`) || document.querySelector(`[data-id="${id}"] .title`);
+				if (title) {
+					swapLabel(title, bookmark, () => title);
+					return;
+				}
+				const wrap = document.querySelector(`.tile-wrap[data-id="${id}"]`);
+				if (!wrap) return;
+				const input = renameInput(bookmark);
+				input.style.position = "absolute";
+				input.style.left = "0";
+				input.style.top = "calc(100% + 4px)";
+				input.style.width = "12rem";
+				input.style.padding = "0.2rem 0.4rem";
+				input.style.background = "var(--card)";
+				input.style.border = "1px solid var(--line)";
+				input.style.borderRadius = "0.4rem";
+				input.style.zIndex = "5";
+				wrap.append(input);
+				finishRename(input, bookmark, () => input.remove());
+			}
+
+			function swapLabel(title, bookmark) {
+				const input = renameInput(bookmark);
+				title.replaceWith(input);
+				finishRename(input, bookmark, () => input.replaceWith(title));
+			}
+
+			function renameInput(bookmark) {
+				const input = document.createElement("input");
+				input.className = "rename";
+				input.value = bookmark.title;
+				input.defaultValue = bookmark.title;
+				return input;
+			}
+
+			function finishRename(input, bookmark, revert) {
+				let closed = false;
+				function close(save) {
+					if (closed) return;
+					closed = true;
+					const next = input.value.trim();
+					const span = document.createElement("span");
+					span.className = "title";
+					span.textContent = save && next ? next : bookmark.title;
+					input.replaceWith(span);
+					if (save && next && next !== bookmark.title) {
+						const renamed = window.launchModel.renamePad(bookmark, next);
+						updateBookmark(bookmark._id, {
+							title: renamed.title,
+							url: bookmark.url,
+							tags: bookmark.tags || [],
+							projects: renamed.projects || bookmark.projects || [],
+						});
+					}
+				}
+				input.addEventListener("keydown", (event) => {
+					if (event.key === "Enter") {
+						event.preventDefault();
+						event.stopPropagation();
+						close(true);
+					}
+					if (event.key === "Escape") {
+						event.preventDefault();
+						close(false);
+					}
+				});
+				input.addEventListener("click", (event) => event.preventDefault());
+				setTimeout(() => {
+					input.focus();
+					input.select();
+					input.addEventListener("blur", () => close(false));
+				}, 0);
+			}
+
+			function finishProjectRename(input, bookmark, projectId, current) {
+				let closed = false;
+				function close(save) {
+					if (closed) return;
+					closed = true;
+					const next = input.value.trim();
+					const span = document.createElement("span");
+					span.className = "title";
+					span.textContent = save && next ? next : current;
+					input.replaceWith(span);
+					if (!save || !next || next === current) return;
+					const projects = window.launchModel.renameInProject(bookmark, projectId, next).projects;
+					const convex = client();
+					if (!convex) return;
+					convex.mutation("launch:setProjects", { id: bookmark._id, projects });
+				}
+				input.addEventListener("keydown", (event) => {
+					if (event.key === "Enter") {
+						event.preventDefault();
+						event.stopPropagation();
+						close(true);
+					}
+					if (event.key === "Escape") {
+						event.preventDefault();
+						close(false);
+					}
+				});
+				input.addEventListener("click", (event) => event.preventDefault());
+				setTimeout(() => {
+					input.focus();
+					input.select();
+					input.addEventListener("blur", () => close(false));
+				}, 0);
+			}
+
+			function closeMenu() {
+				if (!menu) return;
+				menu.remove();
+				menu = null;
+			}
+
+			function favicon(bookmark, large) {
+				const letter = document.createElement("span");
+				letter.className = large ? "mark lg letter" : "mark letter";
+				letter.textContent = (bookmark.title || "?").slice(0, 1).toUpperCase();
+				const src = faviconUrl(bookmark.url);
+				if (!src) return letter;
+				const image = document.createElement("img");
+				image.className = large ? "mark lg" : "mark";
+				image.alt = "";
+				image.loading = "lazy";
+				image.src = src;
+				image.addEventListener("error", () => image.replaceWith(letter));
+				return image;
+			}
+
+			function faviconUrl(url) {
+				try {
+					const parsed = new URL(url);
+					const host = parsed.hostname;
+					if (host === "localhost" || host === "127.0.0.1") {
+						return `${parsed.origin}/favicon.ico`;
+					}
+					return `https://www.google.com/s2/favicons?sz=64&domain_url=${encodeURIComponent(parsed.origin)}`;
+				} catch {
+					return "";
+				}
+			}
+
+			function editRow(bookmark) {
+				const form = document.createElement("div");
+				form.className = "edit";
+				const title = field(bookmark.title);
+				const url = field(bookmark.url);
+				const tags = field((bookmark.tags || []).join(", "));
+				const saveButton = textButton("Save", () => {
+					updateBookmark(bookmark._id, {
+						title: title.value,
+						url: url.value,
+						tags: parseTags(tags.value),
+						projects: bookmark.projects || [],
+					});
+				});
+				const cancel = textButton("Cancel", () => {
+					editingId = null;
+					render(bookmarks);
+				});
+				form.append(title, url, tags, saveButton, cancel);
+				return form;
+			}
+
+			function field(value) {
+				const input = document.createElement("input");
+				input.value = value;
+				input.defaultValue = value;
+				input.addEventListener("input", () => {
+					input.defaultValue = input.value;
+				});
+				return input;
+			}
+
+			function textButton(label, onClick) {
+				const button = document.createElement("button");
+				button.type = "button";
+				button.textContent = label;
+				button.addEventListener("click", onClick);
+				return button;
+			}
+
+			function client() {
+				if (window.launchClient) return window.launchClient;
+				document.getElementById("status").textContent = "Still connecting.";
+				return null;
+			}
+
+			function createBookmark(args) {
+				const convex = client();
+				if (!convex) return false;
+				convex.mutation("launch:create", {
+					title: args.title,
+					url: args.url,
+					tags: args.tags || [],
+				});
+				return true;
+			}
+
+			function updateBookmark(id, args) {
+				const convex = client();
+				if (!convex) return;
+				convex.mutation("launch:update", {
+					id,
+					title: args.title,
+					url: args.url,
+					tags: args.tags || [],
+					projects: args.projects || [],
+				});
+				editingId = null;
+				render(bookmarks);
+			}
+
+			function removeBookmark(id) {
+				const convex = client();
+				if (!convex) return;
+				convex.mutation("launch:remove", { id });
+			}
+
+			function recordClick(id) {
+				const convex = window.launchClient;
+				if (!convex) return;
+				convex.mutation("launch:click", { id });
+			}
+
+			window.applyBookmarks = function apply(next) {
+				save(next);
+				if (window.launchModel) renderProjects();
+			};
+		</script>
+		<script type="module">
+			import { ConvexClient } from "https://esm.sh/convex@1.42.3/browser";
+			import * as launchModel from "./launch-model.mjs";
+			window.launchModel = launchModel;
+
+			const status = document.getElementById("status");
+			const config = await fetch("/api/launch-config").then((response) => response.json());
+			const client = new ConvexClient(config.convexUrl);
+			window.launchClient = client;
+			client.onUpdate("launch:listProjects", {}, (projects) => {
+				window.launchProjects = projects;
+				renderProjects();
+			});
+			client.onUpdate(
+				"launch:list",
+				{},
+				(next) => {
+					window.applyBookmarks(next);
+					status.textContent = "";
+				},
+				() => {
+					status.textContent = "Showing the saved copy.";
+				},
+			);
+		</script>
+	</body>
+</html>
