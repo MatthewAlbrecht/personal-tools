@@ -288,6 +288,7 @@ export default defineSchema({
 		lyricsOverride: v.optional(v.string()),
 		aboutOverride: v.optional(v.string()),
 		durationSecondsOverride: v.optional(v.number()),
+		albumArtUrlOverride: v.optional(v.string()),
 		hiddenCreditLabels: v.optional(v.array(v.string())),
 		shownCreditLabels: v.optional(v.array(v.string())),
 		zineLyricsColumnCount: v.optional(v.union(v.literal(1), v.literal(2))),

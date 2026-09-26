@@ -5,7 +5,7 @@ export function buildAlbumZineSongInput({
 	album,
 	song,
 }: {
-	album: { albumTitle: string; artistName: string };
+	album: { albumTitle: string; artistName: string; albumArtUrl?: string };
 	song: {
 		id: string;
 		trackNumber: number;
@@ -20,6 +20,7 @@ export function buildAlbumZineSongInput({
 		hiddenCreditLabels?: string[];
 		shownCreditLabels?: string[];
 		zinePageRecommendations?: ZinePageRecommendation[];
+		albumArtUrlOverride?: string;
 	};
 }): ZineSongDisplayInput {
 	const trackIntro =
@@ -32,7 +33,8 @@ export function buildAlbumZineSongInput({
 		artistName: album.artistName || "Unknown artist",
 		albumTitle: album.albumTitle || undefined,
 		albumYear: undefined,
-		albumArtUrl: undefined,
+		albumArtUrl:
+			song.albumArtUrlOverride?.trim() || album.albumArtUrl?.trim() || undefined,
 		durationSeconds: song.durationSecondsOverride,
 		userNote: undefined,
 		introContent: trackIntro,

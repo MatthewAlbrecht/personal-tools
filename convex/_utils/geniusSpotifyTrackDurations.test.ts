@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+	buildGeniusTrackAlbumArtPatch,
 	matchGeniusSongToSpotifyTrack,
 	mergeSpotifyAlbumTrackDurations,
 	normalizeTrackTitleForMatch,
@@ -86,4 +87,13 @@ test("parseSpotifyAlbumRawDataTracks reads track durations from album rawData", 
 		{ trackNumber: 1, trackName: "Theme", durationSeconds: 94 },
 		{ trackNumber: 2, trackName: "Cold Blooded", durationSeconds: 183 },
 	]);
+});
+
+test("buildGeniusTrackAlbumArtPatch copies the mapped album image", () => {
+	assert.deepEqual(
+		buildGeniusTrackAlbumArtPatch(" https://i.scdn.co/cover.jpg "),
+		{ albumArtUrlOverride: "https://i.scdn.co/cover.jpg" },
+	);
+	assert.deepEqual(buildGeniusTrackAlbumArtPatch(undefined), {});
+	assert.deepEqual(buildGeniusTrackAlbumArtPatch("   "), {});
 });

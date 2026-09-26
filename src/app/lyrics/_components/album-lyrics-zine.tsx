@@ -103,6 +103,7 @@ export function AlbumLyricsZine({ slug, variant }: AlbumLyricsZineProps) {
 			album: {
 				albumTitle: displayAlbumTitle,
 				artistName: displayArtistName,
+				albumArtUrl: albumData.album.albumArtUrl,
 			},
 			song: {
 				id: song._id,
@@ -115,6 +116,7 @@ export function AlbumLyricsZine({ slug, variant }: AlbumLyricsZineProps) {
 				lyricsOverride: song.lyricsOverride,
 				aboutOverride: song.aboutOverride,
 				durationSecondsOverride: song.durationSecondsOverride,
+				albumArtUrlOverride: song.albumArtUrlOverride,
 				hiddenCreditLabels: song.hiddenCreditLabels,
 				shownCreditLabels: song.shownCreditLabels,
 				zinePageRecommendations: song.zinePageRecommendations,

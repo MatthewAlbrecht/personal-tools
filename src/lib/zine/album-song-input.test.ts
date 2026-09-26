@@ -4,7 +4,11 @@ import { buildAlbumZineSongInput } from "./album-song-input";
 
 test("maps a genius song to zine song input with album artist", () => {
 	const result = buildAlbumZineSongInput({
-		album: { albumTitle: "Twenty", artistName: "Taking Back Sunday" },
+		album: {
+			albumTitle: "Twenty",
+			artistName: "Taking Back Sunday",
+			albumArtUrl: "https://i.scdn.co/twenty.jpg",
+		},
 		song: {
 			id: "song1",
 			trackNumber: 9,
@@ -20,7 +24,7 @@ test("maps a genius song to zine song input with album artist", () => {
 	assert.equal(result.artistName, "Taking Back Sunday");
 	assert.equal(result.albumTitle, "Twenty");
 	assert.equal(result.albumYear, undefined);
-	assert.equal(result.albumArtUrl, undefined);
+	assert.equal(result.albumArtUrl, "https://i.scdn.co/twenty.jpg");
 	assert.equal(result.userNote, undefined);
 	assert.equal(result.durationSeconds, undefined);
 	assert.equal(result.introContent, "context");

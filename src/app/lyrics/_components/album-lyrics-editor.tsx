@@ -587,6 +587,7 @@ export function AlbumLyricsEditor({ slug }: { slug: string }): ReactElement {
 							<AlbumTrackEditor
 								key={song._id}
 								song={song}
+								albumArtUrl={album.albumArtUrl}
 								boostedDuration={durationBoosts[song._id]}
 								expanded={expandedTrackId === song._id}
 								onToggle={() =>
@@ -690,6 +691,7 @@ export function AlbumLyricsEditor({ slug }: { slug: string }): ReactElement {
 					albumTitle: displayTitle,
 					artistName: displayArtist,
 				}}
+				userId={userId ?? undefined}
 				open={spotifyMapDrawerOpen}
 				onOpenChange={setSpotifyMapDrawerOpen}
 				onSelect={handleMapSpotifyAlbum}
@@ -730,6 +732,7 @@ export function AlbumLyricsEditor({ slug }: { slug: string }): ReactElement {
 
 function AlbumTrackEditor({
 	song,
+	albumArtUrl,
 	boostedDuration,
 	expanded,
 	onToggle,
@@ -739,6 +742,7 @@ function AlbumTrackEditor({
 	recommendationsUserId,
 }: {
 	song: Song;
+	albumArtUrl?: string;
 	boostedDuration?: number;
 	expanded: boolean;
 	onToggle: () => void;
@@ -758,11 +762,11 @@ function AlbumTrackEditor({
 			artist: "",
 			album: "",
 			durationInput: formatTrackDurationInput(effectiveDuration),
-			albumArtUrl: "",
+			albumArtUrl: song.albumArtUrlOverride ?? albumArtUrl ?? "",
 			intro: song.aboutOverride ?? "",
 			note: "",
 		};
-	}, [song, effectiveDuration]);
+	}, [song, albumArtUrl, effectiveDuration]);
 
 	const [hiddenCreditLabels, setHiddenCreditLabels] = useState(
 		song.hiddenCreditLabels ?? [],
@@ -791,10 +795,12 @@ function AlbumTrackEditor({
 			songTitleOverride: string;
 			aboutOverride: string;
 			durationSecondsOverride?: number | null;
+			albumArtUrlOverride: string | null;
 		} = {
 			songId: song._id,
 			songTitleOverride: resolveSongTitleOverride(fields.title, song.songTitle),
 			aboutOverride: fields.intro,
+			albumArtUrlOverride: fields.albumArtUrl.trim() || null,
 		};
 
 		if (durationSecondsOverride !== undefined) {
@@ -895,9 +901,10 @@ function AlbumTrackEditor({
 			}
 			placeholders={{
 				title: song.songTitle,
+				albumArtUrl,
 				intro: song.about?.trim() || undefined,
 			}}
-			showArtistAlbumArt={false}
+			showArtistAlbumArt={true}
 			showNote={false}
 			credits={song.credits ?? []}
 			hiddenCreditLabels={hiddenCreditLabels}

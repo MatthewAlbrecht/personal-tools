@@ -22,12 +22,14 @@ type AlbumForMapping = {
 
 export function SpotifyAlbumMapDrawer({
 	album,
+	userId,
 	open,
 	onOpenChange,
 	onSelect,
 	isMapping,
 }: {
 	album: AlbumForMapping | null;
+	userId?: string;
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 	onSelect: (spotifyAlbumId: string) => Promise<void>;
@@ -63,7 +65,7 @@ export function SpotifyAlbumMapDrawer({
 
 	const spotifyAlbums = useQuery(
 		api.geniusAlbums.searchSpotifyAlbumsForMapping,
-		open ? { search: searchArg, limit: 50 } : "skip",
+		open && userId ? { userId, search: searchArg, limit: 50 } : "skip",
 	);
 
 	return (
@@ -88,7 +90,11 @@ export function SpotifyAlbumMapDrawer({
 					</div>
 				</DrawerHeader>
 				<div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-					{spotifyAlbums === undefined ? (
+					{!userId ? (
+						<p className="text-muted-foreground text-sm">
+							Sign in to search your album library.
+						</p>
+					) : spotifyAlbums === undefined ? (
 						<p className="text-muted-foreground text-sm">Loading albums...</p>
 					) : spotifyAlbums.length === 0 ? (
 						<p className="text-muted-foreground text-sm">

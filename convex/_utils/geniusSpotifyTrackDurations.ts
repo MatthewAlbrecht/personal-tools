@@ -30,6 +30,17 @@ type GeniusSongForDurationMatch = {
 	durationSecondsOverride?: number;
 };
 
+export function buildGeniusTrackAlbumArtPatch(
+	imageUrl: string | undefined,
+): { albumArtUrlOverride?: string } {
+	const trimmed = imageUrl?.trim();
+	if (!trimmed) {
+		return {};
+	}
+
+	return { albumArtUrlOverride: trimmed };
+}
+
 export function normalizeTrackTitleForMatch(title: string): string {
 	return title
 		.trim()

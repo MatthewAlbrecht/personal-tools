@@ -25,6 +25,7 @@ import {
 	slugify,
 } from "./_utils/geniusParser";
 import {
+	buildGeniusTrackAlbumArtPatch,
 	type SyncTrackDurationsResult,
 	syncGeniusAlbumTrackDurationsFromSpotify,
 } from "./_utils/geniusSpotifyTrackDurations";
@@ -510,6 +511,7 @@ export const updateSongOverrides = mutation({
 		lyricsOverride: v.optional(v.string()),
 		aboutOverride: v.optional(v.string()),
 		durationSecondsOverride: v.optional(v.union(v.number(), v.null())),
+		albumArtUrlOverride: v.optional(v.union(v.string(), v.null())),
 		hiddenCreditLabels: v.optional(v.array(v.string())),
 		shownCreditLabels: v.optional(v.array(v.string())),
 		zinePageRecommendations: v.optional(zinePageRecommendationsValidator),
@@ -525,6 +527,7 @@ export const updateSongOverrides = mutation({
 			lyricsOverride?: string;
 			aboutOverride?: string;
 			durationSecondsOverride?: number;
+			albumArtUrlOverride?: string;
 			hiddenCreditLabels?: string[];
 			shownCreditLabels?: string[];
 			zinePageRecommendations?: ReturnType<
@@ -546,6 +549,12 @@ export const updateSongOverrides = mutation({
 				args.durationSecondsOverride === null
 					? undefined
 					: args.durationSecondsOverride;
+		}
+		if (args.albumArtUrlOverride !== undefined) {
+			patch.albumArtUrlOverride =
+				args.albumArtUrlOverride === null
+					? undefined
+					: normalizeOptionalString(args.albumArtUrlOverride);
 		}
 		if (args.hiddenCreditLabels !== undefined) {
 			patch.hiddenCreditLabels = normalizeCreditLabelList(
@@ -672,6 +681,7 @@ const spotifyAlbumSearchRowValidator = v.object({
 
 export const searchSpotifyAlbumsForMapping = query({
 	args: {
+		userId: v.string(),
 		search: v.optional(v.string()),
 		limit: v.optional(v.number()),
 	},
@@ -682,11 +692,18 @@ export const searchSpotifyAlbumsForMapping = query({
 		const limit = Math.min(Math.max(args.limit ?? 50, 1), 100);
 		const searchTerm = args.search?.trim() ?? "";
 
-		const albums = await ctx.db
-			.query("spotifyAlbums")
-			.withIndex("by_createdAt")
-			.order("desc")
-			.take(500);
+		const rows = searchTerm
+			? await ctx.db
+					.query("albumLibraryItems")
+					.withSearchIndex("search_albumLibraryItems", (q) =>
+						q.search("searchText", searchTerm).eq("userId", args.userId),
+					)
+					.take(limit)
+			: await ctx.db
+					.query("albumLibraryItems")
+					.withIndex("by_userId_createdAt", (q) => q.eq("userId", args.userId))
+					.order("desc")
+					.take(limit);
 
 		const results: Array<{
 			albumId: Id<"spotifyAlbums">;
@@ -697,24 +714,18 @@ export const searchSpotifyAlbumsForMapping = query({
 			releaseDate?: string;
 		}> = [];
 
-		for (const album of albums) {
-			if (!album.spotifyAlbumId) {
-				continue;
-			}
-			if (!spotifyAlbumMatchesSearch(album, searchTerm)) {
+		for (const row of rows) {
+			if (!row.spotifyAlbumId) {
 				continue;
 			}
 			results.push({
-				albumId: album._id,
-				spotifyAlbumId: album.spotifyAlbumId,
-				name: album.name,
-				artistName: album.artistName,
-				...(album.imageUrl ? { imageUrl: album.imageUrl } : {}),
-				...(album.releaseDate ? { releaseDate: album.releaseDate } : {}),
+				albumId: row.albumId,
+				spotifyAlbumId: row.spotifyAlbumId,
+				name: row.name,
+				artistName: row.artistName,
+				...(row.imageUrl ? { imageUrl: row.imageUrl } : {}),
+				...(row.releaseDate ? { releaseDate: row.releaseDate } : {}),
 			});
-			if (results.length >= limit) {
-				break;
-			}
 		}
 
 		return results;
@@ -1767,20 +1778,6 @@ function splitArtistNames(value: string): string[] {
 		.filter(Boolean);
 }
 
-function spotifyAlbumMatchesSearch(
-	album: Doc<"spotifyAlbums">,
-	searchTerm: string,
-): boolean {
-	const term = searchTerm.trim().toLowerCase();
-	if (!term) {
-		return true;
-	}
-
-	const name = album.name.toLowerCase();
-	const artistName = album.artistName.toLowerCase();
-	return name.includes(term) || artistName.includes(term);
-}
-
 function buildSpotifyAlbumArtistKeys(album: Doc<"spotifyAlbums">): string[] {
 	const parsedArtistNames = parseSpotifyAlbumArtistNames(album.rawData);
 	if (parsedArtistNames.length > 0) {
@@ -1817,13 +1814,28 @@ async function patchSpotifyAlbumMapping(
 		now: number;
 	},
 ): Promise<void> {
+	const spotifyAlbum = await ctx.db.get(args.spotifyAlbumConvexId);
+	const albumArtUrl = normalizeOptionalString(spotifyAlbum?.imageUrl);
+	const trackArtPatch = buildGeniusTrackAlbumArtPatch(albumArtUrl);
+
 	await ctx.db.patch(args.albumId, {
 		spotifyAlbumConvexId: args.spotifyAlbumConvexId,
 		spotifyAlbumId: args.spotifyAlbumId,
 		spotifyAlbumMatchMethod: args.method,
 		spotifyAlbumMatchedAt: args.now,
 		updatedAt: args.now,
+		...(albumArtUrl ? { albumArtUrl } : {}),
 	});
+
+	if (trackArtPatch.albumArtUrlOverride) {
+		const songs = await ctx.db
+			.query("geniusSongs")
+			.withIndex("by_albumId", (q) => q.eq("albumId", args.albumId))
+			.collect();
+		for (const song of songs) {
+			await ctx.db.patch(song._id, trackArtPatch);
+		}
+	}
 }
 
 function appendDurationSyncToMappingReason(
