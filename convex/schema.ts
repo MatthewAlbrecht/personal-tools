@@ -5,6 +5,10 @@ import {
 	enrichmentSliceKeyValidator,
 } from "./_utils/albumEnrichmentTrialValidators";
 import {
+	launchTagValidator,
+	projectMembershipValidator,
+} from "./_utils/launchLayout";
+import {
 	smartPlaylistFiltersValidator,
 	smartPlaylistSourceValidator,
 	smartPlaylistSyncModeValidator,
@@ -1764,4 +1768,28 @@ export default defineSchema({
 		),
 		sentAt: v.number(),
 	}).index("by_birthday_year_step", ["birthdayId", "occurrenceYear", "step"]),
+
+	launchProjects: defineTable({
+		name: v.string(),
+		position: v.optional(v.number()),
+		createdAt: v.number(),
+	}),
+
+	launchBookmarks: defineTable({
+		title: v.string(),
+		url: v.string(),
+		tags: v.array(launchTagValidator),
+		padPosition: v.optional(v.number()),
+		projects: v.array(projectMembershipValidator),
+		clickCount: v.number(),
+		lastClickedAt: v.optional(v.number()),
+		createdAt: v.number(),
+	}),
+
+	launchLayoutState: defineTable({
+		key: v.literal("default"),
+		version: v.number(),
+		recentOperationIds: v.array(v.string()),
+		updatedAt: v.number(),
+	}).index("by_key", ["key"]),
 });

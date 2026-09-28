@@ -1,0 +1,2732 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Launch</title>
+		<style>
+			:root {
+				color-scheme: light;
+				--bg: #f4f4f5;
+				--ink: #18181b;
+				--muted: #71717a;
+				--line: #e4e4e7;
+				--card: #ffffff;
+				--hover: #f4f4f5;
+			}
+			* { box-sizing: border-box; }
+			body {
+				margin: 0;
+				background: var(--bg);
+				color: var(--ink);
+				font: 13px/1.35 "SF Pro Text", "Segoe UI", sans-serif;
+			}
+			.board {
+				display: flex;
+				align-items: flex-start;
+				gap: 1.5rem;
+				padding: 1.25rem 0.85rem 3rem;
+			}
+			.column { width: 17.5rem; }
+			.project-head {
+				display: grid;
+				grid-template-columns: 24px minmax(0, 1fr) auto auto;
+				align-items: center;
+				gap: 0.15rem;
+				margin: 1.15rem 0 0.45rem;
+			}
+			.project-head h2 { min-width: 0; margin: 0; }
+			.plus {
+				display: grid;
+				place-items: center;
+				width: 1.5rem;
+				height: 1.5rem;
+				padding: 0;
+				border: 0;
+				border-radius: 0.4rem;
+				background: transparent;
+				color: var(--muted);
+				cursor: pointer;
+				font-size: 1rem;
+			}
+			.plus:hover { background: var(--hover); color: var(--ink); }
+			.plus[aria-pressed="true"] { color: var(--ink); }
+			#projects section.adding h2 { color: var(--ink); }
+			.add-project {
+				display: flex;
+				align-items: center;
+				justify-content: flex-start;
+				gap: 0.45rem;
+				width: 100%;
+				min-height: 2rem;
+				margin-top: 1rem;
+				padding: 0.35rem 0.5rem;
+				border: 1px solid transparent;
+				border-radius: 0.5rem;
+				background: transparent;
+				color: var(--muted);
+				cursor: pointer;
+				text-align: left;
+			}
+			button.add-project:hover { border-color: var(--line); background: var(--card); color: var(--ink); }
+			input, button { font: inherit; color: inherit; }
+			.edit input {
+				width: 100%;
+				height: 2rem;
+				border: 1px solid var(--line);
+				background: var(--card);
+				border-radius: 0.5rem;
+				padding: 0 0.6rem;
+			}
+			.edit input:focus {
+				outline: 2px solid #18181b;
+				outline-offset: 1px;
+				border-color: transparent;
+			}
+			h2 {
+				margin: 1.15rem 0 0.45rem;
+				font-size: 0.68rem;
+				font-weight: 600;
+				letter-spacing: 0.08em;
+				text-transform: uppercase;
+				color: var(--muted);
+			}
+			.top-grid {
+				display: grid;
+				grid-template-columns: repeat(4, 1fr);
+				gap: 0.4rem;
+			}
+			.tile-wrap { position: relative; }
+			.drag-handle {
+				position: relative;
+				display: grid;
+				place-items: center;
+				flex: none;
+				/*
+				 * Pointer Events snapshots touch-action at pointerdown. pan-y must
+				 * therefore be declared before contact: vertical movement can scroll
+				 * before pickup, while a stationary long-press can still be captured.
+				 * A later vertical move may be claimed by the browser and cancel drag.
+				 */
+				touch-action: pan-y;
+				padding: 0;
+				border: 0;
+				border-radius: 0.3rem;
+				background: transparent;
+				color: var(--muted);
+				cursor: grab;
+				font-size: 0.58rem;
+				line-height: 1;
+				opacity: 0;
+			}
+			.drag-handle::before {
+				position: absolute;
+				inset: -4px;
+				content: "";
+			}
+			/* :focus, not :focus-visible: a drop or rollback moves focus here
+			   programmatically after a pointer gesture, which Chromium does not
+			   treat as focus-visible, and an invisible focused control is a trap. */
+			.drag-handle:hover,
+			.drag-handle:focus {
+				background: var(--hover);
+				color: var(--ink);
+				opacity: 1;
+			}
+			.drag-handle:focus {
+				outline: 2px solid var(--ink);
+				outline-offset: 1px;
+			}
+			.tile-wrap > .drag-handle {
+				position: absolute;
+				top: 2px;
+				left: 2px;
+				z-index: 2;
+				width: 16px;
+				height: 16px;
+			}
+			/* Narrow tiles put their center within 1px of the handle's inner edges. */
+			.tile-wrap > .drag-handle::before {
+				top: -2px;
+				right: 0;
+				bottom: 0;
+				left: -2px;
+			}
+			.tile-wrap:hover > .drag-handle,
+			.row:hover > .drag-handle,
+			.project-head:hover > .drag-handle { opacity: 1; }
+			.row > .drag-handle {
+				width: 16px;
+				height: 24px;
+			}
+			.row > .drag-handle::before {
+				top: 0;
+				right: -4px;
+				bottom: 0;
+				left: -4px;
+			}
+			.project-head > .drag-handle {
+				width: 24px;
+				height: 24px;
+			}
+			.empty-drop-rail,
+			.empty-project-slot {
+				border: 1px dashed transparent;
+				border-radius: 0.6rem;
+			}
+			.launch-drag-overlay {
+				position: fixed;
+				z-index: 50;
+				display: grid;
+				place-items: center;
+				overflow: hidden;
+				border: 1px solid var(--line);
+				border-radius: 0.65rem;
+				background: var(--card);
+				box-shadow: 0 10px 24px rgb(24 24 27 / 0.16);
+				pointer-events: none;
+				will-change: transform;
+			}
+			.launch-drag-project-overlay {
+				width: auto;
+				height: 30px;
+				max-width: 13rem;
+				padding: 0 0.65rem;
+				border-radius: 0.45rem;
+				font-size: 0.68rem;
+				font-weight: 650;
+				letter-spacing: 0.06em;
+				text-transform: uppercase;
+				white-space: nowrap;
+			}
+			.launch-drag-placeholder {
+				flex: none;
+				border: 1px dashed var(--line);
+				border-radius: 0.6rem;
+			}
+			.launch-drop-slot {
+				width: 100%;
+				aspect-ratio: 1.15 / 1;
+				border: 1px dashed var(--ink);
+				border-radius: 0.6rem;
+			}
+			.launch-drop-rule {
+				width: 100%;
+				height: 2px;
+				background: var(--ink);
+			}
+			[data-drop-list][data-dnd-receiving="true"] {
+				outline: 1px solid var(--ink);
+				outline-offset: 3px;
+				border-radius: 0.5rem;
+			}
+			[data-pending="true"] {
+				outline: 1px dotted var(--muted);
+				outline-offset: 2px;
+			}
+			[data-dragging="true"] { pointer-events: none; }
+			@media (prefers-reduced-motion: reduce) {
+				.launch-drag-overlay,
+				.launch-drag-placeholder,
+				.launch-drop-slot,
+				.launch-drop-rule,
+				[data-dnd-receiving="true"] {
+					transition: none !important;
+					animation: none !important;
+				}
+			}
+			.top-grid > .empty-drop-rail,
+			.empty-project-slot {
+				width: 100%;
+				aspect-ratio: 1.15 / 1;
+			}
+			.row-list > .empty-drop-rail { height: 24px; }
+			/* The drop rule stays two pixels and never takes pointer events; the
+			   controller resolves the nearest gap from the pointer coordinates. */
+			.project-gap {
+				position: relative;
+				z-index: 1;
+				height: 2px;
+				margin: -1px 0;
+				pointer-events: none;
+			}
+			.visually-hidden {
+				position: absolute;
+				width: 1px;
+				height: 1px;
+				padding: 0;
+				margin: -1px;
+				overflow: hidden;
+				clip: rect(0, 0, 0, 0);
+				white-space: nowrap;
+				border: 0;
+			}
+			.status-region {
+				display: flex;
+				align-items: center;
+				gap: 0.35rem;
+			}
+			.status-region .status { margin-right: auto; }
+			.dismiss-status {
+				display: none;
+				border: 0;
+				background: transparent;
+				color: var(--muted);
+				cursor: pointer;
+			}
+			.status-region[data-persistent="true"] .dismiss-status { display: block; }
+			.tile {
+				position: relative;
+				display: grid;
+				place-items: center;
+				width: 100%;
+				aspect-ratio: 1.15 / 1;
+				padding: 0;
+				background: var(--card);
+				border: 1px solid var(--line);
+				border-radius: 0.75rem;
+				text-decoration: none;
+				cursor: pointer;
+			}
+			.tile:hover { background: #fafafa; }
+			.tile-wrap.env-local .tile {
+				border: 2px solid transparent;
+				background:
+					linear-gradient(var(--card), var(--card)) padding-box,
+					repeating-linear-gradient(
+						-45deg,
+						#facc15 0 5px,
+						#18181b 5px 10px
+					) border-box;
+			}
+			.env-label {
+				position: absolute;
+				right: 0.22rem;
+				bottom: 0.2rem;
+				z-index: 1;
+				padding: 0.05rem 0.28rem;
+				border: 1px solid var(--line);
+				border-radius: 0.3rem;
+				background: #f4f4f5;
+				color: var(--muted);
+				font-size: 0.55rem;
+				font-weight: 650;
+				letter-spacing: 0.04em;
+				line-height: 1.15;
+				text-transform: uppercase;
+				pointer-events: none;
+			}
+			.tile-wrap.env-prod .env-label {
+				border-color: var(--ink);
+				background: var(--ink);
+				color: #fafafa;
+			}
+			.count {
+				position: absolute;
+				top: 0.28rem;
+				right: 0.32rem;
+				font-size: 0.62rem;
+				font-weight: 600;
+				color: var(--muted);
+			}
+			.popover {
+				position: fixed;
+				z-index: 20;
+				width: 18rem;
+				padding: 0.4rem;
+				overflow: hidden;
+				background: var(--card);
+				border: 1px solid var(--line);
+				border-radius: 0.75rem;
+				box-shadow: 0 8px 24px rgb(24 24 27 / 0.08);
+				transform: translate(-50%, -50%);
+			}
+			.popover-grid {
+				display: grid;
+				grid-template-columns: 1fr 1fr;
+				gap: 0.35rem;
+			}
+			.choice {
+				position: relative;
+				min-width: 0;
+				border-radius: 0.55rem;
+				background: var(--bg);
+			}
+			.choice a {
+				display: block;
+				min-height: 3.4rem;
+				padding: 0.45rem 0.4rem 1.15rem;
+				color: inherit;
+				text-decoration: none;
+			}
+			.choice .title {
+				display: -webkit-box;
+				overflow: hidden;
+				-webkit-box-orient: vertical;
+				-webkit-line-clamp: 3;
+				font-size: 0.72rem;
+				font-weight: 550;
+				line-height: 1.25;
+				text-align: center;
+				overflow-wrap: anywhere;
+			}
+			.choice.active { background: #ececee; }
+			.choice .rename {
+				font-size: 0.72rem;
+				text-align: center;
+			}
+			a.pin {
+				display: flex;
+				align-items: center;
+				gap: 0.5rem;
+				min-width: 0;
+				flex: 1;
+				padding: 0.32rem 0.35rem;
+				color: inherit;
+				text-decoration: none;
+				border-radius: 0.45rem;
+			}
+			a.pin .title {
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+				font-weight: 500;
+			}
+			.row:hover a.pin,
+			.row.active a.pin { background: var(--hover); }
+			.url, .meta, .empty, .status {
+				color: var(--muted);
+				font-size: 0.75rem;
+			}
+			.row {
+				display: flex;
+				align-items: center;
+			}
+			.mark {
+				width: 16px;
+				height: 16px;
+				flex: none;
+			}
+			.mark.lg {
+				width: 22px;
+				height: 22px;
+				font-size: 0.75rem;
+			}
+			.mark.letter {
+				display: grid;
+				place-items: center;
+				border-radius: 4px;
+				background: var(--hover);
+				color: var(--muted);
+				font-size: 0.65rem;
+				font-weight: 600;
+			}
+			.meatball {
+				display: grid;
+				place-items: center;
+				width: 1.35rem;
+				height: 1.35rem;
+				padding: 0;
+				border: 0;
+				border-radius: 0.35rem;
+				background: transparent;
+				color: var(--muted);
+				cursor: pointer;
+			}
+			.meatball:hover { background: var(--hover); color: var(--ink); }
+			.menu {
+				position: fixed;
+				z-index: 30;
+				width: 18.5rem;
+				padding: 0;
+				overflow: hidden;
+				background: var(--card);
+				border: 1px solid var(--line);
+				border-radius: 0.75rem;
+				box-shadow: 0 12px 32px rgb(24 24 27 / 0.1);
+			}
+			.menu-head {
+				display: flex;
+				align-items: center;
+				gap: 0.65rem;
+				padding: 0.7rem 0.75rem;
+				border-bottom: 1px solid var(--line);
+				background: linear-gradient(135deg, #fafafa, #fff 60%);
+			}
+			.menu-head .mark.lg {
+				width: 30px;
+				height: 30px;
+				border-radius: 6px;
+				font-size: 0.8rem;
+			}
+			.menu-head .copy { min-width: 0; }
+			.menu-head .name {
+				margin: 0;
+				font-size: 0.85rem;
+				font-weight: 600;
+				line-height: 1.15;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+			}
+			.menu-head .url {
+				margin: 0.08rem 0 0;
+				color: var(--muted);
+				font-size: 0.7rem;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+			}
+			.menu-actions { padding: 0.3rem; }
+			.menu button {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				gap: 0.75rem;
+				width: 100%;
+				padding: 0.42rem 0.55rem;
+				border: 0;
+				border-radius: 0.4rem;
+				background: transparent;
+				text-align: left;
+				cursor: pointer;
+			}
+			.menu button:hover { background: var(--hover); }
+			.menu button.danger { color: #b91c1c; }
+			.menu button.danger:hover { background: #fef2f2; }
+			.menu kbd,
+			.popover kbd {
+				display: inline-flex;
+				align-items: center;
+				justify-content: center;
+				min-width: 1.15rem;
+				height: 1.15rem;
+				padding: 0 0.28rem;
+				border: 1px solid #d4d4d8;
+				border-radius: 0.3rem;
+				background: linear-gradient(#fff, #f4f4f5);
+				box-shadow: 0 1px 0 #fff inset, 0 1px 0 #d4d4d8;
+				color: #52525b;
+				font: 600 0.65rem/1 ui-monospace, "SF Mono", Menlo, monospace;
+			}
+			.popover.group-picker button {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				gap: 0.75rem;
+				width: 100%;
+				padding: 0.45rem 0.7rem;
+				border: 0;
+				border-radius: 0.4rem;
+				background: transparent;
+				text-align: left;
+				cursor: pointer;
+			}
+			.popover.group-picker button:hover { background: var(--hover); }
+			.menu hr {
+				margin: 0.2rem 0.35rem;
+				border: 0;
+				border-top: 1px solid var(--line);
+			}
+			.rename {
+				width: 100%;
+				height: auto;
+				margin: 0;
+				padding: 0;
+				border: 0;
+				border-radius: 0;
+				background: transparent;
+				font: inherit;
+				font-weight: 500;
+			}
+			.rename:focus { outline: none; }
+			.edit button {
+				border: 0;
+				background: transparent;
+				padding: 0;
+				color: var(--muted);
+				cursor: pointer;
+			}
+			.edit button:hover { color: var(--ink); }
+			.edit {
+				display: grid;
+				gap: 0.4rem;
+				margin-top: 0.45rem;
+			}
+			.empty { margin: 0; }
+			.tags { font-size: 0.75rem; color: var(--muted); }
+			.add-dialog-overlay {
+				position: fixed;
+				inset: 0;
+				z-index: 40;
+				display: grid;
+				place-items: center;
+				padding: 1rem;
+				background: rgb(24 24 27 / 0.45);
+			}
+			.add-dialog {
+				width: min(100%, 22rem);
+				overflow: hidden;
+				background: var(--card);
+				border: 1px solid var(--line);
+				border-radius: 0.85rem;
+				box-shadow: 0 18px 48px rgb(24 24 27 / 0.18);
+			}
+			.add-dialog-head {
+				padding: 1rem 1rem 0.75rem;
+				border-bottom: 1px solid var(--line);
+			}
+			.add-dialog-head h3 {
+				margin: 0;
+				font-size: 0.95rem;
+				font-weight: 650;
+			}
+			.add-dialog-head p {
+				margin: 0.25rem 0 0;
+				color: var(--muted);
+				font-size: 0.75rem;
+			}
+			.add-dialog-body {
+				display: grid;
+				gap: 0.65rem;
+				padding: 0.85rem 1rem;
+			}
+			.add-dialog-preview {
+				display: flex;
+				align-items: center;
+				gap: 0.65rem;
+				min-height: 2.75rem;
+				padding: 0.55rem 0.65rem;
+				border: 1px solid var(--line);
+				border-radius: 0.65rem;
+				background: #fafafa;
+			}
+			.add-dialog-preview .copy { min-width: 0; }
+			.add-dialog-preview .name {
+				margin: 0;
+				font-size: 0.82rem;
+				font-weight: 600;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+			}
+			.add-dialog-preview .hint {
+				margin: 0.1rem 0 0;
+				color: var(--muted);
+				font-size: 0.68rem;
+			}
+			.add-dialog label {
+				display: grid;
+				gap: 0.28rem;
+				color: var(--muted);
+				font-size: 0.68rem;
+				font-weight: 600;
+				letter-spacing: 0.04em;
+				text-transform: uppercase;
+			}
+			.add-dialog input {
+				width: 100%;
+				height: 2.1rem;
+				border: 1px solid var(--line);
+				border-radius: 0.5rem;
+				background: var(--card);
+				padding: 0 0.65rem;
+				color: var(--ink);
+				text-transform: none;
+				letter-spacing: normal;
+				font-weight: 450;
+				font-size: 0.82rem;
+			}
+			.add-dialog input:focus {
+				outline: 2px solid #18181b;
+				outline-offset: 1px;
+				border-color: transparent;
+			}
+			.add-dialog-foot {
+				display: flex;
+				flex-wrap: wrap;
+				justify-content: flex-end;
+				align-items: center;
+				gap: 0.4rem;
+				padding: 0 1rem 1rem;
+			}
+			.add-dialog-foot .cancel { margin-right: auto; }
+			.add-dialog-foot button {
+				height: 2rem;
+				padding: 0 0.75rem;
+				border: 0;
+				border-radius: 0.5rem;
+				background: transparent;
+				color: var(--muted);
+				cursor: pointer;
+				font-size: 0.78rem;
+			}
+			.add-dialog-foot button:hover { color: var(--ink); }
+			.add-dialog-foot .secondary {
+				border: 1px solid var(--line);
+				color: var(--ink);
+			}
+			.add-dialog-foot .secondary:hover { background: var(--hover); }
+			.add-dialog-foot .secondary:disabled {
+				opacity: 0.45;
+				cursor: default;
+			}
+			.add-dialog-foot .primary {
+				background: var(--ink);
+				color: #fafafa;
+			}
+			.add-dialog-foot .primary:hover { color: #fafafa; }
+			.add-dialog-foot .primary:disabled {
+				opacity: 0.45;
+				cursor: default;
+			}
+			.add-dialog-groups {
+				display: grid;
+				gap: 0.2rem;
+				max-height: 14rem;
+				overflow: auto;
+			}
+			.add-dialog-groups button {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				gap: 0.75rem;
+				width: 100%;
+				padding: 0.5rem 0.65rem;
+				border: 1px solid transparent;
+				border-radius: 0.5rem;
+				background: transparent;
+				text-align: left;
+				cursor: pointer;
+				font-size: 0.82rem;
+			}
+			.add-dialog-groups button:hover { background: var(--hover); }
+			.add-dialog-groups button[aria-pressed="true"] {
+				background: #f4f4f5;
+				border-color: var(--line);
+				font-weight: 550;
+			}
+			.add-dialog-groups .check {
+				min-width: 1rem;
+				color: var(--muted);
+				font-size: 0.75rem;
+			}
+			.add-dialog-groups button[aria-pressed="true"] .check { color: var(--ink); }
+			.add-dialog-empty {
+				margin: 0.35rem 0;
+				color: var(--muted);
+				font-size: 0.78rem;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="board">
+			<main class="column" id="pad" tabindex="-1" aria-label="Pad">
+				<div id="list"></div>
+				<div class="status-region" id="status-region">
+					<p class="status" id="status"></p>
+					<button class="dismiss-status" id="dismiss-status" type="button" aria-label="Dismiss status">×</button>
+				</div>
+			</main>
+			<aside class="column" id="projects"></aside>
+		</div>
+		<p class="visually-hidden" id="launch-dnd-live" aria-live="polite" aria-atomic="true"></p>
+		<script>
+			const STORAGE_KEY = "launch-bookmarks";
+			const PROJECTS_STORAGE_KEY = "launch-projects";
+			const LAYOUT_STORAGE_KEY = "launch-layout-v2";
+			const initialLayout = loadInitialLayout();
+			let confirmed = initialLayout;
+			let pendingOperations = [];
+			let view = confirmed;
+			let bookmarks = view.bookmarks;
+			window.launchProjects = view.projects;
+			let editingId = null;
+			let popover = null;
+			let menu = null;
+			let hoveredId = null;
+			let keyboardTargetId = null;
+			let addingProjectId = null;
+			let addDialog = null;
+			let launchDndController = null;
+			let layoutStore = null;
+			let layoutStoreFailed = false;
+			let bufferedDropOperations = [];
+			let dragPreviewBase = null;
+			const faviconBust = {};
+			const SAVING_STATUS = "Saving order…";
+			const OFFLINE_STATUS = "You’re offline. Reconnect, then try the move again.";
+			const UNSAVED_STATUS = "Couldn’t save that move. Your previous order is restored.";
+
+			function isPickupBlocked() {
+				return Boolean(
+					menu || popover || addDialog || addingProjectId ||
+					document.activeElement instanceof HTMLInputElement ||
+					document.activeElement instanceof HTMLTextAreaElement,
+				);
+			}
+
+			function cancelDragForInteraction() {
+				launchDndController?.cancel();
+			}
+
+			document.getElementById("dismiss-status").addEventListener("click", () => {
+				document.getElementById("status").textContent = "";
+				document.getElementById("status-region").removeAttribute("data-persistent");
+			});
+			window.addEventListener("offline", handleLayoutOffline);
+			window.addEventListener("online", handleLayoutOnline);
+
+			document.addEventListener("pointerdown", (event) => {
+				if (addDialog && event.target === addDialog) closeAddLinkDialog();
+				if (menu && !menu.contains(event.target) && !event.target.closest(".meatball")) closeMenu();
+				if (popover && !popover.contains(event.target) && !event.target.closest(".tile")) closePopover();
+			});
+			document.addEventListener("keydown", (event) => {
+				if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+					if (event.key === "Escape" && addDialog) {
+						event.preventDefault();
+						closeAddLinkDialog();
+					}
+					return;
+				}
+				if (event.metaKey || event.ctrlKey || event.altKey) return;
+				if (popover?.dataset?.kind === "environment") {
+					if (event.key === "Escape") {
+						event.preventDefault();
+						closePopover();
+						return;
+					}
+					const nextEnv = window.launchModel?.environmentForShortcut(event.key);
+					if (nextEnv !== undefined) {
+						event.preventDefault();
+						applyProjectEnvironment(
+							popover.dataset.bookmarkId,
+							popover.dataset.projectId,
+							nextEnv,
+						);
+						closePopover();
+					}
+					return;
+				}
+				if (event.key === "c") {
+					event.preventDefault();
+					openAddLinkDialog();
+					return;
+				}
+				const focusId = window.launchModel
+					? window.launchModel.resolveKeyboardTargetId({
+							pinnedId: keyboardTargetId,
+							hoveredId,
+							menuId: menu?.dataset?.id || null,
+						})
+					: keyboardTargetId || hoveredId || menu?.dataset?.id || null;
+				if (event.key === "a" && focusId) {
+					event.preventDefault();
+					startRename(focusId);
+					return;
+				}
+				if (event.key === "l" && focusId) {
+					event.preventDefault();
+					startUrlEdit(focusId);
+					return;
+				}
+				if (event.key === "g" && focusId) {
+					event.preventDefault();
+					const bookmark = bookmarks.find((item) => item._id === focusId);
+					const anchor =
+						document.querySelector(`.active[data-id="${focusId}"]`) ||
+						document.querySelector(".active");
+					if (bookmark) openGroupPicker(bookmark, anchor);
+					return;
+				}
+				if (event.key === "e" && focusId) {
+					const active =
+						document.querySelector(`.active[data-id="${focusId}"]`) ||
+						document.querySelector(".active");
+					const projectId = active?.dataset.projectId;
+					if (!projectId) return;
+					event.preventDefault();
+					const bookmark = bookmarks.find((item) => item._id === focusId);
+					if (bookmark) openEnvironmentPicker(bookmark, projectId, active);
+					return;
+				}
+				if (event.key === "Escape") {
+					if (addDialog) {
+						closeAddLinkDialog();
+						return;
+					}
+					if (addingProjectId) {
+						addingProjectId = null;
+						renderProjects();
+						return;
+					}
+					if (menu) {
+						closeMenu();
+						return;
+					}
+					closePopover();
+				}
+			});
+
+			render(bookmarks);
+			renderProjects();
+			scheduleLaunchDnd();
+
+			function scheduleLaunchDnd() {
+				function loadLaunchDnd() {
+					if (new URL(window.location.href).searchParams.get("launch-dnd") === "0") return;
+					try {
+						if (localStorage.getItem("launch-dnd-disabled") === "1") return;
+					} catch {
+						/* storage access must not affect the fallback page */
+					}
+					import("./launch-dnd.mjs")
+						.then(({ initializeLaunchDnd }) => {
+							launchDndController = initializeLaunchDnd({
+								document,
+								window,
+								pad: document.getElementById("pad"),
+								projects: document.getElementById("projects"),
+								isPickupBlocked,
+								getLayout() {
+									return view;
+								},
+								onPreview(_operation, result) {
+									previewDndLayout(result);
+								},
+								onDrop(operation) {
+									commitDndDrop(operation);
+								},
+								onCancel() {
+									cancelDndPreview();
+								},
+							});
+							window.launchDndController = launchDndController;
+						})
+						.catch(() => {
+							/* enhancement is optional; preserve the complete fallback page */
+						});
+				}
+				if (window.requestAnimationFrame) window.requestAnimationFrame(loadLaunchDnd);
+				else window.setTimeout(loadLaunchDnd, 0);
+			}
+
+			function loadInitialLayout() {
+				try {
+					const saved = localStorage.getItem(LAYOUT_STORAGE_KEY);
+					const snapshot = saved ? JSON.parse(saved) : null;
+					if (
+						snapshot?.schemaVersion === 2 &&
+						Number.isFinite(snapshot.layoutVersion) &&
+						Array.isArray(snapshot.bookmarks) &&
+						Array.isArray(snapshot.projects)
+					) {
+						return {
+							version: snapshot.layoutVersion,
+							bookmarks: snapshot.bookmarks,
+							projects: snapshot.projects,
+						};
+					}
+				} catch {
+					/* fall through to the one-release legacy cache */
+				}
+				let legacyBookmarks = [];
+				let legacyProjects = [];
+				try {
+					const saved = localStorage.getItem(STORAGE_KEY);
+					legacyBookmarks = saved ? JSON.parse(saved) : [];
+				} catch {
+					/* preserve functional rendering */
+				}
+				try {
+					const saved = localStorage.getItem(PROJECTS_STORAGE_KEY);
+					legacyProjects = saved ? JSON.parse(saved) : [];
+				} catch {
+					/* preserve functional rendering */
+				}
+				return inferLegacyInitialLayout(legacyBookmarks, legacyProjects);
+			}
+
+			function inferLegacyInitialLayout(legacyBookmarks, legacyProjects) {
+				let bookmarks = Array.isArray(legacyBookmarks)
+					? legacyBookmarks.map((bookmark) => ({
+							...bookmark,
+							tags: (bookmark.tags || []).includes("top") ? ["top"] : ["pinned"],
+							projects: (bookmark.projects || []).map((membership) => ({ ...membership })),
+						}))
+					: [];
+				for (const zone of ["top", "pinned"]) {
+					const ordered = bookmarks
+						.filter((bookmark) => bookmark.tags[0] === zone)
+						.sort(compareLegacyBookmarks);
+					const positions = new Map(
+						ordered.map((bookmark, position) => [bookmark._id, position]),
+					);
+					bookmarks = bookmarks.map((bookmark) => ({
+						...bookmark,
+						padPosition: positions.has(bookmark._id)
+							? positions.get(bookmark._id)
+							: bookmark.padPosition,
+						projects: bookmark.projects.map((membership) => ({ ...membership })),
+					}));
+				}
+				const projects = Array.isArray(legacyProjects)
+					? compactLegacyProjects(legacyProjects)
+					: [];
+				const projectIds = new Set(projects.map((project) => project._id));
+				for (const bookmark of bookmarks) {
+					for (const membership of bookmark.projects) {
+						projectIds.add(membership.projectId);
+					}
+				}
+				for (const projectId of projectIds) {
+					const entries = bookmarks
+						.flatMap((bookmark) => {
+							const membership = bookmark.projects.find(
+								(item) => item.projectId === projectId,
+							);
+							return membership ? [{ bookmark, membership }] : [];
+						})
+						.sort(compareLegacyMemberships);
+					const positions = new Map(
+						entries.map((entry, position) => [entry.bookmark._id, position]),
+					);
+					bookmarks = bookmarks.map((bookmark) => ({
+						...bookmark,
+						projects: bookmark.projects.map((membership) =>
+							membership.projectId === projectId
+								? { ...membership, position: positions.get(bookmark._id) }
+								: { ...membership },
+						),
+					}));
+				}
+				const zones = { top: [], pinned: [] };
+				for (const bookmark of bookmarks) zones[bookmark.tags[0]].push(bookmark);
+				zones.top.sort(compareLegacyPadPositions);
+				zones.pinned.sort(compareLegacyPadPositions);
+				return {
+					version: 0,
+					bookmarks: [...zones.top, ...zones.pinned],
+					projects,
+				};
+			}
+
+			function compareLegacyBookmarks(left, right) {
+				return (
+					(left._creationTime || 0) - (right._creationTime || 0) ||
+					String(left._id || "").localeCompare(String(right._id || ""))
+				);
+			}
+
+			function compareLegacyPadPositions(left, right) {
+				const leftPosition = Number.isFinite(left.padPosition)
+					? left.padPosition
+					: Number.POSITIVE_INFINITY;
+				const rightPosition = Number.isFinite(right.padPosition)
+					? right.padPosition
+					: Number.POSITIVE_INFINITY;
+				return leftPosition - rightPosition || compareLegacyBookmarks(left, right);
+			}
+
+			function compareLegacyPosition(left, right, fallbackField) {
+				const leftPosition = Number.isFinite(left.position)
+					? left.position
+					: Number.POSITIVE_INFINITY;
+				const rightPosition = Number.isFinite(right.position)
+					? right.position
+					: Number.POSITIVE_INFINITY;
+				return (
+					leftPosition - rightPosition ||
+					(left[fallbackField] || 0) - (right[fallbackField] || 0) ||
+					String(left._id || "").localeCompare(String(right._id || ""))
+				);
+			}
+
+			function compareLegacyMemberships(left, right) {
+				const byPosition = compareLegacyPosition(
+					left.membership,
+					right.membership,
+					"_creationTime",
+				);
+				return byPosition || compareLegacyBookmarks(left.bookmark, right.bookmark);
+			}
+
+			function compactLegacyProjects(projects) {
+				return [...projects]
+					.sort((left, right) =>
+						compareLegacyPosition(left, right, "createdAt"),
+					)
+					.map((project, position) => ({ ...project, position }));
+			}
+
+			function saveLayout(layout) {
+				try {
+					localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify({
+						schemaVersion: 2,
+						layoutVersion: layout.version,
+						bookmarks: layout.bookmarks,
+						projects: layout.projects,
+						savedAt: Date.now(),
+					}));
+				} catch {
+					/* quota and private-mode failures must not break rendering */
+				}
+			}
+
+			function setLayoutView(nextView, persist) {
+				view = nextView;
+				bookmarks = view.bookmarks;
+				window.launchProjects = view.projects;
+				if (persist) saveLayout(view);
+				renderLayout();
+			}
+
+			function withRenderHooks(callback) {
+				const controller = window.launchDndController;
+				controller?.beforeRender();
+				try {
+					callback();
+					applyPendingMarkers();
+				} finally {
+					controller?.afterRender();
+				}
+			}
+
+			function applyPendingMarkers() {
+				for (const root of [
+					document.getElementById("pad"),
+					document.getElementById("projects"),
+				]) {
+					for (const element of root?.querySelectorAll("[data-pending]") || []) {
+						element.removeAttribute("data-pending");
+					}
+					root?.removeAttribute("data-pending");
+				}
+				const markers = window.launchModel?.pendingLayoutMarkers([
+					...pendingOperations,
+					...bufferedDropOperations,
+				]);
+				if (!markers) return;
+				for (const item of markers.items) {
+					for (const element of document.querySelectorAll(
+						`[data-sort-kind="${CSS.escape(item.sortKind)}"][data-sort-id="${CSS.escape(item.sortId)}"]:not([data-drag-handle])`,
+					)) {
+						element.dataset.pending = "true";
+					}
+				}
+				for (const zone of markers.zones) {
+					document
+						.querySelector(`[data-drop-zone="${CSS.escape(zone)}"]`)
+						?.setAttribute("data-pending", "true");
+				}
+			}
+
+			function renderStoreView(next) {
+				const controller = window.launchDndController;
+				confirmed = layoutStore.getConfirmed();
+				pendingOperations = layoutStore.getPendingOperations();
+				if (controller?.isActive?.()) {
+					if (
+						window.launchModel.sameLayoutContent(dragPreviewBase || view, next)
+					) {
+						if (dragPreviewBase) dragPreviewBase = next;
+						else setLiveLayout(next);
+						applyPendingMarkers();
+						return;
+					}
+					controller.cancel();
+				}
+				setLiveLayout(next);
+				renderLayout();
+			}
+
+			function setLayoutStatus(message) {
+				document.getElementById("status").textContent = message;
+				const region = document.getElementById("status-region");
+				if (message && message !== SAVING_STATUS) {
+					region.setAttribute("data-persistent", "true");
+				} else {
+					region.removeAttribute("data-persistent");
+				}
+			}
+
+			function handleLayoutOffline() {
+				if (layoutStore) layoutStore.handleOffline();
+				else if (bufferedDropOperations.length > 0) setLayoutStatus(OFFLINE_STATUS);
+			}
+
+			function handleLayoutOnline() {
+				if (layoutStore) layoutStore.retryOnline();
+				else if (bufferedDropOperations.length > 0) setLayoutStatus(SAVING_STATUS);
+			}
+
+			function failLayoutStore() {
+				if (layoutStore || layoutStoreFailed) return;
+				layoutStoreFailed = true;
+				if (bufferedDropOperations.length === 0) return;
+				bufferedDropOperations = [];
+				window.launchDndController?.restoreFocusToOrigin();
+				setLayoutView(confirmed, false);
+				setLayoutStatus(UNSAVED_STATUS);
+			}
+
+			function renderLayout() {
+				withRenderHooks(() => {
+					renderPadContents(bookmarks);
+					renderProjectsContents();
+				});
+			}
+
+			function rollbackLayout() {
+				window.launchDndController?.restoreFocusToOrigin();
+				setLayoutView(confirmed, true);
+			}
+
+			function setLiveLayout(nextView) {
+				view = nextView;
+				bookmarks = view.bookmarks;
+				window.launchProjects = view.projects;
+			}
+
+			function previewDndLayout(result) {
+				if (!result?.ok) return false;
+				if (!dragPreviewBase) dragPreviewBase = view;
+				setLiveLayout(result.layout);
+				return true;
+			}
+
+			function cancelDndPreview() {
+				if (!dragPreviewBase) return false;
+				setLiveLayout(dragPreviewBase);
+				dragPreviewBase = null;
+				return true;
+			}
+
+			function commitDndDrop(operation) {
+				const base = dragPreviewBase || view;
+				const preview = window.launchModel?.applyLayoutOperation(base, operation);
+				if (!preview?.ok || layoutStoreFailed) {
+					cancelDndPreview();
+					if (layoutStoreFailed) {
+						renderLayout();
+						setLayoutStatus(UNSAVED_STATUS);
+					}
+					return false;
+				}
+				dragPreviewBase = null;
+				if (typeof layoutStore !== "undefined" && layoutStore) {
+					return Boolean(layoutStore.drop(operation)?.ok);
+				}
+				bufferedDropOperations.push(operation);
+				setLayoutView(preview.layout, false);
+				setLayoutStatus(navigator.onLine === false ? OFFLINE_STATUS : SAVING_STATUS);
+				return true;
+			}
+
+			function attachLayoutStore(store) {
+				layoutStore = store;
+				const buffered = bufferedDropOperations;
+				bufferedDropOperations = [];
+				const results = buffered.map((operation) => store.drop(operation));
+				if (results.some((result) => !result?.ok)) {
+					setLayoutView(store.getView(), false);
+				}
+			}
+
+			function parseTags(value) {
+				return [...new Set(String(value || "").split(",").map((part) => part.trim()).filter(Boolean))];
+			}
+
+			function render(items) {
+				withRenderHooks(() => renderPadContents(items));
+			}
+
+			function renderPadContents(items) {
+				const list = document.getElementById("list");
+				list.replaceChildren();
+				const tops = items.filter((bookmark) => (bookmark.tags || []).includes("top"));
+				const pins = items.filter((bookmark) => {
+					const tags = bookmark.tags || [];
+					return tags.includes("pinned") || !tags.includes("top");
+				});
+				const grid = document.createElement("div");
+				grid.className = "top-grid";
+				grid.dataset.dropList = "bookmarks";
+				grid.dataset.dropZone = "top";
+				const groupsByBookmarkId = new Map(
+					groupBySite(tops).flatMap((group) =>
+						group.map((bookmark) => [bookmark._id, group]),
+					),
+				);
+				for (const [position, bookmark] of tops.entries()) {
+					if (editingId === bookmark._id) continue;
+					const group = groupsByBookmarkId.get(bookmark._id);
+					grid.append(
+						group.length === 1
+							? tile(bookmark, position)
+							: siteTile(group, bookmark, position),
+					);
+				}
+				if (grid.childElementCount === 0) grid.append(emptyDropRail());
+				list.append(grid);
+				const editingTop = tops.find((bookmark) => bookmark._id === editingId);
+				if (editingTop) list.append(editRow(editingTop));
+				if (tops.length > 0) list.append(heading("Pinned"));
+				const pinList = document.createElement("div");
+				pinList.className = "row-list";
+				pinList.dataset.dropList = "bookmarks";
+				pinList.dataset.dropZone = "pinned";
+				for (const [position, bookmark] of pins.entries()) {
+					pinList.append(
+						editingId === bookmark._id ? editRow(bookmark) : pin(bookmark, position),
+					);
+				}
+				if (pinList.childElementCount === 0) pinList.append(emptyDropRail());
+				list.append(pinList);
+			}
+
+			function heading(text) {
+				const element = document.createElement("h2");
+				element.textContent = text;
+				return element;
+			}
+
+			function groupBySite(items) {
+				const groups = [];
+				const index = new Map();
+				for (const bookmark of items) {
+					const key = siteKey(bookmark.url);
+					if (!index.has(key)) {
+						index.set(key, groups.length);
+						groups.push([]);
+					}
+					groups[index.get(key)].push(bookmark);
+				}
+				return groups;
+			}
+
+			function siteKey(url) {
+				try {
+					return new URL(url).host;
+				} catch {
+					return url;
+				}
+			}
+
+			function siteTile(group, bookmark, position) {
+				const wrap = document.createElement("div");
+				wrap.className = "tile-wrap";
+				wrap.dataset.id = bookmark._id;
+				wrap.dataset.sortKind = "bookmark";
+				wrap.dataset.sortId = bookmark._id;
+				wrap.dataset.bookmarkId = bookmark._id;
+				wrap.dataset.zone = "top";
+				wrap.dataset.position = String(position);
+				const button = document.createElement("button");
+				button.type = "button";
+				button.className = "tile";
+				button.title = bookmark.title;
+				button.append(favicon(bookmark, true));
+				const count = document.createElement("span");
+				count.className = "count";
+				count.textContent = String(group.length);
+				wrap.append(
+					dragHandle(bookmark.title, {
+						sortKind: "bookmark",
+						sortId: bookmark._id,
+						bookmarkId: bookmark._id,
+						zone: "top",
+					}),
+					button,
+					count,
+				);
+				button.addEventListener("click", (event) => {
+					openPopover(group, event.clientX, event.clientY);
+				});
+				addBookmarkContextMenu(wrap, bookmark);
+				watchHover(wrap, bookmark._id);
+				return wrap;
+			}
+
+			function openPopover(group, x, y) {
+				cancelDragForInteraction();
+				closeMenu();
+				closePopover();
+				const panel = document.createElement("div");
+				panel.className = "popover";
+				const grid = document.createElement("div");
+				grid.className = "popover-grid";
+				for (const bookmark of group) {
+					const cell = document.createElement("div");
+					cell.className = "choice";
+					cell.dataset.id = bookmark._id;
+					const link = document.createElement("a");
+					link.href = bookmark.url;
+					const title = document.createElement("span");
+					title.className = "title";
+					title.textContent = bookmark.title;
+					link.append(title);
+					link.addEventListener("click", (event) => {
+						if (assignIfAdding(event, bookmark)) return;
+						recordClick(bookmark._id);
+					});
+					cell.append(link);
+					addBookmarkContextMenu(cell, bookmark);
+					watchHover(cell, bookmark._id);
+					grid.append(cell);
+				}
+				panel.append(grid);
+				document.body.append(panel);
+				const rect = panel.getBoundingClientRect();
+				const left = Math.min(Math.max(rect.width / 2 + 8, x), window.innerWidth - rect.width / 2 - 8);
+				const top = Math.min(Math.max(rect.height / 2 + 8, y), window.innerHeight - rect.height / 2 - 8);
+				panel.style.left = `${left}px`;
+				panel.style.top = `${top}px`;
+				popover = panel;
+			}
+
+			function closePopover() {
+				if (!popover) return;
+				popover.remove();
+				popover = null;
+				if (!menu) releaseKeyboardTarget();
+			}
+
+			function pinKeyboardTarget(id, element) {
+				keyboardTargetId = id;
+				for (const active of document.querySelectorAll(".active")) {
+					active.classList.remove("active");
+				}
+				if (element) element.classList.add("active");
+			}
+
+			function releaseKeyboardTarget() {
+				const was = keyboardTargetId;
+				keyboardTargetId = null;
+				if (!was || hoveredId === was) return;
+				for (const active of document.querySelectorAll(`.active[data-id="${was}"]`)) {
+					active.classList.remove("active");
+				}
+			}
+
+			function tile(bookmark, position) {
+				const wrap = document.createElement("div");
+				wrap.className = "tile-wrap";
+				wrap.dataset.id = bookmark._id;
+				wrap.dataset.sortKind = "bookmark";
+				wrap.dataset.sortId = bookmark._id;
+				wrap.dataset.bookmarkId = bookmark._id;
+				wrap.dataset.zone = "top";
+				wrap.dataset.position = String(position);
+				const link = document.createElement("a");
+				link.className = "tile";
+				link.href = bookmark.url;
+				link.title = bookmark.title;
+				link.append(favicon(bookmark, true));
+				link.addEventListener("click", (event) => {
+					if (assignIfAdding(event, bookmark)) return;
+					recordClick(bookmark._id);
+				});
+				wrap.append(
+					dragHandle(bookmark.title, {
+						sortKind: "bookmark",
+						sortId: bookmark._id,
+						bookmarkId: bookmark._id,
+						zone: "top",
+					}),
+					link,
+				);
+				addBookmarkContextMenu(wrap, bookmark);
+				watchHover(wrap, bookmark._id);
+				return wrap;
+			}
+
+			function projectTile(bookmark, projectId, membership, position) {
+				const wrap = document.createElement("div");
+				wrap.className = "tile-wrap";
+				wrap.dataset.id = bookmark._id;
+				wrap.dataset.projectId = projectId;
+				wrap.dataset.sortKind = "bookmark";
+				wrap.dataset.sortId = bookmark._id;
+				wrap.dataset.bookmarkId = bookmark._id;
+				wrap.dataset.zone = `project:${projectId}`;
+				wrap.dataset.position = String(position);
+				const model = window.launchModel;
+				if (membership.environment === "prod") wrap.classList.add("env-prod");
+				if (membership.environment === "local" || model?.isLocalUrl(bookmark.url)) {
+					wrap.classList.add("env-local");
+				}
+				const link = document.createElement("a");
+				link.className = "tile";
+				link.href = bookmark.url;
+				link.title = model
+					? model.displayName(bookmark, membership)
+					: membership.name || bookmark.title;
+				const sourceUrl = model
+					? model.faviconSourceForProjectTile(bookmark, projectId, bookmarks)
+					: bookmark.url;
+				link.append(favicon(bookmark, true, sourceUrl));
+				link.addEventListener("click", (event) => {
+					if (assignIfAdding(event, bookmark)) return;
+					recordClick(bookmark._id);
+				});
+				if (membership.environment) {
+					const label = document.createElement("span");
+					label.className = "env-label";
+					label.textContent = membership.environment;
+					link.append(label);
+				}
+				const label = model
+					? model.displayName(bookmark, membership)
+					: membership.name || bookmark.title;
+				wrap.append(
+					dragHandle(label, {
+						sortKind: "bookmark",
+						sortId: bookmark._id,
+						bookmarkId: bookmark._id,
+						projectId,
+						zone: `project:${projectId}`,
+					}),
+					link,
+				);
+				addBookmarkContextMenu(wrap, bookmark);
+				watchHover(wrap, bookmark._id);
+				return wrap;
+			}
+
+			function pin(bookmark, position) {
+				const wrap = document.createElement("div");
+				wrap.className = "row";
+				wrap.dataset.id = bookmark._id;
+				wrap.dataset.sortKind = "bookmark";
+				wrap.dataset.sortId = bookmark._id;
+				wrap.dataset.bookmarkId = bookmark._id;
+				wrap.dataset.zone = "pinned";
+				wrap.dataset.position = String(position);
+				const link = document.createElement("a");
+				link.className = "pin";
+				link.href = bookmark.url;
+				link.append(favicon(bookmark, false));
+				const title = document.createElement("span");
+				title.className = "title";
+				title.textContent = bookmark.title;
+				link.append(title);
+				link.addEventListener("click", (event) => {
+					if (assignIfAdding(event, bookmark)) return;
+					recordClick(bookmark._id);
+				});
+				wrap.append(
+					dragHandle(bookmark.title, {
+						sortKind: "bookmark",
+						sortId: bookmark._id,
+						bookmarkId: bookmark._id,
+						zone: "pinned",
+					}),
+					link,
+				);
+				addBookmarkContextMenu(wrap, bookmark);
+				watchHover(wrap, bookmark._id);
+				return wrap;
+			}
+
+			function dragHandle(label, identity) {
+				const button = document.createElement("button");
+				button.type = "button";
+				button.className = "drag-handle";
+				button.dataset.dragHandle = "";
+				for (const [key, value] of Object.entries(identity)) {
+					button.dataset[key] = value;
+				}
+				button.setAttribute("aria-label", `Move ${label}`);
+				button.textContent = "⠿";
+				const instruction = document.createElement("span");
+				instruction.className = "visually-hidden";
+				instruction.id = `launch-dnd-instructions-${identity.sortKind}-${identity.sortId}-${identity.zone}`.replace(
+					/[^a-zA-Z0-9_-]/g,
+					"-",
+				);
+				instruction.textContent =
+					"Press Space or Enter to pick up. Use arrow keys to move, Tab to change section, Enter to drop, or Escape to cancel.";
+				button.setAttribute("aria-describedby", instruction.id);
+				button.append(instruction);
+				return button;
+			}
+
+			function emptyDropRail() {
+				const rail = document.createElement("div");
+				rail.className = "empty-drop-rail";
+				rail.setAttribute("aria-hidden", "true");
+				return rail;
+			}
+
+			function addBookmarkContextMenu(element, bookmark) {
+				element.addEventListener("contextmenu", (event) => {
+					event.preventDefault();
+					openMenu(bookmark, element);
+				});
+			}
+
+			function watchHover(element, id) {
+				element.addEventListener("mouseenter", () => {
+					hoveredId = id;
+					if (keyboardTargetId && keyboardTargetId !== id) return;
+					for (const active of document.querySelectorAll(".active")) {
+						active.classList.remove("active");
+					}
+					element.classList.add("active");
+				});
+				element.addEventListener("mouseleave", () => {
+					if (hoveredId === id) hoveredId = null;
+					if (keyboardTargetId === id) return;
+					element.classList.remove("active");
+				});
+			}
+
+			function projectMenuButton(project, heading) {
+				const button = document.createElement("button");
+				button.type = "button";
+				button.className = "meatball";
+				button.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><circle cx="2.5" cy="7" r="1.15"/><circle cx="7" cy="7" r="1.15"/><circle cx="11.5" cy="7" r="1.15"/></svg>';
+				button.addEventListener("click", (event) => {
+					event.preventDefault();
+					event.stopPropagation();
+					if (menu && menu.dataset.id === project._id) {
+						closeMenu();
+						return;
+					}
+					openProjectMenu(project, button, heading);
+				});
+				return button;
+			}
+
+			function openProjectMenu(project, anchor, heading) {
+				cancelDragForInteraction();
+				closePopover();
+				closeMenu();
+				const panel = document.createElement("div");
+				panel.className = "menu";
+				panel.dataset.id = project._id;
+				const divider = document.createElement("hr");
+				panel.append(
+					menuItem("Rename", () => {
+						closeMenu();
+						renameProjectHeading(project, heading);
+					}),
+					divider,
+					menuItem("Delete", () => {
+						closeMenu();
+						const convex = client();
+						if (!convex) return;
+						convex.mutation("launch:removeProject", { id: project._id });
+					}, true),
+				);
+				placeMenu(panel, anchor);
+			}
+
+			function renameProjectHeading(project, heading) {
+				cancelDragForInteraction();
+				const input = document.createElement("input");
+				input.className = "rename";
+				input.value = project.name;
+				input.defaultValue = project.name;
+				syncDefaultValue(input);
+				heading.replaceWith(input);
+				let closed = false;
+				function close(save) {
+					if (closed) return;
+					closed = true;
+					const next = input.value.trim();
+					if (save && next && next !== project.name) {
+						const convex = client();
+						if (convex) convex.mutation("launch:renameProject", { id: project._id, name: next });
+					}
+					const restored = document.createElement("h2");
+					restored.textContent = save && next ? next : project.name;
+					input.replaceWith(restored);
+				}
+				input.addEventListener("keydown", (event) => {
+					if (event.key === "Enter") {
+						event.preventDefault();
+						close(true);
+					}
+					if (event.key === "Escape") {
+						event.preventDefault();
+						close(false);
+					}
+				});
+				setTimeout(() => {
+					input.focus();
+					input.select();
+					input.addEventListener("blur", () => close(false));
+				}, 0);
+			}
+
+			function openMenu(bookmark, anchor) {
+				cancelDragForInteraction();
+				closePopover();
+				closeMenu();
+				const panel = document.createElement("div");
+				panel.className = "menu";
+				panel.dataset.id = bookmark._id;
+				const head = document.createElement("div");
+				head.className = "menu-head";
+				const copy = document.createElement("div");
+				copy.className = "copy";
+				const name = document.createElement("p");
+				name.className = "name";
+				name.textContent = bookmark.title;
+				const url = document.createElement("p");
+				url.className = "url";
+				url.textContent = bookmark.url;
+				copy.append(name, url);
+				head.append(favicon(bookmark, true), copy);
+				const actions = document.createElement("div");
+				actions.className = "menu-actions";
+				const divider = document.createElement("hr");
+				const projectId = anchor?.dataset?.projectId;
+				actions.append(
+					menuItem("Rename", () => startRename(bookmark._id), false, "A"),
+					menuItem("Edit URL", () => startUrlEdit(bookmark._id), false, "L"),
+					menuItem("Add to project", () => {
+						closeMenu();
+						openGroupPicker(bookmark, anchor);
+					}, false, "G"),
+				);
+				if (projectId) {
+					actions.append(
+						menuItem("Environment", () => {
+							closeMenu();
+							openEnvironmentPicker(bookmark, projectId, anchor);
+						}, false, "E"),
+					);
+				}
+				actions.append(
+					menuItem("Reload favicon", () => {
+						closeMenu();
+						reloadFavicon(bookmark._id);
+					}),
+					divider,
+					menuItem("Delete", () => {
+						closeMenu();
+						removeBookmark(bookmark._id);
+					}, true),
+				);
+				panel.append(head, actions);
+				placeMenu(panel, anchor);
+				pinKeyboardTarget(bookmark._id, anchor);
+			}
+
+			function placeMenu(panel, anchor) {
+				document.body.append(panel);
+				const anchorRect = anchor.getBoundingClientRect();
+				const panelRect = panel.getBoundingClientRect();
+				const left = Math.min(anchorRect.right - panelRect.width, window.innerWidth - panelRect.width - 8);
+				const top = Math.min(anchorRect.bottom + 4, window.innerHeight - panelRect.height - 8);
+				panel.style.left = `${Math.max(8, left)}px`;
+				panel.style.top = `${Math.max(8, top)}px`;
+				menu = panel;
+			}
+
+			function menuItem(label, onClick, danger, shortcut) {
+				const button = document.createElement("button");
+				button.type = "button";
+				const text = document.createElement("span");
+				text.textContent = label;
+				button.append(text);
+				if (shortcut) {
+					const key = document.createElement("kbd");
+					key.textContent = shortcut;
+					button.append(key);
+				}
+				if (danger) button.className = "danger";
+				button.addEventListener("click", onClick);
+				return button;
+			}
+
+			function rememberLastGroup(projectId) {
+				if (!projectId || !window.launchModel?.writeLastGroupId) return;
+				window.launchModel.writeLastGroupId(localStorage, projectId);
+			}
+
+			function assignIfAdding(event, bookmark) {
+				if (!addingProjectId) return false;
+				event.preventDefault();
+				const next = window.launchModel.addProject(
+					{ title: bookmark.title, projects: bookmark.projects || [] },
+					addingProjectId,
+				);
+				const convex = client();
+				if (convex) {
+					convex.mutation("launch:setProjects", {
+						id: bookmark._id,
+						projects: next.projects,
+					});
+				}
+				rememberLastGroup(addingProjectId);
+				return true;
+			}
+
+			function applyProjectEnvironment(bookmarkId, projectId, environment) {
+				if (!bookmarkId || !projectId) return;
+				const convex = client();
+				if (!convex) return;
+				convex.mutation("launch:setProjectEnvironment", {
+					id: bookmarkId,
+					projectId,
+					environment,
+				});
+			}
+
+			function openEnvironmentPicker(bookmark, projectId, anchor) {
+				cancelDragForInteraction();
+				closeMenu();
+				closePopover();
+				const panel = document.createElement("div");
+				panel.className = "popover group-picker";
+				panel.dataset.kind = "environment";
+				panel.dataset.bookmarkId = bookmark._id;
+				panel.dataset.projectId = projectId;
+				const membership = (bookmark.projects || []).find((item) => item.projectId === projectId);
+				const current = membership?.environment || null;
+				const options = [
+					["prod", "Prod"],
+					["qa", "QA"],
+					["stage", "Stage"],
+					["dev", "Dev"],
+					["local", "Local"],
+					[null, "None"],
+				];
+				for (const [value, label] of options) {
+					const button = document.createElement("button");
+					button.type = "button";
+					const text = document.createElement("span");
+					text.textContent = current === value ? `✓ ${label}` : label;
+					button.append(text);
+					const shortcut = window.launchModel?.environmentShortcutLabel(value);
+					if (shortcut) {
+						const key = document.createElement("kbd");
+						key.textContent = shortcut;
+						button.append(key);
+					}
+					button.addEventListener("click", () => {
+						applyProjectEnvironment(bookmark._id, projectId, value);
+						closePopover();
+					});
+					panel.append(button);
+				}
+				document.body.append(panel);
+				const rect = anchor ? anchor.getBoundingClientRect() : { left: 80, top: 80, width: 0, height: 0 };
+				const x = rect.left + rect.width / 2;
+				const y = rect.top + rect.height / 2;
+				const panelRect = panel.getBoundingClientRect();
+				const left = Math.min(Math.max(panelRect.width / 2 + 8, x), window.innerWidth - panelRect.width / 2 - 8);
+				const top = Math.min(Math.max(panelRect.height / 2 + 8, y), window.innerHeight - panelRect.height / 2 - 8);
+				panel.style.left = `${left}px`;
+				panel.style.top = `${top}px`;
+				popover = panel;
+				pinKeyboardTarget(bookmark._id, anchor);
+			}
+
+			function openGroupPicker(bookmark, anchor) {
+				cancelDragForInteraction();
+				closeMenu();
+				closePopover();
+				const panel = document.createElement("div");
+				panel.className = "popover group-picker";
+				const projects = window.launchModel.projectsNewestFirst(window.launchProjects || []);
+				for (const project of projects) {
+					const member = (bookmark.projects || []).some((item) => item.projectId === project._id);
+					const button = document.createElement("button");
+					button.type = "button";
+					button.textContent = member ? `✓ ${project.name}` : project.name;
+					button.addEventListener("click", () => {
+						const next = window.launchModel.toggleProject(
+							{ title: bookmark.title, projects: bookmark.projects || [] },
+							project._id,
+						);
+						const convex = client();
+						if (convex) {
+							convex.mutation("launch:setProjects", {
+								id: bookmark._id,
+								projects: next.projects,
+							});
+						}
+						if (!member) rememberLastGroup(project._id);
+						closePopover();
+					});
+					panel.append(button);
+				}
+				if (projects.length === 0) {
+					const empty = document.createElement("p");
+					empty.textContent = "No projects yet";
+					empty.style.margin = "0.6rem";
+					panel.append(empty);
+				}
+				document.body.append(panel);
+				const rect = anchor ? anchor.getBoundingClientRect() : { left: 80, top: 80, width: 0, height: 0 };
+				const x = rect.left + rect.width / 2;
+				const y = rect.top + rect.height / 2;
+				const panelRect = panel.getBoundingClientRect();
+				const left = Math.min(Math.max(panelRect.width / 2 + 8, x), window.innerWidth - panelRect.width / 2 - 8);
+				const top = Math.min(Math.max(panelRect.height / 2 + 8, y), window.innerHeight - panelRect.height / 2 - 8);
+				panel.style.left = `${left}px`;
+				panel.style.top = `${top}px`;
+				popover = panel;
+				pinKeyboardTarget(bookmark._id, anchor);
+			}
+
+			function renderProjects() {
+				withRenderHooks(() => renderProjectsContents());
+			}
+
+			function renderProjectsContents() {
+				const root = document.getElementById("projects");
+				root.replaceChildren();
+				root.dataset.dropList = "projects";
+				for (const [projectPosition, project] of (window.launchProjects || []).entries()) {
+					const gap = document.createElement("div");
+					gap.className = "project-gap";
+					gap.dataset.dropZone = "project-list";
+					gap.dataset.position = String(projectPosition);
+					root.append(gap);
+					const section = document.createElement("section");
+					section.dataset.sortKind = "project";
+					section.dataset.id = project._id;
+					section.dataset.sortId = project._id;
+					section.dataset.projectId = project._id;
+					section.dataset.zone = "projects";
+					section.dataset.position = String(projectPosition);
+					if (addingProjectId === project._id) section.className = "adding";
+					const head = document.createElement("div");
+					head.className = "project-head";
+					const heading = document.createElement("h2");
+					heading.textContent = project.name;
+					const plus = document.createElement("button");
+					plus.type = "button";
+					plus.className = "plus";
+					plus.textContent = "+";
+					plus.setAttribute("aria-pressed", addingProjectId === project._id ? "true" : "false");
+					plus.addEventListener("click", () => {
+						addingProjectId = addingProjectId === project._id ? null : project._id;
+						cancelDragForInteraction();
+						renderProjects();
+					});
+					head.append(
+						dragHandle(`${project.name} project`, {
+							sortKind: "project",
+							sortId: project._id,
+							projectId: project._id,
+							zone: "projects",
+						}),
+						heading,
+						plus,
+						projectMenuButton(project, heading),
+					);
+					section.append(head);
+					const grid = document.createElement("div");
+					grid.className = "top-grid";
+					grid.dataset.dropList = "bookmarks";
+					grid.dataset.dropZone = `project:${project._id}`;
+					const projectBookmarks = bookmarks
+						.flatMap((bookmark) => {
+							const membership = (bookmark.projects || []).find(
+								(item) => item.projectId === project._id,
+							);
+							return membership ? [{ bookmark, membership }] : [];
+						})
+						.sort((left, right) => {
+							const leftPosition = Number.isFinite(left.membership.position)
+								? left.membership.position
+								: Number.POSITIVE_INFINITY;
+							const rightPosition = Number.isFinite(right.membership.position)
+								? right.membership.position
+								: Number.POSITIVE_INFINITY;
+							return (
+								leftPosition - rightPosition ||
+								(left.bookmark._creationTime || 0) -
+									(right.bookmark._creationTime || 0) ||
+								String(left.bookmark._id).localeCompare(
+									String(right.bookmark._id),
+								)
+							);
+						});
+					for (const [membershipPosition, entry] of projectBookmarks.entries()) {
+						grid.append(
+							projectTile(
+								entry.bookmark,
+								project._id,
+								entry.membership,
+								membershipPosition,
+							),
+						);
+					}
+					if (grid.childElementCount === 0) {
+						const slot = document.createElement("div");
+						slot.className = "empty-project-slot";
+						slot.setAttribute("aria-hidden", "true");
+						grid.append(slot);
+					}
+					section.append(grid);
+					root.append(section);
+				}
+				const finalGap = document.createElement("div");
+				finalGap.className = "project-gap";
+				finalGap.dataset.dropZone = "project-list";
+				finalGap.dataset.position = String((window.launchProjects || []).length);
+				root.append(finalGap);
+				const add = document.createElement("button");
+				add.type = "button";
+				add.className = "add-project";
+				add.id = "add-project";
+				add.textContent = "Add a project";
+				add.addEventListener("click", () => startAddProject(add));
+				root.append(add);
+				syncAddMode();
+			}
+
+			function syncAddMode() {
+				document.body.classList.remove("adding");
+				document.getElementById("adding-banner")?.remove();
+			}
+
+			function startAddProject(button) {
+				cancelDragForInteraction();
+				const box = document.createElement("div");
+				box.className = "add-project";
+				box.style.display = "grid";
+				box.style.placeItems = "center";
+				box.style.padding = "0.75rem";
+				const input = document.createElement("input");
+				input.placeholder = "Name";
+				input.style.width = "100%";
+				syncDefaultValue(input);
+				const confirm = document.createElement("button");
+				confirm.type = "button";
+				confirm.textContent = "Add";
+				function restore() {
+					box.replaceWith(button);
+				}
+				function submit() {
+					const name = input.value.trim();
+					if (!name) return;
+					const convex = client();
+					if (!convex) return;
+					convex.mutation("launch:createProject", { name });
+				}
+				confirm.addEventListener("click", submit);
+				input.addEventListener("keydown", (event) => {
+					if (event.key === "Enter") {
+						event.preventDefault();
+						submit();
+					}
+					if (event.key === "Escape") {
+						event.preventDefault();
+						restore();
+					}
+				});
+				box.append(input, confirm);
+				button.replaceWith(box);
+				input.focus();
+			}
+
+			function startUrlEdit(id) {
+				cancelDragForInteraction();
+				const bookmark = bookmarks.find((item) => item._id === id);
+				closeMenu();
+				if (!bookmark) return;
+				const anchor = document.querySelector(".active") || document.querySelector(`[data-id="${id}"]`);
+				if (!anchor) return;
+				const input = document.createElement("input");
+				input.className = "rename";
+				input.value = bookmark.url;
+				input.defaultValue = bookmark.url;
+				syncDefaultValue(input);
+				input.style.position = "absolute";
+				input.style.left = "0";
+				input.style.top = "calc(100% + 4px)";
+				input.style.width = "16rem";
+				input.style.padding = "0.2rem 0.4rem";
+				input.style.background = "var(--card)";
+				input.style.border = "1px solid var(--line)";
+				input.style.borderRadius = "0.4rem";
+				input.style.zIndex = "5";
+				anchor.style.position = "relative";
+				anchor.append(input);
+				let closed = false;
+				function close(save) {
+					if (closed) return;
+					closed = true;
+					const next = save ? window.launchModel.stripUtm(input.value.trim()) : bookmark.url;
+					input.remove();
+					if (save && next && next !== bookmark.url) {
+						updateBookmark(bookmark._id, {
+							title: bookmark.title,
+							url: next,
+							tags: bookmark.tags || [],
+							projects: bookmark.projects || [],
+						});
+					}
+				}
+				input.addEventListener("keydown", (event) => {
+					if (event.key === "Enter") {
+						event.preventDefault();
+						event.stopPropagation();
+						close(true);
+					}
+					if (event.key === "Escape") {
+						event.preventDefault();
+						close(false);
+					}
+				});
+				input.addEventListener("click", (event) => event.preventDefault());
+				setTimeout(() => {
+					input.focus();
+					input.select();
+					input.addEventListener("blur", () => close(false));
+				}, 0);
+			}
+
+			function startRename(id) {
+				cancelDragForInteraction();
+				const bookmark = bookmarks.find((item) => item._id === id);
+				closeMenu();
+				if (!bookmark) return;
+				const active = document.querySelector(".active");
+				const projectId = active?.dataset.projectId;
+				if (projectId && active?.dataset.id === id) {
+					const membership = (bookmark.projects || []).find((item) => item.projectId === projectId);
+					const current = window.launchModel.displayName(bookmark, membership || { projectId });
+					const input = document.createElement("input");
+					input.className = "rename";
+					input.value = current;
+					input.defaultValue = current;
+					syncDefaultValue(input);
+					input.style.position = "absolute";
+					input.style.left = "0";
+					input.style.top = "calc(100% + 4px)";
+					input.style.width = "12rem";
+					input.style.padding = "0.2rem 0.4rem";
+					input.style.background = "var(--card)";
+					input.style.border = "1px solid var(--line)";
+					input.style.borderRadius = "0.4rem";
+					input.style.zIndex = "5";
+					active.append(input);
+					finishProjectRename(input, bookmark, projectId, current);
+					return;
+				}
+				const title = document.querySelector(`.active[data-id="${id}"] .title`) || document.querySelector(`[data-id="${id}"] .title`);
+				if (title) {
+					swapLabel(title, bookmark, () => title);
+					return;
+				}
+				const wrap = document.querySelector(`.tile-wrap[data-id="${id}"]`);
+				if (!wrap) return;
+				const input = renameInput(bookmark);
+				input.style.position = "absolute";
+				input.style.left = "0";
+				input.style.top = "calc(100% + 4px)";
+				input.style.width = "12rem";
+				input.style.padding = "0.2rem 0.4rem";
+				input.style.background = "var(--card)";
+				input.style.border = "1px solid var(--line)";
+				input.style.borderRadius = "0.4rem";
+				input.style.zIndex = "5";
+				wrap.append(input);
+				finishRename(input, bookmark, () => input.remove());
+			}
+
+			function swapLabel(title, bookmark) {
+				const input = renameInput(bookmark);
+				title.replaceWith(input);
+				finishRename(input, bookmark, () => input.replaceWith(title));
+			}
+
+			function renameInput(bookmark) {
+				const input = document.createElement("input");
+				input.className = "rename";
+				input.value = bookmark.title;
+				input.defaultValue = bookmark.title;
+				syncDefaultValue(input);
+				return input;
+			}
+
+			function finishRename(input, bookmark, revert) {
+				let closed = false;
+				function close(save) {
+					if (closed) return;
+					closed = true;
+					const next = input.value.trim();
+					const span = document.createElement("span");
+					span.className = "title";
+					span.textContent = save && next ? next : bookmark.title;
+					input.replaceWith(span);
+					if (save && next && next !== bookmark.title) {
+						const renamed = window.launchModel.renamePad(bookmark, next);
+						updateBookmark(bookmark._id, {
+							title: renamed.title,
+							url: bookmark.url,
+							tags: bookmark.tags || [],
+							projects: renamed.projects || bookmark.projects || [],
+						});
+					}
+				}
+				input.addEventListener("keydown", (event) => {
+					if (event.key === "Enter") {
+						event.preventDefault();
+						event.stopPropagation();
+						close(true);
+					}
+					if (event.key === "Escape") {
+						event.preventDefault();
+						close(false);
+					}
+				});
+				input.addEventListener("click", (event) => event.preventDefault());
+				setTimeout(() => {
+					input.focus();
+					input.select();
+					input.addEventListener("blur", () => close(false));
+				}, 0);
+			}
+
+			function finishProjectRename(input, bookmark, projectId, current) {
+				let closed = false;
+				function close(save) {
+					if (closed) return;
+					closed = true;
+					const next = input.value.trim();
+					const span = document.createElement("span");
+					span.className = "title";
+					span.textContent = save && next ? next : current;
+					input.replaceWith(span);
+					if (!save || !next || next === current) return;
+					const projects = window.launchModel.renameInProject(bookmark, projectId, next).projects;
+					const convex = client();
+					if (!convex) return;
+					convex.mutation("launch:setProjects", { id: bookmark._id, projects });
+				}
+				input.addEventListener("keydown", (event) => {
+					if (event.key === "Enter") {
+						event.preventDefault();
+						event.stopPropagation();
+						close(true);
+					}
+					if (event.key === "Escape") {
+						event.preventDefault();
+						close(false);
+					}
+				});
+				input.addEventListener("click", (event) => event.preventDefault());
+				setTimeout(() => {
+					input.focus();
+					input.select();
+					input.addEventListener("blur", () => close(false));
+				}, 0);
+			}
+
+			function closeMenu() {
+				if (!menu) return;
+				menu.remove();
+				menu = null;
+				if (!popover) releaseKeyboardTarget();
+			}
+
+			function reloadFavicon(id) {
+				faviconBust[id] = Date.now();
+				renderLayout();
+			}
+
+			function favicon(bookmark, large, sourceUrl, explicitUrl) {
+				const letter = document.createElement("span");
+				letter.className = large ? "mark lg letter" : "mark letter";
+				letter.textContent = (bookmark.title || "?").slice(0, 1).toUpperCase();
+				const src = explicitUrl || faviconUrl(sourceUrl || bookmark.url, bookmark._id);
+				if (!src) return letter;
+				const image = document.createElement("img");
+				image.className = large ? "mark lg" : "mark";
+				image.alt = "";
+				image.loading = "lazy";
+				image.src = src;
+				image.addEventListener("error", () => {
+					if (explicitUrl) {
+						const fallback = faviconUrl(sourceUrl || bookmark.url, bookmark._id);
+						if (fallback && fallback !== image.src) {
+							explicitUrl = "";
+							image.src = fallback;
+							return;
+						}
+					}
+					if (sourceUrl && sourceUrl !== bookmark.url) {
+						const fallback = faviconUrl(bookmark.url, bookmark._id);
+						if (fallback && fallback !== src) {
+							image.src = fallback;
+							return;
+						}
+					}
+					image.replaceWith(letter);
+				});
+				return image;
+			}
+
+			function faviconUrl(url, bookmarkId) {
+				try {
+					const parsed = new URL(url);
+					const host = parsed.hostname.toLowerCase();
+					let src;
+					if (host === "localhost" || host === "127.0.0.1" || host === "[::1]" || host === "::1") {
+						src = `${parsed.origin}/favicon.ico`;
+					} else {
+						src = `https://www.google.com/s2/favicons?sz=64&domain_url=${encodeURIComponent(parsed.origin)}`;
+					}
+					const bust = bookmarkId != null ? faviconBust[bookmarkId] : null;
+					return window.launchModel?.withCacheBust
+						? window.launchModel.withCacheBust(src, bust)
+						: src;
+				} catch {
+					return "";
+				}
+			}
+
+			function editRow(bookmark) {
+				const form = document.createElement("div");
+				form.className = "edit";
+				const title = field(bookmark.title);
+				const url = field(bookmark.url);
+				const tags = field((bookmark.tags || []).join(", "));
+				const saveButton = textButton("Save", () => {
+					updateBookmark(bookmark._id, {
+						title: title.value,
+						url: url.value,
+						tags: parseTags(tags.value),
+						projects: bookmark.projects || [],
+					});
+				});
+				const cancel = textButton("Cancel", () => {
+					editingId = null;
+					render(bookmarks);
+				});
+				form.append(title, url, tags, saveButton, cancel);
+				return form;
+			}
+
+			function field(value) {
+				const input = document.createElement("input");
+				input.value = value;
+				input.defaultValue = value;
+				syncDefaultValue(input);
+				return input;
+			}
+
+			function syncDefaultValue(input) {
+				input.addEventListener("input", () => {
+					input.defaultValue = input.value;
+				});
+			}
+
+			function textButton(label, onClick) {
+				const button = document.createElement("button");
+				button.type = "button";
+				button.textContent = label;
+				button.addEventListener("click", onClick);
+				return button;
+			}
+
+			function client() {
+				if (window.launchClient) return window.launchClient;
+				document.getElementById("status").textContent = "Still connecting.";
+				return null;
+			}
+
+			function openAddLinkDialog() {
+				cancelDragForInteraction();
+				closeMenu();
+				closePopover();
+				if (addDialog) closeAddLinkDialog();
+
+				const overlay = document.createElement("div");
+				overlay.className = "add-dialog-overlay";
+				const panel = document.createElement("div");
+				panel.className = "add-dialog";
+				panel.addEventListener("pointerdown", (event) => event.stopPropagation());
+
+				const head = document.createElement("div");
+				head.className = "add-dialog-head";
+				const heading = document.createElement("h3");
+				heading.textContent = "Add link";
+				const sub = document.createElement("p");
+				sub.textContent = "Paste a URL. Title and favicon fill in when they can.";
+				head.append(heading, sub);
+
+				const body = document.createElement("div");
+				body.className = "add-dialog-body";
+
+				const preview = document.createElement("div");
+				preview.className = "add-dialog-preview";
+				const previewCopy = document.createElement("div");
+				previewCopy.className = "copy";
+				const previewName = document.createElement("p");
+				previewName.className = "name";
+				previewName.textContent = "New link";
+				const previewHint = document.createElement("p");
+				previewHint.className = "hint";
+				previewHint.textContent = "Waiting for a URL";
+				previewCopy.append(previewName, previewHint);
+				preview.append(previewCopy);
+
+				const urlLabel = document.createElement("label");
+				urlLabel.textContent = "URL";
+				const urlInput = document.createElement("input");
+				urlInput.type = "url";
+				urlInput.placeholder = "https://…";
+				urlInput.autocomplete = "off";
+				urlInput.spellcheck = false;
+				urlInput.defaultValue = "";
+				syncDefaultValue(urlInput);
+				urlLabel.append(urlInput);
+
+				const titleLabel = document.createElement("label");
+				titleLabel.textContent = "Title";
+				const titleInput = document.createElement("input");
+				titleInput.type = "text";
+				titleInput.placeholder = "Optional — filled from the page";
+				titleInput.autocomplete = "off";
+				titleInput.defaultValue = "";
+				syncDefaultValue(titleInput);
+				titleLabel.append(titleInput);
+
+				body.append(preview, urlLabel, titleLabel);
+
+				const foot = document.createElement("div");
+				foot.className = "add-dialog-foot";
+				const cancel = document.createElement("button");
+				cancel.type = "button";
+				cancel.className = "cancel";
+				cancel.textContent = "Cancel";
+				cancel.addEventListener("click", () => closeAddLinkDialog());
+				const saveAndGroups = document.createElement("button");
+				saveAndGroups.type = "button";
+				saveAndGroups.className = "secondary";
+				saveAndGroups.textContent = "Save & add to projects";
+				saveAndGroups.disabled = true;
+				const save = document.createElement("button");
+				save.type = "button";
+				save.className = "primary";
+				save.textContent = "Save";
+				save.disabled = true;
+				foot.append(cancel, saveAndGroups, save);
+
+				panel.append(head, body, foot);
+				overlay.append(panel);
+				document.body.append(overlay);
+				addDialog = overlay;
+
+				let titleTouched = false;
+				let previewToken = 0;
+				let debounceTimer = 0;
+				let saving = false;
+
+				function setPreview(url, title, hint, faviconSource) {
+					const mark = preview.querySelector(".mark");
+					if (mark) mark.remove();
+					const label = title || "New link";
+					previewName.textContent = label;
+					previewHint.textContent = hint || (url ? window.launchModel.stripUtm(url) : "Waiting for a URL");
+					if (url && window.launchModel.looksLikeUrl(url)) {
+						const icon = favicon({ title: label, url }, false, url, faviconSource);
+						preview.prepend(icon);
+					}
+					const ready = Boolean(url && window.launchModel.looksLikeUrl(url));
+					save.disabled = !ready || saving;
+					saveAndGroups.disabled = !ready || saving;
+				}
+
+				function applySuggestedTitle(next) {
+					if (titleTouched) return;
+					titleInput.value = next;
+					titleInput.defaultValue = next;
+					previewName.textContent = next || "New link";
+				}
+
+				async function refreshPreview(rawUrl) {
+					const token = ++previewToken;
+					const trimmed = rawUrl.trim();
+					if (!trimmed || !window.launchModel.looksLikeUrl(trimmed)) {
+						setPreview("", titleInput.value.trim(), trimmed ? "Needs a valid URL" : "Waiting for a URL");
+						return;
+					}
+					const normalized = window.launchModel.normalizeLaunchUrl(trimmed);
+					const suggestion = window.launchModel.titleSuggestionFromUrl(normalized);
+					setPreview(normalized, titleInput.value.trim() || suggestion, "Fetching title…");
+					if (!titleTouched) applySuggestedTitle(suggestion);
+
+					const convex = window.launchClient;
+					if (!convex) return;
+					try {
+						const result = await convex.action("launchActions:previewLink", { url: normalized });
+						if (token !== previewToken || !addDialog) return;
+						const title = result.title || suggestion;
+						if (!titleTouched) applySuggestedTitle(title);
+						setPreview(
+							result.url || normalized,
+							titleInput.value.trim() || title,
+							"Ready",
+							result.faviconUrl,
+						);
+					} catch {
+						if (token !== previewToken || !addDialog) return;
+						setPreview(normalized, titleInput.value.trim() || suggestion, "Title unavailable");
+					}
+				}
+
+				function queuePreview() {
+					window.clearTimeout(debounceTimer);
+					debounceTimer = window.setTimeout(() => {
+						refreshPreview(urlInput.value);
+					}, 280);
+				}
+
+				function readForm() {
+					const url = window.launchModel.normalizeLaunchUrl(urlInput.value);
+					if (!url || !window.launchModel.looksLikeUrl(url)) return null;
+					const title =
+						titleInput.value.trim() ||
+						window.launchModel.titleSuggestionFromUrl(url);
+					return { title, url };
+				}
+
+				function showAddLinkGroupsStep(bookmarkId, linkTitle) {
+					heading.textContent = "Add to projects";
+					sub.textContent = linkTitle
+						? `Choose projects for “${linkTitle}”.`
+						: "Choose projects for this link.";
+
+					const list = document.createElement("div");
+					list.className = "add-dialog-groups";
+					const projects = window.launchModel.projectsNewestFirst(
+						window.launchProjects || [],
+					);
+					const lastGroupId = window.launchModel.readLastGroupId(localStorage);
+					const selected = new Set(
+						window.launchModel.defaultSelectedGroupIds(projects, lastGroupId),
+					);
+
+					function paintGroupButton(button, projectId, name) {
+						const on = selected.has(projectId);
+						button.setAttribute("aria-pressed", on ? "true" : "false");
+						const label = document.createElement("span");
+						label.textContent = name;
+						const check = document.createElement("span");
+						check.className = "check";
+						check.textContent = on ? "✓" : "";
+						button.replaceChildren(label, check);
+					}
+
+					if (projects.length === 0) {
+						const empty = document.createElement("p");
+						empty.className = "add-dialog-empty";
+						empty.textContent = "No projects yet. You can add one from the board.";
+						body.replaceChildren(empty);
+					} else {
+						for (const project of projects) {
+							const button = document.createElement("button");
+							button.type = "button";
+							paintGroupButton(button, project._id, project.name);
+							button.addEventListener("click", () => {
+								if (selected.has(project._id)) selected.delete(project._id);
+								else selected.add(project._id);
+								paintGroupButton(button, project._id, project.name);
+							});
+							list.append(button);
+						}
+						body.replaceChildren(list);
+					}
+
+					const doneCancel = document.createElement("button");
+					doneCancel.type = "button";
+					doneCancel.className = "cancel";
+					doneCancel.textContent = "Cancel";
+					doneCancel.addEventListener("click", () => closeAddLinkDialog());
+					const confirm = document.createElement("button");
+					confirm.type = "button";
+					confirm.className = "primary";
+					confirm.textContent = "Add to projects";
+					confirm.addEventListener("click", () => {
+						const ids = [...selected];
+						if (ids.length > 0) {
+							let next = { title: linkTitle, projects: [] };
+							for (const projectId of ids) {
+								next = window.launchModel.addProject(next, projectId);
+							}
+							const convex = client();
+							if (convex) {
+								convex.mutation("launch:setProjects", {
+									id: bookmarkId,
+									projects: next.projects,
+								});
+							}
+							rememberLastGroup(ids[ids.length - 1]);
+						}
+						closeAddLinkDialog();
+					});
+					foot.replaceChildren(doneCancel, confirm);
+					confirm.focus();
+				}
+
+				titleInput.addEventListener("input", () => {
+					titleTouched = titleInput.value.trim().length > 0;
+					previewName.textContent = titleInput.value.trim() || "New link";
+				});
+				urlInput.addEventListener("input", queuePreview);
+				urlInput.addEventListener("keydown", (event) => {
+					if (event.key === "Enter") {
+						event.preventDefault();
+						save.click();
+					}
+				});
+				titleInput.addEventListener("keydown", (event) => {
+					if (event.key === "Enter") {
+						event.preventDefault();
+						save.click();
+					}
+				});
+				save.addEventListener("click", async () => {
+					const form = readForm();
+					if (!form || saving) return;
+					saving = true;
+					save.disabled = true;
+					saveAndGroups.disabled = true;
+					await createBookmark(form.title, form.url);
+					closeAddLinkDialog();
+				});
+				saveAndGroups.addEventListener("click", async () => {
+					const form = readForm();
+					if (!form || saving) return;
+					saving = true;
+					save.disabled = true;
+					saveAndGroups.disabled = true;
+					const id = await createBookmark(form.title, form.url);
+					if (!addDialog) return;
+					if (!id) {
+						closeAddLinkDialog();
+						return;
+					}
+					showAddLinkGroupsStep(id, form.title);
+				});
+
+				setTimeout(() => urlInput.focus(), 0);
+
+				if (navigator.clipboard?.readText) {
+					navigator.clipboard.readText().then((text) => {
+						if (!addDialog) return;
+						const pasted = String(text || "").trim();
+						if (!pasted || !window.launchModel.looksLikeUrl(pasted)) return;
+						urlInput.value = pasted;
+						urlInput.defaultValue = pasted;
+						refreshPreview(pasted);
+					}).catch(() => {});
+				}
+			}
+
+			function closeAddLinkDialog() {
+				if (!addDialog) return;
+				addDialog.remove();
+				addDialog = null;
+			}
+
+			function createBookmark(title, url) {
+				const convex = client();
+				if (!convex) return Promise.resolve(null);
+				return convex.mutation("launch:create", {
+					title,
+					url,
+					tags: ["top"],
+				});
+			}
+
+			function updateBookmark(id, args) {
+				const convex = client();
+				if (!convex) return;
+				convex.mutation("launch:update", {
+					id,
+					title: args.title,
+					url: args.url,
+					tags: args.tags || [],
+					projects: args.projects || [],
+				});
+				editingId = null;
+				render(bookmarks);
+			}
+
+			function removeBookmark(id) {
+				const convex = client();
+				if (!convex) return;
+				convex.mutation("launch:remove", { id });
+			}
+
+			function recordClick(id) {
+				const convex = window.launchClient;
+				if (!convex) return;
+				convex.mutation("launch:click", { id });
+			}
+
+			window.applyLayout = function apply(next) {
+				if (layoutStore) {
+					layoutStore.receiveSnapshot(next);
+					return;
+				}
+				confirmed = next;
+				pendingOperations = [];
+				setLayoutView(confirmed, true);
+			};
+		</script>
+		<script type="module" onerror="failLayoutStore()">
+			import { ConvexClient } from "https://esm.sh/convex@1.46.0/browser";
+			import * as launchModel from "./launch-model.mjs";
+			window.launchModel = launchModel;
+			renderLayout();
+
+			const status = document.getElementById("status");
+			let client;
+			try {
+				const config = await fetch("/api/launch-config").then((response) => response.json());
+				client = new ConvexClient(config.convexUrl);
+				window.launchClient = client;
+				attachLayoutStore(launchModel.createLaunchLayoutStore({
+					initialLayout: confirmed,
+					storage: localStorage,
+					applyOperation: launchModel.applyLayoutOperation,
+					createOperationId: () => crypto.randomUUID(),
+					isOnline: () => navigator.onLine,
+					mutate: (args) =>
+						client.mutation("launch:applyLayoutOperation", args),
+					render: renderStoreView,
+					restoreFocus: (operation) =>
+						window.launchDndController?.restoreFocusToOrigin(
+							operation
+								? launchModel.focusIdentityForOperation(
+										operation,
+										layoutStore.getView(),
+									)
+								: undefined,
+						),
+					setStatus: setLayoutStatus,
+				}));
+			} catch (error) {
+				console.error("Launch layout sync unavailable", error);
+				failLayoutStore();
+				throw error;
+			}
+			client.onUpdate(
+				"launch:getLayout",
+				{},
+				(next) => {
+					layoutStore.receiveSnapshot(next);
+				},
+				() => {
+					status.textContent = "Showing the saved copy.";
+				},
+			);
+		</script>
+	</body>
+</html>
