@@ -5,6 +5,10 @@ import {
 	enrichmentSliceKeyValidator,
 } from "./_utils/albumEnrichmentTrialValidators";
 import {
+	launchTagValidator,
+	projectMembershipValidator,
+} from "./_utils/launchLayout";
+import {
 	smartPlaylistFiltersValidator,
 	smartPlaylistSourceValidator,
 	smartPlaylistSyncModeValidator,
@@ -288,6 +292,7 @@ export default defineSchema({
 		lyricsOverride: v.optional(v.string()),
 		aboutOverride: v.optional(v.string()),
 		durationSecondsOverride: v.optional(v.number()),
+		albumArtUrlOverride: v.optional(v.string()),
 		hiddenCreditLabels: v.optional(v.array(v.string())),
 		shownCreditLabels: v.optional(v.array(v.string())),
 		zineLyricsColumnCount: v.optional(v.union(v.literal(1), v.literal(2))),
@@ -1766,21 +1771,25 @@ export default defineSchema({
 
 	launchProjects: defineTable({
 		name: v.string(),
+		position: v.optional(v.number()),
 		createdAt: v.number(),
 	}),
 
 	launchBookmarks: defineTable({
 		title: v.string(),
 		url: v.string(),
-		tags: v.array(v.union(v.literal("top"), v.literal("pinned"))),
-		projects: v.array(
-			v.object({
-				projectId: v.id("launchProjects"),
-				name: v.optional(v.string()),
-			}),
-		),
+		tags: v.array(launchTagValidator),
+		padPosition: v.optional(v.number()),
+		projects: v.array(projectMembershipValidator),
 		clickCount: v.number(),
 		lastClickedAt: v.optional(v.number()),
 		createdAt: v.number(),
 	}),
+
+	launchLayoutState: defineTable({
+		key: v.literal("default"),
+		version: v.number(),
+		recentOperationIds: v.array(v.string()),
+		updatedAt: v.number(),
+	}).index("by_key", ["key"]),
 });

@@ -39,6 +39,7 @@ import type * as _utils_geniusCreditVisibility from "../_utils/geniusCreditVisib
 import type * as _utils_geniusParser from "../_utils/geniusParser.js";
 import type * as _utils_geniusSpotifyTrackDurations from "../_utils/geniusSpotifyTrackDurations.js";
 import type * as _utils_google_rym_lucky_search from "../_utils/google_rym_lucky_search.js";
+import type * as _utils_launchLayout from "../_utils/launchLayout.js";
 import type * as _utils_libraryForLaterMigration from "../_utils/libraryForLaterMigration.js";
 import type * as _utils_libraryForLaterPredicate from "../_utils/libraryForLaterPredicate.js";
 import type * as _utils_libraryForLaterState from "../_utils/libraryForLaterState.js";
@@ -85,6 +86,7 @@ import type * as geniusAlbums from "../geniusAlbums.js";
 import type * as geniusCreditLabels from "../geniusCreditLabels.js";
 import type * as home from "../home.js";
 import type * as launch from "../launch.js";
+import type * as launchActions from "../launchActions.js";
 import type * as migrations_backfillCategorizedAt from "../migrations/backfillCategorizedAt.js";
 import type * as migrations_backfillListenFilterFields from "../migrations/backfillListenFilterFields.js";
 import type * as migrations_backfillSpotifyAlbumId from "../migrations/backfillSpotifyAlbumId.js";
@@ -144,6 +146,7 @@ declare const fullApi: ApiFromModules<{
   "_utils/geniusParser": typeof _utils_geniusParser;
   "_utils/geniusSpotifyTrackDurations": typeof _utils_geniusSpotifyTrackDurations;
   "_utils/google_rym_lucky_search": typeof _utils_google_rym_lucky_search;
+  "_utils/launchLayout": typeof _utils_launchLayout;
   "_utils/libraryForLaterMigration": typeof _utils_libraryForLaterMigration;
   "_utils/libraryForLaterPredicate": typeof _utils_libraryForLaterPredicate;
   "_utils/libraryForLaterState": typeof _utils_libraryForLaterState;
@@ -190,6 +193,7 @@ declare const fullApi: ApiFromModules<{
   geniusCreditLabels: typeof geniusCreditLabels;
   home: typeof home;
   launch: typeof launch;
+  launchActions: typeof launchActions;
   "migrations/backfillCategorizedAt": typeof migrations_backfillCategorizedAt;
   "migrations/backfillListenFilterFields": typeof migrations_backfillListenFilterFields;
   "migrations/backfillSpotifyAlbumId": typeof migrations_backfillSpotifyAlbumId;

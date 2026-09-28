@@ -12,6 +12,7 @@
 		"dev:all": "pnpm dev & npx convex dev",
 		"preview": "next build && PORT=1333 next start -p 1333",
 		"start": "PORT=1333 next start -p 1333",
+		"test:launch-browser": "playwright test --config playwright.config.mjs",
 		"typecheck": "tsc --noEmit",
 		"infra:up": "pulumi up",
 		"infra:preview": "pulumi preview",
@@ -46,7 +47,7 @@
 		"class-variance-authority": "^0.7.1",
 		"clsx": "^2.1.1",
 		"cn": "^0.2.6",
-		"convex": "^1.42.3",
+		"convex": "^1.46.0",
 		"convex-helpers": "^0.1.120",
 		"linkedom": "^0.18.12",
 		"lucide-react": "^0.539.0",
@@ -68,19 +69,24 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "1.9.4",
+		"@edge-runtime/vm": "^5.0.0",
+		"@playwright/test": "^1.63.0",
 		"@pulumi/aws": "^7.7.0",
 		"@pulumi/awsx": "^3.0.0",
 		"@pulumi/pulumi": "^3.199.0",
 		"@tailwindcss/postcss": "^4.0.15",
-		"@types/node": "^20.19.15",
+		"@types/node": "^26.6.3",
 		"@types/react": "^19.0.0",
 		"@types/react-dom": "^19.0.0",
+		"convex-test": "^0.0.60",
 		"postcss": "^8.5.3",
 		"tailwindcss": "^4.0.15",
 		"ts-node": "^10.9.2",
 		"tsx": "^4.22.0",
 		"tw-animate-css": "^1.3.6",
-		"typescript": "^5.8.2"
+		"typescript": "^5.8.2",
+		"vite": "^8.3.1",
+		"vitest": "^5.0.2"
 	},
 	"ct3aMetadata": {
 		"initVersion": "7.39.3"

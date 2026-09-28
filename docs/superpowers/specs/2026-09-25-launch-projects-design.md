@@ -27,6 +27,13 @@ launchBookmarks: defineTable({
   projects: v.array(v.object({
     projectId: v.id("launchProjects"),
     name: v.optional(v.string()),
+    environment: v.optional(v.union(
+      v.literal("prod"),
+      v.literal("qa"),
+      v.literal("stage"),
+      v.literal("dev"),
+      v.literal("local"),
+    )),
   })),
   clickCount: v.number(),
   lastClickedAt: v.optional(v.number()),
@@ -37,6 +44,8 @@ launchBookmarks: defineTable({
 Drop the `group` string. It cannot represent several projects.
 
 `projects[].name` is an override. When it is absent, the project row shows `title`. Changing `title` updates every project row that has no override. Setting an override changes that project row only. Clearing the override (renaming it back to the current title) makes it follow `title` again.
+
+`projects[].environment` labels that membership only. Any number of memberships in the same project may share an environment, including `prod`; changing one membership never changes another bookmark.
 
 An empty project is a `launchProjects` row with no bookmark pointing at it.
 
