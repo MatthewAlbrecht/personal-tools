@@ -6,11 +6,9 @@ import { FormattedIntroContent } from "./formatted-intro-content";
 export function ZineIntroPage({
 	content,
 	settings,
-	canEdit,
 }: {
 	content: string;
 	settings: ZineIntroSettings;
-	canEdit?: boolean;
 }) {
 	const hasContent = content.trim() !== "";
 
@@ -35,10 +33,6 @@ export function ZineIntroPage({
 						content={content}
 						paragraphClassName="zine-intro-paragraph"
 					/>
-				) : canEdit ? (
-					<p className="zine-intro-placeholder">
-						Add album intro on the edit page.
-					</p>
 				) : null}
 			</div>
 		</section>

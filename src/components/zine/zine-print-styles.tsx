@@ -444,14 +444,15 @@ export function ZinePrintStyles() {
 					}
 
 					.zine-inside-back-section + .zine-inside-back-section {
-						margin-top: 10pt;
+						margin-top: 16pt;
 					}
 
 					.zine-inside-back-section-title {
-						margin: 0 0 6pt;
-						font-size: 9pt;
-						font-weight: 600;
-						line-height: 1.2;
+						margin: 0 0 8pt;
+						font-size: 11pt;
+						font-weight: 700;
+						letter-spacing: 0.01em;
+						line-height: 1.15;
 					}
 
 					.zine-inside-back-discography-list,
@@ -491,13 +492,26 @@ export function ZinePrintStyles() {
 						align-items: center;
 					}
 
-					/* Keep the first row of each section top-aligned so the gap from
-					   the section header to its content matches across sections,
-					   even when recommendation rows are vertically centered. */
-					.zine-inside-back-discography-row:first-child,
-					.zine-page-inside-back-recommendation-rows-center
-						.zine-inside-back-recommendation-row:first-child {
-						align-items: flex-start;
+					.zine-inside-back-recommendations-title-only
+						.zine-inside-back-recommendation-row {
+						gap: 8pt;
+						margin-bottom: 5pt;
+					}
+
+					.zine-inside-back-recommendations-title-only
+						.zine-inside-back-recommendation-art {
+						width: 0.46in;
+						height: 0.46in;
+					}
+
+					.zine-inside-back-recommendations-title-only
+						.zine-inside-back-item-title {
+						line-height: 1.15;
+					}
+
+					.zine-inside-back-recommendations-title-only
+						.zine-inside-back-item-artist {
+						line-height: 1.15;
 					}
 
 					.zine-inside-back-recommendation-row:last-child {
@@ -555,6 +569,13 @@ export function ZinePrintStyles() {
 					.zine-page-inside-back-compact .zine-inside-back-recommendation-art {
 						width: 0.55in;
 						height: 0.55in;
+					}
+
+					.zine-page-inside-back-compact
+						.zine-inside-back-recommendations-title-only
+						.zine-inside-back-recommendation-art {
+						width: 0.42in;
+						height: 0.42in;
 					}
 
 					.zine-inside-back-art-placeholder {

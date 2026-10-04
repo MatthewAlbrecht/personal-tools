@@ -701,7 +701,6 @@ export function LyricsZine({
 			return (
 				<ZineIntroPage
 					key={`${keyPrefix}-intro`}
-					canEdit={canEdit}
 					content={page.content}
 					settings={page.settings}
 				/>
@@ -2392,28 +2391,24 @@ function ZineInsideBackLayoutControls({
 				Page margins and content block vertical position · screen preview only
 			</p>
 			<InsideBackMarginSlider
-				id="zine-inside-back-margin-top"
-				label="Top margin"
+				id="zine-inside-back-margin-vertical"
+				label="Top and bottom"
 				value={settings.marginTopPt}
-				onChange={(marginTopPt) => patchSettings({ marginTopPt })}
-			/>
-			<InsideBackMarginSlider
-				id="zine-inside-back-margin-right"
-				label="Right margin"
-				value={settings.marginRightPt}
-				onChange={(marginRightPt) => patchSettings({ marginRightPt })}
-			/>
-			<InsideBackMarginSlider
-				id="zine-inside-back-margin-bottom"
-				label="Bottom margin"
-				value={settings.marginBottomPt}
-				onChange={(marginBottomPt) => patchSettings({ marginBottomPt })}
+				onChange={(marginPt) =>
+					patchSettings({ marginTopPt: marginPt, marginBottomPt: marginPt })
+				}
 			/>
 			<InsideBackMarginSlider
 				id="zine-inside-back-margin-left"
 				label="Left margin"
 				value={settings.marginLeftPt}
 				onChange={(marginLeftPt) => patchSettings({ marginLeftPt })}
+			/>
+			<InsideBackMarginSlider
+				id="zine-inside-back-margin-right"
+				label="Right margin"
+				value={settings.marginRightPt}
+				onChange={(marginRightPt) => patchSettings({ marginRightPt })}
 			/>
 			<ZineLyricsColumnOptionRow
 				checked={settings.contentAreaAlign === "top"}

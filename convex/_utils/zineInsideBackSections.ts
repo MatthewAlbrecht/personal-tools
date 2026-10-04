@@ -97,10 +97,7 @@ export function normalizeZineInsideBackSections(
 					spotifyAlbumId: normalizeOptionalString(item.spotifyAlbumId),
 					hidden: item.hidden === true ? true : undefined,
 				}))
-				.filter((item) => item.albumTitle !== "")
 				.slice(0, 50);
-
-			if (items.length === 0) continue;
 
 			normalized.push({
 				type: "discography",
@@ -130,10 +127,7 @@ export function normalizeZineInsideBackSections(
 				imageUrl: normalizeOptionalString(item.imageUrl),
 				similarityBlurb: normalizeOptionalString(item.similarityBlurb),
 			}))
-			.filter((item) => item.albumTitle !== "" && item.artistName !== "")
 			.slice(0, 4);
-
-		if (items.length === 0) continue;
 
 		normalized.push({
 			type: "recommendations",

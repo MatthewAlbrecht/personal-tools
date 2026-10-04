@@ -100,8 +100,17 @@ function InsideBackSectionBlock({
 		);
 	}
 
+	const titleOnly = section.items.every(
+		(item) => !item.similarityBlurb?.trim(),
+	);
+
 	return (
-		<div className="zine-inside-back-section zine-inside-back-recommendations">
+		<div
+			className={cn(
+				"zine-inside-back-section zine-inside-back-recommendations",
+				titleOnly && "zine-inside-back-recommendations-title-only",
+			)}
+		>
 			<h2 className="zine-inside-back-section-title">
 				{section.title?.trim() ||
 					ZINE_INSIDE_BACK_DEFAULT_TITLES.recommendations}

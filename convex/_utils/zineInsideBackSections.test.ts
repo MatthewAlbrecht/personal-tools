@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { normalizeZineInsideBackSections } from "./zineInsideBackSections";
 
-test("normalizeZineInsideBackSections trims strings and drops empty items", () => {
+test("normalizeZineInsideBackSections trims strings and keeps blank rows", () => {
 	const result = normalizeZineInsideBackSections([
 		{
 			type: "discography",
@@ -15,7 +15,7 @@ test("normalizeZineInsideBackSections trims strings and drops empty items", () =
 					imageUrl: " https://example.com/kid-a.jpg ",
 					blurb: " Experimental pivot. ",
 				},
-				{ albumTitle: "  ", blurb: "skip me" },
+				{ albumTitle: "  ", blurb: "  " },
 			],
 		},
 	]);
@@ -25,7 +25,16 @@ test("normalizeZineInsideBackSections trims strings and drops empty items", () =
 	if (result[0]?.type !== "discography")
 		throw new Error("expected discography");
 	assert.equal(result[0].title, "My discography");
-	assert.equal(result[0].items.length, 1);
+	assert.equal(result[0].items.length, 2);
+	assert.deepEqual(result[0].items[1], {
+		albumTitle: "",
+		artistName: undefined,
+		year: undefined,
+		imageUrl: undefined,
+		blurb: "",
+		spotifyAlbumId: undefined,
+		hidden: undefined,
+	});
 	assert.deepEqual(result[0].items[0], {
 		albumTitle: "Kid A",
 		artistName: "Radiohead",
@@ -58,14 +67,27 @@ test("normalizeZineInsideBackSections trims recommendation year", () => {
 	assert.equal(result[0].items[0]?.year, "1997");
 });
 
-test("normalizeZineInsideBackSections drops sections with no valid items", () => {
+test("normalizeZineInsideBackSections keeps empty sections for the editor", () => {
 	const result = normalizeZineInsideBackSections([
 		{
 			type: "recommendations",
-			items: [{ albumTitle: "", artistName: "X" }],
+			items: [{ albumTitle: "", artistName: "" }],
+		},
+		{
+			type: "discography",
+			items: [{ albumTitle: "", blurb: "" }],
 		},
 	]);
-	assert.deepEqual(result, []);
+	assert.equal(result.length, 2);
+	if (result[0]?.type !== "recommendations") {
+		throw new Error("expected recommendations");
+	}
+	assert.equal(result[0].items[0]?.albumTitle, "");
+	assert.equal(result[0].items[0]?.artistName, "");
+	if (result[1]?.type !== "discography") {
+		throw new Error("expected discography");
+	}
+	assert.equal(result[1].items[0]?.albumTitle, "");
 });
 
 test("normalizeZineInsideBackSections keeps discography items without blurbs", () => {
