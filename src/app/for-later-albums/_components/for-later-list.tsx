@@ -1,7 +1,7 @@
 "use client";
 
 import { Disc3 } from "lucide-react";
-import { Button } from "~/components/ui/button";
+import { useEffect, useRef } from "react";
 import type { ForLaterAlbumRowData } from "../_utils/types";
 import { ForLaterRow } from "./for-later-row";
 
@@ -28,6 +28,26 @@ export function ForLaterList({
 	onAddGenreKey?: (key: string) => void;
 	onAddDescriptorKey?: (key: string) => void;
 }) {
+	const loadMoreRef = useRef<HTMLDivElement | null>(null);
+
+	useEffect(() => {
+		const node = loadMoreRef.current;
+		if (!node || !canLoadMore || isLoadingMore) {
+			return;
+		}
+
+		const observer = new IntersectionObserver(
+			(entries) => {
+				if (entries[0]?.isIntersecting) {
+					onLoadMore();
+				}
+			},
+			{ rootMargin: "320px 0px" },
+		);
+		observer.observe(node);
+		return () => observer.disconnect();
+	}, [canLoadMore, isLoadingMore, onLoadMore]);
+
 	if (isLoading) {
 		return (
 			<div className="flex h-64 items-center justify-center">
@@ -67,16 +87,9 @@ export function ForLaterList({
 					onAddDescriptorKey={onAddDescriptorKey}
 				/>
 			))}
-			{canLoadMore ? (
-				<div className="flex justify-center pt-2">
-					<Button
-						type="button"
-						variant="outline"
-						onClick={onLoadMore}
-						disabled={isLoadingMore}
-					>
-						{isLoadingMore ? "Loading..." : "Load more"}
-					</Button>
+			{canLoadMore || isLoadingMore ? (
+				<div ref={loadMoreRef} className="flex justify-center pt-2">
+					<p className="text-muted-foreground text-sm">Loading more...</p>
 				</div>
 			) : null}
 		</section>

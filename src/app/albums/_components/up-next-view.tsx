@@ -3,7 +3,7 @@
 import { usePaginatedQuery, useQuery } from "convex/react";
 import { Disc3, SlidersHorizontal } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useCallback, useMemo, useState } from "react";
 import { AlbumRatingDrawer } from "~/components/album-rating-drawer";
 import { LoginPrompt } from "~/components/login-prompt";
 import { badgeVariants } from "~/components/ui/badge";
@@ -79,6 +79,9 @@ function UpNextViewInner() {
 		userId ? { userId, filters } : "skip",
 		{ initialNumItems: 30 },
 	);
+
+	const loadMoreRows = rows.loadMore;
+	const handleLoadMore = useCallback(() => loadMoreRows(30), [loadMoreRows]);
 
 	const {
 		albumToRate,
@@ -203,7 +206,7 @@ function UpNextViewInner() {
 					isLoading={rows.status === "LoadingFirstPage"}
 					isLoadingMore={rows.status === "LoadingMore"}
 					canLoadMore={rows.status === "CanLoadMore"}
-					onLoadMore={() => rows.loadMore(30)}
+					onLoadMore={handleLoadMore}
 					onRateAlbum={handleRateAlbum}
 					onLinkRymAlbum={openAssociateDrawer}
 					onAddGenreKey={addGenreKeyToFilters}
