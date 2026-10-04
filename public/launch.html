@@ -1363,6 +1363,8 @@
 					cell.dataset.id = bookmark._id;
 					const link = document.createElement("a");
 					link.href = bookmark.url;
+					link.target = "_blank";
+					link.rel = "noopener noreferrer";
 					const title = document.createElement("span");
 					title.className = "title";
 					title.textContent = bookmark.title;
@@ -1422,6 +1424,8 @@
 				const link = document.createElement("a");
 				link.className = "tile";
 				link.href = bookmark.url;
+				link.target = "_blank";
+				link.rel = "noopener noreferrer";
 				link.title = bookmark.title;
 				link.append(favicon(bookmark, true));
 				link.addEventListener("click", (event) => {
@@ -1460,6 +1464,8 @@
 				const link = document.createElement("a");
 				link.className = "tile";
 				link.href = bookmark.url;
+				link.target = "_blank";
+				link.rel = "noopener noreferrer";
 				link.title = model
 					? model.displayName(bookmark, membership)
 					: membership.name || bookmark.title;
@@ -1507,6 +1513,8 @@
 				const link = document.createElement("a");
 				link.className = "pin";
 				link.href = bookmark.url;
+				link.target = "_blank";
+				link.rel = "noopener noreferrer";
 				link.append(favicon(bookmark, false));
 				const title = document.createElement("span");
 				title.className = "title";
