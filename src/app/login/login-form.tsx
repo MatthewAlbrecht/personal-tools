@@ -6,6 +6,7 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { useAuth } from "~/lib/auth-context";
+import { safeNextPath } from "~/lib/route-access";
 
 export function LoginForm() {
 	const router = useRouter();
@@ -26,7 +27,7 @@ export function LoginForm() {
 		setIsSubmitting(false);
 
 		if (success) {
-			router.replace(next || "/");
+			router.replace(safeNextPath(next));
 		} else {
 			setError("Invalid credentials");
 		}

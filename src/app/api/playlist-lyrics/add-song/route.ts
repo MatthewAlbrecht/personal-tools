@@ -1,6 +1,6 @@
-import { cookies } from "next/headers";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { getSessionUserId } from "~/server/session-user";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import {
@@ -21,10 +21,7 @@ type AddSongRequestBody = {
 };
 
 export async function POST(request: NextRequest) {
-	const cookieStore = await cookies();
-	const session = cookieStore.get("session")?.value;
-
-	if (!session) {
+	if (!(await getSessionUserId(request))) {
 		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 	}
 

@@ -1,6 +1,11 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { env } from "~/env";
+import {
+	SESSION_MAX_AGE_SECONDS,
+	constantTimeEqual,
+	signSessionCookie,
+} from "~/lib/session-cookie";
 
 export async function POST(request: Request) {
 	const formData = await request.formData();
@@ -14,17 +19,18 @@ export async function POST(request: Request) {
 		return NextResponse.json({ ok: true });
 	}
 
-	if (username === env.AUTH_USERNAME && password === env.AUTH_PASSWORD) {
-		const token = Buffer.from(`${username}:${Date.now()}`).toString(
-			"base64url",
-		);
+	// Evaluate both comparisons (no short-circuit) so timing does not reveal which failed.
+	const usernameOk = constantTimeEqual(username, env.AUTH_USERNAME);
+	const passwordOk = constantTimeEqual(password, env.AUTH_PASSWORD);
+	if (usernameOk && passwordOk) {
+		const token = await signSessionCookie(username, env.SESSION_SECRET);
 		const cookieStore = await cookies();
 		cookieStore.set("session", token, {
 			httpOnly: true,
 			sameSite: "lax",
 			path: "/",
 			secure: env.NODE_ENV === "production",
-			maxAge: 60 * 60 * 24 * 7, // 7 days
+			maxAge: SESSION_MAX_AGE_SECONDS,
 		});
 		return NextResponse.json({ ok: true });
 	}

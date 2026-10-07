@@ -2,12 +2,12 @@ import { ConvexHttpClient } from "convex/browser";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { env } from "~/env.js";
+import { getSessionUserId } from "~/server/session-user";
 import { api } from "../../../../convex/_generated/api";
 
 export async function POST(request: NextRequest) {
 	try {
-		const session = request.cookies.get("session")?.value;
-		if (!session) {
+		if (!(await getSessionUserId(request))) {
 			return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 		}
 

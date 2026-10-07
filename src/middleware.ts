@@ -1,66 +1,38 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { env } from "~/env";
+import { isPublicPath } from "~/lib/route-access";
+import { verifySessionCookie } from "~/lib/session-cookie";
 
-export function middleware(request: NextRequest) {
-	// Allow all /public/* routes without auth
-	if (request.nextUrl.pathname.startsWith("/public")) {
+// Default-deny: every request needs a validly signed session cookie unless the
+// path is in the allowlist in `~/lib/route-access`.
+export async function middleware(request: NextRequest) {
+	const { pathname, search } = request.nextUrl;
+
+	if (isPublicPath(pathname)) {
 		return NextResponse.next();
 	}
 
-	const session = request.cookies.get("session")?.value;
-
-	// Protect private app routes and their API calls
-	const isBooks = request.nextUrl.pathname.startsWith("/books");
-	const isFolioSociety = request.nextUrl.pathname.startsWith("/folio-society");
-	const isArticles = request.nextUrl.pathname.startsWith("/articles");
-	const isConcerts = request.nextUrl.pathname.startsWith("/concerts");
-	const isBirthdays = request.nextUrl.pathname.startsWith("/birthdays");
-	const isPlaylistLyrics =
-		request.nextUrl.pathname.startsWith("/playlist-lyrics") ||
-		request.nextUrl.pathname.startsWith("/lyrics/playlists");
-	const isPlaylistLyricsApi = request.nextUrl.pathname.startsWith(
-		"/api/migrate-playlist-lyrics",
+	const session = await verifySessionCookie(
+		request.cookies.get("session")?.value,
+		env.SESSION_SECRET,
 	);
-	const isLyricsMigrateApi = request.nextUrl.pathname.startsWith(
-		"/api/migrate-lyrics",
-	);
-
-	if (
-		(isBooks ||
-			isFolioSociety ||
-			isArticles ||
-			isConcerts ||
-			isBirthdays ||
-			isPlaylistLyrics ||
-			isPlaylistLyricsApi ||
-			isLyricsMigrateApi) &&
-		!session
-	) {
-		const url = request.nextUrl.clone();
-		url.pathname = "/login";
-		url.searchParams.set("next", request.nextUrl.pathname);
-		return NextResponse.redirect(url);
+	if (session) {
+		return NextResponse.next();
 	}
-	return NextResponse.next();
+
+	if (pathname.startsWith("/api/")) {
+		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+	}
+
+	const url = request.nextUrl.clone();
+	url.pathname = "/login";
+	url.search = "";
+	url.searchParams.set("next", `${pathname}${search}`);
+	return NextResponse.redirect(url);
 }
 
 export const config = {
-	matcher: [
-		"/books",
-		"/books/:path*",
-		"/folio-society",
-		"/folio-society/:path*",
-		"/articles",
-		"/articles/:path*",
-		"/concerts",
-		"/concerts/:path*",
-		"/birthdays",
-		"/birthdays/:path*",
-		"/playlist-lyrics",
-		"/playlist-lyrics/:path*",
-		"/lyrics/playlists",
-		"/lyrics/playlists/:path*",
-		"/api/migrate-playlist-lyrics",
-		"/api/migrate-lyrics",
-	],
+	// Run on everything except build assets; the allowlist handles the rest.
+	matcher: ["/((?!_next/static|_next/image).*)"],
 };
