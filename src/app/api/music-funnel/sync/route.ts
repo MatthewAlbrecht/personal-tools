@@ -1,4 +1,3 @@
-import { ConvexHttpClient } from "convex/browser";
 import { type NextRequest, NextResponse } from "next/server";
 import { env } from "~/env.js";
 import {
@@ -6,23 +5,22 @@ import {
 	syncMusicFunnelSource,
 } from "~/lib/music-funnel-sync";
 import { refreshAccessToken } from "~/lib/spotify";
-import { api } from "../../../../../convex/_generated/api";
+import {
+	getSpotifyConnection,
+	updateSpotifyTokens,
+} from "~/server/convex-server";
+import { getSessionUserId } from "~/server/session-user";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
-	const body = (await request.json()) as {
-		userId?: string;
-		sourceId?: string;
-	};
-	if (!body.userId) {
-		return NextResponse.json({ error: "Missing userId" }, { status: 400 });
+	const userId = await getSessionUserId(request);
+	if (!userId) {
+		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 	}
+	const body = (await request.json()) as { sourceId?: string };
 
 	try {
-		const convex = new ConvexHttpClient(env.NEXT_PUBLIC_CONVEX_URL);
-		const connection = await convex.query(api.spotify.getConnection, {
-			userId: body.userId,
-		});
+		const connection = await getSpotifyConnection(userId);
 
 		if (!connection) {
 			return NextResponse.json(
@@ -34,8 +32,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 		let accessToken = connection.accessToken;
 		if (connection.expiresAt < Date.now() + 5 * 60 * 1000) {
 			const tokens = await refreshAccessToken(connection.refreshToken);
-			await convex.mutation(api.spotify.updateTokens, {
-				userId: body.userId,
+			await updateSpotifyTokens({
+				userId: userId,
 				accessToken: tokens.access_token,
 				expiresIn: tokens.expires_in,
 				refreshToken: tokens.refresh_token,
@@ -46,12 +44,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 		const result = body.sourceId
 			? await syncMusicFunnelSource({
 					accessToken,
-					userId: body.userId,
+					userId: userId,
 					sourceId: body.sourceId as Id<"musicFunnelSources">,
 				})
 			: await syncMusicFunnel({
 					accessToken,
-					userId: body.userId,
+					userId: userId,
 					source: "manual",
 				});
 

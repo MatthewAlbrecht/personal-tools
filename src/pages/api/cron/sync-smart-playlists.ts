@@ -1,9 +1,11 @@
-import { ConvexHttpClient } from "convex/browser";
 import type { NextApiRequest, NextApiResponse } from "next";
 import { env } from "~/env.js";
 import { syncAllSmartPlaylistsForUser } from "~/lib/smart-playlists-sync";
 import { refreshAccessToken } from "~/lib/spotify";
-import { api } from "../../../../convex/_generated/api";
+import {
+	getSpotifyConnection,
+	updateSpotifyTokens,
+} from "~/server/convex-server";
 
 export default async function handler(
 	req: NextApiRequest,
@@ -26,10 +28,7 @@ export default async function handler(
 	try {
 		console.log("🔄 Starting scheduled smart playlist sync for user:", userId);
 
-		const convex = new ConvexHttpClient(env.NEXT_PUBLIC_CONVEX_URL);
-		const connection = await convex.query(api.spotify.getConnection, {
-			userId,
-		});
+		const connection = await getSpotifyConnection(userId);
 		if (!connection) {
 			console.error("❌ No Spotify connection found for user:", userId);
 			return res.status(404).json({ error: "No Spotify connection found" });
@@ -39,7 +38,7 @@ export default async function handler(
 		if (connection.expiresAt < Date.now() + 5 * 60 * 1000) {
 			console.log("🔑 Refreshing Spotify access token...");
 			const tokens = await refreshAccessToken(connection.refreshToken);
-			await convex.mutation(api.spotify.updateTokens, {
+			await updateSpotifyTokens({
 				userId,
 				accessToken: tokens.access_token,
 				expiresIn: tokens.expires_in,

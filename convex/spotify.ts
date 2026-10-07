@@ -4,7 +4,13 @@ import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import { action, mutation, query } from "./_generated/server";
+import {
+	action,
+	internalMutation,
+	internalQuery,
+	mutation,
+	query,
+} from "./_generated/server";
 import {
 	buildListenOrdinalsById,
 	enrichListenWithUserAlbum,
@@ -605,7 +611,22 @@ function parseTrackDataFields(trackDataJson?: string) {
 // Connection Management
 // ============================================================================
 
-export const upsertConnection = mutation({
+// Token-bearing connection functions are internal: they are reachable only from
+// other Convex functions and from the secret-guarded HTTP actions in `http.ts`.
+const spotifyConnectionValidator = v.object({
+	_id: v.id("spotifyConnections"),
+	_creationTime: v.number(),
+	userId: v.string(),
+	accessToken: v.string(),
+	refreshToken: v.string(),
+	expiresAt: v.number(),
+	spotifyUserId: v.string(),
+	displayName: v.optional(v.string()),
+	createdAt: v.number(),
+	updatedAt: v.number(),
+});
+
+export const upsertConnection = internalMutation({
 	args: {
 		userId: v.string(),
 		accessToken: v.string(),
@@ -614,6 +635,7 @@ export const upsertConnection = mutation({
 		spotifyUserId: v.string(),
 		displayName: v.optional(v.string()),
 	},
+	returns: v.id("spotifyConnections"),
 	handler: async (ctx, args) => {
 		const now = Date.now();
 		const expiresAt = now + args.expiresIn * 1000;
@@ -648,8 +670,9 @@ export const upsertConnection = mutation({
 	},
 });
 
-export const getConnection = query({
+export const getConnection = internalQuery({
 	args: { userId: v.string() },
+	returns: v.union(spotifyConnectionValidator, v.null()),
 	handler: async (ctx, args) => {
 		return await ctx.db
 			.query("spotifyConnections")
@@ -658,13 +681,14 @@ export const getConnection = query({
 	},
 });
 
-export const updateTokens = mutation({
+export const updateTokens = internalMutation({
 	args: {
 		userId: v.string(),
 		accessToken: v.string(),
 		expiresIn: v.number(),
 		refreshToken: v.optional(v.string()),
 	},
+	returns: v.null(),
 	handler: async (ctx, args) => {
 		const connection = await ctx.db
 			.query("spotifyConnections")
@@ -684,11 +708,13 @@ export const updateTokens = mutation({
 			...(args.refreshToken ? { refreshToken: args.refreshToken } : {}),
 			updatedAt: now,
 		});
+		return null;
 	},
 });
 
-export const deleteConnection = mutation({
+export const deleteConnection = internalMutation({
 	args: { userId: v.string() },
+	returns: v.null(),
 	handler: async (ctx, args) => {
 		const connection = await ctx.db
 			.query("spotifyConnections")
@@ -698,6 +724,7 @@ export const deleteConnection = mutation({
 		if (connection) {
 			await ctx.db.delete(connection._id);
 		}
+		return null;
 	},
 });
 
@@ -1605,13 +1632,6 @@ export const getLastSyncRun = query({
 	},
 });
 
-export const getAllConnections = query({
-	args: {},
-	handler: async (ctx) => {
-		return await ctx.db.query("spotifyConnections").collect();
-	},
-});
-
 // ============================================================================
 // Album Management
 // ============================================================================
@@ -2280,7 +2300,7 @@ export const backfillCanonicalTrackArtistIds = action({
 			throw new Error("SPOTIFY_SYNC_USER_ID not configured");
 		}
 
-		const connection = await ctx.runQuery(api.spotify.getConnection, {
+		const connection = await ctx.runQuery(internal.spotify.getConnection, {
 			userId,
 		});
 
@@ -2324,7 +2344,7 @@ export const backfillCanonicalTrackArtistIds = action({
 			const tokens = await tokenResponse.json();
 			accessToken = tokens.access_token;
 
-			await ctx.runMutation(api.spotify.updateTokens, {
+			await ctx.runMutation(internal.spotify.updateTokens, {
 				userId,
 				accessToken: tokens.access_token,
 				expiresIn: tokens.expires_in,

@@ -1,7 +1,12 @@
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
-import { mutation, query } from "./_generated/server";
+import {
+	internalMutation,
+	internalQuery,
+	mutation,
+	query,
+} from "./_generated/server";
 import {
 	MAX_LAUNCH_BOOKMARKS,
 	MAX_LAUNCH_PROJECTS,
@@ -534,7 +539,7 @@ const backfillSummaryValidator = v.object({
 	repairedPositions: v.number(),
 });
 
-export const backfillLayoutOrdering = mutation({
+export const backfillLayoutOrdering = internalMutation({
 	args: {},
 	returns: backfillSummaryValidator,
 	handler: async (ctx) => {
@@ -611,7 +616,7 @@ const verificationResultValidator = v.object({
 	}),
 });
 
-export const verifyLayoutOrdering = query({
+export const verifyLayoutOrdering = internalQuery({
 	args: {},
 	returns: verificationResultValidator,
 	handler: async (ctx) => {

@@ -10,6 +10,10 @@ import {
 	refreshAccessToken,
 	trackToUri,
 } from "~/lib/spotify";
+import {
+	getSpotifyConnection,
+	updateSpotifyTokens,
+} from "~/server/convex-server";
 
 type CronResponse = {
 	success?: boolean;
@@ -111,9 +115,7 @@ export default async function handler(
 		}
 
 		// Get connection for token refresh
-		const connection = await convex.query(api.spotify.getConnection, {
-			userId,
-		});
+		const connection = await getSpotifyConnection(userId);
 
 		if (!connection) {
 			return res.status(404).json({ error: "No Spotify connection found" });
@@ -125,7 +127,7 @@ export default async function handler(
 
 		if (isExpired) {
 			const newTokens = await refreshAccessToken(connection.refreshToken);
-			await convex.mutation(api.spotify.updateTokens, {
+			await updateSpotifyTokens({
 				userId,
 				accessToken: newTokens.access_token,
 				expiresIn: newTokens.expires_in,

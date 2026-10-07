@@ -1,4 +1,5 @@
-import { mutation } from "../_generated/server";
+import { v } from "convex/values";
+import { internalMutation } from "../_generated/server";
 
 /**
  * Migration: Backfill spotifyAlbumId on spotifyTracks
@@ -9,8 +10,15 @@ import { mutation } from "../_generated/server";
  * Run this once from the Convex dashboard or CLI:
  *   npx convex run migrations/backfillSpotifyAlbumId:run
  */
-export const run = mutation({
+export const run = internalMutation({
 	args: {},
+	returns: v.object({
+		total: v.number(),
+		updated: v.number(),
+		skipped: v.number(),
+		noTrackData: v.number(),
+		parseErrors: v.number(),
+	}),
 	handler: async (ctx) => {
 		// Get all tracks that don't have spotifyAlbumId set
 		const allTracks = await ctx.db.query("spotifyTracks").collect();

@@ -9,6 +9,10 @@ import {
 	refreshAccessToken,
 	trackToUri,
 } from "~/lib/spotify";
+import {
+	getSpotifyConnection,
+	updateSpotifyTokens,
+} from "~/server/convex-server";
 
 // How many days back to consider a release as "new"
 const NEW_RELEASE_DAYS = 30;
@@ -70,9 +74,7 @@ export default async function handler(
 		console.log(`🎤 Checking ${artists.length} artists for new releases...`);
 
 		// Get Spotify connection
-		const connection = await convex.query(api.spotify.getConnection, {
-			userId,
-		});
+		const connection = await getSpotifyConnection(userId);
 
 		if (!connection) {
 			console.error("❌ No Spotify connection found");
@@ -88,7 +90,7 @@ export default async function handler(
 			console.log("🔑 Refreshing Spotify access token...");
 			const newTokens = await refreshAccessToken(connection.refreshToken);
 
-			await convex.mutation(api.spotify.updateTokens, {
+			await updateSpotifyTokens({
 				userId,
 				accessToken: newTokens.access_token,
 				expiresIn: newTokens.expires_in,

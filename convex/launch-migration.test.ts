@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { convexTest } from "convex-test";
 import { test } from "vitest";
 
-import { api } from "./_generated/api";
+import { internal } from "./_generated/api";
 import { buildLaunchBackfillPatches } from "./_utils/launchLayout";
 import schema from "./schema";
 
@@ -272,7 +272,7 @@ test("runtime migration is idempotent and preserves newer state and metadata", a
 		return { bookmarkId, projectId };
 	});
 
-	const first = await t.mutation(api.launch.backfillLayoutOrdering, {});
+	const first = await t.mutation(internal.launch.backfillLayoutOrdering, {});
 	assert.equal(first.alreadyInitialized, false);
 	assert.equal(first.version, 1);
 	assert.equal(first.normalizedTags, 1);
@@ -288,7 +288,7 @@ test("runtime migration is idempotent and preserves newer state and metadata", a
 		});
 	});
 
-	const second = await t.mutation(api.launch.backfillLayoutOrdering, {});
+	const second = await t.mutation(internal.launch.backfillLayoutOrdering, {});
 	assert.equal(second.alreadyInitialized, true);
 	assert.equal(second.version, 9);
 
@@ -313,7 +313,7 @@ test("runtime migration is idempotent and preserves newer state and metadata", a
 	assert.deepEqual(stored.states[0]?.recentOperationIds, ["newer-operation"]);
 	assert.equal(stored.states[0]?.updatedAt, 999);
 
-	const verification = await t.query(api.launch.verifyLayoutOrdering, {});
+	const verification = await t.query(internal.launch.verifyLayoutOrdering, {});
 	assert.equal(verification.valid, true);
 	assert.deepEqual(verification.counts, {
 		singletons: 1,
@@ -336,14 +336,14 @@ test("runtime verification detects duplicate singleton rows", async () => {
 		}
 	});
 
-	const result = await t.query(api.launch.verifyLayoutOrdering, {});
+	const result = await t.query(internal.launch.verifyLayoutOrdering, {});
 	assert.equal(result.valid, false);
 	assert.equal(result.counts.singletons, 2);
 	assert.deepEqual(result.violations.singleton, [
 		"Expected one layout state row, found 2",
 	]);
 	await assert.rejects(
-		t.mutation(api.launch.backfillLayoutOrdering, {}),
+		t.mutation(internal.launch.backfillLayoutOrdering, {}),
 		/unique\(\) query returned more than one result/,
 	);
 });
@@ -351,16 +351,16 @@ test("runtime verification detects duplicate singleton rows", async () => {
 test("runtime endpoints enforce argument validators and current auth boundary", async () => {
 	const t = convexTest(schema, modules);
 
-	await t.mutation(api.launch.backfillLayoutOrdering, {});
-	await t.query(api.launch.verifyLayoutOrdering, {});
+	await t.mutation(internal.launch.backfillLayoutOrdering, {});
+	await t.query(internal.launch.verifyLayoutOrdering, {});
 	await assert.rejects(
-		t.mutation(api.launch.backfillLayoutOrdering, {
+		t.mutation(internal.launch.backfillLayoutOrdering, {
 			extra: true,
 		} as never),
 		/Validator error/,
 	);
 	await assert.rejects(
-		t.query(api.launch.verifyLayoutOrdering, { extra: true } as never),
+		t.query(internal.launch.verifyLayoutOrdering, { extra: true } as never),
 		/Validator error/,
 	);
 });

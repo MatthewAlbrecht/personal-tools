@@ -37,6 +37,7 @@ export default function SpotifyPlaylisterPage() {
 		connection,
 		isConnected,
 		getValidAccessToken,
+		refreshConnection,
 	} = useSpotifyAuth();
 
 	// Sync history hook for album detection
@@ -71,7 +72,6 @@ export default function SpotifyPlaylisterPage() {
 	);
 
 	// Convex mutations
-	const deleteConnection = useMutation(convexApi.spotify.deleteConnection);
 	const upsertPlaylist = useMutation(convexApi.spotify.upsertPlaylist);
 	const updatePlaylistDescription = useMutation(
 		convexApi.spotify.updatePlaylistDescription,
@@ -394,7 +394,9 @@ export default function SpotifyPlaylisterPage() {
 	async function handleDisconnect() {
 		if (!userId) return;
 		try {
-			await deleteConnection({ userId });
+			const res = await fetch("/api/spotify/session", { method: "DELETE" });
+			if (!res.ok) throw new Error(`Disconnect failed (${res.status})`);
+			await refreshConnection();
 			setSpotifyPlaylists(undefined);
 			toast.success("Disconnected from Spotify");
 		} catch {

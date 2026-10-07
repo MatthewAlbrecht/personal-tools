@@ -1,4 +1,5 @@
-import { internalMutation, internalQuery, mutation } from "../_generated/server";
+import { v } from "convex/values";
+import { internalMutation, internalQuery } from "../_generated/server";
 
 /**
  * Migration: Initialize rating history for existing rated albums
@@ -75,7 +76,9 @@ export const initializeRatingHistory = internalMutation({
 /**
  * Clear all rating history entries (use before re-running migration)
  */
-export const clearRatingHistory = mutation({
+export const clearRatingHistory = internalMutation({
+	args: {},
+	returns: v.object({ deleted: v.number() }),
 	handler: async (ctx) => {
 		const allHistory = await ctx.db.query("ratingHistory").collect();
 		let deleted = 0;

@@ -1,18 +1,22 @@
-import { fetchMutation, fetchQuery } from "convex/nextjs";
 import { type NextRequest, NextResponse } from "next/server";
 import { refreshAccessToken } from "~/lib/spotify";
-import { api } from "../../../../../convex/_generated/api";
+import {
+	getSpotifyConnection,
+	updateSpotifyTokens,
+} from "~/server/convex-server";
+import { getSessionUserId } from "~/server/session-user";
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
 	try {
-		const { userId } = (await request.json()) as { userId: string };
+		// The user comes from the signed session cookie, never from the request body.
+		const userId = await getSessionUserId(request);
 
 		if (!userId) {
-			return NextResponse.json({ error: "No userId" }, { status: 400 });
+			return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 		}
 
 		// Get current connection
-		const connection = await fetchQuery(api.spotify.getConnection, { userId });
+		const connection = await getSpotifyConnection(userId);
 
 		if (!connection) {
 			return NextResponse.json(
@@ -40,7 +44,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 		const newTokens = await refreshAccessToken(connection.refreshToken);
 
 		// Update in Convex
-		await fetchMutation(api.spotify.updateTokens, {
+		await updateSpotifyTokens({
 			userId,
 			accessToken: newTokens.access_token,
 			expiresIn: newTokens.expires_in,

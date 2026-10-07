@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel";
-import { mutation } from "../_generated/server";
+import { internalMutation } from "../_generated/server";
 import {
 	computeListenFilterFields,
 	listenFilterFieldsNeedPatch,
@@ -13,7 +13,7 @@ import {
  *   npx convex run migrations/backfillListenFilterFields:runBatch
  *   npx convex run migrations/backfillListenFilterFields:runBatch '{"cursor":"<continueCursor>"}'
  */
-export const runBatch = mutation({
+export const runBatch = internalMutation({
 	args: {
 		cursor: v.optional(v.string()),
 		batchSize: v.optional(v.number()),

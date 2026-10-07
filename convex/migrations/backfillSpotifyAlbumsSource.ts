@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation } from "../_generated/server";
+import { internalMutation } from "../_generated/server";
 
 /**
  * Migration: Backfill source on spotifyAlbums
@@ -11,7 +11,7 @@ import { mutation } from "../_generated/server";
  *   npx convex run migrations/backfillSpotifyAlbumsSource:runBatch --prod
  *   npx convex run migrations/backfillSpotifyAlbumsSource:runBatch --prod '{"cursor":"<continueCursor>"}'
  */
-export const runBatch = mutation({
+export const runBatch = internalMutation({
 	args: {
 		cursor: v.optional(v.string()),
 		batchSize: v.optional(v.number()),
@@ -59,7 +59,7 @@ export const runBatch = mutation({
 /**
  * @deprecated Prefer runBatch for production-sized tables.
  */
-export const run = mutation({
+export const run = internalMutation({
 	args: {},
 	returns: v.object({
 		total: v.number(),

@@ -14,6 +14,8 @@ export const env = createEnv({
 		AUTH_PASSWORD: z.string().min(1),
 		SESSION_SECRET: z.string().min(16),
 		CRON_SECRET: z.string().min(16),
+		/** Bearer secret for the server-only Convex HTTP actions (`convex/http.ts`); must match the Convex deployment env var of the same name. */
+		CONVEX_SERVER_SECRET: z.string().min(16),
 		RESEND_API_KEY: z.string().min(1),
 		NOTIFICATION_EMAIL: z.string().email(),
 		AWS_ACCESS_KEY_ID: z.string().min(1),
@@ -67,6 +69,7 @@ export const env = createEnv({
 		AUTH_PASSWORD: process.env.AUTH_PASSWORD,
 		SESSION_SECRET: process.env.SESSION_SECRET,
 		CRON_SECRET: process.env.CRON_SECRET,
+		CONVEX_SERVER_SECRET: process.env.CONVEX_SERVER_SECRET,
 		RESEND_API_KEY: process.env.RESEND_API_KEY,
 		NOTIFICATION_EMAIL: process.env.NOTIFICATION_EMAIL,
 		NEXT_PUBLIC_CONVEX_URL: process.env.NEXT_PUBLIC_CONVEX_URL,

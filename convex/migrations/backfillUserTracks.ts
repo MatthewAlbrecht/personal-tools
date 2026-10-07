@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "../_generated/server";
+import { internalMutation, internalQuery } from "../_generated/server";
 
 /**
  * Migration to backfill userTracks from existing spotifyTracks data.
@@ -10,8 +10,14 @@ import { mutation, query } from "../_generated/server";
  */
 
 // Query to get stats about the migration
-export const getStats = query({
+export const getStats = internalQuery({
 	args: {},
+	returns: v.object({
+		spotifyTracksCount: v.number(),
+		userTracksCount: v.number(),
+		canonicalTracksCount: v.number(),
+		needsMigrationCount: v.number(),
+	}),
 	handler: async (ctx) => {
 		const spotifyTracks = await ctx.db.query("spotifyTracks").collect();
 		const userTracks = await ctx.db.query("userTracks").collect();
@@ -37,11 +43,19 @@ export const getStats = query({
 });
 
 // Process a batch of spotifyTracks and create userTracks records
-export const processBatch = mutation({
+export const processBatch = internalMutation({
 	args: {
 		batchSize: v.optional(v.number()),
 		cursor: v.optional(v.string()), // Last processed trackId for pagination
 	},
+	returns: v.object({
+		processed: v.number(),
+		skipped: v.optional(v.number()),
+		created: v.optional(v.number()),
+		remaining: v.number(),
+		done: v.boolean(),
+		nextCursor: v.union(v.string(), v.null()),
+	}),
 	handler: async (ctx, args) => {
 		const batchSize = args.batchSize ?? 100;
 
@@ -135,10 +149,16 @@ export const processBatch = mutation({
 });
 
 // Run a single batch - call this repeatedly until done is true
-export const runBatch = mutation({
+export const runBatch = internalMutation({
 	args: {
 		batchSize: v.optional(v.number()),
 	},
+	returns: v.object({
+		processed: v.number(),
+		created: v.number(),
+		skipped: v.optional(v.number()),
+		done: v.boolean(),
+	}),
 	handler: async (ctx, args) => {
 		const batchSize = args.batchSize ?? 50;
 
@@ -219,10 +239,18 @@ export const runBatch = mutation({
 });
 
 // Helper to run all batches - run this in a loop from CLI
-export const run = mutation({
+export const run = internalMutation({
 	args: {
 		cursor: v.optional(v.string()),
 	},
+	returns: v.object({
+		processed: v.number(),
+		created: v.number(),
+		skipped: v.optional(v.number()),
+		done: v.boolean(),
+		remaining: v.optional(v.number()),
+		message: v.string(),
+	}),
 	handler: async (ctx, args) => {
 		const batchSize = 250;
 

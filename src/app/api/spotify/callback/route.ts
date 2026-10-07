@@ -1,7 +1,7 @@
-import { fetchMutation } from "convex/nextjs";
 import { type NextRequest, NextResponse } from "next/server";
 import { env } from "~/env.js";
-import { api } from "../../../../../convex/_generated/api";
+import { upsertSpotifyConnection } from "~/server/convex-server";
+import { getSessionUserId } from "~/server/session-user";
 
 const SPOTIFY_TOKEN_URL = "https://accounts.spotify.com/api/token";
 
@@ -64,18 +64,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
 		const profile = (await profileResponse.json()) as SpotifyUserProfile;
 
-		// Get the session user from cookie
-		const sessionToken = request.cookies.get("session")?.value;
-		if (!sessionToken) {
-			return NextResponse.redirect(
-				new URL("/login?redirect=/spotify-playlister", request.url),
-			);
-		}
-
-		// Decode session to get userId
-		const decoded = Buffer.from(sessionToken, "base64url").toString();
-		const userId = decoded.split(":")[0];
-
+		const userId = await getSessionUserId(request);
 		if (!userId) {
 			return NextResponse.redirect(
 				new URL("/login?redirect=/spotify-playlister", request.url),
@@ -83,7 +72,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 		}
 
 		// Store tokens in Convex
-		await fetchMutation(api.spotify.upsertConnection, {
+		await upsertSpotifyConnection({
 			userId,
 			accessToken: tokens.access_token,
 			refreshToken: tokens.refresh_token,

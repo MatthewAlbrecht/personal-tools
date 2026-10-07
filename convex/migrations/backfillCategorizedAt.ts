@@ -1,4 +1,5 @@
-import { mutation } from "../_generated/server";
+import { v } from "convex/values";
+import { internalMutation } from "../_generated/server";
 
 /**
  * Migration: Backfill lastCategorizedAt on spotifyTracks
@@ -9,8 +10,14 @@ import { mutation } from "../_generated/server";
  * Run this once from the Convex dashboard or CLI:
  *   npx convex run migrations/backfillCategorizedAt:run
  */
-export const run = mutation({
+export const run = internalMutation({
 	args: {},
+	returns: v.object({
+		total: v.number(),
+		created: v.number(),
+		updated: v.number(),
+		skipped: v.number(),
+	}),
 	handler: async (ctx) => {
 		// Get all categorizations
 		const categorizations = await ctx.db

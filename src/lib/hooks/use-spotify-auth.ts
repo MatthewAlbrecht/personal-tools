@@ -1,20 +1,15 @@
 "use client";
 
-import { useQuery } from "convex/react";
-import { useCallback, useRef } from "react";
-import { api } from "../../../convex/_generated/api";
+import { useCallback, useRef, useSyncExternalStore } from "react";
 import { useAuthToken } from "./use-auth-token";
 
+// The browser only ever sees the non-secret parts of the Spotify connection.
+// Tokens stay in Convex behind a server-only channel; the short-lived access
+// token comes from `POST /api/spotify/refresh-token`, and the refresh token
+// never leaves the server.
 export type SpotifyConnection = {
-	_id: string;
-	userId: string;
-	accessToken: string;
-	refreshToken: string;
-	expiresAt: number;
 	spotifyUserId: string;
 	displayName?: string;
-	createdAt: number;
-	updatedAt: number;
 };
 
 type UseSpotifyAuthReturn = {
@@ -23,23 +18,80 @@ type UseSpotifyAuthReturn = {
 	connection: SpotifyConnection | null;
 	isConnected: boolean;
 	getValidAccessToken: () => Promise<string | null>;
+	/** Re-read the connection, e.g. after disconnecting. */
+	refreshConnection: () => Promise<void>;
 };
+
+type ConnectionStore = { ready: boolean; connection: SpotifyConnection | null };
+
+// Module-level store shared by every `useSpotifyAuth` caller on the page, so
+// the session route is hit once per page visit rather than once per component.
+const serverSnapshot: ConnectionStore = { ready: false, connection: null };
+let snapshot: ConnectionStore = serverSnapshot;
+const listeners = new Set<() => void>();
+
+function setSnapshot(next: ConnectionStore): void {
+	snapshot = next;
+	for (const listener of listeners) listener();
+}
+
+async function loadConnection(): Promise<void> {
+	let connection: SpotifyConnection | null = null;
+	try {
+		const res = await fetch("/api/spotify/session");
+		if (res.ok) {
+			const data = (await res.json()) as {
+				isConnected: boolean;
+				spotifyUserId: string | null;
+				displayName: string | null;
+			};
+			if (data.isConnected && data.spotifyUserId) {
+				connection = {
+					spotifyUserId: data.spotifyUserId,
+					displayName: data.displayName ?? undefined,
+				};
+			}
+		}
+	} catch (error) {
+		console.error("Spotify session check failed:", error);
+	}
+	setSnapshot({ ready: true, connection });
+}
+
+function subscribe(listener: () => void): () => void {
+	listeners.add(listener);
+	// Fetch on the first subscriber; keep any previous result visible meanwhile.
+	if (listeners.size === 1) void loadConnection();
+	return () => {
+		listeners.delete(listener);
+	};
+}
+
+function getSnapshot(): ConnectionStore {
+	return snapshot;
+}
+
+function getServerSnapshot(): ConnectionStore {
+	return serverSnapshot;
+}
 
 export function useSpotifyAuth(): UseSpotifyAuthReturn {
 	const { userId, isLoading: authLoading } = useAuthToken();
 
-	// Query Spotify connection from Convex
-	const connection = useQuery(
-		api.spotify.getConnection,
-		userId ? { userId } : "skip",
-	) as SpotifyConnection | null | undefined;
+	// useSyncExternalStore syncs with the session route, which is outside React.
+	const { ready, connection } = useSyncExternalStore(
+		subscribe,
+		getSnapshot,
+		getServerSnapshot,
+	);
 
-	const isConnected = !!connection;
+	const isConnected = userId !== null && connection !== null;
 
 	// Token cache to prevent redundant refresh calls
 	const tokenCacheRef = useRef<{ token: string; expiresAt: number } | null>(
 		null,
 	);
+	const inFlightRef = useRef<Promise<string | null> | null>(null);
 
 	// Get a valid access token (refreshes if expired, uses cache otherwise)
 	const getValidAccessToken = useCallback(async (): Promise<string | null> => {
@@ -57,55 +109,56 @@ export function useSpotifyAuth(): UseSpotifyAuthReturn {
 			return tokenCacheRef.current.token;
 		}
 
-		if (connection && connection.expiresAt > now + expiryBufferMs) {
-			tokenCacheRef.current = {
-				token: connection.accessToken,
-				expiresAt: connection.expiresAt,
-			};
-			return connection.accessToken;
+		if (inFlightRef.current) {
+			return inFlightRef.current;
 		}
 
-		try {
-			const res = await fetch("/api/spotify/refresh-token", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ userId }),
-			});
+		const request = (async (): Promise<string | null> => {
+			try {
+				const res = await fetch("/api/spotify/refresh-token", {
+					method: "POST",
+				});
 
-			if (!res.ok) {
-				const errorBody = (await res.json().catch(() => null)) as {
-					error?: string;
-				} | null;
-				console.error(
-					"Failed to get valid Spotify token:",
-					errorBody?.error ?? res.status,
-				);
+				if (!res.ok) {
+					const errorBody = (await res.json().catch(() => null)) as {
+						error?: string;
+					} | null;
+					console.error(
+						"Failed to get valid Spotify token:",
+						errorBody?.error ?? res.status,
+					);
+					return null;
+				}
+
+				const data = (await res.json()) as {
+					accessToken: string;
+					expiresIn?: number;
+				};
+
+				const expiresIn = data.expiresIn ?? 3600;
+				tokenCacheRef.current = {
+					token: data.accessToken,
+					expiresAt: Date.now() + expiresIn * 1000,
+				};
+
+				return data.accessToken;
+			} catch (error) {
+				console.error("Token refresh error:", error);
 				return null;
+			} finally {
+				inFlightRef.current = null;
 			}
-
-			const data = (await res.json()) as {
-				accessToken: string;
-				expiresIn?: number;
-			};
-
-			const expiresIn = data.expiresIn ?? 3600;
-			tokenCacheRef.current = {
-				token: data.accessToken,
-				expiresAt: now + expiresIn * 1000,
-			};
-
-			return data.accessToken;
-		} catch (error) {
-			console.error("Token refresh error:", error);
-			return null;
-		}
-	}, [userId, connection]);
+		})();
+		inFlightRef.current = request;
+		return request;
+	}, [userId]);
 
 	return {
 		userId,
-		isLoading: authLoading || connection === undefined,
-		connection: connection ?? null,
+		isLoading: authLoading || (userId !== null && !ready),
+		connection: userId !== null ? connection : null,
 		isConnected,
 		getValidAccessToken,
+		refreshConnection: loadConnection,
 	};
 }

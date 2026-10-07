@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { action, mutation, query } from "./_generated/server";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 
 // ============================================================================
 // Artist Management
@@ -524,7 +524,7 @@ export const backfillArtistsFromTracks = action({
 		console.log("🎵 Backfilling artists from canonical tracks...");
 
 		// Get Spotify connection and refresh token if needed
-		const connection = await ctx.runQuery(api.spotify.getConnection, {
+		const connection = await ctx.runQuery(internal.spotify.getConnection, {
 			userId,
 		});
 
@@ -567,7 +567,7 @@ export const backfillArtistsFromTracks = action({
 			const tokens = await tokenResponse.json();
 			accessToken = tokens.access_token;
 
-			await ctx.runMutation(api.spotify.updateTokens, {
+			await ctx.runMutation(internal.spotify.updateTokens, {
 				userId,
 				accessToken: tokens.access_token,
 				expiresIn: tokens.expires_in,
@@ -782,7 +782,7 @@ export const enrichSpotifyArtists = action({
 			throw new Error("SPOTIFY_SYNC_USER_ID not configured");
 		}
 
-		const connection = await ctx.runQuery(api.spotify.getConnection, {
+		const connection = await ctx.runQuery(internal.spotify.getConnection, {
 			userId,
 		});
 
@@ -824,7 +824,7 @@ export const enrichSpotifyArtists = action({
 			const tokens = await tokenResponse.json();
 			accessToken = tokens.access_token;
 
-			await ctx.runMutation(api.spotify.updateTokens, {
+			await ctx.runMutation(internal.spotify.updateTokens, {
 				userId,
 				accessToken: tokens.access_token,
 				expiresIn: tokens.expires_in,
