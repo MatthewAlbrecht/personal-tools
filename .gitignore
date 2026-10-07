@@ -49,3 +49,6 @@ roberts-records/
 
 # local git worktrees
 .worktrees/
+
+# Track .cursor (excluded by global gitignore)
+!.cursor/
