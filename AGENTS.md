@@ -47,6 +47,7 @@ tRPC (`src/server/api/`) and the data-shaped API routes are legacy — don't ext
 - Never use raw `<table>`, `<select>`, `<button>`, or ad-hoc bordered cards when a shadcn component exists. Plain layout tags (`div`, `section`, `main`, headings, links) are fine.
 - Don't edit `src/components/ui/` by hand beyond what the shadcn CLI generates.
 - **Drawer over Dialog.** Use the shadcn `Drawer` for any substantial form or informational view (creating or editing a record, details, multi-field settings). Keep `Dialog` / `AlertDialog` for quick confirmations, optionally with a minimal choice — a checkbox or a pick between a few options.
+- **Motion follows [Family Values](https://benji.org/family-values)**: read it before designing transitions, drawers or moments of delight. Reveal gradually in drawers over the current screen; let motion show where the user went (morph in place, keep persistent elements still, cut a transition that explains nothing); give delight in proportion to how rare a moment is.
 - Use `cn()` from `~/lib/utils` for conditional classes; Biome enforces sorted classes in `cn`/`clsx`/`cva`.
 - Images use Next.js `Image` from `next/image`.
 

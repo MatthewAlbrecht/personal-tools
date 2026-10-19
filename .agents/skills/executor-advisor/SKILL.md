@@ -19,6 +19,7 @@ An **advisor** is a skill the implementer loads before writing the part of a tas
 |---|---|
 | UX decisions: flows, states, what the user sees when, how they recover | the `ux-superpowers` skills (`user-journey` for flows and friction, `ux-validate` against a discovery doc, `jobs-to-be-done` for what the user is trying to get done) |
 | UI design: layout, hierarchy, visual detail, interaction | `frontend-design` |
+| Motion: transitions, drawers, moments of delight | `frontend-design`, plus [Family Values](https://benji.org/family-values): reveal gradually, motion shows where the user went, delight in proportion to rarity |
 | Any UI built from components | `shadcn`: use the shadcn component whenever one exists; build custom only where none fits |
 | UI copy: labels, buttons, empty states, errors, toasts | `copywriting` |
 | Database or backend: schema, queries, mutations, migrations | `convex-expert` |
