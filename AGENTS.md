@@ -155,6 +155,7 @@ Also follow the behavioral guidelines in `.cursor/rules/karpathy-guidelines.mdc`
 | `offer-work` | Menu of startable (prefer `planned`) ideas |
 | `offer-build-path` | Ordered build path from planned work in a domain |
 | `executor-advisor` | Execute a plan in place via subagents |
+| `implementor-advisor` | Implement tickets test-first, with advisor skills per part |
 | `plan-ui-shadcn` | Load the shadcn skill whenever plan work touches UI |
 
 Statuses: `open` → `planned` → `started` → `done`. Don't invent scope — use these skills.
