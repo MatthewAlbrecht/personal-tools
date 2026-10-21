@@ -14,77 +14,24 @@ const ashQcsrUrl =
 	"https://www.tcgplayer.com/product/524817/yugioh-25th-anniversary-rarity-collection-ash-blossom-and-joyous-spring-quarter-century-secret-rare";
 const ashSuperUrl =
 	"https://www.tcgplayer.com/product/524809/yugioh-25th-anniversary-rarity-collection-ash-blossom-and-joyous-spring";
-const calledUltraUrl =
-	"https://www.tcgplayer.com/product/524804/yugioh-25th-anniversary-rarity-collection-called-by-the-grave-ur";
 
-const ashQcsr = {
-	cardName: "Ash Blossom & Joyous Spring",
-	rarity: "Quarter Century Secret Rare",
-};
-
-describe("product URL pattern check", () => {
-	test("accepts a product page whose slug names the Card and its rarity", () => {
-		expect(checkTcgplayerProductUrl(ashQcsrUrl, ashQcsr)).toEqual({
+describe("product URL check", () => {
+	test("accepts a product page for that product id, whatever its slug says", () => {
+		expect(checkTcgplayerProductUrl(ashQcsrUrl, 524817)).toEqual({
 			productId: 524817,
 			productUrl: ashQcsrUrl,
 		});
-	});
-
-	test("accepts a bare product name, which TCGplayer gives one rarity per set code", () => {
+		// TCGplayer's server ignores the slug; its details say what the product is.
 		expect(
-			checkTcgplayerProductUrl(ashSuperUrl, {
-				cardName: "Ash Blossom & Joyous Spring",
-				rarity: "Super Rare",
-			}),
-		).toEqual({ productId: 524809, productUrl: ashSuperUrl });
-	});
-
-	test("accepts TCGplayer's rarity abbreviations in the slug", () => {
-		expect(
-			checkTcgplayerProductUrl(calledUltraUrl, {
-				cardName: "Called by the Grave",
-				rarity: "Ultra Rare",
-			})?.productId,
-		).toBe(524804);
-	});
-
-	test("rejects a slug naming a different rarity", () => {
-		expect(
-			checkTcgplayerProductUrl(ashQcsrUrl, {
-				cardName: "Ash Blossom & Joyous Spring",
-				rarity: "Secret Rare",
-			}),
-		).toBeNull();
-		expect(
-			checkTcgplayerProductUrl(calledUltraUrl, {
-				cardName: "Called by the Grave",
-				rarity: "Ultimate Rare",
-			}),
-		).toBeNull();
-	});
-
-	test("rejects a slug for a different Card", () => {
-		expect(
-			checkTcgplayerProductUrl(calledUltraUrl, {
-				cardName: "Ash Blossom & Joyous Spring",
-				rarity: "Ultra Rare",
-			}),
-		).toBeNull();
-	});
-
-	test("rejects a slug for a different set when the set is known", () => {
-		expect(
-			checkTcgplayerProductUrl(ashQcsrUrl, {
-				...ashQcsr,
-				setName: "Quarter Century Bonanza",
-			}),
-		).toBeNull();
-		expect(
-			checkTcgplayerProductUrl(ashQcsrUrl, {
-				...ashQcsr,
-				setName: "25th Anniversary Rarity Collection",
-			})?.productId,
+			checkTcgplayerProductUrl(
+				"https://www.tcgplayer.com/product/524817/garbage-slug",
+				524817,
+			)?.productId,
 		).toBe(524817);
+	});
+
+	test("rejects a product page for another product id", () => {
+		expect(checkTcgplayerProductUrl(ashQcsrUrl, 524809)).toBeNull();
 	});
 
 	test("rejects URLs that aren't TCGplayer product pages", () => {
@@ -95,12 +42,10 @@ describe("product URL pattern check", () => {
 			"https://www.tcgplayer.com/search/yugioh/product?q=RA01-EN008",
 			"https://www.tcgplayer.com/product/abc/yugioh-25th-anniversary-rarity-collection-ash-blossom-and-joyous-spring",
 			"https://www.tcgplayer.com/product/524817",
-			"https://www.tcgplayer.com/product/524817/magic-25th-anniversary-rarity-collection-ash-blossom-and-joyous-spring-quarter-century-secret-rare",
-			// The Card name with no set before it.
-			"https://www.tcgplayer.com/product/524817/yugioh-ash-blossom-and-joyous-spring-quarter-century-secret-rare",
 			"https://www.tcgplayer.com.evil.example/product/524817/yugioh-25th-anniversary-rarity-collection-ash-blossom-and-joyous-spring-quarter-century-secret-rare",
+			`https://www.tcgplayer.com/product/524817/${"a".repeat(2000)}`,
 		]) {
-			expect(checkTcgplayerProductUrl(url, ashQcsr), url).toBeNull();
+			expect(checkTcgplayerProductUrl(url), url).toBeNull();
 		}
 	});
 
@@ -108,30 +53,8 @@ describe("product URL pattern check", () => {
 		expect(
 			checkTcgplayerProductUrl(
 				"  tcgplayer.com/product/524817/yugioh-25th-anniversary-rarity-collection-ash-blossom-and-joyous-spring-quarter-century-secret-rare/?Language=English&Condition=Near+Mint  ",
-				ashQcsr,
 			),
 		).toEqual({ productId: 524817, productUrl: ashQcsrUrl });
-	});
-
-	test("matches names with punctuation the way TCGplayer slugs them", () => {
-		expect(
-			checkTcgplayerProductUrl(
-				"https://www.tcgplayer.com/product/22959/yugioh-stairway-to-the-destined-duel-harpies-feather-duster",
-				{ cardName: "Harpie's Feather Duster", rarity: "Common" },
-			)?.productId,
-		).toBe(22959);
-		expect(
-			checkTcgplayerProductUrl(
-				"https://www.tcgplayer.com/product/256350/yugioh-brothers-of-legend-number-39-utopia",
-				{ cardName: "Number 39: Utopia", rarity: "Ultra Rare" },
-			)?.productId,
-		).toBe(256350);
-		expect(
-			checkTcgplayerProductUrl(
-				"https://www.tcgplayer.com/product/39269/yugioh-storm-of-ragnarok-maxx-c",
-				{ cardName: 'Maxx "C"', rarity: "Super Rare" },
-			)?.productId,
-		).toBe(39269);
 	});
 });
 
@@ -274,6 +197,23 @@ describe("TCGplayer condition", () => {
 		expect(readTcgplayerCondition("1st Edition")).toEqual({
 			condition: null,
 			language: "english",
+		});
+	});
+});
+
+describe("card names with punctuation TCGplayer's URL drops", () => {
+	// D.D. Crow STON-EN024 Ultimate Rare: the slug's "dd-crow" isn't the app's
+	// "D.D. Crow" hyphenated, and the URL is still accepted for its product.
+	test("accepts D.D. Crow's URL, where the dots are dropped, not hyphenated", () => {
+		expect(
+			checkTcgplayerProductUrl(
+				"https://www.tcgplayer.com/product/58555/yugioh-strike-of-neos-dd-crow-utr?page=1&Language=English",
+				58555,
+			),
+		).toEqual({
+			productId: 58555,
+			productUrl:
+				"https://www.tcgplayer.com/product/58555/yugioh-strike-of-neos-dd-crow-utr",
 		});
 	});
 });

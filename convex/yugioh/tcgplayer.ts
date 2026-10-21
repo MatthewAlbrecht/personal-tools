@@ -115,9 +115,9 @@ export const savePastedLink = internalMutation({
 
 /**
  * Saves a pasted TCGplayer product URL. When TCGplayer answers, its details
- * decide: the product must have the Printing's set code and rarity, and the
- * URL must fit TCGplayer's own name for it. If TCGplayer can't be reached,
- * the pattern check against the Card's name decides.
+ * decide: the product must have the Printing's set code and rarity. If
+ * TCGplayer can't be reached (it may block Convex), the paste is saved on its
+ * product id alone: I pasted it on purpose, for this Printing.
  */
 export const setProductUrl = action({
 	args: { printingId: v.id("yugiohPrintings"), url: v.string() },
@@ -135,7 +135,7 @@ export const setProductUrl = action({
 		const product = await productDetails(printingId, productId);
 		const link =
 			product === undefined
-				? checkTcgplayerProductUrl(url, printing)
+				? checkTcgplayerProductUrl(url, productId)
 				: Tcgplayer.checkPastedUrl(url, product, printing);
 		if (!link) throw new ConvexError(REJECTED_PRODUCT_URL);
 		await ctx.runMutation(internal.yugioh.tcgplayer.savePastedLink, {

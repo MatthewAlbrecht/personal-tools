@@ -204,7 +204,7 @@ test("the one matching Printing without a link is linked to the page, then the p
 	});
 });
 
-test("a Printing whose set code and rarity match but whose name the URL doesn't is left alone", async () => {
+test("a Printing whose set code and rarity match is linked whatever its Card's name, with TCGplayer's name reported", async () => {
 	const t = setup();
 	const { printingId } = await deckWith(t, {
 		...BRIONAC,
@@ -214,11 +214,26 @@ test("a Printing whose set code and rarity match but whose name the URL doesn't 
 	const report = await captureBrionac(t);
 
 	expect(report).toMatchObject({
-		printing: null,
-		linked: false,
-		reason:
-			"This page is DT01-EN014 Duel Terminal Ultra Parallel Rare, but its URL doesn't match Gungnir, Dragon of the Ice Barrier, so it wasn't linked.",
+		printing: { cardName: "Gungnir, Dragon of the Ice Barrier" },
+		productName: "Brionac, Dragon of the Ice Barrier",
+		linked: true,
+		reason: null,
 	});
+	const printing = await t.run((ctx) =>
+		ctx.db.get("yugiohPrintings", printingId),
+	);
+	expect(printing?.tcgplayerProductId).toBe(BRIONAC.productId);
+});
+
+test("a page whose URL isn't its own product's is left alone", async () => {
+	const t = setup();
+	const { printingId } = await deckWith(t, BRIONAC);
+
+	const report = await captureBrionac(t, {
+		url: "https://www.tcgplayer.com/product/11111/yugioh-duel-terminal-1-brionac-dragon-of-the-ice-barrier",
+	});
+
+	expect(report).toMatchObject({ printing: null, linked: false });
 	expect(await tcgplayerRows(t)).toBe(0);
 	const printing = await t.run((ctx) =>
 		ctx.db.get("yugiohPrintings", printingId),
@@ -305,4 +320,32 @@ test("a page whose details didn't load asks for another run", async () => {
 			"This page's set code and rarity hadn't loaded, so it can't be matched to a Printing. Run again once the page has loaded.",
 	});
 	expect(await tcgplayerRows(t)).toBe(0);
+});
+
+test("a page whose card name has dots TCGplayer's URL drops is linked (D.D. Crow)", async () => {
+	const t = setup();
+	const { deckId } = await deckWith(t, {
+		cardName: "D.D. Crow",
+		setCode: "STON-EN024",
+		rarity: "Ultimate Rare",
+	});
+
+	const report = await captureBrionac(t, {
+		productId: 58555,
+		url: "https://www.tcgplayer.com/product/58555/yugioh-strike-of-neos-dd-crow-utr?page=1&Language=English",
+		details: {
+			productName: "D.D. Crow (UTR)",
+			setCode: "STON-EN024",
+			rarity: "Ultimate Rare",
+		},
+	});
+
+	expect(report).toMatchObject({ linked: true, reason: null, created: 1 });
+	const deck = await t.query(api.yugioh.decks.getDeck, { deckId });
+	const card = deck?.sections.flatMap((section) => section.cards)[0];
+	expect(card?.candidates[0]?.tcgplayer).toMatchObject({
+		status: "found",
+		productUrl:
+			"https://www.tcgplayer.com/product/58555/yugioh-strike-of-neos-dd-crow-utr",
+	});
 });

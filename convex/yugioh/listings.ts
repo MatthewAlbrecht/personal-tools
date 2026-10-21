@@ -176,6 +176,7 @@ export const ingestTcgplayerProduct = internalMutation({
 			}),
 			v.null(),
 		),
+		productName: v.union(v.string(), v.null()),
 		listings: v.number(),
 		sales: v.number(),
 		created: v.number(),

@@ -111,75 +111,24 @@ export const REJECTED_PRODUCT_URL =
 export const MAX_PRODUCT_URL_LENGTH = 2000;
 
 /**
- * Accepts `tcgplayer.com/product/<id>/<slug>` only when the slug is
- * `yugioh-<set>-<card name>`, optionally followed by this Printing's rarity
- * (full name or TCGplayer's abbreviation). TCGplayer leaves the rarity off one
- * product per set code, so a bare name passes. The set is checked when known.
- * Returns the URL without its query string, or null.
+ * A TCGplayer product URL, `tcgplayer.com/product/<id>/<slug>`, with the id
+ * given when known. The slug isn't checked: TCGplayer's server ignores it, and
+ * TCGplayer's own details (set code and rarity), not its spelling of the name,
+ * say which Printing a product is. Returns the URL without its query string,
+ * or null.
  */
 export function checkTcgplayerProductUrl(
 	url: string,
-	printing: { cardName: string; rarity: string; setName?: string | null },
+	productId?: number,
 ): TcgplayerProductLink | null {
 	if (url.length > MAX_PRODUCT_URL_LENGTH) return null;
 	const parsed = parseProductUrl(url);
 	if (!parsed) return null;
-	const { productId, slug } = parsed;
-	if (!slug.startsWith("yugioh-")) return null;
-	const rest = slug.slice("yugioh-".length);
-	const card = tcgplayerSlugPart(printing.cardName);
-	if (card === "") return null;
-	const set = printing.setName ? tcgplayerSlugPart(printing.setName) : null;
-
-	for (
-		let index = rest.indexOf(`-${card}`);
-		index !== -1;
-		index = rest.indexOf(`-${card}`, index + 1)
-	) {
-		const setPart = rest.slice(0, index);
-		const after = rest.slice(index + 1 + card.length);
-		if (after !== "" && !after.startsWith("-")) continue;
-		if (set !== null && setPart !== set) continue;
-		const suffix = after.slice(1);
-		if (suffix !== "" && !suffixAgrees(suffix, printing.rarity)) continue;
-		return {
-			productId,
-			productUrl: `https://www.tcgplayer.com/product/${productId}/${slug}`,
-		};
-	}
-	return null;
-}
-
-/**
- * The pattern check against TCGplayer's own name for the product rather than
- * the Card's name in the app, which may be short ("Brionac" for "Brionac,
- * Dragon of the Ice Barrier"). For when TCGplayer's data says which product
- * it is.
- */
-export function checkTcgplayerProductUrlFor(
-	url: string,
-	product: { productName: string; rarity: string; setName?: string | null },
-): TcgplayerProductLink | null {
-	return checkTcgplayerProductUrl(url, {
-		cardName: tcgplayerCardName(product.productName, product.rarity),
-		rarity: product.rarity,
-		setName: product.setName,
-	});
-}
-
-/**
- * Whether a Card's name is TCGplayer's name for the product, or its start
- * ("Brionac" for "Brionac, Dragon of the Ice Barrier").
- */
-export function cardNameFitsProduct(
-	cardName: string,
-	product: { productName: string; rarity: string },
-): boolean {
-	const card = tcgplayerSlugPart(cardName);
-	const name = tcgplayerSlugPart(
-		tcgplayerCardName(product.productName, product.rarity),
-	);
-	return card !== "" && (name === card || name.startsWith(`${card}-`));
+	if (productId !== undefined && parsed.productId !== productId) return null;
+	return {
+		productId: parsed.productId,
+		productUrl: `https://www.tcgplayer.com/product/${parsed.productId}/${parsed.slug}`,
+	};
 }
 
 /** The product id in a TCGplayer product URL, or null if it isn't one. */

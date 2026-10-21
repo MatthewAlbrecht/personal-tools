@@ -572,7 +572,7 @@ function CandidateOption({
 							)}
 						</>
 					)}
-					<TcgplayerLink cardName={cardName} candidate={candidate} />
+					<TcgplayerLink candidate={candidate} />
 				</div>
 			</div>
 			{canRemove ? <RemoveCandidate candidate={candidate} /> : null}

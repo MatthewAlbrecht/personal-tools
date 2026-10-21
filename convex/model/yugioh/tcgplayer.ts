@@ -2,7 +2,7 @@ import type { Infer } from "convex/values";
 import {
 	type TcgplayerProduct,
 	type TcgplayerProductLink,
-	checkTcgplayerProductUrlFor,
+	checkTcgplayerProductUrl,
 	rarityNamesAgree,
 	tcgplayerImageUrl,
 	tcgplayerSearchUrl,
@@ -53,8 +53,7 @@ export function productIsPrinting(
 
 /**
  * Turns the AI's pick into a product link, or null. The pick must be sure
- * enough, have the Printing's set code and rarity, and its URL must fit
- * TCGplayer's name, set and rarity for it.
+ * enough and have the Printing's set code and rarity.
  */
 export function acceptPick(
 	printing: LookupPrinting,
@@ -71,8 +70,10 @@ export function acceptPick(
 
 /**
  * A product URL checked against TCGplayer's details for that product: the
- * product must be this Printing, and the URL must fit TCGplayer's own name,
- * set and rarity for it (the Card's name may be short, "Brionac"). Returns the
+ * product is this Printing when its set code and rarity are the Printing's.
+ * The URL need only be TCGplayer's page for that product id; neither its slug
+ * nor TCGplayer's spelling of the Card's name is checked ("D.D. Crow" is
+ * `dd-crow`, "Brionac" is "Brionac, Dragon of the Ice Barrier"). Returns the
  * URL without its query string, or null.
  */
 export function checkPastedUrl(
@@ -81,12 +82,7 @@ export function checkPastedUrl(
 	printing: LookupPrinting,
 ): TcgplayerProductLink | null {
 	if (!product || !productIsPrinting(product, printing)) return null;
-	const link = checkTcgplayerProductUrlFor(url, {
-		productName: product.productName,
-		rarity: product.rarityName,
-		setName: product.setName,
-	});
-	return link?.productId === product.productId ? link : null;
+	return checkTcgplayerProductUrl(url, product.productId);
 }
 
 /** Saves a lookup's outcome, unless the user pasted a URL in the meantime. */

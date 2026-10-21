@@ -151,21 +151,18 @@ describe("TCGplayer lookup when a Printing is added", () => {
 		});
 	});
 
-	test("rejects a product whose URL fails the pattern check", async () => {
+	test("stores the AI's pick by set code and rarity, whatever its URL's slug says", async () => {
 		const t = convexTest(schema, modules);
-		fakes.products = [
-			{
-				...ashQcsrProduct,
-				productUrl:
-					"https://www.tcgplayer.com/product/524817/yugioh-25th-anniversary-rarity-collection-called-by-the-grave",
-			},
-		];
+		const oddSlug =
+			"https://www.tcgplayer.com/product/524817/yugioh-25th-anniversary-rarity-collection-ash-blossom-joyous-spring-alternate-art-qcsr";
+		fakes.products = [{ ...ashQcsrProduct, productUrl: oddSlug }];
 		const { deckId } = await addAsh(t);
 		await t.finishAllScheduledFunctions(vi.runAllTimers);
 
-		expect((await firstCandidate(t, deckId)).tcgplayer.status).toBe(
-			"needsPaste",
-		);
+		expect((await firstCandidate(t, deckId)).tcgplayer).toMatchObject({
+			status: "found",
+			productUrl: oddSlug,
+		});
 	});
 
 	test("stores the AI's pick when TCGplayer says it's the Printing, even if the Card has a short name", async () => {
@@ -353,14 +350,16 @@ describe("pasting a TCGplayer product URL", () => {
 		});
 	});
 
-	test("a pasted URL that fails the pattern check is rejected", async () => {
+	test("a pasted URL that isn't this Printing's product is rejected", async () => {
 		const t = convexTest(schema, modules);
 		const { deckId, printingId } = await ashNeedingPaste(t);
 
 		for (const url of [
 			"https://www.ebay.com/itm/1234",
+			// No such product, per TCGplayer.
 			"https://www.tcgplayer.com/product/524804/yugioh-25th-anniversary-rarity-collection-called-by-the-grave-ur",
-			"https://www.tcgplayer.com/product/524817/yugioh-25th-anniversary-rarity-collection-ash-blossom-and-joyous-spring-secret-rare",
+			// The slug says Quarter Century Secret Rare; TCGplayer says Super Rare.
+			"https://www.tcgplayer.com/product/524809/yugioh-25th-anniversary-rarity-collection-ash-blossom-and-joyous-spring-quarter-century-secret-rare",
 		]) {
 			await expect(
 				t.action(api.yugioh.tcgplayer.setProductUrl, { printingId, url }),
@@ -443,7 +442,7 @@ describe("pasting a TCGplayer product URL", () => {
 		).rejects.toThrow("That isn't a TCGplayer product page for this Printing.");
 	});
 
-	test("a paste that passes the pattern check is saved when TCGplayer can't be reached", async () => {
+	test("a paste is saved on its product id alone when TCGplayer can't be reached", async () => {
 		const t = convexTest(schema, modules);
 		const { deckId, printingId } = await ashNeedingPaste(t);
 		fakes.detailsError = new Error("TCGplayer details failed: 503");

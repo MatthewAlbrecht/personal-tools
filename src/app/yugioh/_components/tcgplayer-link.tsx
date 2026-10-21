@@ -20,10 +20,8 @@ import type { CandidatePrinting } from "../_utils/types";
  * field (with a search link) when it wasn't.
  */
 export function TcgplayerLink({
-	cardName,
 	candidate,
 }: {
-	cardName: string;
 	candidate: CandidatePrinting;
 }): React.ReactElement {
 	const { tcgplayer } = candidate;
@@ -41,20 +39,13 @@ export function TcgplayerLink({
 		return (
 			<LinkedProduct
 				key={candidate.printingId}
-				cardName={cardName}
 				candidate={candidate}
 				productUrl={tcgplayer.productUrl}
 			/>
 		);
 	}
 
-	return (
-		<PasteProductUrl
-			key={candidate.printingId}
-			cardName={cardName}
-			candidate={candidate}
-		/>
-	);
+	return <PasteProductUrl key={candidate.printingId} candidate={candidate} />;
 }
 
 /**
@@ -62,11 +53,9 @@ export function TcgplayerLink({
  * checked paste field an unlinked Printing has.
  */
 function LinkedProduct({
-	cardName,
 	candidate,
 	productUrl,
 }: {
-	cardName: string;
 	candidate: CandidatePrinting;
 	productUrl: string;
 }): React.ReactElement {
@@ -75,7 +64,6 @@ function LinkedProduct({
 	if (changing) {
 		return (
 			<PasteProductUrl
-				cardName={cardName}
 				candidate={candidate}
 				label="Paste the right product URL."
 				onSaved={() => setChanging(false)}
@@ -107,23 +95,20 @@ function LinkedProduct({
 }
 
 function PasteProductUrl({
-	cardName,
 	candidate,
 	label = "Couldn't find it. Paste the product URL.",
 	onSaved,
 	onCancel,
 }: {
-	cardName: string;
 	candidate: CandidatePrinting;
 	label?: string;
 	onSaved?: () => void;
 	onCancel?: () => void;
 }): React.ReactElement {
 	const setProductUrl = useAction(api.yugioh.tcgplayer.setProductUrl);
-	const schema = productUrlSchema({ cardName, rarity: candidate.rarity });
 	const form = useForm({
 		defaultValues: { url: "" },
-		validators: { onSubmit: schema },
+		validators: { onSubmit: productUrlSchema },
 		onSubmit: async ({ value, formApi }) => {
 			try {
 				await setProductUrl({

@@ -4,8 +4,7 @@ import type { Infer } from "convex/values";
 import { saleTime } from "../../../src/lib/yugioh/deals";
 import { normalizeSetCode } from "../../../src/lib/yugioh/deck";
 import {
-	cardNameFitsProduct,
-	checkTcgplayerProductUrlFor,
+	checkTcgplayerProductUrl,
 	rarityNamesAgree,
 	readTcgplayerCondition,
 	tcgplayerCardName,
@@ -43,6 +42,11 @@ export const TCGPLAYER_SELLER_LOCATION = "United States";
 export type TcgplayerIngestReport = {
 	/** The Printing the product page is for; null when none of mine is. */
 	printing: { cardName: string; setCode: string; rarity: string } | null;
+	/**
+	 * TCGplayer's name for the product, when the page's details loaded, so a
+	 * Card name that differs from TCGplayer's is visible. Never blocks a link.
+	 */
+	productName: string | null;
 	/** Current Listings and latest sales on the page. */
 	listings: number;
 	sales: number;
@@ -82,6 +86,7 @@ export async function ingestTcgplayerProduct(
 	}
 	const report: TcgplayerIngestReport = {
 		printing: null,
+		productName: product.details?.productName ?? null,
 		listings: product.listings.length,
 		sales: product.sales.length,
 		created: 0,
@@ -226,9 +231,10 @@ export async function ingestTcgplayerProduct(
 
 /**
  * A product page no Printing is linked to: its own set code and rarity say
- * which Printing it is. The one matching Printing without a link is linked
- * when the Card's name is the page's (or its start, "Brionac") and the URL
- * fits the page's name and rarity. Otherwise, says why not.
+ * which Printing it is, and the one matching Printing without a link is
+ * linked. Neither the Card's name nor the URL's slug is checked: TCGplayer
+ * spells names its own way ("D.D. Crow" is `dd-crow`), and the set code
+ * already says which product it is. Otherwise, says why not.
  */
 async function linkPageToPrinting(
 	ctx: MutationCtx,
@@ -251,11 +257,9 @@ async function linkPageToPrinting(
 	}
 	const [only] = matches;
 	if (matches.length === 1 && only && !isLinked(only)) {
-		const link = cardNameFitsProduct(only.cardName, details)
-			? checkTcgplayerProductUrlFor(product.url, details)
-			: null;
-		if (!link || link.productId !== product.productId) {
-			return `This page is ${setCode} ${details.rarity}, but its URL doesn't match ${only.cardName}, so it wasn't linked.`;
+		const link = checkTcgplayerProductUrl(product.url, product.productId);
+		if (!link) {
+			return `This page's URL isn't TCGplayer's product page ${product.productId}, so it wasn't linked to ${only.cardName} ${setCode} ${details.rarity}.`;
 		}
 		await savePastedLink(ctx, only._id, link);
 		return (await ctx.db.get("yugiohPrintings", only._id)) ?? only;

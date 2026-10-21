@@ -66,24 +66,20 @@ export const chosenPrintingSchema = z.object({
 });
 
 /**
- * A pasted TCGplayer product URL. Runs the same pattern check as the server
- * (`setProductUrl`), so a wrong URL is caught before it's sent.
+ * A pasted TCGplayer product URL. Runs the same check as the server
+ * (`setProductUrl`), so a URL that isn't a product page is caught before it's
+ * sent; the server then checks the product is the Printing.
  */
-export function productUrlSchema(printing: {
-	cardName: string;
-	rarity: string;
-}): z.ZodType<{ url: string }, z.ZodTypeDef, { url: string }> {
-	return z.object({
-		url: z
-			.string()
-			.trim()
-			.min(1, "Paste the product URL.")
-			.refine(
-				(url) => checkTcgplayerProductUrl(url, printing) !== null,
-				REJECTED_PRODUCT_URL,
-			),
-	});
-}
+export const productUrlSchema = z.object({
+	url: z
+		.string()
+		.trim()
+		.min(1, "Paste the product URL.")
+		.refine(
+			(url) => checkTcgplayerProductUrl(url) !== null,
+			REJECTED_PRODUCT_URL,
+		),
+});
 
 /** The "Not a match" choice in the Listing drawer's match form. */
 export const NOT_A_MATCH = "notMatch";
