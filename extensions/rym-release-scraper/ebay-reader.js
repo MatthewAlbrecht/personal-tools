@@ -348,49 +348,67 @@ function isEbayCheckPage(doc) {
 	);
 }
 
-// The Sold and Newly Listed views of one Search, with the same parameters as
-// `ebaySoldUrl` and `ebayNewlyListedUrl` in src/lib/yugioh/searches.ts (the
-// app's builders; tests/dock-links.test.ts holds the two to each other).
-const EBAY_SEARCH_PAGE = "https://www.ebay.com/sch/i.html";
-
-function ebaySoldView(keywords) {
-	const params = new URLSearchParams({
-		_nkw: keywords,
-		LH_Sold: "1",
-		LH_Complete: "1",
-		_sop: "13",
-	});
-	return `${EBAY_SEARCH_PAGE}?${params.toString()}`;
-}
-
-function ebayNewlyListedView(keywords) {
-	const params = new URLSearchParams({ _nkw: keywords, _sop: "10" });
-	return `${EBAY_SEARCH_PAGE}?${params.toString()}`;
-}
+// The Sold, Ending soon and Newly listed views of a search, with the same
+// parameters as `ebaySoldUrl`, `ebayEndingSoonUrl` and `ebayNewlyListedUrl` in
+// src/lib/yugioh/searches.ts (the app's builders; tests/dock-links.test.ts
+// holds them to each other). The dock's quick links; the runner never uses them.
+const EBAY_QUICK_VIEWS = [
+	{
+		key: "sold",
+		label: "Sold",
+		params: { LH_Sold: "1", LH_Complete: "1", _sop: "13" },
+		isCurrent: (p) => p.get("LH_Sold") === "1",
+	},
+	{
+		key: "ending-soon",
+		label: "Ending soon",
+		params: { LH_Auction: "1", _sop: "1" },
+		isCurrent: (p) =>
+			p.get("LH_Sold") !== "1" &&
+			p.get("LH_Auction") === "1" &&
+			p.get("_sop") === "1",
+	},
+	{
+		key: "newly-listed",
+		label: "Newly listed",
+		params: { _sop: "10" },
+		isCurrent: (p) =>
+			p.get("LH_Sold") !== "1" &&
+			p.get("LH_Complete") !== "1" &&
+			p.get("LH_Auction") !== "1" &&
+			p.get("LH_BIN") !== "1" &&
+			p.get("_sop") === "10",
+	},
+];
 
 /**
- * On a Search's Sold or Newly Listed page, the same Search's other view and
- * the link's label; null on any other page.
+ * On an eBay search, the same query (and category) as Sold, Ending soon and
+ * Newly listed, in that order, each `{ key, label, href, current }`; `current`
+ * marks the view the page already is. Null off a search.
  */
-function otherEbayView(url) {
-	let params;
+function ebayQuickViews(url) {
+	let page;
 	try {
-		params = new URL(url).searchParams;
+		page = new URL(url);
 	} catch {
 		return null;
 	}
-	const keywords = params.get("_nkw");
-	if (!keywords) return null;
-	if (params.get("LH_Sold") === "1") {
-		return { href: ebayNewlyListedView(keywords), label: "Go to newly listed" };
-	}
-	if (params.get("_sop") === "10" && params.get("LH_Auction") !== "1") {
-		return { href: ebaySoldView(keywords), label: "Go to sold listings" };
-	}
-	return null;
+	const keywords = page.searchParams.get("_nkw");
+	if (!keywords || !page.pathname.startsWith("/sch/")) return null;
+	const category = page.searchParams.get("_sacat");
+	return EBAY_QUICK_VIEWS.map((view) => {
+		const params = new URLSearchParams({ _nkw: keywords, ...view.params });
+		if (category && category !== "0") params.set("_sacat", category);
+		return {
+			key: view.key,
+			label: view.label,
+			href: `${page.origin}${page.pathname}?${params.toString()}`,
+			current: view.isCurrent(page.searchParams),
+		};
+	});
 }
 
 globalThis.readEbayResults = readEbayResults;
-globalThis.otherEbayView = otherEbayView;
+globalThis.ebayQuickViews = ebayQuickViews;
 globalThis.countEbayResults = countEbayResults;
 globalThis.isEbayCheckPage = isEbayCheckPage;

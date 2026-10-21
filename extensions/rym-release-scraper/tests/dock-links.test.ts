@@ -1,8 +1,8 @@
 // @vitest-environment node
 // The dock's links: "Go to Listings" opens the tracker's Listings for what the
-// page fed (in a new tab), once a capture says which Deck; on an eBay Search
-// that's a Sold or Newly Listed page, a link switches to the other one in
-// place. The dock, readers, content scripts and service worker are real;
+// page fed (in a new tab), once a capture says which Deck; on any eBay search,
+// quick links go to the same query's Sold, Ending soon and Newly listed views
+// in place. The dock, readers, content scripts and service worker are real;
 // chrome, fetch and the page are stubbed.
 
 import { readFileSync } from "node:fs";
@@ -15,46 +15,127 @@ import {
 } from "../../../src/lib/yugioh/searches";
 import "../ebay-reader.js";
 
-declare function otherEbayView(
-	url: string,
-): { href: string; label: string } | null;
+type QuickView = {
+	key: "sold" | "ending-soon" | "newly-listed";
+	label: string;
+	href: string;
+	current: boolean;
+};
+declare function ebayQuickViews(url: string): QuickView[] | null;
 
 const KEYWORDS = "(RA01-EN008,RA01-EN024) -super -ultra";
 
-describe("the other view of an eBay Search", () => {
-	test("a Sold page switches to the same Search, newly listed", () => {
-		expect(otherEbayView(ebaySoldUrl(KEYWORDS))).toEqual({
-			href: ebayNewlyListedUrl(KEYWORDS),
-			label: "Go to newly listed",
+/** The three views' links, keyed, for `url`. */
+function hrefs(url: string): Record<string, string> | null {
+	const views = ebayQuickViews(url);
+	return views && Object.fromEntries(views.map((v) => [v.key, v.href]));
+}
+
+/** Which view `url` is, if any. */
+function current(url: string): string | null {
+	return ebayQuickViews(url)?.find((v) => v.current)?.key ?? null;
+}
+
+describe("the quick views of an eBay search", () => {
+	test("match the app's Sold, Ending soon and Newly listed URLs for the same query", () => {
+		expect(hrefs(ebaySoldUrl(KEYWORDS))).toEqual({
+			sold: ebaySoldUrl(KEYWORDS),
+			"ending-soon": ebayEndingSoonUrl(KEYWORDS),
+			"newly-listed": ebayNewlyListedUrl(KEYWORDS),
 		});
 	});
 
-	test("a Newly Listed page switches to the same Search, sold", () => {
-		expect(otherEbayView(ebayNewlyListedUrl(KEYWORDS))).toEqual({
-			href: ebaySoldUrl(KEYWORDS),
-			label: "Go to sold listings",
+	test("are, in order, Sold, Ending soon, Newly listed", () => {
+		expect(ebayQuickViews(ebaySoldUrl(KEYWORDS))?.map((v) => v.label)).toEqual([
+			"Sold",
+			"Ending soon",
+			"Newly listed",
+		]);
+	});
+
+	test("Sold is completed and sold; Ending soon is auctions only, ending first; Newly listed is every format, newest first", () => {
+		const views = hrefs("https://www.ebay.com/sch/i.html?_nkw=ash+blossom");
+		const params = (key: string) =>
+			Object.fromEntries(new URL(views?.[key] ?? "").searchParams);
+		expect(params("sold")).toEqual({
+			_nkw: "ash blossom",
+			LH_Sold: "1",
+			LH_Complete: "1",
+			_sop: "13",
+		});
+		expect(params("ending-soon")).toEqual({
+			_nkw: "ash blossom",
+			LH_Auction: "1",
+			_sop: "1",
+		});
+		expect(params("newly-listed")).toEqual({ _nkw: "ash blossom", _sop: "10" });
+	});
+
+	test("drop other sorts, filters and the page, from any search", () => {
+		const url =
+			"https://www.ebay.com/sch/i.html?_from=R40&_nkw=ash+blossom+ra01&_sacat=0&LH_BIN=1&_sop=15&rt=nc&LH_ItemCondition=3000&_pgn=3";
+		expect(hrefs(url)).toEqual({
+			sold: ebaySoldUrl("ash blossom ra01"),
+			"ending-soon": ebayEndingSoonUrl("ash blossom ra01"),
+			"newly-listed": ebayNewlyListedUrl("ash blossom ra01"),
 		});
 	});
 
-	test("a later page of results switches to the first page of the other view", () => {
-		expect(otherEbayView(`${ebaySoldUrl(KEYWORDS)}&_pgn=2`)?.href).toBe(
-			ebayNewlyListedUrl(KEYWORDS),
+	test("keep the search's category", () => {
+		const views = hrefs(
+			"https://www.ebay.com/sch/i.html?_nkw=ash+blossom&_sacat=183454&LH_Auction=1&_sop=1",
+		);
+		for (const href of Object.values(views ?? {})) {
+			expect(new URL(href).searchParams.get("_sacat")).toBe("183454");
+		}
+		expect(views?.sold).toBe(`${ebaySoldUrl("ash blossom")}&_sacat=183454`);
+	});
+
+	test("keep a category in the path", () => {
+		const views = hrefs(
+			"https://www.ebay.com/sch/183454/i.html?_nkw=ash+blossom&_sop=12",
+		);
+		expect(views?.["newly-listed"]).toBe(
+			"https://www.ebay.com/sch/183454/i.html?_nkw=ash+blossom&_sop=10",
 		);
 	});
 
-	test("other eBay pages have no switch", () => {
+	test("mark the view the page is on", () => {
+		expect(current(ebaySoldUrl(KEYWORDS))).toBe("sold");
+		expect(current(`${ebaySoldUrl(KEYWORDS)}&_pgn=2`)).toBe("sold");
+		expect(current(ebayEndingSoonUrl(KEYWORDS))).toBe("ending-soon");
+		expect(current(ebayNewlyListedUrl(KEYWORDS))).toBe("newly-listed");
+	});
+
+	test("mark none on a search that's none of the three", () => {
 		for (const url of [
-			ebayEndingSoonUrl(KEYWORDS),
 			"https://www.ebay.com/sch/i.html?_nkw=RA01-EN008",
+			"https://www.ebay.com/sch/i.html?_nkw=RA01-EN008&_sop=10&LH_BIN=1",
+			"https://www.ebay.com/sch/i.html?_nkw=RA01-EN008&_sop=10&LH_Auction=1",
+			"https://www.ebay.com/sch/i.html?_nkw=RA01-EN008&_sop=1",
+			"https://www.ebay.com/sch/i.html?_nkw=RA01-EN008&LH_Complete=1",
+		]) {
+			expect(current(url)).toBeNull();
+		}
+	});
+
+	test("aren't offered off a search", () => {
+		for (const url of [
 			"https://www.ebay.com/sch/i.html?_sop=10",
+			"https://www.ebay.com/itm/1234567890",
 			"not a url",
 		]) {
-			expect(otherEbayView(url)).toBeNull();
+			expect(ebayQuickViews(url)).toBeNull();
 		}
 	});
 });
 
-type Link = { text: string; href: string | null; target: string | null };
+type Link = {
+	text: string;
+	href: string | null;
+	target: string | null;
+	current?: string | null;
+};
 
 /** The dock's links, as shown. */
 function dockLinks(document: Document): Link[] {
@@ -63,6 +144,9 @@ function dockLinks(document: Document): Link[] {
 		text: a.textContent?.trim() ?? "",
 		href: a.getAttribute("href"),
 		target: a.getAttribute("target"),
+		...(a.closest("[data-views]")
+			? { current: a.getAttribute("aria-current") }
+			: {}),
 	}));
 }
 
@@ -137,7 +221,20 @@ describe("the dock on an eBay Search", () => {
 		vi.unstubAllGlobals();
 	});
 
-	test("a Sold page links to the Deck's Listings in a new tab, and to newly listed in place", async () => {
+	/** The quick views, with `current` the one shown as the page's own. */
+	function views(keywords: string, current: string): Link[] {
+		return [
+			["Sold", ebaySoldUrl(keywords)],
+			["Ending soon", ebayEndingSoonUrl(keywords)],
+			["Newly listed", ebayNewlyListedUrl(keywords)],
+		].map(([text, href]) =>
+			text === current
+				? { text, href: null, target: null, current: "page" }
+				: { text, href, target: null, current: null },
+		);
+	}
+
+	test("a Sold page links to the Deck's Listings in a new tab, and to the query's other views in place", async () => {
 		const { document, sent } = await loadPage({
 			fixture: "ebay-sold.html",
 			url: ebaySoldUrl("RA01-EN008"),
@@ -150,16 +247,16 @@ describe("the dock on an eBay Search", () => {
 			searchUrl: ebaySoldUrl("RA01-EN008"),
 		});
 		expect(dockLinks(document)).toEqual([
-			{ text: "Go to Listings", href: LISTINGS_URL, target: "_blank" },
+			...views("RA01-EN008", "Sold"),
 			{
-				text: "Go to newly listed",
-				href: ebayNewlyListedUrl("RA01-EN008"),
-				target: null,
+				text: "Go to Listings",
+				href: LISTINGS_URL,
+				target: "_blank",
 			},
 		]);
 	});
 
-	test("a Newly Listed page no Deck has links only to sold listings", async () => {
+	test("a Newly listed page no Deck has links only to the query's other views", async () => {
 		const { document } = await loadPage({
 			fixture: "ebay-newly-listed.html",
 			url: ebayNewlyListedUrl("RA01-EN008"),
@@ -167,16 +264,10 @@ describe("the dock on an eBay Search", () => {
 			backend: { created: 1, updated: 0 },
 		});
 
-		expect(dockLinks(document)).toEqual([
-			{
-				text: "Go to sold listings",
-				href: ebaySoldUrl("RA01-EN008"),
-				target: null,
-			},
-		]);
+		expect(dockLinks(document)).toEqual(views("RA01-EN008", "Newly listed"));
 	});
 
-	test("an Ending soon page has no switch", async () => {
+	test("an Ending soon page shows it as the current view", async () => {
 		const { document } = await loadPage({
 			fixture: "ebay-ending-soon.html",
 			url: ebayEndingSoonUrl("RA01-EN008"),
@@ -184,7 +275,18 @@ describe("the dock on an eBay Search", () => {
 			backend: { created: 1, updated: 0 },
 		});
 
-		expect(dockLinks(document)).toEqual([]);
+		expect(dockLinks(document)).toEqual(views("RA01-EN008", "Ending soon"));
+	});
+
+	test("any other search gets all three, none current", async () => {
+		const { document } = await loadPage({
+			fixture: "ebay-ending-soon.html",
+			url: "https://www.ebay.com/sch/i.html?_nkw=RA01-EN008&LH_BIN=1&_sop=15",
+			scripts: "ebay",
+			backend: { created: 1, updated: 0 },
+		});
+
+		expect(dockLinks(document)).toEqual(views("RA01-EN008", ""));
 	});
 });
 

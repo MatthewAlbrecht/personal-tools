@@ -41,6 +41,8 @@ const scrapeDockState = {
 	running: false,
 	// Links beside the Capture button: `{ label, href, newTab }`.
 	links: [],
+	// Other views of this page, as one segmented row: `{ label, href, current }`.
+	views: [],
 };
 
 function escapeHtml(value) {
@@ -139,6 +141,27 @@ function applyDockUpdate(patch) {
 function setDockLinks(links) {
 	scrapeDockState.links = links.filter(Boolean);
 	renderScrapeDock();
+}
+
+/**
+ * Sets the dock's quick views of this page, followed in place. The `current`
+ * one shows as the page's own (not a link), so the row stays put.
+ */
+function setDockViews(views) {
+	scrapeDockState.views = views;
+	renderScrapeDock();
+}
+
+function dockViewsHtml(views) {
+	if (views.length === 0) return "";
+	const items = views
+		.map((view) =>
+			view.current
+				? `<a class="view" aria-current="page">${escapeHtml(view.label)}</a>`
+				: `<a class="view" href="${escapeHtml(view.href)}">${escapeHtml(view.label)}</a>`,
+		)
+		.join("");
+	return `<nav class="views" aria-label="Views" data-views>${items}</nav>`;
 }
 
 function dockLinkHtml(link) {
@@ -268,6 +291,35 @@ function dockStyles() {
 			outline: 2px solid #e8b04a;
 			outline-offset: 2px;
 		}
+		.views {
+			display: flex;
+			margin: 0 0 9px;
+			border: 1px solid rgba(243, 234, 216, 0.22);
+		}
+		a.view {
+			flex: 1;
+			text-align: center;
+			font-size: 12px;
+			padding: 4px 8px;
+			color: #d7cbb4;
+			text-decoration: none;
+		}
+		a.view + a.view {
+			border-left: 1px solid rgba(243, 234, 216, 0.22);
+		}
+		a.view[href]:hover {
+			color: #f3ead8;
+			background: rgba(243, 234, 216, 0.06);
+		}
+		a.view[href]:focus-visible {
+			outline: 2px solid #e8b04a;
+			outline-offset: -2px;
+		}
+		a.view[aria-current] {
+			color: #1b1612;
+			background: #f3ead8;
+			cursor: default;
+		}
 		.ghost {
 			margin-left: auto;
 			letter-spacing: 0.04em;
@@ -357,6 +409,7 @@ function renderScrapeDock() {
 							}" style="${indeterminate ? "" : `width:${pct}%`}"></div></div>`
 						: ""
 				}
+				${dockViewsHtml(s.views)}
 				<div class="row">
 					<button class="primary" type="button" data-rescrape ${
 						s.running ? "disabled" : ""
@@ -430,3 +483,4 @@ function mountScrapeDock(options) {
 globalThis.mountScrapeDock = mountScrapeDock;
 globalThis.applyDockUpdate = applyDockUpdate;
 globalThis.setDockLinks = setDockLinks;
+globalThis.setDockViews = setDockViews;

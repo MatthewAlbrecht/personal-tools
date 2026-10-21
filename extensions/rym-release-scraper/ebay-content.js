@@ -41,16 +41,10 @@ function plural(count, one, many) {
 	return `${count} ${count === 1 ? one : many}`;
 }
 
-// On a Sold or Newly Listed Search, the same Search's other view.
-const ebayViewLink = (function viewLink() {
-	const other = otherEbayView(location.href);
-	return other ? { label: other.label, href: other.href, newTab: false } : null;
-})();
-
 function finishEbayCapture(response, count) {
 	const backend = response?.backend;
 	if (response?.ok && backend?.synced) {
-		setDockLinks([listingsLink(backend), ebayViewLink]);
+		setDockLinks([listingsLink(backend)]);
 		const created = typeof backend.created === "number" ? backend.created : 0;
 		const updated = typeof backend.updated === "number" ? backend.updated : 0;
 		applyDockUpdate({
@@ -188,6 +182,7 @@ mountScrapeDock({
 		void runEbayCapture();
 	},
 });
-setDockLinks([ebayViewLink]);
+// The same query's Sold, Ending soon and Newly listed views, for browsing.
+setDockViews(ebayQuickViews(location.href) ?? []);
 
 void runEbayCapture({ scroll: true });

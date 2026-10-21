@@ -27,6 +27,7 @@ test("a sold page is read and sent, and the dock shows the count", async () => {
 	});
 	vi.stubGlobal("mountScrapeDock", () => {});
 	vi.stubGlobal("setDockLinks", () => {});
+	vi.stubGlobal("setDockViews", () => {});
 	vi.stubGlobal("isAutomatedVisit", async () => false);
 	vi.stubGlobal("applyDockUpdate", (patch: (typeof dock)[number]) => {
 		dock.push(patch);
@@ -74,6 +75,7 @@ test("a Search with no results tells the service worker there was nothing to sen
 	});
 	vi.stubGlobal("mountScrapeDock", () => {});
 	vi.stubGlobal("setDockLinks", () => {});
+	vi.stubGlobal("setDockViews", () => {});
 	vi.stubGlobal("isAutomatedVisit", async () => false);
 	vi.stubGlobal("applyDockUpdate", () => {});
 	vi.stubGlobal("chrome", {
@@ -111,6 +113,7 @@ test("an eBay error page instead of results is reported as an error, not as an e
 	});
 	vi.stubGlobal("mountScrapeDock", () => {});
 	vi.stubGlobal("setDockLinks", () => {});
+	vi.stubGlobal("setDockViews", () => {});
 	vi.stubGlobal("isAutomatedVisit", async () => false);
 	vi.stubGlobal("applyDockUpdate", (patch: (typeof dock)[number]) => {
 		dock.push(patch);
@@ -161,6 +164,7 @@ test("a check page instead of results is reported as challenged, so the run stop
 	});
 	vi.stubGlobal("mountScrapeDock", () => {});
 	vi.stubGlobal("setDockLinks", () => {});
+	vi.stubGlobal("setDockViews", () => {});
 	vi.stubGlobal("isAutomatedVisit", async () => false);
 	vi.stubGlobal("applyDockUpdate", (patch: (typeof dock)[number]) => {
 		dock.push(patch);
@@ -241,6 +245,7 @@ async function loadSoldPage({ automated }: { automated: boolean }) {
 	});
 	vi.stubGlobal("mountScrapeDock", () => {});
 	vi.stubGlobal("setDockLinks", () => {});
+	vi.stubGlobal("setDockViews", () => {});
 	vi.stubGlobal("applyDockUpdate", () => {});
 	vi.stubGlobal("chrome", {
 		runtime: {
