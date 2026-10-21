@@ -352,6 +352,7 @@ describe("one run at a time", () => {
 		expect(again.json).toEqual({
 			runId: (first.json as { runId: string }).runId,
 			alreadyOpen: true,
+			kind: "full",
 		});
 		expect(await t.query(api.yugioh.automation.listRuns, {})).toHaveLength(1);
 	});
@@ -361,7 +362,8 @@ describe("one run at a time", () => {
 		const { runId: stuck } = await startRun(t);
 		vi.setSystemTime(NOW + 2 * HOUR + MINUTE);
 
-		const next = await automation(t, { op: "request", trigger: "launchAgent" });
+		// By hand: a scheduled ask wouldn't be due for a full run yet.
+		const next = await automation(t, { op: "request", trigger: "manual" });
 
 		expect((next.json as { alreadyOpen: boolean }).alreadyOpen).toBe(false);
 		const runs = (await t.query(api.yugioh.automation.listRuns, {})) as Run[];

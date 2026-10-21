@@ -4,7 +4,10 @@
 	Yu-Gi-Oh tracker automated captures (docs/yugioh/automation.md).
 	A template: install.sh fills in __RUN_SCRIPT__ and __LOG_FILE__ and writes
 	it to ~/Library/LaunchAgents/dev.moooose.yugioh-automation.plist.
-	StartCalendarInterval (not StartInterval) so a run missed while the Mac
+	It asks the app every 10 minutes (a dict with only Minute fires every
+	hour); the app answers with a full run every 3 hours, a refresh run before
+	a matched auction ends, or nothing due (ticket 16).
+	StartCalendarInterval (not StartInterval) so an ask missed while the Mac
 	slept happens once on wake. launchd never starts a second copy while one
 	is running.
 -->
@@ -21,14 +24,12 @@
 	</array>
 	<key>StartCalendarInterval</key>
 	<array>
-		<dict><key>Hour</key><integer>0</integer><key>Minute</key><integer>0</integer></dict>
-		<dict><key>Hour</key><integer>3</integer><key>Minute</key><integer>0</integer></dict>
-		<dict><key>Hour</key><integer>6</integer><key>Minute</key><integer>0</integer></dict>
-		<dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
-		<dict><key>Hour</key><integer>12</integer><key>Minute</key><integer>0</integer></dict>
-		<dict><key>Hour</key><integer>15</integer><key>Minute</key><integer>0</integer></dict>
-		<dict><key>Hour</key><integer>18</integer><key>Minute</key><integer>0</integer></dict>
-		<dict><key>Hour</key><integer>21</integer><key>Minute</key><integer>0</integer></dict>
+		<dict><key>Minute</key><integer>0</integer></dict>
+		<dict><key>Minute</key><integer>10</integer></dict>
+		<dict><key>Minute</key><integer>20</integer></dict>
+		<dict><key>Minute</key><integer>30</integer></dict>
+		<dict><key>Minute</key><integer>40</integer></dict>
+		<dict><key>Minute</key><integer>50</integer></dict>
 	</array>
 	<key>EnvironmentVariables</key>
 	<dict>

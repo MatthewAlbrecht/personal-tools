@@ -1907,6 +1907,9 @@ export default defineSchema({
 		.index("by_matchedPrintingId", ["matchedPrintingId"])
 		// "Last captured 9h ago" (ticket 15).
 		.index("by_lastSeenAt", ["lastSeenAt"])
+		// Auctions ending soon, for refresh visits (ticket 16): a running
+		// auction's `saleAt` is its end time.
+		.index("by_marketplace_and_saleAt", ["marketplace", "saleAt"])
 		// Each marketplace's Reference price and buy-now floor read their own
 		// Listings only: the two are never blended.
 		.index("by_matchedPrintingId_and_marketplace_and_saleAt", [

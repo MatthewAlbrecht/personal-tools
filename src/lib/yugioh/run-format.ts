@@ -7,7 +7,7 @@ import {
 	format,
 	isToday,
 } from "date-fns";
-import type { RunStatus, RunTrigger } from "./automation";
+import type { RunKind, RunStatus, RunTrigger } from "./automation";
 
 /** The Deck header's note shows once the last capture is older than this. */
 export const STALE_CAPTURE_HOURS = 6;
@@ -29,6 +29,8 @@ export function captureStaleness(
 
 export type RunSummary = {
 	trigger: RunTrigger;
+	/** Missing on runs from before refresh runs: those were full runs. */
+	kind?: RunKind;
 	status: RunStatus;
 	requestedAt: number;
 	startedAt: number | null;
@@ -70,7 +72,11 @@ const TRIGGER_LABELS: Record<RunTrigger, string> = {
 export function describeRun(run: RunSummary, now: number): RunLines {
 	const start = run.startedAt ?? run.requestedAt;
 	const day = isToday(start) ? "Today" : format(start, "MMM d");
-	const when = `${day}, ${format(start, "h:mm a")} · ${TRIGGER_LABELS[run.trigger]}`;
+	const why =
+		run.kind === "refresh"
+			? "Before an auction ends"
+			: TRIGGER_LABELS[run.trigger];
+	const when = `${day}, ${format(start, "h:mm a")} · ${why}`;
 	const pages =
 		run.pagesVisited === 0
 			? null

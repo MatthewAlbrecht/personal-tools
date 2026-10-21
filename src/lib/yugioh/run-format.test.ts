@@ -50,6 +50,25 @@ describe("a run in the list", () => {
 		});
 	});
 
+	test("a refresh run says it ran before an auction ends", () => {
+		expect(
+			describeRun(
+				{
+					...finished,
+					kind: "refresh",
+					pagesPlanned: 1,
+					pagesVisited: 1,
+					searchPagesVisited: 1,
+					productPagesVisited: 0,
+				},
+				NOW,
+			),
+		).toMatchObject({
+			when: "Today, 2:41 PM · Before an auction ends",
+			pages: "1 Search page",
+		});
+	});
+
 	test("a run counts the matched auctions it found no end time for", () => {
 		expect(
 			describeRun({ ...finished, auctionsWithoutEndTime: 2 }, NOW).listings,

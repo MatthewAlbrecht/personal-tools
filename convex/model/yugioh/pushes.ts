@@ -267,6 +267,33 @@ export async function checkAuction(
 	);
 }
 
+/**
+ * Whether a running auction will get its auction push, so a refresh visit
+ * before it is worth making (ticket 16): a device has push on, the auction
+ * isn't pushed yet, and it's matched and Qualifying for a Card that still
+ * needs Copies and searches its Printing. The same selection as
+ * `checkAuction`.
+ */
+export async function awaitsAuctionPush(
+	ctx: QueryCtx,
+	listing: Doc<"yugiohListings">,
+	now: number,
+): Promise<boolean> {
+	if (listing.endsAt === null || !isRunningAuction(listing, now)) return false;
+	const printingId = matchedPrintingId(listing);
+	if (printingId === null) return false;
+	if ((await newestSubscription(ctx)) === null) return false;
+	if (await pushFor(ctx, listing._id, "auction")) return false;
+	const want = await wantingCard(
+		ctx,
+		listing,
+		printingId,
+		now,
+		isQualifyingDeal,
+	);
+	return want !== null;
+}
+
 /** A push that shows every device push is working. Not held. */
 export async function queueTestPush(
 	ctx: MutationCtx,
@@ -460,7 +487,7 @@ type WantingCard<D extends CardDeal = CardDeal> = {
  * several Decks), the one in the Deck I viewed most recently.
  */
 async function wantingCard<D extends CardDeal>(
-	ctx: MutationCtx,
+	ctx: QueryCtx,
 	listing: Doc<"yugiohListings">,
 	printingId: Id<"yugiohPrintings">,
 	now: number,

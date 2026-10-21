@@ -5,6 +5,7 @@ import * as Automation from "../model/yugioh/automation";
 import {
 	yugiohAutomationRunValidator,
 	yugiohPlannedVisitValidator,
+	yugiohRunKindValidator,
 	yugiohRunTriggerValidator,
 	yugiohVisitReportValidator,
 } from "../model/yugioh/validators";
@@ -18,12 +19,16 @@ const runValidator = yugiohAutomationRunValidator.extend({
 	_id: v.id("yugiohAutomationRuns"),
 });
 
-/** The script asks for a run; an open run is returned instead of a new one. */
+/**
+ * The script asks for a run; an open run is returned instead of a new one.
+ * A scheduled ask with nothing due gets a null `runId` and `kind`.
+ */
 export const requestRun = internalMutation({
 	args: { trigger: yugiohRunTriggerValidator },
 	returns: v.object({
-		runId: v.id("yugiohAutomationRuns"),
+		runId: v.union(v.id("yugiohAutomationRuns"), v.null()),
 		alreadyOpen: v.boolean(),
+		kind: v.union(yugiohRunKindValidator, v.null()),
 	}),
 	handler: async (ctx, args) =>
 		await Automation.requestRun(ctx, args.trigger, Date.now()),

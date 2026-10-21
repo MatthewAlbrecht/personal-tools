@@ -1,9 +1,16 @@
 import {
+	type EndingAuction,
 	MAX_VISITS_PER_RUN,
 	type PlannedVisit,
+	REFRESH_CLOSES_BEFORE_END_MS,
+	REFRESH_COALESCE_MS,
 	RUN_ABANDONED_AFTER_MS,
+	type RunKind,
 	type RunTrigger,
+	auctionsToRefresh,
+	buildRefreshVisits,
 	buildVisitPlan,
+	scheduledRunDue,
 } from "../../../src/lib/yugioh/automation";
 import {
 	buildDeckSearches,
@@ -11,7 +18,9 @@ import {
 } from "../../../src/lib/yugioh/searches";
 import type { Doc, Id } from "../../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../../_generated/server";
+import { matchedPrintingId } from "./deals";
 import { MAX_DECKS, readDeck } from "./decks";
+import { awaitsAuctionPush } from "./pushes";
 
 /** How many failed pages a run keeps on itself for the runs list. */
 export const MAX_PAGE_ERRORS_SHOWN = 20;
@@ -19,9 +28,23 @@ export const MAX_PAGE_ERRORS_SHOWN = 20;
 /** How many runs the app lists. */
 export const MAX_RUNS_SHOWN = 20;
 
+/**
+ * How many recent runs a scheduled ask looks through for the last full run:
+ * more than the refresh runs that fit between two full runs.
+ */
+const RECENT_RUNS_READ = 50;
+
+/** Most auctions ending in the next 45 minutes read for refresh visits. */
+const MAX_ENDING_AUCTIONS = 100;
+
+/**
+ * A run asked for (or the one already open), with its kind; `runId` and
+ * `kind` are null when a scheduled ask finds nothing due.
+ */
 export type RunRequest = {
-	runId: Id<"yugiohAutomationRuns">;
+	runId: Id<"yugiohAutomationRuns"> | null;
 	alreadyOpen: boolean;
+	kind: RunKind | null;
 };
 
 export type ClaimedRun = {
@@ -42,6 +65,10 @@ const OPEN_STATUSES = ["requested", "running"] as const;
  * Asks for a run. While one is still open (asked for or running) it's
  * returned instead, so two triggers never run at once. An open run older than
  * RUN_ABANDONED_AFTER_MS is closed as failed first.
+ *
+ * T3 Code and hand runs are always full runs. The LaunchAgent asks every 10
+ * minutes and gets a full run every 3 hours, a refresh run when an auction
+ * awaiting its push ends in about 20 minutes, or nothing.
  */
 export async function requestRun(
 	ctx: MutationCtx,
@@ -55,7 +82,11 @@ export async function requestRun(
 			.take(10);
 		for (const run of open) {
 			if (now - (run.startedAt ?? run.requestedAt) < RUN_ABANDONED_AFTER_MS) {
-				return { runId: run._id, alreadyOpen: true };
+				return {
+					runId: run._id,
+					alreadyOpen: true,
+					kind: runKind(run),
+				};
 			}
 			await ctx.db.patch("yugiohAutomationRuns", run._id, {
 				status: "failed",
@@ -64,8 +95,12 @@ export async function requestRun(
 			});
 		}
 	}
+	const kind =
+		trigger === "launchAgent" ? await scheduledRun(ctx, now) : "full";
+	if (kind === null) return { runId: null, alreadyOpen: false, kind: null };
 	const runId = await ctx.db.insert("yugiohAutomationRuns", {
 		trigger,
+		kind,
 		status: "requested",
 		requestedAt: now,
 		startedAt: null,
@@ -81,7 +116,63 @@ export async function requestRun(
 		error: null,
 		pageErrors: [],
 	});
-	return { runId, alreadyOpen: false };
+	return { runId, alreadyOpen: false, kind };
+}
+
+/** Which run a scheduled ask starts now, if any. */
+async function scheduledRun(
+	ctx: QueryCtx,
+	now: number,
+): Promise<RunKind | null> {
+	const recent = await ctx.db
+		.query("yugiohAutomationRuns")
+		.order("desc")
+		.take(RECENT_RUNS_READ);
+	const lastFull = recent.find((run) => runKind(run) === "full");
+	return scheduledRunDue({
+		lastFullRunAt: lastFull?.requestedAt ?? null,
+		lastRunAt: recent[0]?.requestedAt ?? null,
+		auctions: await readEndingAuctions(ctx, now),
+		now,
+	});
+}
+
+type EndingAuctionWithSetCode = EndingAuction & { setCode: string };
+
+/**
+ * Running eBay auctions ending in the next 45 minutes (but not within 17)
+ * that will get an auction push, with their matched Printing's set code.
+ */
+async function readEndingAuctions(
+	ctx: QueryCtx,
+	now: number,
+): Promise<EndingAuctionWithSetCode[]> {
+	const ending = await ctx.db
+		.query("yugiohListings")
+		.withIndex("by_marketplace_and_saleAt", (q) =>
+			q
+				.eq("marketplace", "ebay")
+				.gt("saleAt", now + REFRESH_CLOSES_BEFORE_END_MS)
+				.lte("saleAt", now + REFRESH_COALESCE_MS),
+		)
+		.take(MAX_ENDING_AUCTIONS);
+	const auctions: EndingAuctionWithSetCode[] = [];
+	for (const listing of ending) {
+		if (listing.endsAt === null) continue;
+		if (!(await awaitsAuctionPush(ctx, listing, now))) continue;
+		const printingId = matchedPrintingId(listing);
+		const printing =
+			printingId === null
+				? null
+				: await ctx.db.get("yugiohPrintings", printingId);
+		if (!printing) continue;
+		auctions.push({
+			endsAt: listing.endsAt,
+			lastSeenAt: listing.lastSeenAt,
+			setCode: printing.setCode,
+		});
+	}
+	return auctions;
 }
 
 /**
@@ -97,7 +188,7 @@ export async function claimRun(
 		.withIndex("by_status", (q) => q.eq("status", "requested"))
 		.first();
 	if (!run) return null;
-	const visits = await readVisitPlan(ctx);
+	const visits = await readVisitPlan(ctx, runKind(run), now);
 	await ctx.db.patch("yugiohAutomationRuns", run._id, {
 		status: "running",
 		startedAt: now,
@@ -107,11 +198,17 @@ export async function claimRun(
 }
 
 /**
- * Every page to visit, across all Decks: the Searches packed from every
- * Card's searched Printings (as the Searches tab packs one Deck's), then
- * the TCGplayer product page of each of those Printings that has one.
+ * The pages a run visits, across all Decks. First the refresh pages of
+ * auctions ending in the next 45 minutes that await their push. Then, for a
+ * full run, the Searches packed from every Card's searched Printings (as the
+ * Searches tab packs one Deck's), then the TCGplayer product page of each of
+ * those Printings that has one.
  */
-export async function readVisitPlan(ctx: QueryCtx): Promise<PlannedVisit[]> {
+export async function readVisitPlan(
+	ctx: QueryCtx,
+	kind: RunKind,
+	now: number,
+): Promise<PlannedVisit[]> {
 	const decks = await ctx.db.query("yugiohDecks").take(MAX_DECKS);
 	const views = await Promise.all(decks.map((deck) => readDeck(ctx, deck._id)));
 	const cards = views.flatMap(
@@ -137,7 +234,16 @@ export async function readVisitPlan(ctx: QueryCtx): Promise<PlannedVisit[]> {
 			a.cardName.localeCompare(b.cardName) ||
 			a.setCode.localeCompare(b.setCode),
 	);
-	return buildVisitPlan(buildDeckSearches(cards), byName);
+	const searches = buildDeckSearches(cards);
+	const refresh = buildRefreshVisits(
+		searches,
+		auctionsToRefresh(await readEndingAuctions(ctx, now), now).map(
+			(auction) => auction.setCode,
+		),
+	);
+	return kind === "full"
+		? buildVisitPlan(searches, byName, refresh)
+		: refresh.slice(0, MAX_VISITS_PER_RUN);
 }
 
 /**
@@ -200,6 +306,11 @@ export async function finishRun(
 		endedAt: now,
 		error: failure,
 	});
+}
+
+/** Runs from before refresh runs have no kind: they were all full runs. */
+function runKind(run: Doc<"yugiohAutomationRuns">): RunKind {
+	return run.kind ?? "full";
 }
 
 export type RunView = Omit<Doc<"yugiohAutomationRuns">, "_creationTime">;

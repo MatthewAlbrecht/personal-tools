@@ -212,6 +212,19 @@ export function ebayNewlyListedUrl(keywords: string): string {
 	return `${EBAY_SEARCH_URL}?${params.toString()}`;
 }
 
+/**
+ * Running auctions only, ending soonest first (`LH_Auction=1`, `_sop=1`):
+ * the refresh page before an auction's push (ticket 16).
+ */
+export function ebayEndingSoonUrl(keywords: string): string {
+	const params = new URLSearchParams({
+		_nkw: keywords,
+		LH_Auction: "1",
+		_sop: "1",
+	});
+	return `${EBAY_SEARCH_URL}?${params.toString()}`;
+}
+
 /** Sold and completed Listings, most recently ended first (`_sop=13`). */
 export function ebaySoldUrl(keywords: string): string {
 	const params = new URLSearchParams({

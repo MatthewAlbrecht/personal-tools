@@ -2,15 +2,16 @@
 # One automated capture run for the Yu-Gi-Oh tracker (docs/yugioh/automation.md).
 #
 # Asks the app for a run, opens the automation Chrome profile (its extension
-# claims the run and visits every Search and TCGplayer page), waits for the run
-# to end, then quits that Chrome if this script opened it. Run by the
-# LaunchAgent every 3 hours, by a T3 Code scheduled task, or by hand:
+# claims the run and visits its pages), waits for the run to end, then quits
+# that Chrome if this script opened it. The LaunchAgent asks every 10 minutes;
+# the app answers with a full run every 3 hours, a refresh run before a matched
+# auction ends, or nothing due. T3 Code and hand runs are always full runs:
 #
 #   scripts/yugioh-automation/run.sh [--trigger launchAgent|t3|manual]
 #
 # Settings come from ~/.config/yugioh-automation/config (see install.sh).
-# Exit codes: 0 the run finished (or one was already going), 1 it failed,
-# 64 bad arguments, 78 not set up.
+# Exit codes: 0 the run finished (or one was already going, or none was due),
+# 1 it failed, 64 bad arguments, 78 not set up.
 
 set -uo pipefail
 
@@ -43,7 +44,7 @@ while [ $# -gt 0 ]; do
 	case "$1" in
 	--trigger) trigger="${2:-}"; shift 2 ;;
 	--trigger=*) trigger="${1#*=}"; shift ;;
-	-h | --help) sed -n '2,15p' "$0"; exit 0 ;;
+	-h | --help) sed -n '2,14p' "$0"; exit 0 ;;
 	*) echo "Unknown argument: $1" >&2; exit 64 ;;
 	esac
 done
@@ -128,7 +129,11 @@ reply="$(step "{\"op\":\"request\",\"trigger\":\"$trigger\"}")" || {
 	exit 1
 }
 run_id="$(field "$reply" runId)"
+kind="$(field "$reply" kind)"
 if [ -z "$run_id" ]; then
+	# A scheduled ask with nothing due (runId null): the usual answer every 10
+	# minutes, so it isn't logged.
+	if [ "$(field "$reply" alreadyOpen)" = "false" ]; then exit 0; fi
 	log "Unexpected reply from the app: ${reply:0:200}"
 	exit 1
 fi
@@ -137,7 +142,7 @@ if [ "$(field "$reply" alreadyOpen)" = "true" ]; then
 	ended=true
 	exit 0
 fi
-log "Asked for run $run_id ($trigger)."
+log "Asked for run $run_id ($trigger, ${kind:-full})."
 
 if [ -z "$(chrome_pid)" ]; then
 	mkdir -p "$profile"

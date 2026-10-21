@@ -20,6 +20,7 @@ import { api } from "../../../../convex/_generated/api";
 const KIND_LABELS = {
 	ebayNewlyListed: "Newly Listed",
 	ebaySold: "Sold",
+	ebayEndingSoon: "Ending soon",
 	tcgplayer: "TCGplayer",
 } as const;
 
@@ -38,7 +39,8 @@ export function AutomatedRuns(): React.ReactElement {
 				<CardTitle>Automated runs</CardTitle>
 				<CardDescription>
 					Every 3 hours, your Mac opens each Search and TCGplayer page in its
-					own Chrome profile.
+					own Chrome profile. It looks again about 20 minutes before a matched
+					auction ends, so the alert shows a fresh price.
 				</CardDescription>
 			</CardHeader>
 			<CardContent>

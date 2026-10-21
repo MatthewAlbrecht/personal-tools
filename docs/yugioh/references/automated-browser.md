@@ -12,6 +12,7 @@ Platform facts for the scheduled capture run. A bash script, started by a user L
 - **`StartInterval` skips intervals that fall while the Mac sleeps, and intervals that fall while the job is still running** (verified, `man launchd.plist`). `StartCalendarInterval` runs once on wake, folding any missed runs into one.
 - **A user LaunchAgent runs in the `Aqua` (GUI) session by default and can launch GUI apps** (verified, TN2083). Use `launchctl bootstrap gui/$(id -u) <plist>`.
 - **When the job's main process exits, launchd kills anything left in the job's process group** unless `AbandonProcessGroup` is true (verified). This matters if the script runs the Chrome binary directly.
+- **Trigger pre-auction runs (ticket 16) by firing the LaunchAgent every 10 minutes and letting the app answer "not due"** (see §8). `StartCalendarInterval` dicts with only `Minute` match every hour, and missed slots fold into one run on wake (verified). Neither Convex nor `chrome.alarms` can start Chrome on the Mac. A T3 webhook task could, but each run costs an agent turn and needs the T3 app open. Nothing in user space wakes a sleeping Mac; `pmset schedule wake` needs root.
 
 ## 1. MV3 service worker lifetime
 
@@ -148,3 +149,35 @@ Sources: `man launchd.plist`, `man launchctl` (local, macOS 26.3), [TN2083 Daemo
   - A plist in `$HOME/Library/LaunchAgents` must be owned by the user and must not be group- or world-writable.
 - **`plutil -lint <plist>`** checks plist syntax. This is standard; it was not checked against the man page here.
 - **"Background Items Added" (partly verified).** Apple's [deployment guide](https://support.apple.com/guide/deployment/manage-login-items-background-tasks-mac-depdca572563/web) says macOS 13+ tells users when login and background items are added. They are listed in System Settings → General → Login Items, and `sfltool dumpbtm` prints them. Whether a hand-installed `~/Library/LaunchAgents` plist triggers the notification is unverified (third-party reports say yes). It is a notice, not a block, but the user can turn the item off there.
+
+## 8. Triggering extra runs (ticket 16)
+
+Ticket 16 needs a run about 20 minutes before certain eBay auctions end, at any hour. Three ways to trigger one were checked on 2026-10-20. Sources: `man launchd.plist` and `man pmset` (local, macOS 26.3), [chrome.alarms](https://developer.chrome.com/docs/extensions/reference/api/alarms), [Convex scheduled functions](https://docs.convex.dev/scheduling/scheduled-functions), and the T3 Code `schedule_task` and `list_scheduled_tasks` tool schemas (T3 Code (Beta), read from the tool descriptions, not called).
+
+**Recommendation: (b), the LaunchAgent fires every 10 minutes and the app answers "not due" most of the time.** It is the only option that works with Chrome closed and the T3 app shut, catches up after sleep, and costs about one HTTP request per firing. The app keeps the whole schedule, so ticket 17 (adaptive timing) needs no change on the Mac. Because the slots are 10 minutes apart, the window in which `request` treats a refresh as due must be wider than 10 minutes. As built, it opens 28 minutes and closes 17 minutes before the end, so a visit lands about 18–28 minutes before (see `docs/yugioh/automation.md` → "Refresh runs before auctions end").
+
+### (b) LaunchAgent every 10 minutes
+
+- **A dict with only `Minute` fires every hour (verified, man).** For `StartCalendarInterval`, "Missing arguments are considered to be wildcard. The semantics are similar to crontab(5)." So six dicts, `Minute` 0, 10, 20, 30, 40 and 50 with no `Hour`, fire every 10 minutes around the clock. They replace the eight `Hour` dicts; the 3-hourly run becomes the app's decision.
+- **Sleep (verified, man).** "launchd will start the job the next time the computer wakes up. If multiple intervals transpire before the computer is woken, those events will be coalesced into one event upon wake." So the job runs once on wake, and the app decides what's still worth visiting. `StartInterval 600` would also fire every 10 minutes, but it misses intervals that fall during sleep and has no catch-up, so keep `StartCalendarInterval`.
+- **Firing while a run is in progress.** `StartInterval` skips a firing while the job runs (verified). For `StartCalendarInterval` the man page says nothing (unverified, probably skipped, since a label has one instance). Either way `request` returns "already open" and the script exits, so a 60-minute run that spans six slots doesn't matter.
+- **Throttling (verified, man).** `ThrottleInterval`: "by default, jobs will not be spawned more than once every 10 seconds". At a 10-minute spacing this never applies, so don't set it. Apple's "Creating Launch Daemons" guidance ("do not shut down for at least 10 seconds after launch", §7) is about on-demand jobs that launchd respawns. Whether a calendar job that exits after ~1 s gets logged or delayed is unverified. If the log shows throttling, have the "not due" path `sleep 10` before exiting.
+- **Cost.** 144 firings a day, each a `curl` to the Next route and one Convex call. Chrome opens only when the app says a run is due.
+
+### (a) Convex schedules the run and the extension polls for it
+
+- **Convex can't reach the Mac (verified in part).** `scheduler.runAt` / `runAfter` schedule a mutation or action at a time "minutes, days, and even months in the future", and the work runs on Convex. An action can call `fetch`, but nothing on the Mac listens. Chrome's extension APIs give the server no way to push to a closed Chrome (unverified as an explicit statement; no such API exists in the docs read).
+- **The extension only runs while the profile's Chrome is open.** `run.sh` quits that Chrome after every run. `chrome.alarms` "will not wake up a device", and missed alarms fire only once Chrome runs again. The alarms page never says an alarm launches Chrome (unverified, but nothing suggests it does). Polling would mean keeping that Chrome open all the time.
+- **Still useful.** Keeping the due time in Convex (a scheduled mutation, or a `dueAt` field that `request` reads) is how (b) knows when to say "due". It just can't be the trigger.
+
+### (c) T3 Code scheduled task
+
+- **Schedule types (verified, tool schema).** `interval` (`everyMs`, "with a minimum of 60000 (one minute)"), `fixed_time` (`timeOfDay` plus optional `weekdays`), and `webhook` (runs once per request to a generated URL).
+- **The webhook is a real push channel, which was a surprise.** A Convex action scheduled with `runAt` could `POST` to the task's webhook URL 20 minutes before an auction ends. The URL needs T3 Connect: "if it is absent, this environment has no T3 Connect managed tunnel". A `cloudflared` tunnel run by T3 was seen running locally. `maxDeliveryAgeMinutes` lets you "skip requests the relay held longer than this many minutes while the environment was offline", which suggests the relay holds requests while the Mac is offline (verified wording; delivery behaviour not tested).
+- **Needs the T3 app running (unverified, likely).** The tool says tasks live in "the app scheduler" and run "even when no turn is active". No T3 LaunchAgent exists in `~/Library/LaunchAgents`, so with the app quit nothing runs.
+- **Cost (verified, tool schema).** Each run posts a prompt to an agent thread ("runs post into THIS thread by default"; `bindToCurrentThread: false` makes "a fresh top-level thread per run"), and the thread inherits the provider and model. Every trigger is a model turn just to run `run.sh`. At 144 checks a day that's far too heavy, and even for a few pre-auction runs a day it adds a model call, the app having to be open, and a beta dependency for no gain over (b).
+
+### Waking the Mac
+
+- **No launchd key wakes the Mac (verified, man).** `StartCalendarInterval` only runs "the next time the computer wakes up". `chrome.alarms` doesn't wake the device either.
+- **Only `pmset` can (verified, `man pmset`).** `pmset schedule wake "MM/dd/yy HH:mm:ss"` sets a one-time wake, and `pmset repeat` allows only "one pair of repeating events". But "pmset must be run as root in order to modify any settings", so the app can't set per-auction wakes without a root helper. Not done here. If the Mac sleeps through an auction's window, the on-wake run catches up, but the auction may already be over.

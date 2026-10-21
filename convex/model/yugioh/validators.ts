@@ -1,6 +1,7 @@
 import { type Infer, v } from "convex/values";
 import type {
 	PlannedVisit,
+	RunKind,
 	RunStatus,
 	RunTrigger,
 	VisitKind,
@@ -331,6 +332,7 @@ export const yugiohRunStatusValidator = v.union(
 export const yugiohVisitKindValidator = v.union(
 	v.literal("ebayNewlyListed"),
 	v.literal("ebaySold"),
+	v.literal("ebayEndingSoon"),
 	v.literal("tcgplayer"),
 );
 
@@ -349,12 +351,20 @@ export const yugiohPageErrorValidator = v.object({
 	error: v.string(),
 });
 
+/** A full run (every page) or a refresh run (auctions about to end). */
+export const yugiohRunKindValidator = v.union(
+	v.literal("full"),
+	v.literal("refresh"),
+);
+
 /**
  * An automated run as stored (`yugiohAutomationRuns`). Times are Unix ms.
  * The page counts are running totals of its `yugiohAutomationVisits`.
  */
 export const yugiohAutomationRunValidator = v.object({
 	trigger: yugiohRunTriggerValidator,
+	/** Missing on runs from before refresh runs: those were all full. */
+	kind: v.optional(yugiohRunKindValidator),
 	status: yugiohRunStatusValidator,
 	requestedAt: v.number(),
 	startedAt: v.union(v.number(), v.null()),
@@ -479,6 +489,7 @@ const runTriggersAgree: Same<
 	Infer<typeof yugiohRunTriggerValidator>,
 	RunTrigger
 > = true;
+const runKindsAgree: Same<Infer<typeof yugiohRunKindValidator>, RunKind> = true;
 const runStatusesAgree: Same<
 	Infer<typeof yugiohRunStatusValidator>,
 	RunStatus
@@ -492,6 +503,7 @@ const plannedVisitsAgree: Same<
 	PlannedVisit
 > = true;
 void runTriggersAgree;
+void runKindsAgree;
 void runStatusesAgree;
 void visitKindsAgree;
 void plannedVisitsAgree;
