@@ -36,7 +36,7 @@ export async function pickTcgplayerProduct(
 		},
 		questions: {
 			product: choice(
-				"Which TCGplayer product in `products` is the Yu-Gi-Oh! card `printing`: the same card, the same set code and the same rarity? TCGplayer sometimes uses longer rarity names, such as Prismatic Collector's Rare for Collector's Rare.",
+				"Which TCGplayer product in `products` is the Yu-Gi-Oh! card `printing`: the same card, the same set code and the same rarity? TCGplayer sometimes names rarities differently, such as Prismatic Collector's Rare for Collector's Rare, Ultra Pharaoh's Rare for Ultra Rare (Pharaoh's Rare), and Common / Short Print for Common.",
 				options,
 			),
 			anyMatch: noul(

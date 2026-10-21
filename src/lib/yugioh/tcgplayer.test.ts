@@ -4,6 +4,7 @@ import {
 	parseTcgplayerSearchResponse,
 	rarityNamesAgree,
 	readTcgplayerCondition,
+	tcgplayerCardName,
 	tcgplayerImageUrl,
 	tcgplayerProductUrl,
 	tcgplayerSearchUrl,
@@ -215,5 +216,115 @@ describe("card names with punctuation TCGplayer's URL drops", () => {
 			productUrl:
 				"https://www.tcgplayer.com/product/58555/yugioh-strike-of-neos-dd-crow-utr",
 		});
+	});
+});
+
+describe("Pharaoh's Rares", () => {
+	test("TCGplayer's 'Ultra Pharaoh’s Rare' and 'Secret Pharaoh’s Rare' agree with the app's names (Gold Sarcophagus MAMA-EN110)", () => {
+		expect(
+			rarityNamesAgree("Ultra Pharaoh’s Rare", "Ultra Rare (Pharaoh's Rare)"),
+		).toBe(true);
+		expect(
+			rarityNamesAgree("Secret Pharaoh’s Rare", "Secret Rare (Pharaoh's Rare)"),
+		).toBe(true);
+		expect(
+			rarityNamesAgree("Ultra Pharaoh’s Rare", "Secret Rare (Pharaoh's Rare)"),
+		).toBe(false);
+	});
+});
+
+// TCGplayer's own rarity names, from its search API's rarityName aggregation
+// for Yu-Gi-Oh! (docs/yugioh/references/tcgplayer-product-lookup.md).
+describe("TCGplayer rarity names the hobby spells differently", () => {
+	test("Pharaoh's Rares agree with straight or curly apostrophes on either side", () => {
+		expect(
+			rarityNamesAgree("Ultra Pharaoh's Rare", "Ultra Rare (Pharaoh’s Rare)"),
+		).toBe(true);
+		expect(
+			rarityNamesAgree("Secret Pharaoh's Rare", "Secret Rare (Pharaoh's Rare)"),
+		).toBe(true);
+		expect(
+			rarityNamesAgree("Ultra Pharaoh’s Rare", "Ultra Pharaoh's Rare"),
+		).toBe(true);
+		expect(rarityNamesAgree("Ultra Pharaoh’s Rare", "Ultra Rare")).toBe(false);
+	});
+
+	test("'Common / Short Print' (BETB-EN089 Chaospawn Bishop) agrees with Common and Short Print", () => {
+		expect(rarityNamesAgree("Common / Short Print", "Common")).toBe(true);
+		expect(rarityNamesAgree("Common / Short Print", "Short Print")).toBe(true);
+		expect(rarityNamesAgree("Common / Short Print", "Rare")).toBe(false);
+	});
+
+	test("names TCGplayer shares with the hobby agree as they are", () => {
+		for (const rarity of [
+			"Quarter Century Secret Rare",
+			"Platinum Secret Rare",
+			"Duel Terminal Normal Parallel Rare",
+			"Duel Terminal Rare Parallel Rare",
+			"Duel Terminal Super Parallel Rare",
+			"Duel Terminal Ultra Parallel Rare",
+			"Duel Terminal Technology Common",
+			"Duel Terminal Technology Ultra Rare",
+			"Starlight Rare",
+			"Ghost Rare",
+			"Ghost/Gold Rare",
+			"Gold Rare",
+			"Gold Secret Rare",
+			"Premium Gold Rare",
+			"10000 Secret Rare",
+			"Starfoil Rare",
+			"Shatterfoil Rare",
+			"Mosaic Rare",
+			"Grand Master Rare",
+		]) {
+			expect(rarityNamesAgree(rarity, rarity), rarity).toBe(true);
+		}
+		expect(rarityNamesAgree("Prismatic Ultimate Rare", "Ultimate Rare")).toBe(
+			true,
+		);
+		expect(
+			rarityNamesAgree("Prismatic Collector's Rare", "Collector’s Rare"),
+		).toBe(true);
+		expect(rarityNamesAgree("Gold Secret Rare", "Gold Rare")).toBe(false);
+		expect(rarityNamesAgree("Ghost/Gold Rare", "Ghost Rare")).toBe(false);
+	});
+
+	test("the Card is named without a Pharaoh's Rare suffix, spelled out or abbreviated", () => {
+		expect(
+			tcgplayerCardName(
+				"Gold Sarcophagus (Ultra Pharaoh's Rare)",
+				"Ultra Pharaoh’s Rare",
+			),
+		).toBe("Gold Sarcophagus");
+		expect(
+			tcgplayerCardName(
+				"Gold Sarcophagus (Secret Pharaoh's Rare)",
+				"Secret Rare (Pharaoh's Rare)",
+			),
+		).toBe("Gold Sarcophagus");
+		expect(
+			tcgplayerCardName(
+				"Gold Sarcophagus (UPR)",
+				"Ultra Rare (Pharaoh's Rare)",
+			),
+		).toBe("Gold Sarcophagus");
+		expect(
+			tcgplayerCardName("Gold Sarcophagus (SPR)", "Secret Pharaoh’s Rare"),
+		).toBe("Gold Sarcophagus");
+		expect(
+			tcgplayerCardName("Gold Sarcophagus (SPR)", "Ultra Pharaoh’s Rare"),
+		).toBe("Gold Sarcophagus (SPR)");
+	});
+
+	test("the Card is named without the abbreviations TCGplayer gives newer rarities", () => {
+		expect(
+			tcgplayerCardName("Snake-Eyes Poplar (EUR)", "Emblazoned Ultra Rare"),
+		).toBe("Snake-Eyes Poplar");
+		expect(
+			tcgplayerCardName("Ryzeal Cross (ESR)", "Emblazoned Secret Rare"),
+		).toBe("Ryzeal Cross");
+		expect(
+			tcgplayerCardName("Synchro Emergency (GMR)", "Grand Master Rare"),
+		).toBe("Synchro Emergency");
 	});
 });

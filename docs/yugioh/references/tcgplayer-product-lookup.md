@@ -97,6 +97,14 @@ Fields: `productId` (a float, so cast it to an integer), `productName`, `product
 - **`https://mpapi.tcgplayer.com/v2/product/<id>/details` → 404 (verified).** The front end uses the search host instead (`getProductDetails` in `src-DTOiPm24.js`).
 - **`GET https://mp-search-api.tcgplayer.com/v1/product/<id>/details` (and `/v2/…`) → 200 without cookies (verified).** It returns the same fields as a search hit (`productName`, `productUrlName`, `setName`, `setUrlName`, `setCode`, `rarityName`, `customAttributes.number`, `productLineUrlName`) plus `imageCount`, `skus` and `formattedAttributes`. Use it to check a pasted product URL: parse the id, fetch the details, compare the number and rarity.
 
+## TCGplayer's rarity names
+
+Every Yu-Gi-Oh! `rarityName`, from the search API's `aggregations.rarityName` with an empty `q` and the `productLineName: ["yugioh"]` filter (verified 2026-10-21, 36 names): Common / Short Print, Ultra Rare, Super Rare, Rare, Secret Rare, Quarter Century Secret Rare, Platinum Secret Rare, Ultimate Rare, Starlight Rare, Prismatic Secret Rare, Duel Terminal Normal Parallel Rare, Starfoil Rare, Prismatic Ultimate Rare, Prismatic Collector's Rare, Gold Rare, Shatterfoil Rare, Collector's Rare, Mosaic Rare, Duel Terminal Rare Parallel Rare, Duel Terminal Technology Common, Premium Gold Rare, Promo, Gold Secret Rare, Duel Terminal Super Parallel Rare, Duel Terminal Ultra Parallel Rare, Ghost Rare, Parallel Rare, Platinum Rare, Duel Terminal Technology Ultra Rare, Secret Pharaoh’s Rare, Ultra Pharaoh’s Rare, Emblazoned Ultra Rare, Emblazoned Secret Rare, Grand Master Rare, Ghost/Gold Rare, 10000 Secret Rare.
+
+- **Names that differ from YGOPRODeck's (verified):** `Prismatic Collector's Rare` / `Prismatic Ultimate Rare` (RA01), `Ultra Pharaoh’s Rare` / `Secret Pharaoh’s Rare` (YGOPRODeck: `Ultra Rare (Pharaoh's Rare)`, MAMA-EN110; note the curly apostrophe) and `Common / Short Print` (YGOPRODeck: `Common`, BETB-EN089). `RARITY_ALIASES` in `src/lib/yugioh/tcgplayer.ts` maps them.
+- **Product-name suffixes (verified):** the Pharaoh's Rares are spelled out with a straight apostrophe (`Gold Sarcophagus (Ultra Pharaoh's Rare)`); newer rarities are abbreviated (`(EUR)`, `(ESR)`, `(GMR)`).
+- **Unresolved:** YGOPRODeck lists the 25LP Emblazoned printings as plain `Ultra Rare` / `Secret Rare`, so they have no alias; a Printing recorded that way won't match TCGplayer's `Emblazoned …` product.
+
 ## YGOPRODeck
 
 - **`card_sets[]` (verified):** `https://db.ygoprodeck.com/api/v7/cardinfo.php?name=Called%20by%20the%20Grave` gives `{set_name, set_code, set_rarity, set_rarity_code, set_price}` per printing, e.g. `25th Anniversary Rarity Collection / RA01-EN057 / Ultra Rare`. It has no TCGplayer product id.

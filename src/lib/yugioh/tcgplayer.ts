@@ -47,10 +47,18 @@ export function tcgplayerSearchUrl(setCode: string): string {
 	return `https://www.tcgplayer.com/search/yugioh/product?${params.toString()}`;
 }
 
-// TCGplayer calls two rarities by longer names than the rest of the hobby.
+// TCGplayer's rarity names that differ from the rest of the hobby's, as
+// rarity keys (from its search API's rarityName aggregation; see
+// docs/yugioh/references/tcgplayer-product-lookup.md).
 const RARITY_ALIASES: Record<string, string> = {
 	"prismatic-collectors-rare": "collectors-rare",
 	"prismatic-ultimate-rare": "ultimate-rare",
+	// "Ultra Pharaoh’s Rare" is the hobby's "Ultra Rare (Pharaoh's Rare)".
+	"ultra-pharaohs-rare": "ultra-rare-pharaohs-rare",
+	"secret-pharaohs-rare": "secret-rare-pharaohs-rare",
+	// TCGplayer files Short Prints with Commons: "Common / Short Print".
+	"common-short-print": "common",
+	"short-print": "common",
 };
 
 function rarityKey(rarity: string): string {
@@ -75,6 +83,11 @@ const SUFFIX_ABBREVIATIONS: Record<string, string> = {
 	pur: "ultimate-rare",
 	pcr: "collectors-rare",
 	pscr: "prismatic-secret-rare",
+	upr: "ultra-rare-pharaohs-rare",
+	spr: "secret-rare-pharaohs-rare",
+	eur: "emblazoned-ultra-rare",
+	esr: "emblazoned-secret-rare",
+	gmr: "grand-master-rare",
 };
 
 /** Whether a product-name suffix (after the Card name) names this rarity. */

@@ -349,3 +349,45 @@ test("a page whose card name has dots TCGplayer's URL drops is linked (D.D. Crow
 			"https://www.tcgplayer.com/product/58555/yugioh-strike-of-neos-dd-crow-utr",
 	});
 });
+
+test("a Pharaoh's Rare Printing is linked by its page, whose rarity TCGplayer spells 'Ultra Pharaoh’s Rare' (Gold Sarcophagus MAMA-EN110)", async () => {
+	const t = setup();
+	const { deckId } = await deckWith(t, {
+		cardName: "Gold Sarcophagus",
+		setCode: "MAMA-EN110",
+		rarity: "Ultra Rare (Pharaoh's Rare)",
+	});
+	await deckWith(t, {
+		cardName: "Gold Sarcophagus",
+		setCode: "MAMA-EN110",
+		rarity: "Secret Rare (Pharaoh's Rare)",
+	});
+
+	const report = await captureBrionac(t, {
+		productId: 452554,
+		url: "https://www.tcgplayer.com/product/452554/yugioh-magnificent-mavens-gold-sarcophagus-ultra-pharaohs-rare?Language=English",
+		details: {
+			productName: "Gold Sarcophagus (Ultra Pharaoh's Rare)",
+			setCode: "MAMA-EN110",
+			rarity: "Ultra Pharaoh’s Rare",
+		},
+	});
+
+	expect(report).toMatchObject({
+		printing: {
+			cardName: "Gold Sarcophagus",
+			setCode: "MAMA-EN110",
+			rarity: "Ultra Rare (Pharaoh's Rare)",
+		},
+		linked: true,
+		reason: null,
+		created: 1,
+	});
+	const deck = await t.query(api.yugioh.decks.getDeck, { deckId });
+	const card = deck?.sections.flatMap((section) => section.cards)[0];
+	expect(card?.candidates[0]?.tcgplayer).toMatchObject({
+		status: "found",
+		productUrl:
+			"https://www.tcgplayer.com/product/452554/yugioh-magnificent-mavens-gold-sarcophagus-ultra-pharaohs-rare",
+	});
+});
