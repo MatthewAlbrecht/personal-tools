@@ -6,7 +6,6 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import type * as React from "react";
 import { Button } from "~/components/ui/button";
-import { Card } from "~/components/ui/card";
 import {
 	Empty,
 	EmptyContent,
@@ -16,9 +15,11 @@ import {
 	EmptyTitle,
 } from "~/components/ui/empty";
 import { Skeleton } from "~/components/ui/skeleton";
+import { useCardGridColumns } from "~/lib/hooks/use-card-grid-columns";
 import { useHeldWhileLoading } from "~/lib/hooks/use-held-while-loading";
 import { useHourClock } from "~/lib/hooks/use-hour-clock";
-import { cn } from "~/lib/utils";
+import { useMediaQuery } from "~/lib/hooks/use-media-query";
+import { type GridColumns, shownGridColumns } from "~/lib/yugioh/card-grid";
 import { formatWholeDollars } from "~/lib/yugioh/costs";
 import { SECTION_LABELS } from "~/lib/yugioh/deck";
 import { api } from "../../../../convex/_generated/api";
@@ -28,9 +29,9 @@ import { AddCardDrawer } from "./add-card-drawer";
 import { CaptureStalenessNote } from "./capture-staleness-note";
 import { CardDrawer } from "./card-drawer";
 import { CardOrderToggle } from "./card-order-toggle";
-import { CardRow } from "./card-row";
+import { CardTileGrid, CardTileGridSkeleton } from "./card-tile-grid";
 import { DeckCostHeader, DeckCostHeaderSkeleton } from "./deck-cost";
-import { SortableCardList } from "./sortable-card-list";
+import { GridColumnsToggle } from "./grid-columns-toggle";
 
 export function DeckPage({
 	deckId,
@@ -46,6 +47,8 @@ export function DeckPage({
 	const pathname = usePathname() ?? `/yugioh/decks/${deckId}`;
 	const searchParams = useSearchParams() ?? new URLSearchParams();
 	const [adding, setAdding] = useState(false);
+	const columns = useCardGridColumns();
+	const phone = useMediaQuery("(max-width: 639px)");
 
 	if (deck === undefined) return <DeckPageSkeleton />;
 	// DeckShell (the layout) shows the missing-Deck state.
@@ -100,17 +103,20 @@ export function DeckPage({
 			) : (
 				<>
 					<div className="flex flex-col gap-2">
-						<div className="flex items-center justify-between gap-2">
+						<div className="flex flex-wrap items-center justify-between gap-2">
 							<Button className="h-11 md:h-9" onClick={() => setAdding(true)}>
 								<Plus data-icon="inline-start" />
 								Add Card
 							</Button>
-							<CardOrderToggle deckId={deckId} value={deck.cardOrder} />
+							<div className="flex items-center gap-2">
+								<GridColumnsToggle value={shownGridColumns(columns, phone)} />
+								<CardOrderToggle deckId={deckId} value={deck.cardOrder} />
+							</div>
 						</div>
 						{deck.cardOrder === "custom" && (
 							<p className="text-muted-foreground text-sm">
-								Drag a handle to move a Card within its Section, or tap it to
-								move the Card up, down, to the top or to the bottom.
+								Drag a Card's handle to move it within its Section, or tap the
+								handle to move it earlier, later, to the start or to the end.
 							</p>
 						)}
 					</div>
@@ -120,6 +126,7 @@ export function DeckPage({
 							deckId={deckId}
 							group={group}
 							sortable={deck.cardOrder === "custom"}
+							columns={columns}
 							cardHref={cardHref}
 						/>
 					))}
@@ -136,11 +143,13 @@ function SectionList({
 	deckId,
 	group,
 	sortable,
+	columns,
 	cardHref,
 }: {
 	deckId: Id<"yugiohDecks">;
 	group: DeckSection;
 	sortable: boolean;
+	columns: GridColumns;
 	cardHref: (cardId: string) => string;
 }): React.ReactElement {
 	const count = group.cards.length;
@@ -148,7 +157,7 @@ function SectionList({
 	return (
 		<section
 			aria-labelledby={`section-${group.section}`}
-			className="flex flex-col gap-2"
+			className="flex flex-col gap-3"
 		>
 			<div className="flex items-baseline justify-between gap-3">
 				<h2
@@ -173,52 +182,30 @@ function SectionList({
 					</p>
 				)}
 			</div>
-			<Card className={cn("gap-0 py-0", !sortable && "overflow-hidden")}>
-				{sortable ? (
-					<SortableCardList
-						deckId={deckId}
-						section={group.section}
-						cards={group.cards}
-						cardHref={cardHref}
-					/>
-				) : (
-					<ul className="divide-y">
-						{group.cards.map((card) => (
-							<li key={card._id}>
-								<CardRow card={card} href={cardHref(card._id)} />
-							</li>
-						))}
-					</ul>
-				)}
-			</Card>
+			<CardTileGrid
+				deckId={deckId}
+				section={group.section}
+				cards={group.cards}
+				columns={columns}
+				sortable={sortable}
+				cardHref={cardHref}
+			/>
 		</section>
 	);
 }
 
 export function DeckPageSkeleton(): React.ReactElement {
+	const columns = useCardGridColumns();
 	return (
 		<div className="flex flex-col gap-6">
 			<DeckCostHeaderSkeleton />
-			<Skeleton className="h-9 w-28" />
-			<div className="flex flex-col gap-2">
+			<div className="flex items-center justify-between gap-2">
+				<Skeleton className="h-11 w-28 md:h-9" />
+				<Skeleton className="h-11 w-56 md:h-9" />
+			</div>
+			<div className="flex flex-col gap-3">
 				<Skeleton className="h-5 w-32" />
-				<Card className="gap-0 py-0">
-					<ul className="divide-y">
-						{[0, 1, 2, 3, 4, 5].map((key) => (
-							<li
-								key={key}
-								className="flex items-center gap-3 px-3 py-2.5 md:px-4"
-							>
-								<Skeleton className="aspect-[59/86] w-10 rounded-[3px] md:w-12" />
-								<div className="flex flex-1 flex-col gap-1.5">
-									<Skeleton className="h-4 w-2/5" />
-									<Skeleton className="h-3 w-1/3" />
-								</div>
-								<Skeleton className="h-4 w-12" />
-							</li>
-						))}
-					</ul>
-				</Card>
+				<CardTileGridSkeleton columns={columns} count={columns * 2} />
 			</div>
 		</div>
 	);
