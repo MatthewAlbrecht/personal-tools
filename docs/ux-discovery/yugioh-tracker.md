@@ -102,7 +102,7 @@ Discovery for the 17 tickets in `.scratch/yugioh-tracker/issues/`. Run non-inter
 | Phase | Action and touchpoint | Target feeling | Design opportunity | Signal |
 |---|---|---|---|---|
 | Plan (desktop) | An agent seeds the Deck; Matt tweaks Candidates, Copies and condition in drawers | In control | Deck page, Card drawer (01, 05) | Deck seeded with no hand typing |
-| Watch (no touchpoint) | The Mac's automated browser captures every Search and product page every 3 h, more often at busy hours | Unbothered | Automation (15-17) | Newest capture < 3 h old |
+| Watch (no touchpoint) | The Mac's automated browser captures every Search and product page every 3 h until it learns when sellers post, then every hour in busy hours and at least every 6 h otherwise | Unbothered | Automation (15-17) | Newest capture < 3 h old while learning; about 1 h in busy hours and < 6 h at quiet times once learned |
 | Alert (iPhone, lock screen) | Push: "Great deal · Ash Blossom QCSR · $42 vs $58 ref" | Alert, not alarmed | Deal and auction pushes (13, 14) | Pushes he opens; few false positives |
 | Judge (iPhone, in app) | Tap the push → Listing drawer: Per-copy breakdown, Deal grade, flags → Open on eBay | Confident | Listing drawer, flags (09) | Seconds from tap to marketplace |
 | Buy (marketplace) | Buys on eBay or TCGplayer | Satisfied | Out of scope | n/a |

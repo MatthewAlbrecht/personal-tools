@@ -21,7 +21,7 @@ One offer to sell a Card on a marketplace (eBay or TCGplayer), whether still act
 _Avoid_: Post, item, auction (an auction is one kind of Listing)
 
 **Search**:
-One marketplace query covering a group of Printings' set codes at once, viewed as either Newly Listed or Sold.
+One marketplace query covering a group of Printings' set codes at once, viewed as Newly Listed or Sold, or as Ending soon (its running auctions, ending soonest first) shortly before one of them ends.
 _Avoid_: Query, feed
 
 **Exclusion**:

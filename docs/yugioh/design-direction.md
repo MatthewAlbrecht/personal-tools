@@ -223,9 +223,9 @@ Ash Blossom · RA01-EN008 QCSR                       US · 3h ago
 ```
 Price           £31.00 → $39.37
 Shipping        $4.00
-Import fees     $4.34   (UK 10%)
+Import fees     $5.64   (UK 13%)
 Copies in lot   ÷ 1
-Per copy        $47.71
+Per copy        $49.01
 ```
 
 3. **What the title says:** set code, rarity, condition (or "Unknown, check photos"), Copies, language, grading. All AI-read, labelled "Read from title".
@@ -292,7 +292,7 @@ Always a text label; hue and fill reinforce it. Show "NN% of ref" beside it wher
 | **Good** | ≤ 95% | tinted `bg-deal-good/12 text-deal-good`, no icon |
 | **Fair** | ≤ 110% | `variant="outline"`, `text-foreground` |
 | **Poor** | > 110% | plain `text-xs text-muted-foreground` "Poor", no badge chrome |
-| none | running auction, no Reference price, or not Qualifying | no grade; auctions show the countdown instead |
+| none | running auction, no Reference price, not matched to a Printing the Deck wants, not English, or below the Card's Lowest acceptable condition. A Graded Listing isn't Qualifying but still gets a grade, with its Graded flag | no grade; auctions show the countdown instead |
 
 - Never red for Poor: overpriced isn't an error.
 - `destructive` is reserved for failures and removal.
