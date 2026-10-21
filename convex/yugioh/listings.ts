@@ -4,13 +4,16 @@ import { requireAuth } from "../auth";
 import { loadDealContext } from "../model/yugioh/deals";
 import * as Listings from "../model/yugioh/listings";
 import * as Matching from "../model/yugioh/matching";
+import * as TcgplayerCapture from "../model/yugioh/tcgplayerCapture";
 import {
 	yugiohCapturedEbayListingValidator,
+	yugiohCapturedTcgplayerProductValidator,
 	yugiohDealValidator,
 	yugiohListingFiltersValidator,
 	yugiohMarketplaceValidator,
 	yugiohMatchStatusValidator,
 	yugiohPerCopyPriceValidator,
+	yugiohTcgplayerDetailsValidator,
 	yugiohTitleReadValidator,
 } from "../model/yugioh/validators";
 import { readNewSince } from "../model/yugioh/whatsNew";
@@ -31,6 +34,8 @@ const listingValidator = v.object({
 	deal: yugiohDealValidator,
 	/** First seen since my last visit to this Deck. */
 	isNew: v.boolean(),
+	/** Seller, condition and quantity, for a TCGplayer Listing or sale. */
+	tcgplayer: v.union(yugiohTcgplayerDetailsValidator, v.null()),
 	/** What the AI read from the title; null until read, or when reading failed. */
 	titleRead: v.union(yugiohTitleReadValidator, v.null()),
 	match: v.object({
@@ -151,5 +156,35 @@ export const ingestEbayListings = internalMutation({
 	}),
 	handler: async (ctx, args) => {
 		return await Listings.ingestEbayListings(ctx, args.listings, Date.now());
+	},
+});
+
+/**
+ * Stores one captured TCGplayer product page: its current Listings and latest
+ * sales, under the Printing with that product id. Internal: reached only
+ * through the secret-guarded `/server/yugioh/tcgplayer-product` HTTP action.
+ */
+export const ingestTcgplayerProduct = internalMutation({
+	args: { product: yugiohCapturedTcgplayerProductValidator },
+	returns: v.object({
+		printing: v.union(
+			v.object({
+				cardName: v.string(),
+				setCode: v.string(),
+				rarity: v.string(),
+			}),
+			v.null(),
+		),
+		listings: v.number(),
+		sales: v.number(),
+		created: v.number(),
+		updated: v.number(),
+	}),
+	handler: async (ctx, args) => {
+		return await TcgplayerCapture.ingestTcgplayerProduct(
+			ctx,
+			args.product,
+			Date.now(),
+		);
 	},
 });

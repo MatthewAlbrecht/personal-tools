@@ -41,7 +41,7 @@ What the Copies a Deck still needs should cost: remaining Copies × the lower Re
 _Avoid_: Estimate, budget, total
 
 **Buy-now total**:
-What finishing would cost today: remaining Copies × the cheapest Qualifying buy-it-now Per-copy price of each Card. Cards with nothing to buy now are left out and counted.
+What finishing would cost today: remaining Copies × the cheapest Qualifying buy-it-now Per-copy price of each Card, on eBay or TCGplayer. Cards with nothing to buy now are left out and counted.
 _Avoid_: Buy-now floor (that is one Printing's cheapest price), checkout total
 
 **Lowest acceptable condition**:

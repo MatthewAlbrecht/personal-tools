@@ -8,7 +8,8 @@ import {
 	REFERENCE_WINDOW_DAYS,
 	type Reference,
 } from "~/lib/yugioh/deals";
-import { formatMoney } from "~/lib/yugioh/listing-format";
+import type { Marketplace } from "~/lib/yugioh/listing-filters";
+import { MARKETPLACE_LABELS, formatMoney } from "~/lib/yugioh/listing-format";
 import type { ListingView } from "../_utils/types";
 
 /**
@@ -78,29 +79,33 @@ export function DealGradeSummary({
 }
 
 /**
- * An eBay Reference price with its evidence: "$54.00 eBay ref · 11 sales",
- * or "Not enough eBay sales (2 of 3)" when there's too little to go on.
+ * One marketplace's Reference price with its evidence: "$54.00 eBay ref ·
+ * 11 sales", or "Not enough TCGplayer sales (2 of 3)" when there's too little
+ * to go on.
  */
 export function ReferenceLine({
 	reference,
+	marketplace,
 	className,
 }: {
 	reference: Reference;
+	marketplace: Marketplace;
 	className?: string;
 }): React.ReactElement {
+	const label = MARKETPLACE_LABELS[marketplace];
 	if (reference.price === null) {
 		return (
 			<span className={cn("text-muted-foreground tabular-nums", className)}>
-				Not enough eBay sales ({reference.sales} of {MIN_REFERENCE_SALES})
+				Not enough {label} sales ({reference.sales} of {MIN_REFERENCE_SALES})
 			</span>
 		);
 	}
 	return (
 		<span
 			className={cn("tabular-nums", className)}
-			title={`Median Per-copy price of Qualifying eBay sales in the last ${REFERENCE_WINDOW_DAYS} days`}
+			title={`Median Per-copy price of Qualifying ${label} sales in the last ${REFERENCE_WINDOW_DAYS} days`}
 		>
-			{formatMoney(reference.price, "USD")} eBay ref
+			{formatMoney(reference.price, "USD")} {label} ref
 			<span className="text-muted-foreground">
 				{" "}
 				· {reference.sales} {reference.sales === 1 ? "sale" : "sales"}

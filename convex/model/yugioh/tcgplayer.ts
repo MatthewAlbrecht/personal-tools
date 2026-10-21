@@ -100,17 +100,20 @@ function linkFields(link: TcgplayerProductLink | null): {
 	tcgplayerStatus: TcgplayerStatus;
 	tcgplayerProductUrl: string | null;
 	tcgplayerImageUrl: string | null;
+	tcgplayerProductId: number | null;
 } {
 	if (!link) {
 		return {
 			tcgplayerStatus: "needsPaste",
 			tcgplayerProductUrl: null,
 			tcgplayerImageUrl: null,
+			tcgplayerProductId: null,
 		};
 	}
 	return {
 		tcgplayerStatus: "found",
 		tcgplayerProductUrl: link.productUrl,
 		tcgplayerImageUrl: tcgplayerImageUrl(link.productId),
+		tcgplayerProductId: link.productId,
 	};
 }

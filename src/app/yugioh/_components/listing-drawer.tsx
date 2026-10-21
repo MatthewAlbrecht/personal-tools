@@ -28,6 +28,7 @@ import {
 import { Spinner } from "~/components/ui/spinner";
 import { REFERENCE_WINDOW_DAYS } from "~/lib/yugioh/deals";
 import {
+	MARKETPLACE_LABELS,
 	formatMoney,
 	gradingLabel,
 	listingTypeLabel,
@@ -74,9 +75,10 @@ export function ListingDrawer({
 							{headline(listing)}
 						</DrawerTitle>
 						<p className="text-muted-foreground text-sm tabular-nums">
-							eBay · {listingTypeLabel(listing, now)}
+							{MARKETPLACE_LABELS[listing.marketplace]} ·{" "}
+							{listingTypeLabel(listing, now)}
 						</p>
-						<DealLine deal={listing.deal} />
+						<DealLine deal={listing.deal} marketplace={listing.marketplace} />
 					</DrawerHeader>
 				) : undefined
 			}
@@ -84,7 +86,7 @@ export function ListingDrawer({
 				listing ? (
 					<Button asChild className="h-11 w-full md:h-9">
 						<a href={listing.url} target="_blank" rel="noopener noreferrer">
-							Open on eBay
+							Open on {MARKETPLACE_LABELS[listing.marketplace]}
 							<ExternalLink data-icon="inline-end" />
 						</a>
 					</Button>
@@ -95,7 +97,11 @@ export function ListingDrawer({
 				<div className="flex flex-col gap-6">
 					<p className="text-sm">{listing.title}</p>
 					<PriceBreakdown listing={listing} />
-					<TitleSays listing={listing} />
+					{listing.tcgplayer ? (
+						<TcgplayerPageSays listing={listing} details={listing.tcgplayer} />
+					) : (
+						<TitleSays listing={listing} />
+					)}
 					<MatchForm
 						key={`${listing._id}-${listing.match.status}-${listing.match.printing?._id ?? ""}`}
 						deckId={deckId}
@@ -108,14 +114,17 @@ export function ListingDrawer({
 }
 
 /**
- * How the Listing compares with its Printing's eBay Reference price: the
- * grade and "78% of $54.00 eBay ref (11 sales, 60 days)". Without a grade,
- * why not. Nothing for a Listing that isn't for a Printing this Deck wants.
+ * How the Listing compares with its Printing's Reference price on its own
+ * marketplace: the grade and "78% of $54.00 eBay ref (11 sales, 60 days)".
+ * Without a grade, why not. Nothing for a Listing that isn't for a Printing
+ * this Deck wants.
  */
 function DealLine({
 	deal,
+	marketplace,
 }: {
 	deal: ListingView["deal"];
+	marketplace: ListingView["marketplace"];
 }): React.ReactElement | null {
 	const reference = deal.reference;
 	if (reference === null) return null;
@@ -124,14 +133,20 @@ function DealLine({
 		deal.grade === null ||
 		deal.percentOfReference === null
 	) {
-		return <ReferenceLine reference={reference} className="text-sm" />;
+		return (
+			<ReferenceLine
+				reference={reference}
+				marketplace={marketplace}
+				className="text-sm"
+			/>
+		);
 	}
 	return (
 		<div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm tabular-nums">
 			<DealGradeBadge deal={deal} />
 			<span>
-				{deal.percentOfReference}% of {formatMoney(reference.price, "USD")} eBay
-				ref
+				{deal.percentOfReference}% of {formatMoney(reference.price, "USD")}{" "}
+				{MARKETPLACE_LABELS[marketplace]} ref
 				<span className="text-muted-foreground">
 					{" "}
 					({reference.sales} {reference.sales === 1 ? "sale" : "sales"},{" "}
@@ -293,6 +308,48 @@ function TitleSays({ listing }: { listing: ListingView }): React.ReactElement {
 					Couldn't read this title. Its set code alone decided the match.
 				</p>
 			)}
+		</section>
+	);
+}
+
+/**
+ * What a TCGplayer product page says about a Listing or sale: the seller,
+ * TCGplayer's own condition wording, how many Copies, and the language.
+ * Nothing here is read by AI.
+ */
+function TcgplayerPageSays({
+	listing,
+	details,
+}: {
+	listing: ListingView;
+	details: NonNullable<ListingView["tcgplayer"]>;
+}): React.ReactElement {
+	return (
+		<section aria-labelledby="page-says" className="flex flex-col gap-2">
+			<div className="flex items-baseline justify-between gap-3">
+				<h3 id="page-says" className="font-medium text-sm">
+					What TCGplayer says
+				</h3>
+				<span className="text-muted-foreground text-xs">
+					From the product page
+				</span>
+			</div>
+			<dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1.5 text-sm">
+				{details.seller === null ? null : (
+					<ReadRow term="Seller">{details.seller}</ReadRow>
+				)}
+				<ReadRow term="Condition">{details.condition}</ReadRow>
+				{details.quantity === null ? null : (
+					<ReadRow term={listing.sold ? "Copies sold" : "Copies for sale"}>
+						<span className="tabular-nums">{details.quantity}</span>
+					</ReadRow>
+				)}
+				{listing.titleRead ? (
+					<ReadRow term="Language">
+						{LANGUAGE_LABELS[listing.titleRead.language]}
+					</ReadRow>
+				) : null}
+			</dl>
 		</section>
 	);
 }

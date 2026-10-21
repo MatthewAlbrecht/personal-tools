@@ -3,6 +3,7 @@ import {
 	checkTcgplayerProductUrl,
 	parseTcgplayerSearchResponse,
 	rarityNamesAgree,
+	readTcgplayerCondition,
 	tcgplayerImageUrl,
 	tcgplayerProductUrl,
 	tcgplayerSearchUrl,
@@ -231,5 +232,48 @@ describe("search response", () => {
 		]);
 		expect(parseTcgplayerSearchResponse({ nope: true })).toEqual([]);
 		expect(parseTcgplayerSearchResponse(null)).toEqual([]);
+	});
+});
+
+describe("TCGplayer condition", () => {
+	test.each([
+		["Near Mint 1st Edition", "nearMint"],
+		["Near Mint Unlimited", "nearMint"],
+		["Lightly Played Limited", "lightlyPlayed"],
+		["Moderately Played 1st Edition", "moderatelyPlayed"],
+		["Heavily Played", "heavilyPlayed"],
+		["Damaged Unlimited", "damaged"],
+	] as const)("%s reads as %s, in English", (text, condition) => {
+		expect(readTcgplayerCondition(text)).toEqual({
+			condition,
+			language: "english",
+		});
+	});
+
+	test.each([
+		["NM 1st Edition", "nearMint"],
+		["LP", "lightlyPlayed"],
+		["MP Unlimited", "moderatelyPlayed"],
+		["HP", "heavilyPlayed"],
+		["DMG 1st Edition", "damaged"],
+	] as const)(
+		"the latest sales' short form %s reads as %s",
+		(text, condition) => {
+			expect(readTcgplayerCondition(text).condition).toBe(condition);
+		},
+	);
+
+	test("a language TCGplayer names is kept", () => {
+		expect(readTcgplayerCondition("Near Mint 1st Edition - Japanese")).toEqual({
+			condition: "nearMint",
+			language: "japanese",
+		});
+	});
+
+	test("text that names no condition reads as unknown", () => {
+		expect(readTcgplayerCondition("1st Edition")).toEqual({
+			condition: null,
+			language: "english",
+		});
 	});
 });

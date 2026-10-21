@@ -7,6 +7,7 @@ import {
 	bearerMatchesSecret,
 } from "./_utils/serverSecret";
 import { MAX_LISTINGS_PER_CAPTURE } from "./model/yugioh/listings";
+import type { CapturedTcgplayerProduct } from "./model/yugioh/tcgplayerCapture";
 
 // Server-to-Convex channel. Next.js route handlers and crons call these with
 // `Authorization: Bearer $CONVEX_SERVER_SECRET`; the functions behind them are
@@ -169,6 +170,26 @@ http.route({
 			);
 		} catch (error) {
 			console.error("[yugioh/ebay-listings] ingest failed", error);
+			return badRequest();
+		}
+	}),
+});
+
+http.route({
+	path: "/server/yugioh/tcgplayer-product",
+	method: "POST",
+	handler: serverRoute(async (ctx, body) => {
+		const product = body.product;
+		if (typeof product !== "object" || product === null) return badRequest();
+		try {
+			// The mutation's argument validator checks the page's shape.
+			return json(
+				await ctx.runMutation(internal.yugioh.listings.ingestTcgplayerProduct, {
+					product: product as CapturedTcgplayerProduct,
+				}),
+			);
+		} catch (error) {
+			console.error("[yugioh/tcgplayer-product] ingest failed", error);
 			return badRequest();
 		}
 	}),

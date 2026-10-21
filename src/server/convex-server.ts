@@ -1,5 +1,6 @@
 import { env } from "~/env";
 import type { IngestReport } from "../../convex/model/yugioh/listings";
+import type { TcgplayerIngestReport } from "../../convex/model/yugioh/tcgplayerCapture";
 
 // Server-only client for the secret-guarded Convex HTTP actions in
 // `convex/http.ts`. Spotify token functions are internal in Convex, so Next
@@ -83,4 +84,11 @@ export function captureEbayListings(
 	listings: unknown[],
 ): Promise<IngestReport> {
 	return callConvexServer("/server/yugioh/ebay-listings", { listings });
+}
+
+/** Stores one captured TCGplayer product page (`internal.yugioh.listings`). */
+export function captureTcgplayerProduct(
+	product: object,
+): Promise<TcgplayerIngestReport> {
+	return callConvexServer("/server/yugioh/tcgplayer-product", { product });
 }

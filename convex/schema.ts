@@ -34,6 +34,7 @@ import {
 	yugiohMarketplaceValidator,
 	yugiohMatchStatusValidator,
 	yugiohSectionValidator,
+	yugiohTcgplayerDetailsValidator,
 	yugiohTcgplayerStatusValidator,
 	yugiohTitleReadStatusValidator,
 	yugiohTitleReadValidator,
@@ -1822,7 +1823,16 @@ export default defineSchema({
 		tcgplayerStatus: v.optional(yugiohTcgplayerStatusValidator),
 		tcgplayerProductUrl: v.optional(v.union(v.string(), v.null())),
 		tcgplayerImageUrl: v.optional(v.union(v.string(), v.null())),
-	}).index("by_setCode_and_rarity", ["setCode", "rarity"]),
+		// TCGplayer capture (ticket 12): the product id from the URL, so a
+		// captured product page finds its Printing. Then when a capture last
+		// read the page's cheapest Listings, and the highest price + shipping
+		// it showed (null: none). An unseen Listing at or below it is gone.
+		tcgplayerProductId: v.optional(v.union(v.number(), v.null())),
+		tcgplayerListingsSeenAt: v.optional(v.number()),
+		tcgplayerListingsSeenUpTo: v.optional(v.union(v.number(), v.null())),
+	})
+		.index("by_setCode_and_rarity", ["setCode", "rarity"])
+		.index("by_tcgplayerProductId", ["tcgplayerProductId"]),
 
 	// A Card in one Deck. Ownership and condition are per Deck.
 	yugiohDeckCards: defineTable({
@@ -1884,11 +1894,20 @@ export default defineSchema({
 		// before it became a sale, then frozen: a sale's Per-copy price keeps
 		// the rate of when it sold. Null when there was no rate yet.
 		capturedUsdPerUnit: v.optional(v.union(v.number(), v.null())),
+		// TCGplayer Listings and sales only (ticket 12): seller, condition
+		// as TCGplayer words it, and quantity.
+		tcgplayer: v.optional(yugiohTcgplayerDetailsValidator),
 	})
 		.index("by_marketplace_and_itemId", ["marketplace", "itemId"])
 		.index("by_setCodeKey", ["setCodeKey"])
 		.index("by_matchedPrintingId", ["matchedPrintingId"])
-		.index("by_matchedPrintingId_and_saleAt", ["matchedPrintingId", "saleAt"]),
+		// Each marketplace's Reference price and buy-now floor read their own
+		// Listings only: the two are never blended.
+		.index("by_matchedPrintingId_and_marketplace_and_saleAt", [
+			"matchedPrintingId",
+			"marketplace",
+			"saleAt",
+		]),
 
 	// A Listing's price over time: one row when it's first captured, then one
 	// each time a capture sees a different price, shipping, bid count or sold

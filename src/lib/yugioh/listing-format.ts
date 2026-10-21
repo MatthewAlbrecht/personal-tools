@@ -1,5 +1,6 @@
 import { format, intervalToDuration, parseISO } from "date-fns";
 
+import type { Marketplace } from "./listing-filters";
 import {
 	LANGUAGE_CODES,
 	type ReadCondition,
@@ -16,6 +17,35 @@ type ListingTypeFields = {
 	sold: boolean;
 	soldDate: string | null;
 };
+
+export const MARKETPLACE_LABELS: Record<Marketplace, string> = {
+	ebay: "eBay",
+	tcgplayer: "TCGplayer",
+};
+
+/**
+ * Who sells a Listing, as far as the page says: an eBay seller's country
+ * ("United Kingdom"), or a TCGplayer seller's name with how many Copies they
+ * have ("Card Castle · 3 Copies"). Null when unknown, as for a TCGplayer
+ * sale.
+ */
+export function listingSeller(listing: {
+	marketplace: Marketplace;
+	sellerLocation: string | null;
+	tcgplayer: {
+		seller: string | null;
+		condition: string;
+		quantity: number | null;
+	} | null;
+}): string | null {
+	if (listing.marketplace === "ebay") return listing.sellerLocation;
+	const seller = listing.tcgplayer?.seller ?? null;
+	if (seller === null) return null;
+	const quantity = listing.tcgplayer?.quantity ?? null;
+	return quantity !== null && quantity > 1
+		? `${seller} · ${quantity} Copies`
+		: seller;
+}
 
 /** A Listing price in its own currency, with cents: `$42.15`, `£31.00`. */
 export function formatMoney(amount: number, currency: string): string {

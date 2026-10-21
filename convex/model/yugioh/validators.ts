@@ -90,6 +90,63 @@ export const yugiohCapturedEbayListingValidator = v.object({
 	soldDate: v.union(v.string(), v.null()),
 });
 
+/**
+ * One current Listing on a TCGplayer product page, as the extension's page
+ * reader sends it. `listingId` is TCGplayer's own, stable across visits
+ * (`<productConditionId>-<sellerKey>`). `condition` is TCGplayer's wording
+ * ("Near Mint 1st Edition"). Prices are USD; `shipping` is 0 when free or
+ * included and null when the page doesn't say. `quantity` is how many Copies
+ * the seller has. `customTitle` is the seller's own title on a Listing with
+ * photos, which may be another card (a foreign alt art, a graded copy).
+ */
+export const yugiohCapturedTcgplayerListingValidator = v.object({
+	listingId: v.string(),
+	seller: v.union(v.string(), v.null()),
+	condition: v.string(),
+	price: v.number(),
+	shipping: v.union(v.number(), v.null()),
+	quantity: v.union(v.number(), v.null()),
+	customTitle: v.union(v.string(), v.null()),
+});
+
+/**
+ * One of a TCGplayer product page's latest sales. `soldDate` is
+ * `YYYY-MM-DD`; `price` is per Copy, in USD; `shipping` is null because the
+ * page doesn't show it. `customTitle` as for a Listing.
+ */
+export const yugiohCapturedTcgplayerSaleValidator = v.object({
+	soldDate: v.string(),
+	condition: v.string(),
+	quantity: v.number(),
+	price: v.number(),
+	shipping: v.union(v.number(), v.null()),
+	customTitle: v.union(v.string(), v.null()),
+});
+
+/**
+ * One TCGplayer product page: its current Listings and latest sales.
+ * `listingsFromCheapest` is true when the Listings shown start from the
+ * cheapest (page 1, no condition or printing filter), so a Listing they
+ * leave out is gone or pricier.
+ */
+export const yugiohCapturedTcgplayerProductValidator = v.object({
+	productId: v.number(),
+	url: v.string(),
+	listingsFromCheapest: v.boolean(),
+	listings: v.array(yugiohCapturedTcgplayerListingValidator),
+	sales: v.array(yugiohCapturedTcgplayerSaleValidator),
+});
+
+/** What a TCGplayer Listing or sale says beyond the eBay-shaped fields. */
+export const yugiohTcgplayerDetailsValidator = v.object({
+	/** Null for a sale: TCGplayer doesn't say who sold it. */
+	seller: v.union(v.string(), v.null()),
+	/** TCGplayer's wording, e.g. "Near Mint 1st Edition". */
+	condition: v.string(),
+	/** Copies the seller has, or Copies sold; null when the page doesn't say. */
+	quantity: v.union(v.number(), v.null()),
+});
+
 export const yugiohLanguageValidator = v.union(
 	v.literal("english"),
 	v.literal("japanese"),

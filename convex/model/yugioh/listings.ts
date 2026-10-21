@@ -146,7 +146,7 @@ function mergeCapture(
 }
 
 /** Price, shipping, bids or sold status moved: worth a new observation. */
-function observationChanged(
+export function observationChanged(
 	before: CapturedEbayListing,
 	after: CapturedEbayListing,
 ): boolean {
@@ -159,7 +159,8 @@ function observationChanged(
 	);
 }
 
-async function observe(
+/** Records a Listing's price as seen at `now`. */
+export async function observe(
 	ctx: MutationCtx,
 	listingId: Id<"yugiohListings">,
 	listing: CapturedEbayListing,
@@ -340,6 +341,8 @@ export type ListingView = CapturedEbayListing & {
 	deal: DealView;
 	/** First seen since my last visit to the Deck. */
 	isNew: boolean;
+	/** Seller, condition and quantity, for a TCGplayer Listing or sale. */
+	tcgplayer: NonNullable<Doc<"yugiohListings">["tcgplayer"]> | null;
 } & ListingMatchView;
 
 /**
@@ -378,6 +381,7 @@ export async function listingView(
 		perCopyPrice,
 		deal: await deals.deal(listing, perCopyPrice),
 		isNew: isNewListing(listing, newSince),
+		tcgplayer: listing.tcgplayer ?? null,
 		...(await listingMatchView(ctx, listing)),
 	};
 }

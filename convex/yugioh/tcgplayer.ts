@@ -1,9 +1,11 @@
+import { paginationOptsValidator } from "convex/server";
 import { ConvexError, v } from "convex/values";
 import {
 	REJECTED_PRODUCT_URL,
 	type TcgplayerProduct,
 	type TcgplayerProductLink,
 	checkTcgplayerProductUrl,
+	tcgplayerProductIdOf,
 } from "../../src/lib/yugioh/tcgplayer";
 import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
@@ -157,3 +159,35 @@ async function productDetails(
 		return undefined;
 	}
 }
+
+/**
+ * One-off: fills `tcgplayerProductId` on Printings whose product URL was
+ * saved before TCGplayer capture, a page at a time, so captures of their
+ * product pages find them. Run until `isDone`, passing back `cursor`:
+ * `npx convex run yugioh/tcgplayer:backfillTcgplayerProductIds '{"paginationOpts":{"numItems":200,"cursor":null}}'`.
+ */
+export const backfillTcgplayerProductIds = internalMutation({
+	args: { paginationOpts: paginationOptsValidator },
+	returns: v.object({
+		updated: v.number(),
+		isDone: v.boolean(),
+		cursor: v.string(),
+	}),
+	handler: async (ctx, args) => {
+		const page = await ctx.db
+			.query("yugiohPrintings")
+			.paginate(args.paginationOpts);
+		let updated = 0;
+		for (const printing of page.page) {
+			if (printing.tcgplayerProductId != null) continue;
+			const url = printing.tcgplayerProductUrl;
+			const productId = url ? tcgplayerProductIdOf(url) : null;
+			if (productId === null) continue;
+			await ctx.db.patch("yugiohPrintings", printing._id, {
+				tcgplayerProductId: productId,
+			});
+			updated++;
+		}
+		return { updated, isDone: page.isDone, cursor: page.continueCursor };
+	},
+});

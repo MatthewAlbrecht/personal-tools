@@ -16,3 +16,7 @@ export type EbaySearch = NonNullable<
 export type ListingView = FunctionReturnType<
 	typeof api.yugioh.listings.listListings
 >["listings"][number];
+/** One Candidate's eBay and TCGplayer Reference prices and TCGplayer buy-now floor. */
+export type CandidatePrices = FunctionReturnType<
+	typeof api.yugioh.deals.listReferencePrices
+>[number];

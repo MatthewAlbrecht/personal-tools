@@ -7,9 +7,10 @@ import * as Deals from "../model/yugioh/deals";
 import { yugiohReferenceValidator } from "../model/yugioh/validators";
 
 /**
- * The eBay Reference price of each Card's Candidate Printings in a Deck, at
- * `now` (Unix ms, from the client: a query can't read the clock). A null
- * price means fewer than 3 Qualifying sales in the last 60 days.
+ * Each Card's Candidate Printings' eBay and TCGplayer Reference prices in a
+ * Deck, kept separate, plus the TCGplayer buy-now floor, at `now` (Unix ms,
+ * from the client: a query can't read the clock). A null price means fewer
+ * than 3 Qualifying sales in the last 60 days.
  */
 export const listReferencePrices = query({
 	args: { deckId: v.id("yugiohDecks"), now: v.number() },
@@ -18,6 +19,9 @@ export const listReferencePrices = query({
 			deckCardId: v.id("yugiohDeckCards"),
 			printingId: v.id("yugiohPrintings"),
 			ebay: yugiohReferenceValidator,
+			tcgplayer: yugiohReferenceValidator,
+			/** The cheapest current Qualifying TCGplayer Listing's Per-copy price. */
+			tcgplayerBuyNow: v.union(v.number(), v.null()),
 		}),
 	),
 	handler: async (ctx, args) => {

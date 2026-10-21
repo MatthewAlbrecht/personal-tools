@@ -107,6 +107,7 @@ import type * as model_yugioh_pricing from "../model/yugioh/pricing.js";
 import type * as model_yugioh_searches from "../model/yugioh/searches.js";
 import type * as model_yugioh_seed from "../model/yugioh/seed.js";
 import type * as model_yugioh_tcgplayer from "../model/yugioh/tcgplayer.js";
+import type * as model_yugioh_tcgplayerCapture from "../model/yugioh/tcgplayerCapture.js";
 import type * as model_yugioh_tcgplayerPicker from "../model/yugioh/tcgplayerPicker.js";
 import type * as model_yugioh_tcgplayerSearch from "../model/yugioh/tcgplayerSearch.js";
 import type * as model_yugioh_titleReader from "../model/yugioh/titleReader.js";
@@ -240,6 +241,7 @@ declare const fullApi: ApiFromModules<{
   "model/yugioh/searches": typeof model_yugioh_searches;
   "model/yugioh/seed": typeof model_yugioh_seed;
   "model/yugioh/tcgplayer": typeof model_yugioh_tcgplayer;
+  "model/yugioh/tcgplayerCapture": typeof model_yugioh_tcgplayerCapture;
   "model/yugioh/tcgplayerPicker": typeof model_yugioh_tcgplayerPicker;
   "model/yugioh/tcgplayerSearch": typeof model_yugioh_tcgplayerSearch;
   "model/yugioh/titleReader": typeof model_yugioh_titleReader;

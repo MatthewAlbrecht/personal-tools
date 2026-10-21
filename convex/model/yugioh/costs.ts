@@ -1,9 +1,10 @@
 // Cost to finish: what each Card in a Deck still costs, from its Candidate
-// Printings' Reference prices and buy-now floors.
+// Printings' Reference prices and buy-now floors on eBay and TCGplayer.
 import {
 	type CandidatePrices,
 	type CardCost,
 	cardCost,
+	lowestPrice,
 } from "../../../src/lib/yugioh/costs";
 import { isCardFinished } from "../../../src/lib/yugioh/deck";
 import type { Doc, Id } from "../../_generated/dataModel";
@@ -28,11 +29,20 @@ export async function readCardCosts(
 		const candidatePrices: CandidatePrices[] = await Promise.all(
 			wanted.map(async ({ printingId }) => {
 				const condition = card.lowestAcceptableCondition;
-				const [reference, buyNow] = await Promise.all([
-					prices.reference(printingId, condition),
-					prices.buyNow(printingId, condition),
-				]);
-				return { printingId, reference: reference.price, buyNow };
+				const [ebay, tcgplayer, ebayBuyNow, tcgplayerBuyNow] =
+					await Promise.all([
+						prices.reference("ebay", printingId, condition),
+						prices.reference("tcgplayer", printingId, condition),
+						prices.buyNow("ebay", printingId, condition),
+						prices.buyNow("tcgplayer", printingId, condition),
+					]);
+				// Each figure takes the cheaper marketplace; the Reference
+				// prices themselves stay separate.
+				return {
+					printingId,
+					reference: lowestPrice([ebay.price, tcgplayer.price]),
+					buyNow: lowestPrice([ebayBuyNow, tcgplayerBuyNow]),
+				};
 			}),
 		);
 		costs.set(card._id, cardCost(card, candidatePrices));

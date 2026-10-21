@@ -1,0 +1,262 @@
+// TCGplayer product pages captured by the extension. A page is one Printing's
+// product, so its Listings and sales are matched by product id, without AI.
+import type { Infer } from "convex/values";
+import { saleTime } from "../../../src/lib/yugioh/deals";
+import { readTcgplayerCondition } from "../../../src/lib/yugioh/tcgplayer";
+import {
+	type TitleRead,
+	setCodeKey,
+} from "../../../src/lib/yugioh/title-reading";
+import type { Doc, Id } from "../../_generated/dataModel";
+import type { MutationCtx } from "../../_generated/server";
+import {
+	type CapturedEbayListing,
+	MAX_LISTINGS_PER_CAPTURE,
+	observationChanged,
+	observe,
+} from "./listings";
+import type {
+	yugiohCapturedTcgplayerProductValidator,
+	yugiohTcgplayerDetailsValidator,
+} from "./validators";
+
+export type CapturedTcgplayerProduct = Infer<
+	typeof yugiohCapturedTcgplayerProductValidator
+>;
+type TcgplayerDetails = Infer<typeof yugiohTcgplayerDetailsValidator>;
+
+/**
+ * TCGplayer is a US marketplace, so its sellers pay no import fees.
+ * **(assumption)**: the product page doesn't show a seller's country.
+ */
+export const TCGPLAYER_SELLER_LOCATION = "United States";
+
+export type TcgplayerIngestReport = {
+	/** The Printing the product page is for; null when none of mine is. */
+	printing: { cardName: string; setCode: string; rarity: string } | null;
+	/** Current Listings and latest sales on the page. */
+	listings: number;
+	sales: number;
+	/** Listings and sales seen for the first time. */
+	created: number;
+	/** Listings and sales already known, updated in place. */
+	updated: number;
+};
+
+/**
+ * Stores one TCGplayer product page under the Printing with that product id.
+ * Listings are upserted by TCGplayer's listing id; sales, which have no id,
+ * by what they say (date, condition, price, shipping, quantity) plus how many
+ * identical ones came before them on the page. Ones with photos carry the
+ * seller's own title, which may be another card, so they're unsure until I
+ * match them. A product none of my Printings has is reported and not stored.
+ */
+export async function ingestTcgplayerProduct(
+	ctx: MutationCtx,
+	product: CapturedTcgplayerProduct,
+	now: number,
+): Promise<TcgplayerIngestReport> {
+	if (
+		product.listings.length + product.sales.length >
+		MAX_LISTINGS_PER_CAPTURE
+	) {
+		throw new Error(
+			`A capture can carry at most ${MAX_LISTINGS_PER_CAPTURE} Listings and sales`,
+		);
+	}
+	const printing = await ctx.db
+		.query("yugiohPrintings")
+		.withIndex("by_tcgplayerProductId", (q) =>
+			q.eq("tcgplayerProductId", product.productId),
+		)
+		.first();
+	const report: TcgplayerIngestReport = {
+		printing: null,
+		listings: product.listings.length,
+		sales: product.sales.length,
+		created: 0,
+		updated: 0,
+	};
+	if (!printing) return report;
+	report.printing = {
+		cardName: printing.cardName,
+		setCode: printing.setCode,
+		rarity: printing.rarity,
+	};
+
+	const url = printing.tcgplayerProductUrl ?? product.url;
+	const rows = new Map<string, Row>();
+	for (const listing of product.listings) {
+		rows.set(`listing:${listing.listingId}`, {
+			customTitle: listing.customTitle,
+			captured: {
+				...baseFields(printing, url, listing.condition, listing.customTitle),
+				price: listing.price,
+				shipping: listing.shipping,
+				sold: false,
+				soldDate: null,
+			},
+			details: {
+				seller: listing.seller,
+				condition: listing.condition,
+				quantity: listing.quantity,
+			},
+		});
+	}
+	const seen = new Map<string, number>();
+	for (const sale of product.sales) {
+		const what = [
+			sale.soldDate,
+			sale.condition.toLowerCase(),
+			sale.price,
+			sale.shipping ?? "?",
+			sale.quantity,
+			sale.customTitle ?? "",
+		].join(":");
+		const repeat = seen.get(what) ?? 0;
+		seen.set(what, repeat + 1);
+		rows.set(`sale:${what}#${repeat}`, {
+			customTitle: sale.customTitle,
+			captured: {
+				...baseFields(printing, url, sale.condition, sale.customTitle),
+				price: sale.price,
+				shipping: sale.shipping,
+				sold: true,
+				soldDate: sale.soldDate,
+			},
+			details: {
+				seller: null,
+				condition: sale.condition,
+				quantity: sale.quantity,
+			},
+		});
+	}
+
+	for (const [itemId, { captured, details, customTitle }] of rows) {
+		const existing = await ctx.db
+			.query("yugiohListings")
+			.withIndex("by_marketplace_and_itemId", (q) =>
+				q.eq("marketplace", "tcgplayer").eq("itemId", itemId),
+			)
+			.unique();
+		const fields = {
+			...captured,
+			itemId,
+			tcgplayer: details,
+			titleRead: pageRead(printing, details.condition),
+		};
+		if (!existing) {
+			const listingId = await ctx.db.insert("yugiohListings", {
+				marketplace: "tcgplayer",
+				...fields,
+				firstSeenAt: now,
+				lastSeenAt: now,
+				titleReadStatus: "read",
+				setCodeKey: setCodeKey(printing.setCode),
+				...pageMatch(printing, customTitle),
+				matchOverridden: false,
+				saleAt: saleTime(fields, now),
+				capturedUsdPerUnit: 1,
+			});
+			await observe(ctx, listingId, fields, now);
+			report.created++;
+			continue;
+		}
+		await ctx.db.patch("yugiohListings", existing._id, {
+			...fields,
+			lastSeenAt: now,
+			saleAt: saleTime(fields, existing.saleAt ?? now),
+			// Photos added or removed since: the match follows, unless I set it.
+			...(existing.matchOverridden ? {} : pageMatch(printing, customTitle)),
+		});
+		if (observationChanged(existing, { ...existing, ...fields })) {
+			await observe(ctx, existing._id, fields, now);
+		}
+		report.updated++;
+	}
+	// The page lists Listings cheapest first, by price + shipping. When it
+	// starts from the cheapest, an unseen Listing no pricier than the dearest
+	// one it showed is gone; a pricier one may just be on a later page.
+	if (product.listingsFromCheapest) {
+		const landed = product.listings.map((l) => l.price + (l.shipping ?? 0));
+		await ctx.db.patch("yugiohPrintings", printing._id, {
+			tcgplayerListingsSeenAt: now,
+			tcgplayerListingsSeenUpTo:
+				landed.length === 0 ? null : Math.max(...landed),
+		});
+	}
+	return report;
+}
+
+type Row = {
+	captured: Omit<CapturedEbayListing, "itemId">;
+	details: TcgplayerDetails;
+	customTitle: string | null;
+};
+
+/**
+ * The fields every TCGplayer Listing and sale of a Printing shares. The title
+ * is the seller's own, on one with photos, else the condition (first, since
+ * rows already name the Card) and the Printing.
+ */
+function baseFields(
+	printing: Doc<"yugiohPrintings">,
+	url: string,
+	condition: string,
+	customTitle: string | null,
+): Omit<
+	CapturedEbayListing,
+	"itemId" | "price" | "shipping" | "sold" | "soldDate"
+> {
+	return {
+		url,
+		title:
+			customTitle ??
+			`${condition} · ${printing.cardName} ${printing.setCode} ${printing.rarity}`,
+		imageUrl: printing.tcgplayerImageUrl ?? null,
+		currency: "USD",
+		listingType: "buyItNow",
+		bids: null,
+		endsAt: null,
+		listedAt: null,
+		sellerLocation: TCGPLAYER_SELLER_LOCATION,
+	};
+}
+
+/**
+ * The page's own Printing, unless the seller's title (on one with photos)
+ * says something else may be for sale: then it's unsure.
+ */
+function pageMatch(
+	printing: Doc<"yugiohPrintings">,
+	customTitle: string | null,
+): {
+	matchStatus: "match" | "unsure";
+	matchedPrintingId: Id<"yugiohPrintings"> | null;
+} {
+	return customTitle === null
+		? { matchStatus: "match", matchedPrintingId: printing._id }
+		: { matchStatus: "unsure", matchedPrintingId: null };
+}
+
+/**
+ * What a TCGplayer page states, in the shape of a title read, so the
+ * Qualifying rule judges it like any Listing: the Printing's set code and
+ * rarity, TCGplayer's condition and language, one raw Copy.
+ */
+function pageRead(
+	printing: Doc<"yugiohPrintings">,
+	condition: string,
+): TitleRead {
+	const read = readTcgplayerCondition(condition);
+	return {
+		setCode: printing.setCode,
+		rarity: printing.rarity,
+		condition: read.condition,
+		copies: 1,
+		language: read.language,
+		graded: false,
+		gradingCompany: null,
+		grade: null,
+	};
+}

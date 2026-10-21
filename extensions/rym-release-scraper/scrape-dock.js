@@ -12,6 +12,11 @@ const SCRAPE_DOCK_COPY = {
 		headline: "These results can be captured",
 		detail: "Every Listing on the page goes to the Yu-Gi-Oh tracker.",
 	},
+	tcgplayer: {
+		label: "TCGplayer",
+		headline: "This product can be captured",
+		detail: "Its Listings and latest sales go to the Yu-Gi-Oh tracker.",
+	},
 	release: {
 		label: "Release",
 		headline: "This release can be captured",

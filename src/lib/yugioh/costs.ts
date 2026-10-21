@@ -12,9 +12,9 @@ export const BUY_NOW_FRESH_MS = BUY_NOW_FRESH_DAYS * 24 * 60 * 60 * 1000;
 /** What one Candidate Printing of a Card costs a Copy, in USD. */
 export type CandidatePrices = {
 	printingId: string;
-	/** The lower of its Reference prices; null without enough sales. */
+	/** The lower of its eBay and TCGplayer Reference prices; null when neither has enough sales. */
 	reference: number | null;
-	/** The cheapest Qualifying buy-it-now Per-copy price right now. */
+	/** The cheapest Qualifying buy-it-now Per-copy price right now, on either marketplace. */
 	buyNow: number | null;
 };
 
@@ -48,8 +48,8 @@ export function cardCost(
 		card.chosenPrintingId === null
 			? candidates
 			: candidates.filter((c) => c.printingId === card.chosenPrintingId);
-	const reference = cheapest(priced.map((c) => c.reference));
-	const buyNow = cheapest(priced.map((c) => c.buyNow));
+	const reference = lowestPrice(priced.map((c) => c.reference));
+	const buyNow = lowestPrice(priced.map((c) => c.buyNow));
 	return {
 		remainingCopies,
 		toFinish: reference === null ? null : cents(remainingCopies * reference),
@@ -115,7 +115,10 @@ export function byRemainingCost<T extends { cardName: string }>(
 	};
 }
 
-function cheapest(prices: ReadonlyArray<number | null>): number | null {
+/** The lowest of several prices, ignoring missing ones; null when all are. */
+export function lowestPrice(
+	prices: ReadonlyArray<number | null>,
+): number | null {
 	let lowest: number | null = null;
 	for (const price of prices) {
 		if (price !== null && (lowest === null || price < lowest)) lowest = price;

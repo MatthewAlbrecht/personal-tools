@@ -213,7 +213,7 @@ Ash Blossom · RA01-EN008 QCSR                       US · 3h ago
   - Line 3: the original title, one line, truncated, in `text-xs text-muted-foreground`, then flags.
   - Not a match: the whole row is `opacity-60`, labelled "Not a match".
   - Unsure: an "Unsure" outline badge with `CircleHelp`.
-- **Desktop:** the same data in a `Table`. Columns: Per-copy · Grade · Card / Printing · Title · Type · Location · Seen. Clicking a row opens the Listing drawer; an external-link icon button opens the marketplace.
+- **Desktop:** the same data in a `Table`. Columns: Per-copy · Grade · Card / Printing · Title · Type · Seller · Seen. Seller is the country for eBay (all it shows) and the seller's name and Copies for TCGplayer (12). Clicking a row opens the Listing drawer; an external-link icon button opens the marketplace.
 
 **Listing drawer** (`?listing=`):
 

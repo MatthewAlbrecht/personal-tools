@@ -519,11 +519,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 });
 
 /**
- * POST one eBay search-results page of Listings to Next.js → Convex
- * (`/api/yugioh/ebay-capture`). Same origin/secret settings and
- * host-permission flow as the RYM and Bandcamp captures.
+ * POST one Yu-Gi-Oh capture to Next.js → Convex (`/api/yugioh/<kind>-capture`).
+ * Same origin/secret settings and host-permission flow as the RYM and
+ * Bandcamp captures. `label` names the page in logs.
  */
-async function forwardEbayListingsToBackend(listings) {
+async function postYugiohCapture(path, body, label) {
 	const cfg = await chrome.storage.sync.get([
 		SETTINGS_BACKEND_ORIGIN,
 		SETTINGS_BACKEND_SECRET,
@@ -551,13 +551,13 @@ async function forwardEbayListingsToBackend(listings) {
 	}
 
 	try {
-		const res = await fetch(`${origin}/api/yugioh/ebay-capture`, {
+		const res = await fetch(`${origin}${path}`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
 				Authorization: `Bearer ${secret}`,
 			},
-			body: JSON.stringify({ listings }),
+			body: JSON.stringify(body),
 		});
 		const text = await res.text();
 		let json = {};
@@ -572,7 +572,7 @@ async function forwardEbayListingsToBackend(listings) {
 					? json.error.trim()
 					: text;
 			console.error(
-				"[rym-release-scraper] eBay capture failed",
+				`[rym-release-scraper] ${label} capture failed`,
 				res.status,
 				errorMessage,
 			);
@@ -583,15 +583,9 @@ async function forwardEbayListingsToBackend(listings) {
 				error: errorMessage,
 			};
 		}
-		return {
-			synced: true,
-			skipped: false,
-			captured: json?.captured,
-			created: json?.created,
-			updated: json?.updated,
-		};
+		return { synced: true, skipped: false, ...json };
 	} catch (error) {
-		console.error("[rym-release-scraper] eBay capture error", error);
+		console.error(`[rym-release-scraper] ${label} capture error`, error);
 		return {
 			synced: false,
 			skipped: false,
@@ -600,6 +594,7 @@ async function forwardEbayListingsToBackend(listings) {
 	}
 }
 
+// eBay search-results page → `{ captured, created, updated }`.
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 	if (!message || message.type !== "YUGIOH_EBAY_CAPTURE") {
 		return;
@@ -607,10 +602,38 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 	void (async function sendEbayCapture() {
 		try {
 			const listings = Array.isArray(message.listings) ? message.listings : [];
-			const backend = await forwardEbayListingsToBackend(listings);
+			const backend = await postYugiohCapture(
+				"/api/yugioh/ebay-capture",
+				{ listings },
+				"eBay",
+			);
 			sendResponse({ ok: true, backend });
 		} catch (error) {
 			console.error("[rym-release-scraper] failed to send eBay capture", error);
+			sendResponse({ ok: false });
+		}
+	})();
+	return true;
+});
+
+// TCGplayer product page → `{ printing, listings, sales, created, updated }`.
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+	if (!message || message.type !== "YUGIOH_TCGPLAYER_CAPTURE") {
+		return;
+	}
+	void (async function sendTcgplayerCapture() {
+		try {
+			const backend = await postYugiohCapture(
+				"/api/yugioh/tcgplayer-capture",
+				{ product: message.product },
+				"TCGplayer",
+			);
+			sendResponse({ ok: true, backend });
+		} catch (error) {
+			console.error(
+				"[rym-release-scraper] failed to send TCGplayer capture",
+				error,
+			);
 			sendResponse({ ok: false });
 		}
 	})();

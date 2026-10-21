@@ -1,5 +1,7 @@
-// eBay Reference prices and Deal grades, judged in one Deck: Qualifying
-// depends on the Lowest acceptable condition of the Deck's Card.
+// Reference prices, buy-now floors and Deal grades, judged in one Deck:
+// Qualifying depends on the Lowest acceptable condition of the Deck's Card.
+// Each marketplace (eBay, TCGplayer) has its own, read from its own Listings
+// only: the two are never blended.
 import { BUY_NOW_FRESH_MS } from "../../../src/lib/yugioh/costs";
 import {
 	type DealGrade,
@@ -16,6 +18,7 @@ import {
 	referencePrice,
 } from "../../../src/lib/yugioh/deals";
 import type { Condition } from "../../../src/lib/yugioh/deck";
+import type { Marketplace } from "../../../src/lib/yugioh/listing-filters";
 import {
 	type PerCopyPrice,
 	type Pricing,
@@ -32,13 +35,16 @@ export const MAX_REFERENCE_SALES = 200;
 /** Most Listings still for sale one buy-now floor reads: the newest captured. */
 export const MAX_BUY_NOW_LISTINGS = 200;
 
-/** How a Listing compares with its Printing's eBay Reference price. */
+/** How a Listing compares with its Printing's Reference price on its own marketplace. */
 export type DealView = {
 	/** Counts toward prices, deals and cost to finish in this Deck. */
 	qualifying: boolean;
 	/** Its condition is below the Card's Lowest acceptable condition. */
 	belowCondition: boolean;
-	/** Its Printing's eBay Reference price; null when it isn't matched to a Printing this Deck wants. */
+	/**
+	 * Its Printing's Reference price on the Listing's marketplace; null when it
+	 * isn't matched to a Printing this Deck wants.
+	 */
 	reference: Reference | null;
 	/** Null for a running auction, a Listing that isn't gradable, or no Reference price. */
 	grade: DealGrade | null;
@@ -85,7 +91,11 @@ export async function loadDealContext(
 					percentOfReference: null,
 				};
 			}
-			const reference = await references(printingId, condition);
+			const reference = await references(
+				listing.marketplace,
+				printingId,
+				condition,
+			);
 			const percent =
 				reference.price === null ||
 				perCopy === null ||
@@ -104,46 +114,63 @@ export async function loadDealContext(
 	};
 }
 
-/** One Candidate Printing's eBay Reference price for a Card in a Deck. */
+/**
+ * One Candidate Printing's prices for a Card in a Deck: its eBay and
+ * TCGplayer Reference prices, side by side, and the TCGplayer buy-now floor.
+ */
 export type CardReferencePrice = {
 	deckCardId: Id<"yugiohDeckCards">;
 	printingId: Id<"yugiohPrintings">;
 	ebay: Reference;
+	tcgplayer: Reference;
+	/** The cheapest current Qualifying TCGplayer Listing's Per-copy price. */
+	tcgplayerBuyNow: number | null;
 };
 
 /**
- * The eBay Reference price of every Card's Candidate Printings in a Deck, at
- * each Card's own Lowest acceptable condition.
+ * The Reference prices of every Card's Candidate Printings in a Deck, at each
+ * Card's own Lowest acceptable condition.
  */
 export async function readReferencePrices(
 	ctx: QueryCtx,
 	deckId: Id<"yugiohDecks">,
 	now: number,
 ): Promise<CardReferencePrice[]> {
-	const references = referenceReader(ctx, await loadPricing(ctx), now);
-	const prices: CardReferencePrice[] = [];
-	for (const want of await deckWants(ctx, deckId)) {
-		prices.push({
-			deckCardId: want.deckCardId,
-			printingId: want.printingId,
-			ebay: await references(want.printingId, want.condition),
-		});
+	const prices = await loadPriceReaders(ctx, now);
+	const rows: CardReferencePrice[] = [];
+	for (const { deckCardId, printingId, condition } of await deckWants(
+		ctx,
+		deckId,
+	)) {
+		const [ebay, tcgplayer, tcgplayerBuyNow] = await Promise.all([
+			prices.reference("ebay", printingId, condition),
+			prices.reference("tcgplayer", printingId, condition),
+			prices.buyNow("tcgplayer", printingId, condition),
+		]);
+		rows.push({ deckCardId, printingId, ebay, tcgplayer, tcgplayerBuyNow });
 	}
-	return prices;
+	return rows;
 }
 
-/** Reads a Printing's prices for a Card wanting it at `condition`, at one moment. */
+/**
+ * Reads a Printing's prices on one marketplace, for a Card wanting it at
+ * `condition`, at one moment.
+ */
 export type PriceReaders = {
-	/** The eBay Reference price. */
+	/** The marketplace's Reference price. */
 	reference: (
+		marketplace: Marketplace,
 		printingId: Id<"yugiohPrintings">,
 		condition: Condition,
 	) => Promise<Reference>;
 	/**
 	 * The cheapest Per-copy price of a Qualifying buy-it-now Listing still for
-	 * sale and seen in the last `BUY_NOW_FRESH_DAYS`; null when there's none.
+	 * sale on the marketplace; null when there's none. eBay Listings must have
+	 * been seen in the last `BUY_NOW_FRESH_DAYS`; TCGplayer Listings, in the
+	 * latest capture of the product page too.
 	 */
 	buyNow: (
+		marketplace: Marketplace,
 		printingId: Id<"yugiohPrintings">,
 		condition: Condition,
 	) => Promise<number | null>;
@@ -180,23 +207,22 @@ function listingPerCopyPrice(
 }
 
 /**
- * Reads Reference prices, each Printing and condition once: the median
- * Per-copy price of its Qualifying sales in the window before `now`.
+ * Reads Reference prices, each marketplace, Printing and condition once: the
+ * median Per-copy price of its Qualifying sales on that marketplace in the
+ * window before `now`.
  */
 function referenceReader(
 	ctx: QueryCtx,
 	pricing: Pricing,
 	now: number,
-): (
-	printingId: Id<"yugiohPrintings">,
-	condition: Condition,
-) => Promise<Reference> {
-	return memoised(async (printingId, condition): Promise<Reference> => {
+): PriceReaders["reference"] {
+	return memoised(async (marketplace, printingId, condition) => {
 		const sales = await ctx.db
 			.query("yugiohListings")
-			.withIndex("by_matchedPrintingId_and_saleAt", (q) =>
+			.withIndex("by_matchedPrintingId_and_marketplace_and_saleAt", (q) =>
 				q
 					.eq("matchedPrintingId", printingId)
+					.eq("marketplace", marketplace)
 					.gte("saleAt", now - REFERENCE_WINDOW_MS)
 					.lte("saleAt", now),
 			)
@@ -214,31 +240,37 @@ function referenceReader(
 }
 
 /**
- * Reads buy-now floors, each Printing and condition once. Fixed-price
- * Listings still for sale have no `saleAt`; graded and other non-Qualifying
- * Listings don't count.
+ * Reads buy-now floors, each marketplace, Printing and condition once.
+ * Fixed-price Listings still for sale have no `saleAt`; graded and other
+ * non-Qualifying Listings don't count. A TCGplayer Listing the latest capture
+ * of its product page didn't see is gone.
  */
 function buyNowReader(
 	ctx: QueryCtx,
 	pricing: Pricing,
 	now: number,
-): (
-	printingId: Id<"yugiohPrintings">,
-	condition: Condition,
-) => Promise<number | null> {
-	return memoised(async (printingId, condition) => {
+): PriceReaders["buyNow"] {
+	return memoised(async (marketplace, printingId, condition) => {
 		const forSale = await ctx.db
 			.query("yugiohListings")
-			.withIndex("by_matchedPrintingId_and_saleAt", (q) =>
-				q.eq("matchedPrintingId", printingId).eq("saleAt", null),
+			.withIndex("by_matchedPrintingId_and_marketplace_and_saleAt", (q) =>
+				q
+					.eq("matchedPrintingId", printingId)
+					.eq("marketplace", marketplace)
+					.eq("saleAt", null),
 			)
 			.order("desc")
 			.take(MAX_BUY_NOW_LISTINGS);
+		const gone =
+			marketplace === "tcgplayer"
+				? goneFromTcgplayerPage(await ctx.db.get("yugiohPrintings", printingId))
+				: () => false;
 		let cheapest: number | null = null;
 		for (const listing of forSale) {
 			if (matchedPrintingId(listing) !== printingId) continue;
 			if (listing.sold || listing.listingType === "auction") continue;
 			if (listing.lastSeenAt < now - BUY_NOW_FRESH_MS) continue;
+			if (gone(listing)) continue;
 			if (!isQualifying(listing, condition)) continue;
 			const price = listingPerCopyPrice(listing, pricing, now);
 			if (price !== null && (cheapest === null || price.perCopy < cheapest)) {
@@ -249,16 +281,37 @@ function buyNowReader(
 	});
 }
 
-/** Caches a Printing-and-condition read for the life of one query. */
-function memoised<R>(
-	read: (printingId: Id<"yugiohPrintings">, condition: Condition) => Promise<R>,
-): (printingId: Id<"yugiohPrintings">, condition: Condition) => Promise<R> {
+/**
+ * Whether a TCGplayer Listing has left its product page: the latest capture
+ * of the page's cheapest Listings didn't show it, though it showed one as
+ * pricey or pricier (or showed none at all). TCGplayer sorts by price +
+ * shipping, so a pricier unseen Listing may just be on a later page.
+ */
+function goneFromTcgplayerPage(
+	printing: Doc<"yugiohPrintings"> | null,
+): (listing: Doc<"yugiohListings">) => boolean {
+	const seenAt = printing?.tcgplayerListingsSeenAt;
+	if (seenAt === undefined) return () => false;
+	const upTo = printing?.tcgplayerListingsSeenUpTo ?? null;
+	return (listing) =>
+		listing.lastSeenAt < seenAt &&
+		(upTo === null || (listing.price ?? 0) + (listing.shipping ?? 0) <= upTo);
+}
+
+type PriceRead<R> = (
+	marketplace: Marketplace,
+	printingId: Id<"yugiohPrintings">,
+	condition: Condition,
+) => Promise<R>;
+
+/** Caches a marketplace, Printing and condition read for the life of one query. */
+function memoised<R>(read: PriceRead<R>): PriceRead<R> {
 	const cache = new Map<string, Promise<R>>();
-	return (printingId, condition) => {
-		const key = `${printingId}:${condition}`;
+	return (marketplace, printingId, condition) => {
+		const key = `${marketplace}:${printingId}:${condition}`;
 		let result = cache.get(key);
 		if (result === undefined) {
-			result = read(printingId, condition);
+			result = read(marketplace, printingId, condition);
 			cache.set(key, result);
 		}
 		return result;

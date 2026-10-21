@@ -1,26 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { env } from "~/env.js";
 import { captureEbayListings } from "~/server/convex-server";
+import { rejectUnlessExtension } from "~/server/extension-ingest";
 
 // The extension posts each eBay search-results page here with the shared
 // extension secret (as for RYM and Bandcamp). Listings are forwarded over the
 // secret-guarded Convex server channel to an internal mutation, which checks
 // every field.
 export async function POST(request: NextRequest): Promise<NextResponse> {
-	if (!env.RYM_EXTENSION_INGEST_SECRET) {
-		return NextResponse.json(
-			{ error: "RYM_EXTENSION_INGEST_SECRET is not set on the server" },
-			{ status: 503 },
-		);
-	}
-
-	const authHeader = request.headers.get("authorization");
-	const bearer = authHeader?.startsWith("Bearer ")
-		? authHeader.slice("Bearer ".length).trim()
-		: null;
-	if (!bearer || bearer !== env.RYM_EXTENSION_INGEST_SECRET) {
-		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-	}
+	const rejected = rejectUnlessExtension(request);
+	if (rejected) return rejected;
 
 	let body: unknown;
 	try {

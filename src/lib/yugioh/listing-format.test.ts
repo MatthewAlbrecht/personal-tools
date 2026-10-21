@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
 	formatMoney,
+	listingSeller,
 	listingTypeLabel,
 	newListingsRate,
 	timeLeft,
@@ -151,5 +152,46 @@ describe("newListingsRate", () => {
 		expect(newListingsRate(1.25)).toBe("About 1 new a week");
 		expect(newListingsRate(2.75)).toBe("About 3 new a week");
 		expect(newListingsRate(12)).toBe("12 new a week");
+	});
+});
+
+describe("listingSeller", () => {
+	test("an eBay Listing shows the seller's country", () => {
+		expect(
+			listingSeller({
+				marketplace: "ebay",
+				sellerLocation: "United Kingdom",
+				tcgplayer: null,
+			}),
+		).toBe("United Kingdom");
+	});
+
+	test("a TCGplayer Listing shows the seller, with how many Copies they have", () => {
+		const listing = {
+			marketplace: "tcgplayer" as const,
+			sellerLocation: "United States",
+			tcgplayer: {
+				seller: "Card Castle",
+				condition: "Near Mint 1st Edition",
+				quantity: 3,
+			},
+		};
+		expect(listingSeller(listing)).toBe("Card Castle · 3 Copies");
+		expect(
+			listingSeller({
+				...listing,
+				tcgplayer: { ...listing.tcgplayer, quantity: 1 },
+			}),
+		).toBe("Card Castle");
+	});
+
+	test("a TCGplayer sale names no seller", () => {
+		expect(
+			listingSeller({
+				marketplace: "tcgplayer",
+				sellerLocation: "United States",
+				tcgplayer: { seller: null, condition: "Near Mint", quantity: 2 },
+			}),
+		).toBeNull();
 	});
 });

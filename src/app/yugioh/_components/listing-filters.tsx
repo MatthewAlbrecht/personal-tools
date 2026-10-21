@@ -30,6 +30,7 @@ import {
 	quickView,
 	withQuickView,
 } from "~/lib/yugioh/listing-filters";
+import { MARKETPLACE_LABELS } from "~/lib/yugioh/listing-format";
 import {
 	LANGUAGES,
 	LANGUAGE_LABELS,
@@ -47,11 +48,6 @@ const QUICK_VIEW_LABELS: Record<QuickView, string> = {
 	new: "New",
 	ending: "Ending soon",
 	sold: "Sold",
-};
-
-const MARKETPLACE_LABELS: Record<Marketplace, string> = {
-	ebay: "eBay",
-	tcgplayer: "TCGplayer",
 };
 
 const KIND_LABELS: Record<ListingKind, string> = {

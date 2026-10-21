@@ -55,7 +55,6 @@ import {
 import { Skeleton } from "~/components/ui/skeleton";
 import { Spinner } from "~/components/ui/spinner";
 import { useMinuteClock } from "~/lib/hooks/use-minute-clock";
-import type { Reference } from "~/lib/yugioh/deals";
 import {
 	CONDITIONS,
 	CONDITION_LABELS,
@@ -63,7 +62,7 @@ import {
 	MAX_COPIES_NEEDED,
 	SECTION_LABELS,
 } from "~/lib/yugioh/deck";
-import { newListingsRate } from "~/lib/yugioh/listing-format";
+import { formatMoney, newListingsRate } from "~/lib/yugioh/listing-format";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { errorMessage } from "../_utils/errors";
@@ -78,7 +77,11 @@ import {
 	copiesSchema,
 	printingSchema,
 } from "../_utils/schemas";
-import type { CandidatePrinting, DeckCard } from "../_utils/types";
+import type {
+	CandidatePrices,
+	CandidatePrinting,
+	DeckCard,
+} from "../_utils/types";
 import { CardArt } from "./card-art";
 import { ReferenceLine } from "./deal-grade";
 import { OverloadedRaritiesCombobox, RarityCombobox } from "./printing-fields";
@@ -372,14 +375,14 @@ function Printings({
 		deckId,
 		now,
 	});
-	function ebayReference(
+	function pricesOf(
 		printingId: Id<"yugiohPrintings">,
-	): Reference | undefined {
+	): CandidatePrices | undefined {
 		return references?.find(
 			(reference) =>
 				reference.deckCardId === card._id &&
 				reference.printingId === printingId,
-		)?.ebay;
+		);
 	}
 	const [showOthers, setShowOthers] = useState(false);
 	const [adding, setAdding] = useState(false);
@@ -426,7 +429,7 @@ function Printings({
 							<CandidateOption
 								cardName={card.cardName}
 								candidate={first}
-								ebayReference={ebayReference(first.printingId)}
+								prices={pricesOf(first.printingId)}
 								chosen={first.printingId === card.chosenPrintingId}
 								canRemove={canRemove}
 							/>
@@ -462,7 +465,7 @@ function Printings({
 												key={candidate._id}
 												cardName={card.cardName}
 												candidate={candidate}
-												ebayReference={ebayReference(candidate.printingId)}
+												prices={pricesOf(candidate.printingId)}
 												chosen={false}
 												canRemove={canRemove}
 											/>
@@ -508,14 +511,14 @@ function Printings({
 function CandidateOption({
 	cardName,
 	candidate,
-	ebayReference,
+	prices,
 	chosen,
 	canRemove,
 }: {
 	cardName: string;
 	candidate: CandidatePrinting;
 	/** Undefined while loading. */
-	ebayReference: Reference | undefined;
+	prices: CandidatePrices | undefined;
 	chosen: boolean;
 	canRemove: boolean;
 }): React.ReactElement {
@@ -544,10 +547,30 @@ function CandidateOption({
 					</Field>
 				</FieldLabel>
 				<div className="flex flex-col gap-1 px-3 pb-1">
-					{ebayReference === undefined ? (
-						<Skeleton className="h-5 w-40" />
+					{prices === undefined ? (
+						<>
+							<Skeleton className="h-5 w-40" />
+							<Skeleton className="h-5 w-52" />
+						</>
 					) : (
-						<ReferenceLine reference={ebayReference} className="text-sm" />
+						<>
+							<ReferenceLine
+								reference={prices.ebay}
+								marketplace="ebay"
+								className="text-sm"
+							/>
+							<ReferenceLine
+								reference={prices.tcgplayer}
+								marketplace="tcgplayer"
+								className="text-sm"
+							/>
+							{prices.tcgplayerBuyNow === null ? null : (
+								<span className="text-sm tabular-nums">
+									Buy now from {formatMoney(prices.tcgplayerBuyNow, "USD")} on
+									TCGplayer
+								</span>
+							)}
+						</>
 					)}
 					<TcgplayerLink cardName={cardName} candidate={candidate} />
 				</div>

@@ -126,7 +126,8 @@ export async function saveTitleRead(
 /**
  * Re-matches the Listings filed under a set code's card, after a Printing on
  * it was added or learned another Overloaded rarity. No AI: stored reads are
- * reused. Overrides are left alone.
+ * reused. Overrides are left alone, and so are TCGplayer Listings, which are
+ * matched by product page, not by title.
  */
 export async function rematchSetCode(
 	ctx: MutationCtx,
@@ -142,7 +143,11 @@ export async function rematchSetCode(
 	// Every Listing here names the same card, so its Printings are read once.
 	const printings = await printingsForSetCode(ctx, setCode);
 	for (const listing of listings) {
-		if (listing.matchOverridden || listing.titleReadStatus === "reading") {
+		if (
+			listing.matchOverridden ||
+			listing.titleReadStatus === "reading" ||
+			listing.marketplace === "tcgplayer"
+		) {
 			continue;
 		}
 		const { status, printingId } = matchListing(matchInput(listing), printings);

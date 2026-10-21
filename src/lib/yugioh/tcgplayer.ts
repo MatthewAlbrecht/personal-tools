@@ -3,6 +3,7 @@
 // Formats: docs/yugioh/references/tcgplayer-product-lookup.md.
 
 import { RARITIES } from "./deck";
+import { LANGUAGES, type Language, type ReadCondition } from "./title-reading";
 
 const PRODUCT_HOSTS = new Set(["www.tcgplayer.com", "tcgplayer.com"]);
 
@@ -135,6 +136,11 @@ export function checkTcgplayerProductUrl(
 	return null;
 }
 
+/** The product id in a TCGplayer product URL, or null if it isn't one. */
+export function tcgplayerProductIdOf(url: string): number | null {
+	return parseProductUrl(url)?.productId ?? null;
+}
+
 function parseProductUrl(
 	input: string,
 ): { productId: number; slug: string } | null {
@@ -236,4 +242,33 @@ export function parseTcgplayerProduct(
 function field(value: unknown, key: string): unknown {
 	if (typeof value !== "object" || value === null) return undefined;
 	return (value as Record<string, unknown>)[key];
+}
+
+// TCGplayer's condition names, and the short forms its latest sales use.
+const TCGPLAYER_CONDITIONS: ReadonlyArray<[RegExp, ReadCondition]> = [
+	[/\bnear mint\b|\bnm\b/, "nearMint"],
+	[/\blightly played\b|\blp\b/, "lightlyPlayed"],
+	[/\bmoderately played\b|\bmp\b/, "moderatelyPlayed"],
+	[/\bheavily played\b|\bhp\b/, "heavilyPlayed"],
+	[/\bdamaged\b|\bdmg\b/, "damaged"],
+];
+
+/**
+ * What a TCGplayer condition says: "Near Mint 1st Edition" (or the latest
+ * sales' "NM 1st Edition") is Near Mint, in English. TCGplayer names a
+ * language only when it isn't English ("… - Japanese"). A text without a
+ * condition reads as unknown (null).
+ */
+export function readTcgplayerCondition(text: string): {
+	condition: ReadCondition | null;
+	language: Language;
+} {
+	const lower = text.toLowerCase();
+	const condition =
+		TCGPLAYER_CONDITIONS.find(([pattern]) => pattern.test(lower))?.[1] ?? null;
+	const language =
+		LANGUAGES.find(
+			(name) => name !== "english" && new RegExp(`\\b${name}\\b`).test(lower),
+		) ?? "english";
+	return { condition, language };
 }

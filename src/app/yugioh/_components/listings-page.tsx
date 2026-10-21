@@ -32,7 +32,12 @@ import {
 	listingFiltersFromParams,
 	withListingFilters,
 } from "~/lib/yugioh/listing-filters";
-import { formatMoney, listingTypeLabel } from "~/lib/yugioh/listing-format";
+import {
+	MARKETPLACE_LABELS,
+	formatMoney,
+	listingSeller,
+	listingTypeLabel,
+} from "~/lib/yugioh/listing-format";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import type { ListingView } from "../_utils/types";
@@ -237,7 +242,8 @@ function ListingRow({
 					<DealGradeSummary deal={listing.deal} />
 				</span>
 				<span className="shrink-0 text-muted-foreground text-xs tabular-nums">
-					eBay · {listingTypeLabel(listing, now)}
+					{MARKETPLACE_LABELS[listing.marketplace]} ·{" "}
+					{listingTypeLabel(listing, now)}
 				</span>
 			</span>
 			<div className="flex items-center justify-between gap-3 text-sm">
@@ -277,10 +283,10 @@ function ListingsTable({
 					<TableHead>Card / Printing</TableHead>
 					<TableHead className="w-full">Title</TableHead>
 					<TableHead>Type</TableHead>
-					<TableHead>Location</TableHead>
+					<TableHead>Seller</TableHead>
 					<TableHead>Seen</TableHead>
 					<TableHead>
-						<span className="sr-only">Open on eBay</span>
+						<span className="sr-only">Open on the marketplace</span>
 					</TableHead>
 				</TableRow>
 			</TableHeader>
@@ -326,10 +332,20 @@ function ListingsTable({
 							</div>
 						</TableCell>
 						<TableCell className="align-top tabular-nums">
-							{listingTypeLabel(listing, now)}
+							<div className="flex flex-col">
+								<span>{listingTypeLabel(listing, now)}</span>
+								<span className="text-muted-foreground text-xs">
+									{MARKETPLACE_LABELS[listing.marketplace]}
+								</span>
+							</div>
 						</TableCell>
-						<TableCell className="align-top text-muted-foreground">
-							{listing.sellerLocation}
+						<TableCell className="max-w-40 align-top text-muted-foreground">
+							<p
+								className="truncate"
+								title={listingSeller(listing) ?? undefined}
+							>
+								{listingSeller(listing)}
+							</p>
 						</TableCell>
 						<TableCell className="align-top text-muted-foreground">
 							{freshness(listing)}
@@ -340,7 +356,7 @@ function ListingsTable({
 									href={listing.url}
 									target="_blank"
 									rel="noopener noreferrer"
-									aria-label={`Open on eBay: ${listing.title} (opens in a new tab)`}
+									aria-label={`Open on ${MARKETPLACE_LABELS[listing.marketplace]}: ${listing.title} (opens in a new tab)`}
 								>
 									<ExternalLink />
 								</a>
@@ -396,9 +412,12 @@ function PerCopy({ listing }: { listing: ListingView }): React.ReactElement {
 	);
 }
 
-/** "United Kingdom · listed 3h ago", leaving out a location eBay didn't show. */
+/**
+ * "United Kingdom · listed 3h ago" (eBay) or "Card Castle · 3 Copies ·
+ * seen 2h ago" (TCGplayer), leaving out a seller the page didn't show.
+ */
 function whereAndWhen(listing: ListingView): string {
-	return [listing.sellerLocation, freshness(listing)]
+	return [listingSeller(listing), freshness(listing)]
 		.filter((part) => part !== null)
 		.join(" · ");
 }
