@@ -43,7 +43,10 @@ test("a sold page is read and sent, and the dock shows the count", async () => {
 	});
 
 	await import("../ebay-content.js");
-	await vi.waitFor(() => expect(dock.at(-1)?.status).toBe("ok"));
+	// The content script lets the page settle for 2s before reading.
+	await vi.waitFor(() => expect(dock.at(-1)?.status).toBe("ok"), {
+		timeout: 5000,
+	});
 
 	expect(sent).toHaveLength(1);
 	expect(sent[0]?.type).toBe("YUGIOH_EBAY_CAPTURE");

@@ -50,8 +50,10 @@ async function runOnSavedPage(backend: unknown): Promise<{
 
 	vi.resetModules();
 	await import("../tcgplayer-content.js");
-	await vi.waitFor(() =>
-		expect(["ok", "warn", "error"]).toContain(dock.at(-1)?.status),
+	// The content script lets the page settle for 2s before reading.
+	await vi.waitFor(
+		() => expect(["ok", "warn", "error"]).toContain(dock.at(-1)?.status),
+		{ timeout: 5000 },
 	);
 	return { sent, dock };
 }

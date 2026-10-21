@@ -4,16 +4,24 @@
 
 const EBAY_OBSERVE_MS = 8000;
 
+// Pages keep rendering after the first result shows up: give them a moment
+// before reading, so late rows, prices and time-left text are there.
+const DATA_SETTLE_MS = 2000;
+
+function settleThen(resolve) {
+	window.setTimeout(resolve, DATA_SETTLE_MS);
+}
+
 function waitForEbayResults(timeoutMs) {
 	return new Promise(function resolveResults(resolve) {
 		if (countEbayResults(document) > 0) {
-			resolve();
+			settleThen(resolve);
 			return;
 		}
 		const observer = new MutationObserver(function check() {
 			if (countEbayResults(document) > 0) {
 				observer.disconnect();
-				resolve();
+				settleThen(resolve);
 			}
 		});
 		observer.observe(document.documentElement, {

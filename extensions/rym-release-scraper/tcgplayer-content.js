@@ -12,16 +12,24 @@ const TCGPLAYER_MAX_SALES_LOADS = 7;
 // Matches REFERENCE_WINDOW_DAYS in src/lib/yugioh/deals.ts.
 const TCGPLAYER_SALES_WINDOW_DAYS = 60;
 
+// Pages keep rendering after the first result shows up: give them a moment
+// before reading, so late rows, prices and time-left text are there.
+const DATA_SETTLE_MS = 2000;
+
+function settleThen(resolve) {
+	window.setTimeout(resolve, DATA_SETTLE_MS);
+}
+
 function waitForTcgplayer(check, timeoutMs) {
 	return new Promise(function resolveWait(resolve) {
 		if (check()) {
-			resolve();
+			settleThen(resolve);
 			return;
 		}
 		const observer = new MutationObserver(function onChange() {
 			if (check()) {
 				observer.disconnect();
-				resolve();
+				settleThen(resolve);
 			}
 		});
 		observer.observe(document.documentElement, {
