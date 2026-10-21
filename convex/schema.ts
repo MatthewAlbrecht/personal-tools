@@ -1839,6 +1839,14 @@ export default defineSchema({
 		position: v.optional(v.number()),
 	}).index("by_deckId", ["deckId"]),
 
+	// My visits to each Deck (ticket 11): when I last looked, and where this
+	// visit's "new" starts. One row per Deck I've opened.
+	yugiohDeckVisits: defineTable({
+		deckId: v.id("yugiohDecks"),
+		viewedAt: v.number(),
+		newSince: v.number(),
+	}).index("by_deckId", ["deckId"]),
+
 	yugiohCandidatePrintings: defineTable({
 		deckId: v.id("yugiohDecks"),
 		deckCardId: v.id("yugiohDeckCards"),

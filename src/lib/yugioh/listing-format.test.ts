@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
 	formatMoney,
 	listingTypeLabel,
+	newListingsRate,
 	timeLeft,
 	titleFlags,
 } from "./listing-format";
@@ -139,5 +140,16 @@ describe("titleFlags", () => {
 
 	test("an unread title has no flags", () => {
 		expect(titleFlags(null)).toEqual([]);
+	});
+});
+
+describe("newListingsRate", () => {
+	test("reads plainly, never as a fraction of a Listing", () => {
+		expect(newListingsRate(0)).toBe("No new Listings in 4 weeks");
+		expect(newListingsRate(0.25)).toBe("Under 1 new a week");
+		expect(newListingsRate(1)).toBe("1 new a week");
+		expect(newListingsRate(1.25)).toBe("About 1 new a week");
+		expect(newListingsRate(2.75)).toBe("About 3 new a week");
+		expect(newListingsRate(12)).toBe("12 new a week");
 	});
 });

@@ -2,7 +2,8 @@
 
 import { useForm } from "@tanstack/react-form";
 import { useMutation, useQuery } from "convex/react";
-import { ChevronDown, Minus, Plus, Trash2 } from "lucide-react";
+import { ArrowRight, ChevronDown, Minus, Plus, Trash2 } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import type * as React from "react";
 import { toast } from "sonner";
@@ -62,6 +63,7 @@ import {
 	MAX_COPIES_NEEDED,
 	SECTION_LABELS,
 } from "~/lib/yugioh/deck";
+import { newListingsRate } from "~/lib/yugioh/listing-format";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { errorMessage } from "../_utils/errors";
@@ -191,9 +193,41 @@ export function CardDrawer({
 					/>
 
 					<Printings key={shown._id} deckId={deckId} card={shown} />
+
+					<CardListings deckId={deckId} card={shown} />
 				</div>
 			) : null}
 		</YugiohDrawer>
+	);
+}
+
+/** How often the Card gets new Listings, and the way to all of them. */
+function CardListings({
+	deckId,
+	card,
+}: {
+	deckId: Id<"yugiohDecks">;
+	card: DeckCard;
+}): React.ReactElement {
+	return (
+		<section aria-labelledby="card-listings" className="flex flex-col gap-1">
+			<h3 id="card-listings" className="font-medium text-sm">
+				Listings for this Card
+			</h3>
+			<div className="flex items-center justify-between gap-3 text-sm">
+				<span className="text-muted-foreground tabular-nums">
+					{card.newListingsPerWeek === null
+						? null
+						: newListingsRate(card.newListingsPerWeek)}
+				</span>
+				<Button variant="link" className="h-11 shrink-0 px-0 md:h-9" asChild>
+					<Link href={`/yugioh/decks/${deckId}/listings?card=${card._id}`}>
+						All Listings for this Card
+						<ArrowRight data-icon="inline-end" aria-hidden />
+					</Link>
+				</Button>
+			</div>
+		</section>
 	);
 }
 

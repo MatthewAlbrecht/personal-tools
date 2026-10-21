@@ -10,6 +10,7 @@ import type {
 	Condition,
 	Section,
 } from "../../../src/lib/yugioh/deck";
+import type { ListingFilters } from "../../../src/lib/yugioh/listing-filters";
 import type {
 	ExchangeRate,
 	PerCopyPrice,
@@ -212,6 +213,25 @@ export const yugiohDeckCostValidator = v.object({
 	cardsWithoutBuyNow: v.number(),
 });
 
+/** Filters on a Deck's Listings, as kept in the URL; unset lets everything through. */
+export const yugiohListingFiltersValidator = v.object({
+	new: v.optional(v.boolean()),
+	ending: v.optional(v.boolean()),
+	marketplace: v.optional(yugiohMarketplaceValidator),
+	type: v.optional(
+		v.union(v.literal("buyItNow"), v.literal("auction"), v.literal("sold")),
+	),
+	language: v.optional(yugiohLanguageValidator),
+	condition: v.optional(
+		v.union(yugiohReadConditionValidator, v.literal("unknown")),
+	),
+	graded: v.optional(v.boolean()),
+	match: v.optional(v.union(yugiohMatchStatusValidator, v.literal("reading"))),
+	location: v.optional(v.string()),
+	/** A Deck Card ID, as it appears in the URL; an unknown one matches nothing. */
+	card: v.optional(v.string()),
+});
+
 // Compile-time check that the validators and the domain library agree.
 type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
 const sectionsAgree: Same<Infer<typeof yugiohSectionValidator>, Section> = true;
@@ -288,3 +308,8 @@ const deckCostsAgree: Same<
 void cardCostsAgree;
 void costTotalsAgree;
 void deckCostsAgree;
+const listingFiltersAgree: Same<
+	Infer<typeof yugiohListingFiltersValidator>,
+	ListingFilters
+> = true;
+void listingFiltersAgree;

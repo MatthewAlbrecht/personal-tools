@@ -6,6 +6,13 @@ import {
 	SECTIONS,
 } from "~/lib/yugioh/deck";
 import {
+	CONDITION_FILTERS,
+	LISTING_KINDS,
+	MARKETPLACES,
+	MATCH_FILTERS,
+	QUICK_VIEWS,
+} from "~/lib/yugioh/listing-filters";
+import {
 	HOME_COUNTRY,
 	MAX_COUNTRY_LENGTH,
 	isHomeCountry,
@@ -14,6 +21,7 @@ import {
 	REJECTED_PRODUCT_URL,
 	checkTcgplayerProductUrl,
 } from "~/lib/yugioh/tcgplayer";
+import { LANGUAGES } from "~/lib/yugioh/title-reading";
 
 // Field schemas mirror the checks in convex/model/yugioh/decks.ts.
 
@@ -111,3 +119,21 @@ export const newImportFeeRateSchema = z.object({
 		),
 	percent: importFeePercentSchema,
 });
+
+/** "Any" leaves a Listing filter unset. */
+export const ANY = "any";
+
+/** The Listings filter drawer: each field is a filter, or "any". */
+export const listingFiltersSchema = z.object({
+	marketplace: z.enum([ANY, ...MARKETPLACES]),
+	type: z.enum([ANY, ...LISTING_KINDS]),
+	language: z.enum([ANY, ...LANGUAGES]),
+	condition: z.enum([ANY, ...CONDITION_FILTERS]),
+	graded: z.enum([ANY, "yes", "no"]),
+	match: z.enum([ANY, ...MATCH_FILTERS]),
+	location: z.string(),
+	card: z.string(),
+});
+
+/** The Listings quick views: All · New · Ending soon · Sold. */
+export const quickViewSchema = z.object({ view: z.enum(QUICK_VIEWS) });

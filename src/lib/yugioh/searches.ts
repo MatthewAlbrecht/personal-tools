@@ -48,6 +48,28 @@ export function searchedCandidates<
 }
 
 /**
+ * The Printings each Card searches, by Card ID, from a Deck's Cards and its
+ * Candidate Printings (each naming its Card).
+ */
+export function searchedPrintingsByCard<
+	CardId extends string,
+	PrintingId extends string,
+>(
+	cards: ReadonlyArray<{ _id: CardId; chosenPrintingId: PrintingId | null }>,
+	candidates: ReadonlyArray<{ deckCardId: CardId; printingId: PrintingId }>,
+): Map<CardId, PrintingId[]> {
+	return new Map(
+		cards.map((card) => [
+			card._id,
+			searchedCandidates({
+				chosenPrintingId: card.chosenPrintingId,
+				candidates: candidates.filter((c) => c.deckCardId === card._id),
+			}).map((c) => c.printingId),
+		]),
+	);
+}
+
+/**
  * Packs a Deck's Printings into eBay Searches of at most 8 set codes.
  *
  * - A Card with a Chosen Printing searches only that one; an undecided Card

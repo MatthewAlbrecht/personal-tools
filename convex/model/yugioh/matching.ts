@@ -11,6 +11,7 @@ import {
 	readTitle,
 	setCodeKey,
 	setCodeVariants,
+	shownMatchStatus,
 	titleSetCode,
 } from "../../../src/lib/yugioh/title-reading";
 import { internal } from "../../_generated/api";
@@ -250,10 +251,7 @@ export async function listingMatchView(
 	return {
 		titleRead: listing.titleRead ?? null,
 		match: {
-			status:
-				!overridden && listing.titleReadStatus === "reading"
-					? "reading"
-					: (listing.matchStatus ?? "unsure"),
+			status: shownMatchStatus(listing),
 			printing: printing && {
 				_id: printing._id,
 				cardName: printing.cardName,

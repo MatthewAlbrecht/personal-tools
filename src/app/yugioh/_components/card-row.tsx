@@ -4,6 +4,7 @@ import type * as React from "react";
 import { cn } from "~/lib/utils";
 import { formatWholeDollars } from "~/lib/yugioh/costs";
 import { isCardFinished, rarityAbbreviation } from "~/lib/yugioh/deck";
+import { newListingsRate } from "~/lib/yugioh/listing-format";
 import type { DeckCard } from "../_utils/types";
 import { CardArt } from "./card-art";
 
@@ -74,6 +75,12 @@ export function CardRow({
 						<span className="sr-only"> Copies owned</span>
 					</span>
 				</span>
+				{/* Third line, only when there's something to say. */}
+				{card.newListingsPerWeek !== null && card.newListingsPerWeek > 0 && (
+					<span className="truncate text-muted-foreground text-xs tabular-nums">
+						{newListingsRate(card.newListingsPerWeek)}
+					</span>
+				)}
 			</div>
 			<div className="flex shrink-0 flex-col items-end justify-center text-right text-sm tabular-nums">
 				{finished ? (

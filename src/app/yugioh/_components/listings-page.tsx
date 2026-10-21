@@ -2,7 +2,7 @@
 
 import { useQuery } from "convex/react";
 import { formatDistanceToNowStrict } from "date-fns";
-import { ExternalLink, Tag } from "lucide-react";
+import { ExternalLink, ListFilter, Tag } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type * as React from "react";
@@ -24,22 +24,29 @@ import {
 	TableHeader,
 	TableRow,
 } from "~/components/ui/table";
+import { useHeldWhileLoading } from "~/lib/hooks/use-held-while-loading";
 import { useMinuteClock } from "~/lib/hooks/use-minute-clock";
 import { cn } from "~/lib/utils";
+import {
+	type ListingFilters,
+	listingFiltersFromParams,
+	withListingFilters,
+} from "~/lib/yugioh/listing-filters";
 import { formatMoney, listingTypeLabel } from "~/lib/yugioh/listing-format";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
-import { MAX_LISTINGS_SHOWN } from "../../../../convex/model/yugioh/listings";
 import type { ListingView } from "../_utils/types";
 import { DealGradeSummary } from "./deal-grade";
 import { ListingDrawer } from "./listing-drawer";
+import { ListingsToolbar } from "./listing-filters";
 import { MatchSummary, TitleFlagBadges } from "./listing-match";
 
 const SKELETON_ROWS = [0, 1, 2, 3, 4, 5, 6, 7];
 
 /**
  * The Deck's Listings, newest first: matched, unsure and not-a-match alike.
- * Tapping one opens the Listing drawer (`?listing=`).
+ * Filters live in the URL and only narrow; with none set, nothing is hidden.
+ * Tapping a Listing opens the Listing drawer (`?listing=`).
  */
 export function ListingsPage({
 	deckId,
@@ -47,14 +54,50 @@ export function ListingsPage({
 	deckId: Id<"yugiohDecks">;
 }): React.ReactElement {
 	const now = useMinuteClock();
-	const listings = useQuery(api.yugioh.listings.listListings, { deckId, now });
 	const router = useRouter();
 	const pathname = usePathname() ?? `/yugioh/decks/${deckId}/listings`;
 	const searchParams = useSearchParams() ?? new URLSearchParams();
+	const filters = listingFiltersFromParams(searchParams);
+	const page = useHeldWhileLoading(
+		useQuery(api.yugioh.listings.listListings, { deckId, now, filters }),
+		deckId,
+	);
 
-	if (listings === undefined) return <ListingsPageSkeleton />;
+	function replaceParams(params: URLSearchParams): void {
+		const query = params.toString();
+		router.replace(query ? `${pathname}?${query}` : pathname, {
+			scroll: false,
+		});
+	}
 
-	if (listings.length === 0) {
+	function setFilters(next: ListingFilters): void {
+		replaceParams(
+			withListingFilters(new URLSearchParams(searchParams.toString()), next),
+		);
+	}
+
+	const toolbar = (
+		<ListingsToolbar
+			deckId={deckId}
+			filters={filters}
+			newCount={page?.newCount ?? null}
+			matching={page?.matching ?? null}
+			locations={page?.locations ?? []}
+			onChange={setFilters}
+		/>
+	);
+
+	if (page === undefined) {
+		return (
+			<section aria-label="Listings" className="flex flex-col gap-3">
+				{toolbar}
+				<ListingsPageSkeleton />
+			</section>
+		);
+	}
+
+	const filtered = Object.keys(filters).length > 0;
+	if (page.matching === 0 && !filtered) {
 		return (
 			<Empty className="border">
 				<EmptyHeader>
@@ -78,6 +121,7 @@ export function ListingsPage({
 		);
 	}
 
+	const listings = page.listings;
 	const openListingId = searchParams.get("listing");
 	const openListing =
 		listings.find((listing) => listing._id === openListingId) ?? null;
@@ -91,31 +135,50 @@ export function ListingsPage({
 	function closeListing(): void {
 		const params = new URLSearchParams(searchParams.toString());
 		params.delete("listing");
-		const query = params.toString();
-		router.replace(query ? `${pathname}?${query}` : pathname, {
-			scroll: false,
-		});
+		replaceParams(params);
 	}
 
 	return (
 		<section aria-label="Listings" className="flex flex-col gap-3">
-			<p className="text-muted-foreground text-sm tabular-nums">
-				{countLine(listings.length)}
-			</p>
-			<ul className="-mx-4 flex flex-col divide-y border-y md:hidden">
-				{listings.map((listing) => (
-					<li key={listing._id}>
-						<ListingRow
-							listing={listing}
-							href={listingHref(listing._id)}
-							now={now}
-						/>
-					</li>
-				))}
-			</ul>
-			<div className="hidden md:block">
-				<ListingsTable listings={listings} href={listingHref} now={now} />
-			</div>
+			{toolbar}
+			{page.matching === 0 ? (
+				<Empty className="border">
+					<EmptyHeader>
+						<EmptyMedia variant="icon">
+							<ListFilter />
+						</EmptyMedia>
+						<EmptyTitle>Nothing matches these filters.</EmptyTitle>
+					</EmptyHeader>
+					<EmptyContent>
+						<Button variant="outline" onClick={() => setFilters({})}>
+							Clear filters
+						</Button>
+					</EmptyContent>
+				</Empty>
+			) : (
+				<>
+					<p
+						className="text-muted-foreground text-sm tabular-nums"
+						aria-live="polite"
+					>
+						{countLine(listings.length, page.matching, filters)}
+					</p>
+					<ul className="-mx-4 flex flex-col divide-y border-y md:hidden">
+						{listings.map((listing) => (
+							<li key={listing._id}>
+								<ListingRow
+									listing={listing}
+									href={listingHref(listing._id)}
+									now={now}
+								/>
+							</li>
+						))}
+					</ul>
+					<div className="hidden md:block">
+						<ListingsTable listings={listings} href={listingHref} now={now} />
+					</div>
+				</>
+			)}
 			<ListingDrawer
 				deckId={deckId}
 				listing={openListing}
@@ -126,10 +189,25 @@ export function ListingsPage({
 	);
 }
 
-/** "17 Listings, newest first", or "The newest 200 Listings" at the cap. */
-function countLine(count: number): string {
-	if (count >= MAX_LISTINGS_SHOWN) return `The newest ${count} Listings`;
-	return `${count} ${count === 1 ? "Listing" : "Listings"}, newest first`;
+/**
+ * "17 Listings, newest first"; "The newest 200 of 812 Listings" past the cap;
+ * "3 running auctions, ending soonest first" for Ending soon.
+ */
+function countLine(
+	shown: number,
+	matching: number,
+	filters: ListingFilters,
+): string {
+	if (filters.ending) {
+		const noun = matching === 1 ? "running auction" : "running auctions";
+		return shown < matching
+			? `The first ${shown} of ${matching} ${noun}, ending soonest first`
+			: `${matching} ${noun}, ending soonest first`;
+	}
+	const noun = matching === 1 ? "Listing" : "Listings";
+	return shown < matching
+		? `The newest ${shown} of ${matching} ${noun}`
+		: `${matching} ${noun}, newest first`;
 }
 
 function ListingRow({
@@ -154,6 +232,7 @@ function ListingRow({
 		>
 			<span className="flex items-center justify-between gap-3">
 				<span className="flex min-w-0 items-center gap-2">
+					{listing.isNew && <NewMark />}
 					<PerCopy listing={listing} />
 					<DealGradeSummary deal={listing.deal} />
 				</span>
@@ -215,7 +294,10 @@ function ListingsTable({
 						)}
 					>
 						<TableCell className="text-right align-top">
-							<PerCopy listing={listing} />
+							<span className="inline-flex items-center gap-2">
+								{listing.isNew && <NewMark />}
+								<PerCopy listing={listing} />
+							</span>
 						</TableCell>
 						<TableCell className="align-top">
 							<DealGradeSummary deal={listing.deal} stacked />
@@ -268,6 +350,16 @@ function ListingsTable({
 				))}
 			</TableBody>
 		</Table>
+	);
+}
+
+/** First seen since my last visit: a dot, read out as "New". */
+function NewMark(): React.ReactElement {
+	return (
+		<>
+			<span aria-hidden className="size-2 shrink-0 rounded-full bg-primary" />
+			<span className="sr-only">New</span>
+		</>
 	);
 }
 

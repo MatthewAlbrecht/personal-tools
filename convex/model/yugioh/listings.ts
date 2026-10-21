@@ -1,11 +1,25 @@
 import type { Infer } from "convex/values";
 import { isSale, saleTime } from "../../../src/lib/yugioh/deals";
-import type { PerCopyPrice } from "../../../src/lib/yugioh/pricing";
+import {
+	type ListingFilters,
+	applyListingFilters,
+} from "../../../src/lib/yugioh/listing-filters";
+import {
+	type PerCopyPrice,
+	cleanCountry,
+	countryKey,
+} from "../../../src/lib/yugioh/pricing";
+import { searchedPrintingsByCard } from "../../../src/lib/yugioh/searches";
 import { setCodeKey } from "../../../src/lib/yugioh/title-reading";
+import { isNewListing } from "../../../src/lib/yugioh/whats-new";
 import type { Doc, Id } from "../../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../../_generated/server";
-import type { DealContext, DealView } from "./deals";
-import { MAX_CANDIDATES_PER_DECK } from "./decks";
+import { type DealContext, type DealView, loadDealContext } from "./deals";
+import {
+	MAX_CANDIDATES_PER_DECK,
+	listDeckCandidates,
+	listDeckCards,
+} from "./decks";
 import {
 	type ListingMatchView,
 	listingMatchView,
@@ -13,6 +27,7 @@ import {
 } from "./matching";
 import { currentUsdPerUnit } from "./pricing";
 import type { yugiohCapturedEbayListingValidator } from "./validators";
+import { readNewSince } from "./whatsNew";
 
 export type CapturedEbayListing = Infer<
 	typeof yugiohCapturedEbayListingValidator
@@ -219,9 +234,78 @@ export async function readDeckListings(
 				.take(MAX_LISTINGS_SHOWN),
 		);
 	}
-	return [...found.values()]
-		.sort((a, b) => b._creationTime - a._creationTime)
-		.slice(0, MAX_LISTINGS_SHOWN);
+	return [...found.values()].sort((a, b) => b._creationTime - a._creationTime);
+}
+
+/** The Listings a Deck's Listings view shows, with what's needed to explain them. */
+export type DeckListingsPage = {
+	/** Up to `MAX_LISTINGS_SHOWN` of the Listings the filters let through. */
+	listings: ListingView[];
+	/** How many Listings the filters let through, shown or not. */
+	matching: number;
+	/** How many of the Deck's Listings are new since my last visit. */
+	newCount: number;
+	/** Every seller country among the Deck's Listings, A to Z: the location filter's options. */
+	locations: string[];
+};
+
+/**
+ * A Deck's Listings through `filters`, newest first, priced and graded at
+ * `now`. Filters only narrow: with none, every Listing shows.
+ */
+export async function readDeckListingsPage(
+	ctx: QueryCtx,
+	deckId: Id<"yugiohDecks">,
+	now: number,
+	filters: ListingFilters,
+): Promise<DeckListingsPage> {
+	const all = await readDeckListings(ctx, deckId);
+	const newSince = await readNewSince(ctx, deckId);
+	const matching = applyListingFilters(all, filters, {
+		now,
+		newSince,
+		cardPrintings: await readCardPrintings(ctx, deckId),
+	});
+	const deals = await loadDealContext(ctx, deckId, now);
+	return {
+		listings: await Promise.all(
+			matching
+				.slice(0, MAX_LISTINGS_SHOWN)
+				.map((listing) => listingView(ctx, listing, deals, newSince)),
+		),
+		matching: matching.length,
+		newCount: all.filter((listing) => isNewListing(listing, newSince)).length,
+		locations: sellerCountries(all),
+	};
+}
+
+function sellerCountries(listings: Doc<"yugiohListings">[]): string[] {
+	const byKey = new Map<string, string>();
+	for (const { sellerLocation } of listings) {
+		if (sellerLocation === null) continue;
+		const key = countryKey(sellerLocation);
+		if (!byKey.has(key)) byKey.set(key, cleanCountry(sellerLocation));
+	}
+	return [...byKey.values()].sort((a, b) => a.localeCompare(b));
+}
+
+/** The Printings each of the Deck's Cards searches, by Card ID. */
+async function readCardPrintings(
+	ctx: QueryCtx,
+	deckId: Id<"yugiohDecks">,
+): Promise<Map<string, Set<string>>> {
+	const [cards, candidates] = await Promise.all([
+		listDeckCards(ctx, deckId),
+		listDeckCandidates(ctx, deckId),
+	]);
+	const byCard = new Map<string, Set<string>>();
+	for (const [cardId, printingIds] of searchedPrintingsByCard(
+		cards,
+		candidates,
+	)) {
+		byCard.set(cardId, new Set(printingIds));
+	}
+	return byCard;
 }
 
 /** One Listing with its observations, newest first, or null if missing. */
@@ -254,17 +338,21 @@ export type ListingView = CapturedEbayListing & {
 	/** Null when there's no price, or no exchange rate for its currency yet. */
 	perCopyPrice: PerCopyPrice | null;
 	deal: DealView;
+	/** First seen since my last visit to the Deck. */
+	isNew: boolean;
 } & ListingMatchView;
 
 /**
  * The stored Listing as the Listings views show it, with its read, match,
  * Per-copy price and Deal grade. `deals` comes from `loadDealContext`, once
- * per query. Copies come from the title read, 1 when it's unknown.
+ * per query. Copies come from the title read, 1 when it's unknown. `newSince`
+ * is where "new" starts in the Deck (`readNewSince`).
  */
 export async function listingView(
 	ctx: QueryCtx,
 	listing: Doc<"yugiohListings">,
 	deals: DealContext,
+	newSince: number | null,
 ): Promise<ListingView> {
 	const perCopyPrice = deals.perCopyPrice(listing);
 	return {
@@ -289,6 +377,7 @@ export async function listingView(
 		lastSeenAt: listing.lastSeenAt,
 		perCopyPrice,
 		deal: await deals.deal(listing, perCopyPrice),
+		isNew: isNewListing(listing, newSince),
 		...(await listingMatchView(ctx, listing)),
 	};
 }

@@ -11,6 +11,7 @@ import {
 	yugiohSectionValidator,
 	yugiohTcgplayerStatusValidator,
 } from "../model/yugioh/validators";
+import * as WhatsNew from "../model/yugioh/whatsNew";
 
 const deckSummaryValidator = v.object({
 	_id: v.id("yugiohDecks"),
@@ -45,6 +46,8 @@ const deckCardValidator = v.object({
 	chosenPrintingId: v.union(v.id("yugiohPrintings"), v.null()),
 	candidates: v.array(candidateValidator),
 	cost: v.union(yugiohCardCostValidator, v.null()),
+	/** New Listings a week over the last 4 weeks; null without `now`. */
+	newListingsPerWeek: v.union(v.number(), v.null()),
 });
 
 const deckValidator = deckSummaryValidator.extend({
@@ -99,6 +102,20 @@ export const getDeck = query({
 	handler: async (ctx, args) => {
 		requireAuth(ctx);
 		return await Decks.readDeck(ctx, args.deckId, args.now);
+	},
+});
+
+/**
+ * Records that I opened the Deck, for "new since my last visit". Looking
+ * again within 30 minutes continues the visit, so what's new stays new.
+ */
+export const recordDeckVisit = mutation({
+	args: { deckId: v.id("yugiohDecks") },
+	returns: v.null(),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+		await WhatsNew.recordDeckVisit(ctx, args.deckId, Date.now());
+		return null;
 	},
 });
 

@@ -1,9 +1,10 @@
 "use client";
 
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect } from "react";
 import type * as React from "react";
 import { Button } from "~/components/ui/button";
 import {
@@ -37,6 +38,7 @@ export function DeckShell({
 }): React.ReactElement {
 	const deck = useQuery(api.yugioh.decks.getDeck, { deckId });
 	const pathname = usePathname() ?? "";
+	useDeckVisit(deckId);
 	const base = `/yugioh/decks/${deckId}`;
 
 	if (deck === null) return <MissingDeck />;
@@ -87,6 +89,34 @@ export function DeckShell({
 			{children}
 		</div>
 	);
+}
+
+/** How often a visit is recorded while the Deck stays open and in view. */
+const VISIT_HEARTBEAT_MS = 5 * 60 * 1000;
+
+/**
+ * Records a visit to the Deck when it opens, every few minutes while it stays
+ * in view, and whenever the page comes back into view (the installed app
+ * resumes without reloading). So the next visit's "new" starts about when I
+ * stopped looking.
+ */
+function useDeckVisit(deckId: Id<"yugiohDecks">): void {
+	const recordDeckVisit = useMutation(api.yugioh.decks.recordDeckVisit);
+	// Syncs with the browser's page visibility and a timer.
+	useEffect(() => {
+		function record(): void {
+			if (document.visibilityState !== "visible") return;
+			// A missed visit only leaves "new" a little stale; nothing to tell me.
+			recordDeckVisit({ deckId }).catch(() => {});
+		}
+		record();
+		const heartbeat = window.setInterval(record, VISIT_HEARTBEAT_MS);
+		document.addEventListener("visibilitychange", record);
+		return () => {
+			window.clearInterval(heartbeat);
+			document.removeEventListener("visibilitychange", record);
+		};
+	}, [deckId, recordDeckVisit]);
 }
 
 function MissingDeck(): React.ReactElement {

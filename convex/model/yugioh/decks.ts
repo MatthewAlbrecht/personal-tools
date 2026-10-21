@@ -28,6 +28,7 @@ import { readCardCosts } from "./costs";
 import { type PriceReaders, loadPriceReaders } from "./deals";
 import { rematchSetCode } from "./matching";
 import { type TcgplayerView, tcgplayerView } from "./tcgplayer";
+import { readNewListingRates } from "./whatsNew";
 
 /** Bounds every Yu-Gi-Oh read. A Deck is at most 60 Main + 15 Extra + 15 Side Cards. */
 export const MAX_DECKS = 50;
@@ -312,6 +313,8 @@ export type DeckCardView = {
 	candidates: CandidateView[];
 	/** Null when no `now` was given to price it at. */
 	cost: CardCost | null;
+	/** New Listings a week over the last 4 weeks; null without `now`. */
+	newListingsPerWeek: number | null;
 };
 
 export type DeckView = {
@@ -355,6 +358,10 @@ export async function readDeck(
 					cards,
 					candidates,
 				);
+	const rates =
+		now === undefined
+			? null
+			: await readNewListingRates(ctx, cards, candidates, now);
 	const printingIds = [...new Set(candidates.map((c) => c.printingId))];
 	const printings = new Map(
 		(
@@ -394,6 +401,7 @@ export async function readDeck(
 			chosenPrintingId: card.chosenPrintingId,
 			candidates: [...chosen, ...others],
 			cost: costs?.get(card._id) ?? null,
+			newListingsPerWeek: rates?.get(card._id) ?? null,
 		};
 	}
 	const cardOrder = deck.cardOrder ?? "byCost";

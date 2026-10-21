@@ -1,10 +1,5 @@
 import { v } from "convex/values";
-import {
-	type QueryCtx,
-	internalMutation,
-	mutation,
-	query,
-} from "../_generated/server";
+import { internalMutation, mutation, query } from "../_generated/server";
 import { requireAuth } from "../auth";
 import { loadDealContext } from "../model/yugioh/deals";
 import * as Listings from "../model/yugioh/listings";
@@ -12,11 +7,13 @@ import * as Matching from "../model/yugioh/matching";
 import {
 	yugiohCapturedEbayListingValidator,
 	yugiohDealValidator,
+	yugiohListingFiltersValidator,
 	yugiohMarketplaceValidator,
 	yugiohMatchStatusValidator,
 	yugiohPerCopyPriceValidator,
 	yugiohTitleReadValidator,
 } from "../model/yugioh/validators";
+import { readNewSince } from "../model/yugioh/whatsNew";
 
 const listingValidator = v.object({
 	_id: v.id("yugiohListings"),
@@ -32,6 +29,8 @@ const listingValidator = v.object({
 	perCopyPrice: v.union(yugiohPerCopyPriceValidator, v.null()),
 	/** Qualifying, flags and Deal grade against the eBay Reference price. */
 	deal: yugiohDealValidator,
+	/** First seen since my last visit to this Deck. */
+	isNew: v.boolean(),
 	/** What the AI read from the title; null until read, or when reading failed. */
 	titleRead: v.union(yugiohTitleReadValidator, v.null()),
 	match: v.object({
@@ -64,18 +63,32 @@ const observationValidator = v.object({
 });
 
 /**
- * A Deck's Listings, newest first (see `readDeckListings`), graded at `now`
- * (Unix ms, from the client: a query can't read the clock).
+ * A Deck's Listings through `filters` (as kept in the URL), newest first,
+ * graded at `now` (Unix ms, from the client: a query can't read the clock).
+ * With no filters, nothing is hidden.
  */
 export const listListings = query({
-	args: { deckId: v.id("yugiohDecks"), now: v.number() },
-	returns: v.array(listingValidator),
+	args: {
+		deckId: v.id("yugiohDecks"),
+		now: v.number(),
+		filters: v.optional(yugiohListingFiltersValidator),
+	},
+	returns: v.object({
+		listings: v.array(listingValidator),
+		/** How many Listings the filters let through; at most 200 are shown. */
+		matching: v.number(),
+		/** How many of the Deck's Listings are new since my last visit. */
+		newCount: v.number(),
+		/** Every seller country among the Deck's Listings, A to Z. */
+		locations: v.array(v.string()),
+	}),
 	handler: async (ctx, args) => {
 		requireAuth(ctx);
-		const listings = await Listings.readDeckListings(ctx, args.deckId);
-		const deals = await loadDealContext(ctx, args.deckId, args.now);
-		return await Promise.all(
-			listings.map((listing) => Listings.listingView(ctx, listing, deals)),
+		return await Listings.readDeckListingsPage(
+			ctx,
+			args.deckId,
+			args.now,
+			args.filters ?? {},
 		);
 	},
 });
@@ -100,8 +113,9 @@ export const getListing = query({
 		if (!listing) return null;
 		const { observations, ...doc } = listing;
 		const deals = await loadDealContext(ctx, args.deckId, args.now);
+		const newSince = await readNewSince(ctx, args.deckId);
 		return {
-			...(await Listings.listingView(ctx, doc, deals)),
+			...(await Listings.listingView(ctx, doc, deals, newSince)),
 			observations,
 		};
 	},

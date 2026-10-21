@@ -5,6 +5,7 @@ import {
 	type ReadCondition,
 	type TitleRead,
 } from "./title-reading";
+import { LISTING_RATE_WEEKS } from "./whats-new";
 
 // Display helpers for Listings. Relative imports only.
 
@@ -118,4 +119,15 @@ export function gradingLabel(
 			.filter((part) => part !== null)
 			.join(" ") || "Graded"
 	);
+}
+
+/**
+ * A Card's new Listings a week, in words: "About 3 new a week", "Under 1 new
+ * a week", or "No new Listings in 4 weeks".
+ */
+export function newListingsRate(perWeek: number): string {
+	if (perWeek === 0) return `No new Listings in ${LISTING_RATE_WEEKS} weeks`;
+	if (perWeek < 1) return "Under 1 new a week";
+	const rounded = Math.round(perWeek);
+	return `${rounded === perWeek ? "" : "About "}${rounded} new a week`;
 }

@@ -15,4 +15,4 @@ export type EbaySearch = NonNullable<
 >[number];
 export type ListingView = FunctionReturnType<
 	typeof api.yugioh.listings.listListings
->[number];
+>["listings"][number];

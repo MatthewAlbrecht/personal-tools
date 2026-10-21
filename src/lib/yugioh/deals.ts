@@ -56,7 +56,7 @@ type JudgedListing = { title: string; titleRead?: TitleRead | null };
  * The Listing's language: as read from the title, else the region of its set
  * code. A title that says neither is taken as English (it's on eBay US).
  */
-function listingLanguage(listing: JudgedListing): Language {
+export function listingLanguage(listing: JudgedListing): Language {
 	if (listing.titleRead) return listing.titleRead.language;
 	const setCode = titleSetCode(listing.title);
 	return (setCode === null ? null : languageOfSetCode(setCode)) ?? "english";

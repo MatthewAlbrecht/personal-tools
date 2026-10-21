@@ -71,10 +71,11 @@ async function listings(t: T) {
 		});
 		decks.set(t, deckId);
 	}
-	return await t.query(api.yugioh.listings.listListings, {
+	const page = await t.query(api.yugioh.listings.listListings, {
 		deckId,
 		now: Date.now(),
 	});
+	return page.listings;
 }
 
 beforeEach(() => {

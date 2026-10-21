@@ -112,6 +112,7 @@ import type * as model_yugioh_tcgplayerSearch from "../model/yugioh/tcgplayerSea
 import type * as model_yugioh_titleReader from "../model/yugioh/titleReader.js";
 import type * as model_yugioh_typesafe from "../model/yugioh/typesafe.js";
 import type * as model_yugioh_validators from "../model/yugioh/validators.js";
+import type * as model_yugioh_whatsNew from "../model/yugioh/whatsNew.js";
 import type * as musicFunnel from "../musicFunnel.js";
 import type * as playlistLyrics from "../playlistLyrics.js";
 import type * as rankingSnapshots from "../rankingSnapshots.js";
@@ -244,6 +245,7 @@ declare const fullApi: ApiFromModules<{
   "model/yugioh/titleReader": typeof model_yugioh_titleReader;
   "model/yugioh/typesafe": typeof model_yugioh_typesafe;
   "model/yugioh/validators": typeof model_yugioh_validators;
+  "model/yugioh/whatsNew": typeof model_yugioh_whatsNew;
   musicFunnel: typeof musicFunnel;
   playlistLyrics: typeof playlistLyrics;
   rankingSnapshots: typeof rankingSnapshots;

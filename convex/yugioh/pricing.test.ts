@@ -129,7 +129,7 @@ async function capture(
 }
 
 async function perCopyPrice(t: T, deckId: Id<"yugiohDecks">) {
-	const listings = await t.query(api.yugioh.listings.listListings, {
+	const { listings } = await t.query(api.yugioh.listings.listListings, {
 		deckId,
 		now: Date.now(),
 	});

@@ -233,6 +233,22 @@ export function readTitle(title: string, judgments: TitleJudgments): TitleRead {
 
 export type MatchStatus = "match" | "notMatch" | "unsure";
 
+/**
+ * A Listing's match as shown: "reading" while the AI reads a new or changed
+ * title, unless I set the match myself. Listings captured before matching
+ * existed read as unsure.
+ */
+export function shownMatchStatus(listing: {
+	titleReadStatus?: "reading" | "read" | "failed";
+	matchStatus?: MatchStatus;
+	matchOverridden?: boolean;
+}): MatchStatus | "reading" {
+	if (!listing.matchOverridden && listing.titleReadStatus === "reading") {
+		return "reading";
+	}
+	return listing.matchStatus ?? "unsure";
+}
+
 type MatchablePrinting<Id> = {
 	_id: Id;
 	setCode: string;

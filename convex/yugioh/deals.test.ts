@@ -176,7 +176,11 @@ async function ashReference(t: T, deckId: Id<"yugiohDecks">) {
 }
 
 async function listings(t: T, deckId: Id<"yugiohDecks">) {
-	return await t.query(api.yugioh.listings.listListings, { deckId, now: NOW });
+	const page = await t.query(api.yugioh.listings.listListings, {
+		deckId,
+		now: NOW,
+	});
+	return page.listings;
 }
 
 async function dealFor(t: T, deckId: Id<"yugiohDecks">, itemId: string) {
