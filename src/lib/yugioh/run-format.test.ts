@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
-import { captureStaleness, describeRun, describeRunTiming } from "./run-format";
+import { captureStaleness, describeRun, describeRunDay } from "./run-format";
 
 const HOUR = 60 * 60 * 1000;
 const MINUTE = 60 * 1000;
@@ -221,87 +221,53 @@ describe("a run in the list", () => {
 	});
 });
 
-describe("run timing", () => {
-	const DAY = 24 * HOUR;
-	const zone = { timeZone: "America/New_York" };
+describe("the run schedule", () => {
+	const ZONE = "America/New_York";
+	/** A time on Wednesday 21 October 2026 in New York (EDT, UTC-4). */
+	function wednesday(hour: number, minute = 0): number {
+		return Date.UTC(2026, 9, 21, hour + 4, minute);
+	}
+	const today = {
+		date: "2026-10-21",
+		timeZone: ZONE,
+		slots: [
+			{ at: wednesday(7, 12), status: "ran" as const },
+			{ at: wednesday(11, 5), status: "skipped" as const },
+			{ at: wednesday(15, 2), status: "planned" as const },
+			{ at: wednesday(18, 57), status: "planned" as const },
+		],
+	};
+	const SUMMARY =
+		"About 4 times a day, 4 hours apart, from between 6 and 9 AM (New York time). Some days skip one. TCGplayer pages are visited about twice a day.";
 
-	test("before any Listing, it runs about every 3 hours", () => {
-		expect(
-			describeRunTiming(
-				{ status: "learning", dataSince: null, busyHours: [], ...zone },
-				NOW,
-			),
-		).toEqual({
-			summary:
-				"About every 3 hours for now, and not from 1 to 7 AM. Once it has about 4 weeks of Listings, it learns when sellers post and runs around those times.",
-			busyTimes: [],
+	test("names today's slots in my time zone, and what became of each", () => {
+		expect(describeRunDay(today, wednesday(12))).toEqual({
+			summary: SUMMARY,
+			slots: ["7:12 AM, ran", "11:05 AM, skipped", "3:02 PM", "6:57 PM"],
 		});
 	});
 
-	test("while learning, it says how many days of data it has", () => {
-		expect(
-			describeRunTiming(
-				{
-					status: "learning",
-					dataSince: NOW - 12 * DAY - HOUR,
-					busyHours: [],
-					...zone,
-				},
-				NOW,
-			).summary,
-		).toBe(
-			"About every 3 hours for now, and not from 1 to 7 AM. Still learning when sellers post: 12 days of data so far, of about 28.",
-		);
-		expect(
-			describeRunTiming(
-				{ status: "learning", dataSince: NOW - DAY, busyHours: [], ...zone },
-				NOW,
-			).summary,
-		).toContain("1 day of data so far");
-		expect(
-			describeRunTiming(
-				{ status: "learning", dataSince: NOW - HOUR, busyHours: [], ...zone },
-				NOW,
-			).summary,
-		).toContain("Under a day of data so far");
-	});
-
-	test("once learned, it names the busy times of the week, runs of hours together", () => {
-		const learned = describeRunTiming(
-			{
-				status: "learned",
-				dataSince: NOW - 30 * DAY,
-				// Sun 7–9 PM, Mon 11 AM–1 PM, Sat 11 PM through Sun 1 AM.
-				busyHours: [0, 19, 20, 24 + 11, 24 + 12, 6 * 24 + 23],
-				...zone,
-			},
-			NOW,
-		);
-		expect(learned.summary).toBe(
-			"Sellers post most at these times (New York time). It runs about every hour during them and the hour after, and at least every 6 hours otherwise, but not from 1 to 7 AM.",
-		);
-		expect(learned.busyTimes).toEqual([
-			"Sun 7–9 PM",
-			"Mon 11 AM–1 PM",
-			"Sat 11 PM–1 AM",
-		]);
-	});
-
-	test("learned with no busy hours, it stays on 3 hours", () => {
-		expect(
-			describeRunTiming(
-				{
-					status: "learned",
-					dataSince: NOW - 30 * DAY,
-					busyHours: [],
-					...zone,
-				},
-				NOW,
+	test("a slot missed and folded into a later run reads missed", () => {
+		const missed = {
+			...today,
+			slots: today.slots.map((slot, index) =>
+				index === 0 ? { ...slot, status: "passed" as const } : slot,
 			),
-		).toEqual({
+		};
+		expect(describeRunDay(missed, wednesday(12)).slots[0]).toBe(
+			"7:12 AM, missed",
+		);
+	});
+
+	test("before today's plan is drawn, only the summary", () => {
+		expect(describeRunDay(today, wednesday(24, 10))).toEqual({
+			summary: SUMMARY,
+			slots: [],
+		});
+		expect(describeRunDay(null, wednesday(12))).toEqual({
 			summary:
-				"About every 3 hours, and not from 1 to 7 AM. No hours of the week stand out yet for when sellers post.",
-			busyTimes: [],
+				"About 4 times a day, 4 hours apart, from between 6 and 9 AM. Some days skip one. TCGplayer pages are visited about twice a day.",
+			slots: [],
 		});
 	});
 });

@@ -38,6 +38,7 @@ import {
 	yugiohPushKindValidator,
 	yugiohPushStatusValidator,
 	yugiohRejectionValidator,
+	yugiohRunDayValidator,
 	yugiohRunTimingValidator,
 	yugiohSectionValidator,
 	yugiohTcgplayerDetailsValidator,
@@ -1978,12 +1979,16 @@ export default defineSchema({
 		["status"],
 	),
 
-	// When scheduled full runs happen (ticket 17): one row, relearned from
-	// listing times each time a full run ends. `learnedAt` is Unix ms.
+	// Legacy (ticket 17's learned posting times): no longer written or read,
+	// kept so the stored row still validates. `learnedAt` is Unix ms.
 	yugiohRunTiming: defineTable({
 		...yugiohRunTimingValidator.fields,
 		learnedAt: v.number(),
 	}),
+
+	// A day's plan of scheduled full runs, drawn at the day's first scheduled
+	// ask: one row per local date (`YYYY-MM-DD`). Slot times are Unix ms.
+	yugiohRunDays: defineTable(yugiohRunDayValidator).index("by_date", ["date"]),
 
 	// One page an automated run visited, in the order visited.
 	yugiohAutomationVisits: defineTable({

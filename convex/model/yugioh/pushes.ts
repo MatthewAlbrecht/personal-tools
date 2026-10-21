@@ -645,7 +645,7 @@ async function lastViewedAt(
 }
 
 /**
- * My time zone, for quiet hours and run timing: the zone of the device I
+ * My time zone, for quiet hours and the daily run plan: the zone of the device I
  * used most recently (the phone, once it has push on), else the default.
  */
 export async function userTimeZone(ctx: QueryCtx): Promise<string> {

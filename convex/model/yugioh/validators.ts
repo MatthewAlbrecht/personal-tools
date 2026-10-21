@@ -25,7 +25,7 @@ import type {
 	ExchangeRate,
 	PerCopyPrice,
 } from "../../../src/lib/yugioh/pricing";
-import type { RunTiming } from "../../../src/lib/yugioh/run-timing";
+import type { RunDay } from "../../../src/lib/yugioh/run-timing";
 import type {
 	Language,
 	MatchStatus,
@@ -446,16 +446,42 @@ export const yugiohAutomationRunValidator = v.object({
 	 */
 	checkPage: v.optional(v.union(yugiohCheckPageValidator, v.null())),
 	/**
-	 * A full run's draw (0–1), picked when it ended: where in each range the
-	 * gap to the next scheduled full run falls (`fullRunDue`). Missing on
-	 * refresh runs, open runs and runs from before ticket 19.
+	 * Legacy: a full run's gap draw (0–1) from the gap-based timing of ticket
+	 * 19, replaced by the daily plan (`yugiohRunDays`). No longer written or
+	 * read; kept so stored runs still validate.
 	 */
 	gapDraw: v.optional(v.number()),
 });
 
+/** One slot of a day's plan of full runs (`RunSlot` in run-timing.ts). */
+export const yugiohRunSlotValidator = v.object({
+	/** When the full run is due (Unix ms). */
+	at: v.number(),
+	status: v.union(
+		v.literal("planned"),
+		v.literal("skipped"),
+		v.literal("ran"),
+		v.literal("passed"),
+	),
+});
+
 /**
- * When scheduled full runs happen (ticket 17, `RunTiming` in run-timing.ts):
- * still learning, or the busy hours of the week learned from listing times.
+ * A day's plan of scheduled full runs (`RunDay` in run-timing.ts), drawn at
+ * the day's first scheduled ask.
+ */
+export const yugiohRunDayValidator = v.object({
+	/** The local calendar date, `YYYY-MM-DD`, in `timeZone`. */
+	date: v.string(),
+	/** The IANA zone the slots were planned in. */
+	timeZone: v.string(),
+	/** Four slots, earliest first. */
+	slots: v.array(yugiohRunSlotValidator),
+});
+
+/**
+ * Legacy: the learned posting times of ticket 17's adaptive timing, replaced
+ * by the daily plan. No longer written or read; kept so the stored row still
+ * validates.
  */
 export const yugiohRunTimingValidator = v.object({
 	status: v.union(v.literal("learning"), v.literal("learned")),
@@ -490,11 +516,8 @@ export const yugiohVisitReportValidator = v.object({
 
 // Compile-time check that the validators and the domain library agree.
 type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
-const runTimingsAgree: Same<
-	Infer<typeof yugiohRunTimingValidator>,
-	RunTiming
-> = true;
-void runTimingsAgree;
+const runDaysAgree: Same<Infer<typeof yugiohRunDayValidator>, RunDay> = true;
+void runDaysAgree;
 const sectionsAgree: Same<Infer<typeof yugiohSectionValidator>, Section> = true;
 const conditionsAgree: Same<
 	Infer<typeof yugiohConditionValidator>,

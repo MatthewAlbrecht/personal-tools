@@ -107,7 +107,7 @@ import type * as model_yugioh_listings from "../model/yugioh/listings.js";
 import type * as model_yugioh_matching from "../model/yugioh/matching.js";
 import type * as model_yugioh_pricing from "../model/yugioh/pricing.js";
 import type * as model_yugioh_pushes from "../model/yugioh/pushes.js";
-import type * as model_yugioh_runTiming from "../model/yugioh/runTiming.js";
+import type * as model_yugioh_runDays from "../model/yugioh/runDays.js";
 import type * as model_yugioh_searches from "../model/yugioh/searches.js";
 import type * as model_yugioh_seed from "../model/yugioh/seed.js";
 import type * as model_yugioh_tcgplayer from "../model/yugioh/tcgplayer.js";
@@ -251,7 +251,7 @@ declare const fullApi: ApiFromModules<{
   "model/yugioh/matching": typeof model_yugioh_matching;
   "model/yugioh/pricing": typeof model_yugioh_pricing;
   "model/yugioh/pushes": typeof model_yugioh_pushes;
-  "model/yugioh/runTiming": typeof model_yugioh_runTiming;
+  "model/yugioh/runDays": typeof model_yugioh_runDays;
   "model/yugioh/searches": typeof model_yugioh_searches;
   "model/yugioh/seed": typeof model_yugioh_seed;
   "model/yugioh/tcgplayer": typeof model_yugioh_tcgplayer;

@@ -2,13 +2,13 @@ import { v } from "convex/values";
 import { internalMutation, internalQuery, query } from "../_generated/server";
 import { requireAuth } from "../auth";
 import * as Automation from "../model/yugioh/automation";
-import { readRunTiming } from "../model/yugioh/runTiming";
+import { readLatestRunDay } from "../model/yugioh/runDays";
 import {
 	yugiohAutomationRunValidator,
 	yugiohLastCheckPageValidator,
 	yugiohPlannedVisitValidator,
+	yugiohRunDayValidator,
 	yugiohRunKindValidator,
-	yugiohRunTimingValidator,
 	yugiohRunTriggerValidator,
 	yugiohVisitReportValidator,
 } from "../model/yugioh/validators";
@@ -106,14 +106,14 @@ export const getLastCapturedAt = query({
 });
 
 /**
- * When scheduled full runs happen, for Settings: still learning (with when
- * the data starts), or the busy hours of the week.
+ * The latest day's plan of scheduled full runs, for Settings (today's once
+ * the day's first scheduled ask drew it); null before any.
  */
-export const getRunTiming = query({
+export const getRunDay = query({
 	args: {},
-	returns: yugiohRunTimingValidator,
+	returns: v.union(yugiohRunDayValidator, v.null()),
 	handler: async (ctx) => {
 		requireAuth(ctx);
-		return await readRunTiming(ctx);
+		return await readLatestRunDay(ctx);
 	},
 });

@@ -1,19 +1,19 @@
 # Automated browser runs
 
-Every few hours (about every 3 until it learns when sellers post, never from 1 to 7 AM, see "Run timing") a script on my Mac opens every eBay Search (Newly Listed and Sold) and every TCGplayer product page in a Chrome profile of its own. About 20 minutes before a matched auction ends, it also makes a short refresh run, so the auction push 15 minutes before the end shows a fresh price. The extension there captures each page, exactly as it does when I open one myself. Each run is recorded in the app (Settings → Automated runs), and the Deck page says "Last captured 9h ago" once captures are over 6 hours old.
+About 4 times a day (around 7 AM, 11 AM, 3 PM and 7 PM, see "The daily plan") a script on my Mac opens every eBay Search (Newly Listed and Sold) in a Chrome profile of its own, and about twice a day every TCGplayer product page too. About 20 minutes before a matched auction ends, it also makes a short refresh run, so the auction push 15 minutes before the end shows a fresh price. The extension there captures each page, exactly as it does when I open one myself. Each run is recorded in the app (Settings → Automated runs), and the Deck page says "Last captured 9h ago" once captures are over 6 hours old.
 
-Platform facts and sources: `references/automated-browser.md` (§8 covers how extra runs get triggered). Tickets: `.scratch/yugioh-tracker/issues/15-automated-browser-runs.md`, `16-pre-auction-refresh-visits.md`, `17-adaptive-timing.md`, `18-stop-on-challenge.md`, `19-varied-run-timing.md`, `20-searches-like-a-person.md`.
+Platform facts and sources: `references/automated-browser.md` (§8 covers how extra runs get triggered). Tickets: `.scratch/yugioh-tracker/issues/15-automated-browser-runs.md`, `16-pre-auction-refresh-visits.md`, `17-adaptive-timing.md`, `18-stop-on-challenge.md`, `19-varied-run-timing.md`, `20-searches-like-a-person.md`. Tickets 17 (learned posting times) and 19 (random gaps, overnight pause) were replaced by the daily plan on 2026-10-21.
 
 ## How a run works
 
 1. **Trigger.** The LaunchAgent (every 10 minutes), a T3 Code scheduled task, or I run `scripts/yugioh-automation/run.sh`.
 2. **Ask.** The script posts `{ op: "request" }` to `/api/yugioh/automation` with the extension secret. The app answers with a run ID and its kind (`full` or `refresh`), or with `runId: null` when nothing is due, and the script exits quietly. If a run is already open, the script leaves that run alone and exits, so two triggers never overlap. See "When a run is due" below.
-3. **Wait a moment.** A scheduled run comes with a start delay the app picks at random (`startDelayMs`): up to 4 minutes for a full run, up to 90 s for a refresh run, so runs don't start on the 10-minute marks. T3 Code and hand runs don't wait.
+3. **Wait a moment.** A scheduled run comes with a start delay the app picks at random (`startDelayMs`): up to 4 minutes for a full run, up to 90 s for a refresh run, so runs don't start on the 10-minute marks. (Slot times are jittered, but a slot only starts at the next ask, which is on a 10-minute mark, so the delay still matters.) T3 Code and hand runs don't wait.
 4. **Open Chrome.** The script opens Chrome with the automation profile (`--user-data-dir`). That profile runs as its own Chrome, beside my everyday one. If the profile is already open, the script leaves it open.
 5. **Claim.** In that profile, "Run automated captures" is on in the extension's options. Its service worker checks the app when Chrome starts, and then every minute. It claims the run and gets the visit plan:
    - first, the refresh pages of auctions ending in the next 45 minutes (see below), in every kind of run;
    - for a full run, each Search's Newly Listed page, then its Sold page, with the Searches packed across all Decks;
-   - then the TCGplayer product page of every searched Printing that has one.
+   - then the TCGplayer product page of every searched Printing that has one, if the run visits TCGplayer: hand and T3 Code runs always do; a scheduled full run only when no run visited a TCGplayer page in the last 10 hours (`visitsTcgplayer`, `TCGPLAYER_EVERY_MS`), counted from when that run was asked for. Otherwise the run is eBay Searches only.
 
    Only Cards still missing copies are searched. A Card is done when I own every copy it needs (`copiesOwned >= copiesNeeded`, `missesCopies` in `src/lib/yugioh/searches.ts`), and then it gets no Search, no TCGplayer page and no refresh page. The Searches tab shows the same set. Listings for a done Card's Printings can still match when another Search turns them up.
 6. **Visit.** The extension visits the refresh pages first, as planned, then the Search pages in a random order, then the TCGplayer pages in a random order (`shuffleVisits` in `automation-runner.js`). It opens the pages in one window of its own, with one tab per marketplace kept for the whole run (see "Visits like a person" below), and waits up to 2 minutes for each page to capture. Each page is scrolled through before it's read. It reports the page (Listings captured, new ones, any error), and pauses before the next one, with the page still showing: 20–60 s, or about 1 time in 6 a longer 1½–3 minutes (`pauseLength`). Closing the window at the end closes the tabs.
@@ -42,7 +42,7 @@ A run's visits should read like one person browsing, without adding page loads: 
 T3 Code and hand runs are always full runs. The LaunchAgent asks every 10 minutes, and the app (`scheduledRunDue` in `src/lib/yugioh/automation.ts`) answers:
 
 0. **Nothing, for 6 hours after a run stopped on a check page** (`CHECK_PAGE_COOL_DOWN_MS`), neither full nor refresh runs. Hand and T3 Code runs (started with **Run now**) still start, and the script says the last run hit a check page and when scheduled runs resume. See "Check pages" below.
-1. **A full run** when the run timing says one is due (`fullRunDue` in `src/lib/yugioh/run-timing.ts`, see "Run timing" below): 2½–3¾ hours after the last one until posting times are learned, and never from 1 to 7 AM. Any full run counts, failed ones too, so a broken run isn't retried every 10 minutes.
+1. **A full run** when a slot of today's plan is due (`scheduledSlot` in `src/lib/yugioh/automation.ts`, see "The daily plan" below). A failed run uses up its slot too, so a broken run isn't retried every 10 minutes.
 2. **A refresh run** when an auction's refresh window is open and no capture has seen it since, overnight too. See the next section.
 3. **Nothing** otherwise.
 
@@ -73,13 +73,13 @@ When eBay or TCGplayer shows a check page (a captcha, "Pardon Our Interruption",
 - **Spotting one.** eBay sends its browser check and captcha to `/splashui/*`, where no content script runs. The service worker watches the visit tab's URL (`checkPageAt` in `automation-runner.js`) and settles the visit the moment the tab gets there. Akamai's block ("Error Page | eBay") comes at the search URL itself, so the eBay content script spots it (`isEbayCheckPage` in `ebay-reader.js`). A results page always has its results list, even with no results, so it never counts. On TCGplayer, `isTcgplayerCheckPage` in `tcgplayer-reader.js` looks for the Cloudflare, AWS WAF and CloudFront shapes. None has been seen on TCGplayer yet. Every product page mentions hCaptcha for its sign-in form, so that name alone doesn't count.
 - **The run ends.** The page is reported as `challenged`, distinct from an empty Search and from a timeout. The app ends the run as `challenged`, with the page (`checkPage`), and answers `running: false`, so the extension visits nothing more. Settings → Automated runs shows "Stopped on a check page at eBay (RA01-EN008)", and until scheduled runs resume, when that is. `run.sh` logs the page and exits with code 2.
 - **A push.** Devices with push on get "Run stopped on a check page at eBay" at once, at any hour (quiet hours don't hold it). It opens Settings. One push per run.
-- **The cool-down.** For 6 hours after the run stopped, the LaunchAgent's asks get nothing. After that, the first ask gets a full run. A hand or T3 Code run during the cool-down still starts, and doesn't end the cool-down, even when it finishes cleanly.
+- **The cool-down.** For 6 hours after the run stopped, the LaunchAgent's asks get nothing. Slots of the day's plan that fall in those 6 hours are skipped, not made up for afterwards: the next full run is the next slot after the cool-down. A hand or T3 Code run during the cool-down still starts, and doesn't end the cool-down, even when it finishes cleanly.
 
 ## Limits
 
 - If the extension hasn't claimed the run within 3 minutes, the script ends it as failed: "The extension didn't start the run…".
 - If a run takes over 3 hours, the script ends it as failed. With the varied pauses (about 56 s on average) and TCGplayer pages that take up to 75 s to load, a page takes about 1–2 minutes, so 3 hours fits roughly 110–150 pages. The first Deck's full run (60 Cards, 66 Candidates: about 20 Search pages and 66 product pages) takes about 2 hours. A bigger collection needs a longer timeout.
-- In busy hours, a full run that long outlasts the 45–80-minute gap, so busy-hour full runs go back to back, and refresh runs can't start while one is open (see "Known gaps" above).
+- Refresh runs can't start while a full run is open (see "Known gaps" above). Slots are about 4 hours apart, so full runs don't overlap.
 - If a run stays open for over 3½ hours (say the Mac slept mid-run), the next request closes it as failed.
 - A page report that arrives after its run has ended is dropped, and the extension stops.
 
@@ -92,7 +92,7 @@ When eBay or TCGplayer shows a check page (a captcha, "Pardon Our Interruption",
 | Convex channel (one `op` per step) | `/server/yugioh/automation` in `convex/http.ts` |
 | Convex functions | `convex/yugioh/automation.ts`, `convex/model/yugioh/automation.ts` |
 | Visit plan | `buildVisitPlan` and `buildRefreshVisits` in `src/lib/yugioh/automation.ts` |
-| When a run is due | `scheduledRunDue` and `auctionsToRefresh` in `src/lib/yugioh/automation.ts`; `requestRun` and `readVisitPlan` in `convex/model/yugioh/automation.ts` |
+| When a run is due | `planRunDay`, `dueSlot` and `takeSlot` in `src/lib/yugioh/run-timing.ts`; `scheduledRunDue`, `scheduledSlot`, `visitsTcgplayer` and `auctionsToRefresh` in `src/lib/yugioh/automation.ts`; `todaysRunDay` in `convex/model/yugioh/runDays.ts`; `requestRun` and `readVisitPlan` in `convex/model/yugioh/automation.ts` |
 | Extension | `automation-runner.js` (run, order, pauses, tabs), `page-scroll.js` (scrolling), `run-navigation.js` (the content scripts' `YUGIOH_NAVIGATE` listener), `marketplaces.js` (each marketplace's host and paths), plus the end of `service-worker.js`, in `extensions/rym-release-scraper/` |
 
 ## One-time setup
@@ -173,24 +173,26 @@ Create it from a T3 Code thread in the personal-tools project with the `schedule
 - **Pacing:** `MIN_PAUSE_MS` and `MAX_PAUSE_MS` (20–60 s), `LONG_PAUSE_CHANCE` (1 in 6), and `MIN_LONG_PAUSE_MS` and `MAX_LONG_PAUSE_MS` (1½–3 minutes) in `automation-runner.js`. Longer pauses make runs longer: keep the run timeout above the biggest run (see "Limits").
 - **Page order:** `shuffleVisits` in `automation-runner.js`.
 - **Start delay:** `MAX_FULL_START_DELAY_MS` (4 minutes) and `MAX_REFRESH_START_DELAY_MS` (90 s) in `src/lib/yugioh/automation.ts`. Keep the refresh one short: a refresh visit must still land before the push 15 minutes before the end.
-- **Gaps and the overnight pause:** `FALLBACK_GAP`, `BUSY_GAP`, `CAP_GAP`, `OVERNIGHT_FROM_HOUR` and `OVERNIGHT_UNTIL_HOUR` in `src/lib/yugioh/run-timing.ts`. Keep `CAP_GAP`'s top two asks short of 6 hours.
+- **The daily plan:** `SLOTS_PER_DAY`, `FIRST_SLOT_FROM_MINUTES`, `FIRST_SLOT_UNTIL_MINUTES`, `SLOT_GAP_MINUTES`, `SLOT_JITTER_MINUTES` and `SKIP_CHANCE` in `src/lib/yugioh/run-timing.ts`. A changed plan takes effect from the next day's plan; today's is already stored.
+- **TCGplayer:** `TCGPLAYER_EVERY_MS` (10 hours) in `src/lib/yugioh/automation.ts`.
 - **Timeouts:** the page timeout is `AUTOMATION_VISIT_TIMEOUT_MS` in `service-worker.js` (2 minutes). The pickup and run timeouts are at the top of `run.sh` (3 minutes and 3 hours), and the env vars `YUGIOH_PICKUP_TIMEOUT_S`, `YUGIOH_RUN_TIMEOUT_S` and `YUGIOH_POLL_S` override them. The 3½-hour abandon time is `RUN_ABANDONED_AFTER_MS` in `src/lib/yugioh/automation.ts`; keep it above the run timeout.
 - **Schedule:** how often the LaunchAgent asks is the `StartCalendarInterval` entries in the plist template (run `install.sh` again afterwards). When a run is due is the app's call; see "When a run is due".
 - **Extension code:** an unpacked extension is re-read from disk each time Chrome starts, so a new extension takes effect at the next run.
-- **Adaptive timing** (ticket 17) changes only the full-run rule in `scheduledRunDue`. The LaunchAgent and the script stay as they are.
 
-## Run timing
+## The daily plan
 
-Once Listings go back about 4 weeks (28 days since the first capture), the app learns the hours of the week when sellers post new Listings for my Printings, and times full runs around them. Settings → Automated runs → "When it runs" shows the busy times, or "still learning" with the days of data so far.
+Full runs follow a plan drawn once a day, in my time zone (the zone of the device I used most recently, as for quiet hours; else Denver). Settings → Automated runs → "When it runs" shows today's slots and what became of each.
 
-- **What it counts:** eBay's own listing time (`listedAt`) of each Listing matched to a Printing, listed in the last 28 days, by hour of the week in my time zone (the zone of the device I used most recently, as for quiet hours). The first-seen time doesn't count: it follows the run schedule, so it would only learn the schedule back. Up to the 2,000 newest Listings captured in that window are read; past that, the oldest weeks are undercounted. TCGplayer Listings have no listing time, so only eBay counts. A Newly Listed page shows a limited number of results, so a long quiet stretch can miss some Listings, which makes the busy hours look a little busier.
-- **Busy hours:** an hour of the week with at least 3 Listings in the 28 days and at least twice the average hour. At most the 24 busiest.
-- **The rule:** a full run 45–80 minutes after the last in a busy hour and in the hour after it (that run catches the busy hour's Listings). Otherwise no more than 6 hours apart: an ask 5 hours to 5 hours 40 minutes after the last full run starts one. The top is two asks early, so neither the wait for the next ask nor an ask that finds a refresh run still open passes 6 hours. A sleeping Mac, a full run that's still open, or the overnight pause can still stretch it.
-- **Fallback:** 2½–3¾ hours apart while learning, and when no hour stands out.
-- **Varied gaps:** where in its range each gap falls is drawn at random when a full run ends (finished, failed, stopped on a check page, or closed as abandoned) and stored on that run (`gapDraw`, 0–1), so every ask until the next full run gets the same answer. One draw places the gap in whichever range applies at the ask (`gapWithin`). A full run from before this has no draw and counts as 0.4: the old 3 hours. Asks come every 10 minutes, so a gap lands on the first ask past it (half an ask's slack applies to the fallback and busy gaps).
-- **Overnight pause:** no scheduled full run from 1 to 7 AM in my time zone (`inOvernightPause`). Busy hours in that window are skipped, and the 6-hour cap doesn't force a run there: the first ask after 7 AM starts one if it's due by then. Refresh runs for auctions ending overnight still happen, and hand and T3 Code runs still start. My time zone is the run timing's (`timeZone`); before the first relearn, the zone of the device I used most recently, else Denver.
-- **Start delay:** see "How a run works", step 3. It's picked by the app when it asks for a scheduled run (`startDelay`), and the script waits it out before opening Chrome. If the automation profile is already open, its extension claims the run at the next minute anyway.
-- **When it relearns:** each time a full run ends (`relearnRunTiming` in `convex/model/yugioh/runTiming.ts`), stored in the one-row `yugiohRunTiming` table. No new trigger.
+- **Four slots a day** (`planRunDay` in `src/lib/yugioh/run-timing.ts`). The first falls anywhere from 6:00 to 9:00 AM. Each next one is 4 hours after the one before, give or take up to 25 minutes. So a typical day is about 7 AM, 11 AM, 3 PM and 7 PM, and the last slot is never after 10:15 PM.
+- **A skipped slot:** 1 day in 3 (`SKIP_CHANCE`), one of the four slots, picked at random, is skipped.
+- **Drawn once:** the day's first scheduled ask (from midnight) draws the plan with `Math.random` and stores it in `yugiohRunDays`, one row per local date (`todaysRunDay` in `convex/model/yugioh/runDays.ts`). Every later ask that day reads the same slots. Each slot keeps its status: `planned`, `skipped` (drawn so), `ran` (a scheduled full run started for it) or `passed` (missed, and folded into a later slot's run).
+- **When a slot runs:** the first ask at or after its time starts a full run, then the start delay applies (see "How a run works", step 3). Asks come every 10 minutes, so a slot starts up to 10 minutes late, plus the delay.
+- **One catch-up:** a slot missed while the Mac slept runs once on wake. If several were missed, the wake ask runs once, for the latest one, and the earlier ones count as passed (`dueSlot` and `takeSlot`). Yesterday's missed slots are never made up: there are no full runs outside the day's plan.
+- **Covered by a full run:** a slot that came due while a full run of any trigger was going (a hand run, say) counts as covered: no catch-up straight after it. An abandoned run (open past 3½ hours, the Mac asleep mid-run) covers only its first 3½ hours, so the slot due on wake still runs.
+- **Check pages:** slots in a check page's 6-hour cool-down are skipped (see "Check pages").
+- **TCGplayer about twice a day:** a scheduled full run visits the TCGplayer product pages only if no run visited one in the last 10 hours. With slots 4 hours apart, that's usually the first and last slots, about 12 hours apart; the others are eBay Searches only. If the first slot is skipped, the second one picks TCGplayer up. Hand and T3 Code runs always visit TCGplayer, and count.
+- **Refresh runs** for ending auctions are separate from the plan: they still come at any hour, overnight too.
+- **Old data:** the `yugiohRunTiming` table (ticket 17's learned posting times) and runs' `gapDraw` (ticket 19) are no longer written or read. They stay in the schema so stored documents still validate; they can be cleared out by hand.
 
 ## Troubleshooting
 

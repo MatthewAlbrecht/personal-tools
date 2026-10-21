@@ -64,5 +64,5 @@ for attempt in 1 2 3 4 5; do
 	if [ "$attempt" -eq 5 ]; then launchctl bootstrap "$domain" "$plist"; fi
 	sleep 1
 done
-echo "Installed $label: asks the app every 10 minutes (a full run about every 3 hours but none from 1 to 7 AM, refresh runs before auctions end). Logs: $log_file"
+echo "Installed $label: asks the app every 10 minutes (full runs about 7 AM, 11 AM, 3 PM and 7 PM, refresh runs before auctions end). Logs: $log_file"
 echo "Run it now with: launchctl kickstart -p $domain/$label"

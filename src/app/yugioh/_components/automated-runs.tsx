@@ -16,10 +16,10 @@ import { Skeleton } from "~/components/ui/skeleton";
 import { Spinner } from "~/components/ui/spinner";
 import { useMinuteClock } from "~/lib/hooks/use-minute-clock";
 import {
+	type RunDayLines,
 	type RunLines,
-	type RunTimingLines,
 	describeRun,
-	describeRunTiming,
+	describeRunDay,
 } from "~/lib/yugioh/run-format";
 import { api } from "../../../../convex/_generated/api";
 
@@ -78,9 +78,9 @@ export function AutomatedRuns(): React.ReactElement {
 	);
 }
 
-/** When full runs happen: learned busy times, or still learning. */
+/** When full runs happen: the daily schedule, and today's slots. */
 function RunTimingSection({ now }: { now: number }): React.ReactElement {
-	const timing = useQuery(api.yugioh.automation.getRunTiming, {});
+	const day = useQuery(api.yugioh.automation.getRunDay, {});
 
 	return (
 		<section
@@ -90,10 +90,10 @@ function RunTimingSection({ now }: { now: number }): React.ReactElement {
 			<h3 id="run-timing-heading" className="font-medium text-[0.9375rem]">
 				When it runs
 			</h3>
-			{timing === undefined ? (
+			{day === undefined ? (
 				<Skeleton className="h-4 w-full max-w-sm" />
 			) : (
-				<RunTimingText lines={describeRunTiming(timing, now)} />
+				<RunTimingText lines={describeRunDay(day, now)} />
 			)}
 		</section>
 	);
@@ -102,14 +102,14 @@ function RunTimingSection({ now }: { now: number }): React.ReactElement {
 function RunTimingText({
 	lines,
 }: {
-	lines: RunTimingLines;
+	lines: RunDayLines;
 }): React.ReactElement {
 	return (
 		<>
 			<p className="text-muted-foreground text-sm">{lines.summary}</p>
-			{lines.busyTimes.length > 0 && (
-				<ul className="flex flex-wrap gap-1.5">
-					{lines.busyTimes.map((time) => (
+			{lines.slots.length > 0 && (
+				<ul aria-label="Today" className="flex flex-wrap gap-1.5">
+					{lines.slots.map((time) => (
 						<li key={time}>
 							<Badge variant="secondary" className="font-normal tabular-nums">
 								{time}

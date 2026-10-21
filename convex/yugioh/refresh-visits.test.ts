@@ -2,8 +2,8 @@
 // @vitest-environment edge-runtime
 
 // Seam 1: pre-auction refresh visits (ticket 16). The LaunchAgent asks the app
-// every 10 minutes; the app answers with a full run every 3 hours, a refresh
-// run when a matched, Qualifying auction on a Card I still need ends in about
+// every 10 minutes; the app answers with a full run at a slot of the day's
+// plan, a refresh run when a matched, Qualifying auction on a Card I still need ends in about
 // 20 minutes and hasn't been seen since, or nothing. Auctions ending close
 // together share one run, and each Search's auctions share one page.
 
@@ -63,7 +63,7 @@ beforeEach(() => {
 	vi.useFakeTimers();
 	vi.setSystemTime(NOW);
 	fakes.reads = new Map();
-	// Each full run's gap draw (ticket 19): 0.4 is the fixed 3 hours.
+	// Every draw 0.4: the day's plan (see `fullRun`) and start delays.
 	vi.spyOn(Math, "random").mockReturnValue(0.4);
 });
 
@@ -228,7 +228,11 @@ async function runIt(t: T, error: string | null = null): Promise<Visit[]> {
 	return visits;
 }
 
-/** The scheduled full run every 3 hours, at the current time. */
+/**
+ * A scheduled full run at the current time. Draws of 0.4 put today's slots at
+ * 7:12 AM, 11:07 AM, 3:02 PM and 6:57 PM in New York (11:12, 15:07, 19:02
+ * and 22:57 UTC).
+ */
 async function fullRun(t: T): Promise<void> {
 	expect((await scheduledAsk(t)).kind).toBe("full");
 	await runIt(t);
@@ -239,7 +243,7 @@ function at(time: number): void {
 }
 
 describe("the schedule", () => {
-	test("a scheduled ask starts a full run every 3 hours and nothing in between", async () => {
+	test("a scheduled ask starts a full run at a slot of the day's plan and nothing in between", async () => {
 		const t = setup();
 		await deck(t);
 
@@ -252,9 +256,9 @@ describe("the schedule", () => {
 			lastCheckPage: null,
 			startDelayMs: 0,
 		});
-		at(NOW + 2 * HOUR + 50 * MINUTE);
-		expect((await scheduledAsk(t)).runId).toBeNull();
 		at(NOW + 3 * HOUR);
+		expect((await scheduledAsk(t)).runId).toBeNull();
+		at(NOW + 3 * HOUR + 10 * MINUTE);
 		expect((await scheduledAsk(t)).kind).toBe("full");
 	});
 
@@ -397,11 +401,11 @@ describe("refresh visits", () => {
 		await deck(t);
 		const endsAt = NOW + 2 * HOUR;
 		await capture(t, { endsAt });
+		at(endsAt - HOUR);
+		await fullRun(t);
 		await t.mutation(api.yugioh.pushes.removePushSubscription, {
 			endpoint: "https://web.push.apple.com/phone",
 		});
-		at(endsAt - HOUR);
-		await fullRun(t);
 
 		at(endsAt - 25 * MINUTE);
 		expect((await scheduledAsk(t)).runId).toBeNull();
@@ -414,7 +418,8 @@ describe("refresh visits", () => {
 		await capture(t, { endsAt });
 		await fullRun(t);
 
-		at(NOW + 3 * HOUR);
+		// The 11:07 AM slot.
+		at(NOW + 3 * HOUR + 10 * MINUTE);
 		expect((await scheduledAsk(t)).kind).toBe("full");
 		const { visits } = await claim(t);
 

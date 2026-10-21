@@ -2,7 +2,7 @@
 // by Convex (relative imports only) and the /yugioh UI.
 // How the runs are driven: docs/yugioh/automation.md.
 
-import { type RunTiming, fullRunDue } from "./run-timing";
+import { type RunSlot, dueSlot } from "./run-timing";
 import { type Search, ebayEndingSoonUrl } from "./searches";
 
 export type RunTrigger = "launchAgent" | "t3" | "manual";
@@ -120,33 +120,62 @@ export type EndingAuction = {
 };
 
 /**
- * Which run a scheduled ask starts: a full run when `timing` says one is due
- * (about every 3 hours until posting times are learned, never 1–7 AM; the
- * last full run's `gapDraw` varies the gap, see `fullRunDue`), a
- * refresh run when an auction's refresh window is open and it hasn't been
- * seen since, or none. Nothing at all within 6 hours of a run stopping on a
- * check page (`lastCheckPageAt`). `auctions` are the matched, Qualifying
- * auctions on Cards still needed.
+ * The slot of today's plan a scheduled ask runs, as its index (see
+ * `dueSlot`), or null. Slots in a check page's 6-hour cool-down are skipped,
+ * not made up for, and so is a slot that came due while a full run (of any
+ * trigger) was going: that run covered it.
  */
-export function scheduledRunDue({
-	lastFullRunAt,
-	lastRunAt,
+export function scheduledSlot({
+	slots,
+	lastFullRunEndedAt,
 	lastCheckPageAt,
-	gapDraw,
-	auctions,
-	timing,
 	now,
 }: {
-	lastFullRunAt: number | null;
+	slots: readonly RunSlot[];
+	/** When the last full run ended (or was asked for, if still open). */
+	lastFullRunEndedAt: number | null;
+	lastCheckPageAt: number | null;
+	now: number;
+}): number | null {
+	const coolDownEnd =
+		lastCheckPageAt === null ? null : lastCheckPageAt + CHECK_PAGE_COOL_DOWN_MS;
+	const notBefore = Math.max(
+		coolDownEnd ?? Number.NEGATIVE_INFINITY,
+		lastFullRunEndedAt ?? Number.NEGATIVE_INFINITY,
+	);
+	return dueSlot(slots, Number.isFinite(notBefore) ? notBefore : null, now);
+}
+
+/**
+ * Which run a scheduled ask starts: a full run when a slot of today's plan
+ * is due (`scheduledSlot`), a refresh run when an auction's refresh window is
+ * open and it hasn't been seen since, or none. Nothing at all within 6 hours
+ * of a run stopping on a check page (`lastCheckPageAt`). `auctions` are the
+ * matched, Qualifying auctions on Cards still needed.
+ */
+export function scheduledRunDue({
+	slots,
+	lastFullRunEndedAt,
+	lastRunAt,
+	lastCheckPageAt,
+	auctions,
+	now,
+}: {
+	slots: readonly RunSlot[];
+	lastFullRunEndedAt: number | null;
 	lastRunAt: number | null;
 	lastCheckPageAt: number | null;
-	gapDraw: number;
 	auctions: readonly EndingAuction[];
-	timing: RunTiming;
 	now: number;
 }): RunKind | null {
 	if (inCheckPageCoolDown(lastCheckPageAt, now)) return null;
-	if (fullRunDue({ lastFullRunAt, gapDraw, timing, now })) return "full";
+	const slot = scheduledSlot({
+		slots,
+		lastFullRunEndedAt,
+		lastCheckPageAt,
+		now,
+	});
+	if (slot !== null) return "full";
 	if (lastRunAt !== null && now - lastRunAt < REFRESH_MIN_GAP_MS) return null;
 	const windowOpen = auctions.some(
 		(auction) =>
@@ -154,6 +183,35 @@ export function scheduledRunDue({
 			auction.endsAt - now <= REFRESH_OPENS_BEFORE_END_MS,
 	);
 	return windowOpen ? "refresh" : null;
+}
+
+/**
+ * A scheduled full run visits TCGplayer product pages only when no run
+ * that visited any started within this long, so TCGplayer gets about two
+ * runs a day (about the first and last slots, 12 hours apart).
+ */
+export const TCGPLAYER_EVERY_MS = 10 * 60 * MINUTE_MS;
+
+/**
+ * Whether a full run visits the TCGplayer product pages, or only the eBay
+ * Searches. `lastTcgplayerRunAt`: when the latest run that visited a
+ * TCGplayer page was asked for; null when none did lately. T3 Code and
+ * hand runs always do.
+ */
+export function visitsTcgplayer({
+	trigger,
+	lastTcgplayerRunAt,
+	now,
+}: {
+	trigger: RunTrigger;
+	lastTcgplayerRunAt: number | null;
+	now: number;
+}): boolean {
+	if (trigger !== "launchAgent") return true;
+	return (
+		lastTcgplayerRunAt === null ||
+		now - lastTcgplayerRunAt >= TCGPLAYER_EVERY_MS
+	);
 }
 
 /**

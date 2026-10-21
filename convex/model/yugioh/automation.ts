@@ -14,10 +14,13 @@ import {
 	buildVisitPlan,
 	inCheckPageCoolDown,
 	scheduledRunDue,
+	scheduledSlot,
 	startDelay,
 	visitMarketplace,
+	visitsTcgplayer,
 } from "../../../src/lib/yugioh/automation";
 import { MARKETPLACE_LABELS } from "../../../src/lib/yugioh/listing-format";
+import { takeSlot } from "../../../src/lib/yugioh/run-timing";
 import {
 	buildDeckSearches,
 	missesCopies,
@@ -28,7 +31,7 @@ import type { MutationCtx, QueryCtx } from "../../_generated/server";
 import { matchedPrintingId } from "./deals";
 import { MAX_DECKS, readDeck } from "./decks";
 import { awaitsAuctionPush, queueCheckPagePush } from "./pushes";
-import { readRunTiming, relearnRunTiming } from "./runTiming";
+import { saveSlots, todaysRunDay } from "./runDays";
 import type { yugiohLastCheckPageValidator } from "./validators";
 
 /** How many failed pages a run keeps on itself for the runs list. */
@@ -38,16 +41,11 @@ export const MAX_PAGE_ERRORS_SHOWN = 20;
 export const MAX_RUNS_SHOWN = 20;
 
 /**
- * How many recent runs a scheduled ask looks through for the last full run:
- * more than the refresh runs that fit between two full runs.
+ * How many recent runs are looked through for the last full run, or the
+ * last run that visited TCGplayer: more than the refresh runs that fit
+ * between two full runs, or in 10 hours.
  */
-const RECENT_RUNS_READ = 50;
-
-/**
- * The gap draw for a full run that has none (from before ticket 19): the
- * 3 hours of the fixed schedule while learning.
- */
-const LEGACY_GAP_DRAW = 0.4;
+const RECENT_RUNS_READ = 100;
 
 /** Most auctions ending in the next 45 minutes read for refresh visits. */
 const MAX_ENDING_AUCTIONS = 100;
@@ -91,9 +89,9 @@ const OPEN_STATUSES = ["requested", "running"] as const;
  * RUN_ABANDONED_AFTER_MS is closed as failed first.
  *
  * T3 Code and hand runs are always full runs. The LaunchAgent asks every 10
- * minutes and gets a full run when the run timing says one is due (every 3
- * hours until posting times are learned), a refresh run when an auction
- * awaiting its push ends in about 20 minutes, or nothing.
+ * minutes and gets a full run when a slot of today's plan is due (about
+ * 7 AM, 11 AM, 3 PM and 7 PM; see run-timing.ts), a refresh run when an
+ * auction awaiting its push ends in about 20 minutes, or nothing.
  *
  * For 6 hours after a run stopped on a check page, the LaunchAgent gets no
  * run. Hand and T3 Code runs (started with "Run now") still start, and the
@@ -127,14 +125,11 @@ export async function requestRun(
 				status: "failed",
 				endedAt: now,
 				error: "Didn't finish. Closed when the next run was asked for.",
-				...nextGapDraw(run),
 			});
 		}
 	}
 	const kind =
-		trigger === "launchAgent"
-			? await scheduledRun(ctx, lastCheckPage, now)
-			: "full";
+		trigger === "launchAgent" ? await scheduledRun(ctx, now) : "full";
 	if (kind === null) {
 		return {
 			runId: null,
@@ -180,11 +175,7 @@ async function readLastCheckPage(
 	ctx: QueryCtx,
 	now: number,
 ): Promise<LastCheckPage | null> {
-	const run = await ctx.db
-		.query("yugiohAutomationRuns")
-		.withIndex("by_status", (q) => q.eq("status", "challenged"))
-		.order("desc")
-		.first();
+	const run = await lastChallengedRun(ctx);
 	const at = run?.endedAt ?? null;
 	if (!run?.checkPage || at === null || !inCheckPageCoolDown(at, now)) {
 		return null;
@@ -196,26 +187,57 @@ async function readLastCheckPage(
 	};
 }
 
-/** Which run a scheduled ask starts now, if any. */
-async function scheduledRun(
+/** The last run that stopped on a check page, however long ago; null if none. */
+async function lastChallengedRun(
 	ctx: QueryCtx,
-	lastCheckPage: LastCheckPage | null,
+): Promise<Doc<"yugiohAutomationRuns"> | null> {
+	return await ctx.db
+		.query("yugiohAutomationRuns")
+		.withIndex("by_status", (q) => q.eq("status", "challenged"))
+		.order("desc")
+		.first();
+}
+
+/**
+ * Which run a scheduled ask starts now, if any. Draws today's plan at the
+ * day's first ask; a full run marks its slot ran (and earlier missed ones
+ * passed).
+ */
+async function scheduledRun(
+	ctx: MutationCtx,
 	now: number,
 ): Promise<RunKind | null> {
+	const day = await todaysRunDay(ctx, now);
 	const recent = await ctx.db
 		.query("yugiohAutomationRuns")
 		.order("desc")
 		.take(RECENT_RUNS_READ);
 	const lastFull = recent.find((run) => runKind(run) === "full");
-	return scheduledRunDue({
-		lastFullRunAt: lastFull?.requestedAt ?? null,
-		lastRunAt: recent[0]?.requestedAt ?? null,
-		lastCheckPageAt: lastCheckPage?.at ?? null,
-		gapDraw: lastFull?.gapDraw ?? LEGACY_GAP_DRAW,
-		auctions: await readEndingAuctions(ctx, now),
-		timing: await readRunTiming(ctx),
+	const due = {
+		slots: day.slots,
+		lastFullRunEndedAt: lastFull ? coveredUntil(lastFull) : null,
+		// Even after the cool-down: the slots in it stay skipped.
+		lastCheckPageAt: (await lastChallengedRun(ctx))?.endedAt ?? null,
 		now,
+	};
+	const kind = scheduledRunDue({
+		...due,
+		lastRunAt: recent[0]?.requestedAt ?? null,
+		auctions: await readEndingAuctions(ctx, now),
 	});
+	const slot = kind === "full" ? scheduledSlot(due) : null;
+	if (slot !== null) await saveSlots(ctx, day._id, takeSlot(day.slots, slot));
+	return kind;
+}
+
+/**
+ * Until when a full run covered the slots that came due while it went: its
+ * end, but no later than when it would count as abandoned, so a run left
+ * open while the Mac slept doesn't swallow the slot due on wake.
+ */
+function coveredUntil(run: Doc<"yugiohAutomationRuns">): number {
+	const end = run.endedAt ?? run.requestedAt;
+	return Math.min(end, run.requestedAt + RUN_ABANDONED_AFTER_MS);
 }
 
 type EndingAuctionWithSetCode = EndingAuction & { setCode: string };
@@ -271,7 +293,13 @@ export async function claimRun(
 	if (!run) return null;
 	// The auctions to refresh are those of the ask, not the claim: a
 	// scheduled run's start delay must not push one under 17 minutes.
-	const visits = await readVisitPlan(ctx, runKind(run), run.requestedAt);
+	const visits = await readVisitPlan(ctx, runKind(run), run.requestedAt, {
+		tcgplayer: visitsTcgplayer({
+			trigger: run.trigger,
+			lastTcgplayerRunAt: await lastTcgplayerRunAt(ctx),
+			now: run.requestedAt,
+		}),
+	});
 	await ctx.db.patch("yugiohAutomationRuns", run._id, {
 		status: "running",
 		startedAt: now,
@@ -281,17 +309,31 @@ export async function claimRun(
 }
 
 /**
+ * When the latest run that visited a TCGplayer page was asked for; null
+ * when none of the recent runs did.
+ */
+async function lastTcgplayerRunAt(ctx: QueryCtx): Promise<number | null> {
+	const recent = await ctx.db
+		.query("yugiohAutomationRuns")
+		.order("desc")
+		.take(RECENT_RUNS_READ);
+	return recent.find((run) => run.productPagesVisited > 0)?.requestedAt ?? null;
+}
+
+/**
  * The pages a run visits, across all Decks. First the refresh pages of
  * auctions ending within 45 minutes of `now` that await their push. Then, for a
  * full run, the Searches packed from the searched Printings of every Card
- * still missing copies (as the Searches tab packs one Deck's), then the
- * TCGplayer product page of each of those Printings that has one. Refresh
- * pages come only from those Searches, so a done Card gets no page at all.
+ * still missing copies (as the Searches tab packs one Deck's), then, when
+ * `tcgplayer` (see `visitsTcgplayer`), the TCGplayer product page of each of
+ * those Printings that has one. Refresh pages come only from those Searches,
+ * so a done Card gets no page at all.
  */
 export async function readVisitPlan(
 	ctx: QueryCtx,
 	kind: RunKind,
 	now: number,
+	{ tcgplayer }: { tcgplayer: boolean },
 ): Promise<PlannedVisit[]> {
 	const decks = await ctx.db.query("yugiohDecks").take(MAX_DECKS);
 	const views = await Promise.all(decks.map((deck) => readDeck(ctx, deck._id)));
@@ -327,7 +369,7 @@ export async function readVisitPlan(
 		),
 	);
 	return kind === "full"
-		? buildVisitPlan(searches, byName, refresh)
+		? buildVisitPlan(searches, tcgplayer ? byName : [], refresh)
 		: refresh.slice(0, MAX_VISITS_PER_RUN);
 }
 
@@ -398,16 +440,13 @@ async function stopOnCheckPage(
 			kind: visit.kind,
 			label: visit.label,
 		},
-		...nextGapDraw(run),
 	});
 	await queueCheckPagePush(ctx, run._id, marketplace, now);
-	if (runKind(run) === "full") await relearnRunTiming(ctx, now);
 }
 
 /**
  * Ends a run: finished, or failed with `error`. A run that was never claimed
- * can't finish, so it fails. Ending an ended run changes nothing. A full run
- * ending relearns the run timing from what it captured.
+ * can't finish, so it fails. Ending an ended run changes nothing.
  */
 export async function finishRun(
 	ctx: MutationCtx,
@@ -423,17 +462,7 @@ export async function finishRun(
 		status: failure === null ? "finished" : "failed",
 		endedAt: now,
 		error: failure,
-		...nextGapDraw(run),
 	});
-	if (runKind(run) === "full") await relearnRunTiming(ctx, now);
-}
-
-/**
- * A full run that ends draws where the gap to the next scheduled full run
- * falls, stored on it so every ask until then gets the same answer.
- */
-function nextGapDraw(run: Doc<"yugiohAutomationRuns">): { gapDraw?: number } {
-	return runKind(run) === "full" ? { gapDraw: Math.random() } : {};
 }
 
 /** Runs from before refresh runs have no kind: they were all full runs. */

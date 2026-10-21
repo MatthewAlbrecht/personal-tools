@@ -1,182 +1,161 @@
-// Adaptive timing (ticket 17): when scheduled full runs happen. Once about
-// 4 weeks of Listings exist, the hours of the week (in my time zone) when
-// sellers post new Listings for my Printings get a full run about every hour;
-// otherwise full runs are under 6 hours apart. Before that, about every 3
-// hours. Gaps vary within a range, and there are no full runs overnight
-// (ticket 19). Relative imports only (Convex imports this).
+// When scheduled full runs happen: a plan of 4 slots a day in my time zone,
+// about 7 AM, 11 AM, 3 PM and 7 PM. The first slot falls between 6 and 9 AM,
+// each next one about 4 hours later give or take 25 minutes, and about 1 day
+// in 3 one slot is skipped. A day's plan is drawn once and stored, so every
+// ask that day gets the same answer. Relative imports only (Convex imports
+// this). How the runs are driven: docs/yugioh/automation.md.
 
 const MINUTE_MS = 60 * 1000;
-const HOUR_MS = 60 * MINUTE_MS;
-const DAY_MS = 24 * HOUR_MS;
 
 /**
  * The LaunchAgent asks the app whether a run is due this often. Here, not in
- * automation.ts, so the gaps below can use it without a circular import.
+ * automation.ts, so timing rules can use it without a circular import.
  */
 export const SCHEDULE_TICK_MS = 10 * MINUTE_MS;
 
-export const HOURS_IN_WEEK = 7 * 24;
+/** Full runs planned a day. */
+export const SLOTS_PER_DAY = 4;
 
-/** Posting times are learned once Listings go back this many days. */
-export const LEARNING_DAYS = 28;
+/** The first slot falls from this many minutes after midnight (6 AM)… */
+export const FIRST_SLOT_FROM_MINUTES = 6 * 60;
+/** …to this many (9 AM), local time. */
+export const FIRST_SLOT_UNTIL_MINUTES = 9 * 60;
 
-/** Busy hours are counted over this many days of listing times. */
-export const POSTING_WINDOW_MS = LEARNING_DAYS * DAY_MS;
+/** Each next slot is about this long after the one before (4 hours)… */
+export const SLOT_GAP_MINUTES = 4 * 60;
+/** …give or take up to this long. */
+export const SLOT_JITTER_MINUTES = 25;
 
-/** Never longer than this between scheduled full runs, once learned. */
-export const MAX_FULL_RUN_GAP_MS = 6 * HOUR_MS;
-
-/** A gap between full runs: somewhere from `min` to `max` (Unix ms). */
-export type GapRange = { min: number; max: number };
-
-/**
- * The gap between full runs while learning, or when no hour stands out:
- * about 3 hours.
- */
-export const FALLBACK_GAP: GapRange = {
-	min: 2.5 * HOUR_MS,
-	max: 3.75 * HOUR_MS,
-};
-
-/** The gap in a busy hour and the hour after it: about an hour. */
-export const BUSY_GAP: GapRange = { min: 45 * MINUTE_MS, max: 80 * MINUTE_MS };
+/** The chance that a day skips one of its slots, picked at random. */
+export const SKIP_CHANCE = 1 / 3;
 
 /**
- * The longest gap outside busy hours, once learned. Its top is two asks
- * short of 6 hours, so neither the wait for the next ask nor an ask that
- * finds a run (a refresh) still open passes 6 hours.
+ * `planned`: still to come, or due. `skipped`: dropped when the day was
+ * drawn. `ran`: a scheduled full run started for it. `passed`: missed (the
+ * Mac slept, a cool-down) and folded into a later slot's run.
  */
-export const CAP_GAP: GapRange = {
-	min: 5 * HOUR_MS,
-	max: MAX_FULL_RUN_GAP_MS - 2 * SCHEDULE_TICK_MS,
-};
+export type RunSlotStatus = "planned" | "skipped" | "ran" | "passed";
 
-/** Where in a range a gap falls, from a draw in [0, 1]. */
-export function gapWithin(range: GapRange, gapDraw: number): number {
-	return range.min + gapDraw * (range.max - range.min);
-}
+/** One planned full run: when (Unix ms) and what became of it. */
+export type RunSlot = { at: number; status: RunSlotStatus };
 
-/** No full runs from this hour (1 AM)… */
-export const OVERNIGHT_FROM_HOUR = 1;
-/** …until this hour (7 AM), in my time zone. */
-export const OVERNIGHT_UNTIL_HOUR = 7;
+/** A day's plan of full runs: its local date (`YYYY-MM-DD`) in `timeZone`. */
+export type RunDay = { date: string; timeZone: string; slots: RunSlot[] };
 
-/** Whether `time` is in the overnight pause (1–7 AM in `timeZone`). */
-export function inOvernightPause(time: number, timeZone: string): boolean {
-	const hour = hourOfWeek(time, timeZone) % 24;
-	return hour >= OVERNIGHT_FROM_HOUR && hour < OVERNIGHT_UNTIL_HOUR;
+/** The calendar date (`YYYY-MM-DD`) `time` falls on in `timeZone`. */
+export function localDate(time: number, timeZone: string): string {
+	const parts = new Intl.DateTimeFormat("en-US", {
+		timeZone,
+		year: "numeric",
+		month: "2-digit",
+		day: "2-digit",
+	}).formatToParts(new Date(time));
+	const part = (type: string) =>
+		parts.find((entry) => entry.type === type)?.value ?? "";
+	return `${part("year")}-${part("month")}-${part("day")}`;
 }
 
 /**
- * An hour of the week is busy when at least this many Listings went up in
- * it over the window (most weeks)…
+ * The day's plan, from `draw` (Math.random in the app): the first slot's
+ * time, then each next slot's jitter, then whether a slot is skipped and,
+ * if so, which.
  */
-const BUSY_MIN_LISTINGS = 3;
-/** …and at least this many times the average hour. */
-const BUSY_OVER_AVERAGE = 2;
-/** At most this many busy hours a week (the busiest), to keep runs modest. */
-export const MAX_BUSY_HOURS = 24;
+export function planRunDay(
+	date: string,
+	timeZone: string,
+	draw: () => number,
+): RunDay {
+	const minutes: number[] = [
+		FIRST_SLOT_FROM_MINUTES +
+			draw() * (FIRST_SLOT_UNTIL_MINUTES - FIRST_SLOT_FROM_MINUTES),
+	];
+	for (let slot = 1; slot < SLOTS_PER_DAY; slot++) {
+		const previous = minutes[slot - 1] ?? FIRST_SLOT_FROM_MINUTES;
+		const jitter = (draw() * 2 - 1) * SLOT_JITTER_MINUTES;
+		minutes.push(previous + SLOT_GAP_MINUTES + jitter);
+	}
+	const skipped =
+		draw() < SKIP_CHANCE
+			? Math.min(SLOTS_PER_DAY - 1, Math.floor(draw() * SLOTS_PER_DAY))
+			: null;
+	return {
+		date,
+		timeZone,
+		slots: minutes.map((minute, index) => ({
+			at: zonedTime(date, Math.round(minute), timeZone),
+			status: index === skipped ? "skipped" : "planned",
+		})),
+	};
+}
 
 /**
- * When full runs happen. `learning` until Listings go back LEARNING_DAYS
- * (`dataSince` is the first capture, null before any). `busyHours` are hours
- * of the week (0 is Sunday midnight to 1am in `timeZone`), ascending; empty
- * while learning, or when no hour stands out.
+ * The slot a scheduled ask at `now` runs, as its index: the latest planned
+ * slot whose time has passed, so slots missed while the Mac slept give one
+ * run, not several. Slots before `notBefore` (a check page's cool-down, or a
+ * full run that was going at the time) aren't due. Null when none is.
  */
-export type RunTiming = {
-	status: "learning" | "learned";
-	dataSince: number | null;
-	timeZone: string;
-	busyHours: number[];
-};
+export function dueSlot(
+	slots: readonly RunSlot[],
+	notBefore: number | null,
+	now: number,
+): number | null {
+	let due: number | null = null;
+	slots.forEach((slot, index) => {
+		if (slot.status !== "planned" || slot.at > now) return;
+		if (notBefore !== null && slot.at < notBefore) return;
+		due = index;
+	});
+	return due;
+}
 
-/** The hour of the week `time` falls in, in `timeZone`: 0 (Sunday 12–1am) to 167. */
-export function hourOfWeek(time: number, timeZone: string): number {
+/**
+ * The slots after the run for slot `index` starts: it ran, and every
+ * earlier slot still planned passed (folded into this run).
+ */
+export function takeSlot(slots: readonly RunSlot[], index: number): RunSlot[] {
+	return slots.map((slot, i) => {
+		if (i === index) return { ...slot, status: "ran" };
+		if (i < index && slot.status === "planned") {
+			return { ...slot, status: "passed" };
+		}
+		return slot;
+	});
+}
+
+/**
+ * The Unix ms of `minutes` after midnight on `date` (`YYYY-MM-DD`) in
+ * `timeZone`, on the local clock (DST included).
+ */
+function zonedTime(date: string, minutes: number, timeZone: string): number {
+	const [year = 0, month = 1, day = 1] = date.split("-").map(Number);
+	const wall = Date.UTC(year, month - 1, day, 0, minutes);
+	// Guess with the offset at the wall time, then correct with the offset
+	// at the guess, which is right unless the time falls in a DST gap.
+	const guess = wall - zoneOffset(wall, timeZone);
+	return wall - zoneOffset(guess, timeZone);
+}
+
+/** How far `timeZone`'s clock is ahead of UTC at `time`, in ms. */
+function zoneOffset(time: number, timeZone: string): number {
 	const parts = new Intl.DateTimeFormat("en-US", {
 		timeZone,
 		hourCycle: "h23",
-		weekday: "short",
+		year: "numeric",
+		month: "numeric",
+		day: "numeric",
 		hour: "numeric",
+		minute: "numeric",
+		second: "numeric",
 	}).formatToParts(new Date(time));
-	const weekday = parts.find((part) => part.type === "weekday")?.value ?? "";
-	const hour = Number(parts.find((part) => part.type === "hour")?.value ?? 0);
-	return WEEKDAYS.indexOf(weekday) * 24 + hour;
-}
-
-/** The days of a week, as hour of the week counts them (Sunday first). */
-export const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-/**
- * Learns when full runs happen from `listedTimes`: when the Listings matched
- * to my Printings went up (eBay's listing time). Only those in the last
- * LEARNING_DAYS before `now` count.
- */
-export function learnRunTiming({
-	listedTimes,
-	dataSince,
-	timeZone,
-	now,
-}: {
-	listedTimes: readonly number[];
-	dataSince: number | null;
-	timeZone: string;
-	now: number;
-}): RunTiming {
-	if (dataSince === null || now - dataSince < LEARNING_DAYS * DAY_MS) {
-		return { status: "learning", dataSince, timeZone, busyHours: [] };
-	}
-	const counts = new Array<number>(HOURS_IN_WEEK).fill(0);
-	for (const time of listedTimes) {
-		if (time <= now - POSTING_WINDOW_MS || time > now) continue;
-		const hour = hourOfWeek(time, timeZone);
-		counts[hour] = (counts[hour] ?? 0) + 1;
-	}
-	const average = counts.reduce((sum, count) => sum + count, 0) / HOURS_IN_WEEK;
-	const busyHours = counts
-		.map((count, hour) => ({ count, hour }))
-		.filter(
-			({ count }) =>
-				count >= BUSY_MIN_LISTINGS && count >= BUSY_OVER_AVERAGE * average,
-		)
-		.sort((a, b) => b.count - a.count || a.hour - b.hour)
-		.slice(0, MAX_BUSY_HOURS)
-		.map(({ hour }) => hour)
-		.sort((a, b) => a - b);
-	return { status: "learned", dataSince, timeZone, busyHours };
-}
-
-/**
- * Whether a scheduled ask at `now` starts a full run. Never from 1 to 7 AM
- * in my time zone; the first ask after starts one if it's due by then.
- * Otherwise, with busy hours learned: in a busy hour and the hour after
- * (whose run catches the busy hour's Listings) 45–80 minutes after the last,
- * else 5 hours to 5 hours 40 after it. Otherwise 2½–3¾ hours after it.
- * `gapDraw` (0–1, picked when the last full run ended) says where in each
- * range the gap falls. None yet: due (outside the night).
- */
-export function fullRunDue({
-	lastFullRunAt,
-	gapDraw,
-	timing,
-	now,
-}: {
-	lastFullRunAt: number | null;
-	gapDraw: number;
-	timing: RunTiming;
-	now: number;
-}): boolean {
-	if (inOvernightPause(now, timing.timeZone)) return false;
-	if (lastFullRunAt === null) return true;
-	const since = now - lastFullRunAt;
-	// Half a tick early, so a run asked for a few seconds late still counts.
-	const slack = SCHEDULE_TICK_MS / 2;
-	if (timing.status === "learning" || timing.busyHours.length === 0) {
-		return since >= gapWithin(FALLBACK_GAP, gapDraw) - slack;
-	}
-	if (since >= gapWithin(CAP_GAP, gapDraw)) return true;
-	const hour = hourOfWeek(now, timing.timeZone);
-	const previous = (hour + HOURS_IN_WEEK - 1) % HOURS_IN_WEEK;
-	const busy =
-		timing.busyHours.includes(hour) || timing.busyHours.includes(previous);
-	return busy && since >= gapWithin(BUSY_GAP, gapDraw) - slack;
+	const part = (type: string) =>
+		Number(parts.find((entry) => entry.type === type)?.value ?? 0);
+	const asUtc = Date.UTC(
+		part("year"),
+		part("month") - 1,
+		part("day"),
+		part("hour"),
+		part("minute"),
+		part("second"),
+	);
+	return asUtc - Math.floor(time / 1000) * 1000;
 }

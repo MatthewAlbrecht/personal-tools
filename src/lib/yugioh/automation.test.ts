@@ -4,8 +4,9 @@ import {
 	buildVisitPlan,
 	scheduledRunDue,
 	startDelay,
+	visitsTcgplayer,
 } from "./automation";
-import type { RunTiming } from "./run-timing";
+import type { RunSlot } from "./run-timing";
 
 const ash = {
 	setCodes: ["MP23-EN001", "RA01-EN008"],
@@ -74,56 +75,51 @@ describe("the visit plan", () => {
 describe("when a scheduled ask starts a run", () => {
 	const MINUTE = 60 * 1000;
 	const HOUR = 60 * MINUTE;
-	const NOW = Date.UTC(2026, 9, 20, 12, 0);
-	const learning = {
-		status: "learning",
-		dataSince: null,
-		timeZone: "America/New_York",
-		busyHours: [],
-	} as const satisfies RunTiming;
-	const recent = {
-		lastFullRunAt: NOW - HOUR,
+	/** Wednesday 21 October 2026, noon in New York. */
+	const NOW = Date.UTC(2026, 9, 21, 16, 0);
+	/** Today's slots: 7 AM, 11 AM (ran), 3 PM and 7 PM in New York. */
+	const slots: RunSlot[] = [
+		{ at: NOW - 5 * HOUR, status: "passed" },
+		{ at: NOW - HOUR, status: "ran" },
+		{ at: NOW + 3 * HOUR, status: "planned" },
+		{ at: NOW + 7 * HOUR, status: "planned" },
+	];
+	const quiet = {
+		slots,
+		lastFullRunEndedAt: NOW - 40 * MINUTE,
 		lastRunAt: NOW - HOUR,
 		lastCheckPageAt: null,
-		// Where the gap falls in its range: 0.4 is 3 hours while learning.
-		gapDraw: 0.4,
-		timing: learning,
 	};
-	/** An auction ending `minutesLeft` from now, last seen 2 hours ago. */
-	function endingIn(minutesLeft: number) {
-		return { endsAt: NOW + minutesLeft * MINUTE, lastSeenAt: NOW - 2 * HOUR };
+	/** An auction ending `minutesLeft` from `now`, last seen 2 hours before. */
+	function endingIn(minutesLeft: number, now = NOW) {
+		return { endsAt: now + minutesLeft * MINUTE, lastSeenAt: now - 2 * HOUR };
 	}
 
-	test("a full run 3 hours after the last (gap draw 0.4), allowing a few minutes' slack", () => {
-		expect(scheduledRunDue({ ...recent, auctions: [], now: NOW })).toBe(null);
+	test("a full run once a planned slot's time has passed, and nothing between slots", () => {
+		expect(scheduledRunDue({ ...quiet, auctions: [], now: NOW })).toBe(null);
+		expect(
+			scheduledRunDue({ ...quiet, auctions: [], now: NOW + 3 * HOUR - MINUTE }),
+		).toBe(null);
+		expect(
+			scheduledRunDue({ ...quiet, auctions: [], now: NOW + 3 * HOUR }),
+		).toBe("full");
+	});
+
+	test("a slot that came due while a full run was going is covered by it", () => {
 		expect(
 			scheduledRunDue({
-				lastFullRunAt: NOW - 3 * HOUR + 4 * MINUTE,
-				lastRunAt: null,
-				lastCheckPageAt: null,
-				gapDraw: 0.4,
+				...quiet,
+				lastFullRunEndedAt: NOW + 3 * HOUR + 30 * MINUTE,
 				auctions: [],
-				timing: learning,
-				now: NOW,
+				now: NOW + 3 * HOUR + 40 * MINUTE,
 			}),
-		).toBe("full");
-		expect(
-			scheduledRunDue({
-				lastFullRunAt: null,
-				lastRunAt: null,
-				lastCheckPageAt: null,
-				gapDraw: 0.4,
-				auctions: [],
-				timing: learning,
-				now: NOW,
-			}),
-		).toBe("full");
+		).toBe(null);
 	});
 
 	test("a refresh run from 28 to 17 minutes before an auction ends", () => {
 		const due = (minutesLeft: number) =>
 			scheduledRunDue({
-				...recent,
+				...quiet,
 				auctions: [endingIn(minutesLeft)],
 				now: NOW,
 			});
@@ -136,7 +132,7 @@ describe("when a scheduled ask starts a run", () => {
 	test("no refresh for an auction seen within 45 minutes of its end", () => {
 		expect(
 			scheduledRunDue({
-				...recent,
+				...quiet,
 				auctions: [
 					{ endsAt: NOW + 25 * MINUTE, lastSeenAt: NOW - 20 * MINUTE },
 				],
@@ -145,52 +141,51 @@ describe("when a scheduled ask starts a run", () => {
 		).toBe(null);
 	});
 
-	test("nothing for 6 hours after a run stopped on a check page", () => {
-		const due = (hoursSinceCheckPage: number) =>
+	test("nothing for 6 hours after a run stopped on a check page, and the slots in those hours are skipped", () => {
+		// 12:30 PM: the cool-down runs to 6:30 PM.
+		const checkPageAt = NOW + 30 * MINUTE;
+		const due = (now: number, auctions = [endingIn(25, now)]) =>
 			scheduledRunDue({
-				lastFullRunAt: NOW - 8 * HOUR,
-				lastRunAt: NOW - 8 * HOUR,
-				lastCheckPageAt: NOW - hoursSinceCheckPage * HOUR,
-				gapDraw: 0.4,
-				auctions: [endingIn(25)],
-				timing: learning,
+				...quiet,
+				lastCheckPageAt: checkPageAt,
+				auctions,
+				now,
+			});
+		// The 3 PM slot falls in the cool-down: no full run, no refresh.
+		expect(due(NOW + 3 * HOUR)).toBe(null);
+		expect(due(checkPageAt + 6 * HOUR - MINUTE)).toBe(null);
+		// After it, the 3 PM slot isn't made up for: only refresh runs…
+		expect(due(checkPageAt + 6 * HOUR, [])).toBe(null);
+		expect(due(checkPageAt + 6 * HOUR)).toBe("refresh");
+		// …until the 7 PM slot.
+		expect(due(NOW + 7 * HOUR, [])).toBe("full");
+	});
+});
+
+describe("whether a full run visits TCGplayer", () => {
+	const HOUR = 60 * 60 * 1000;
+	const NOW = Date.UTC(2026, 9, 21, 16, 0);
+
+	test("a scheduled one does when no run visited TCGplayer in the last 10 hours", () => {
+		const visits = (hoursAgo: number | null) =>
+			visitsTcgplayer({
+				trigger: "launchAgent",
+				lastTcgplayerRunAt: hoursAgo === null ? null : NOW - hoursAgo * HOUR,
 				now: NOW,
 			});
-		expect(due(1)).toBe(null);
-		expect(due(5.99)).toBe(null);
-		expect(due(6)).toBe("full");
+		expect(visits(null)).toBe(true);
+		expect(visits(4)).toBe(false);
+		expect(visits(9.9)).toBe(false);
+		expect(visits(10)).toBe(true);
+		expect(visits(12)).toBe(true);
 	});
 
-	test("a refresh run waits out the cool-down too", () => {
-		expect(
-			scheduledRunDue({
-				...recent,
-				lastCheckPageAt: NOW - 2 * HOUR,
-				auctions: [endingIn(25)],
-				now: NOW,
-			}),
-		).toBe(null);
-	});
-
-	test("overnight (1–7 AM), refresh runs still happen but full runs wait", () => {
-		/** Wednesday 21 October 2026, 3 AM in New York. */
-		const night = Date.UTC(2026, 9, 21, 7, 0);
-		const due = (auctions: ReturnType<typeof endingIn>[]) =>
-			scheduledRunDue({
-				lastFullRunAt: night - 8 * HOUR,
-				lastRunAt: night - 8 * HOUR,
-				lastCheckPageAt: null,
-				gapDraw: 0.4,
-				auctions: auctions.map((a) => ({
-					...a,
-					endsAt: a.endsAt - NOW + night,
-					lastSeenAt: night - 2 * HOUR,
-				})),
-				timing: learning,
-				now: night,
-			});
-		expect(due([])).toBe(null);
-		expect(due([endingIn(25)])).toBe("refresh");
+	test("hand and T3 Code runs always do", () => {
+		for (const trigger of ["manual", "t3"] as const) {
+			expect(
+				visitsTcgplayer({ trigger, lastTcgplayerRunAt: NOW - HOUR, now: NOW }),
+			).toBe(true);
+		}
 	});
 });
 

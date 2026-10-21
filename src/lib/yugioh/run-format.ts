@@ -7,7 +7,6 @@ import {
 	format,
 	isToday,
 } from "date-fns";
-import { millisecondsInHour } from "date-fns/constants";
 import {
 	CHECK_PAGE_COOL_DOWN_MS,
 	type PlannedVisit,
@@ -18,15 +17,13 @@ import {
 import type { Marketplace } from "./listing-filters";
 import { MARKETPLACE_LABELS } from "./listing-format";
 import {
-	FALLBACK_GAP,
-	HOURS_IN_WEEK,
-	LEARNING_DAYS,
-	MAX_FULL_RUN_GAP_MS,
-	OVERNIGHT_FROM_HOUR,
-	OVERNIGHT_UNTIL_HOUR,
-	type RunTiming,
-	WEEKDAYS,
-	gapWithin,
+	FIRST_SLOT_FROM_MINUTES,
+	FIRST_SLOT_UNTIL_MINUTES,
+	type RunDay,
+	type RunSlotStatus,
+	SLOTS_PER_DAY,
+	SLOT_GAP_MINUTES,
+	localDate,
 } from "./run-timing";
 
 /** The Deck header's note shows once the last capture is older than this. */
@@ -194,89 +191,45 @@ function duration(from: number, to: number): string {
 	return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 }
 
-export type RunTimingLines = { summary: string; busyTimes: string[] };
+export type RunDayLines = { summary: string; slots: string[] };
 
-/** The middle of the fallback gap, in whole hours. */
-const FIXED_HOURS = Math.round(
-	gapWithin(FALLBACK_GAP, 0.5) / millisecondsInHour,
-);
-const OVERNIGHT = `${OVERNIGHT_FROM_HOUR} to ${OVERNIGHT_UNTIL_HOUR} AM`;
-const MAX_GAP_HOURS = MAX_FULL_RUN_GAP_MS / millisecondsInHour;
+const SCHEDULE = `About ${SLOTS_PER_DAY} times a day, ${SLOT_GAP_MINUTES / 60} hours apart, from between ${FIRST_SLOT_FROM_MINUTES / 60} and ${FIRST_SLOT_UNTIL_MINUTES / 60} AM`;
+const AFTER_SCHEDULE =
+	"Some days skip one. TCGplayer pages are visited about twice a day.";
+
+const SLOT_NOTES: Record<RunSlotStatus, string | null> = {
+	planned: null,
+	ran: "ran",
+	skipped: "skipped",
+	passed: "missed",
+};
 
 /**
- * When scheduled full runs happen, for Settings: a sentence, and the busy
- * times of the week ("Sun 7–9 PM"), each run of busy hours as one.
+ * When scheduled full runs happen, for Settings: a sentence, and today's
+ * slots ("7:12 AM, ran") once today's plan is drawn, in its time zone.
  */
-export function describeRunTiming(
-	timing: RunTiming,
-	now: number,
-): RunTimingLines {
-	if (timing.status === "learning") {
-		if (timing.dataSince === null) {
-			return {
-				summary: `About every ${FIXED_HOURS} hours for now, and not from ${OVERNIGHT}. Once it has about ${LEARNING_DAYS / 7} weeks of Listings, it learns when sellers post and runs around those times.`,
-				busyTimes: [],
-			};
-		}
-		const days = differenceInDays(now, timing.dataSince);
-		const data =
-			days === 0 ? "Under a day" : `${days} ${days === 1 ? "day" : "days"}`;
-		return {
-			summary: `About every ${FIXED_HOURS} hours for now, and not from ${OVERNIGHT}. Still learning when sellers post: ${data} of data so far, of about ${LEARNING_DAYS}.`,
-			busyTimes: [],
-		};
+export function describeRunDay(day: RunDay | null, now: number): RunDayLines {
+	if (day === null) {
+		return { summary: `${SCHEDULE}. ${AFTER_SCHEDULE}`, slots: [] };
 	}
-	if (timing.busyHours.length === 0) {
-		return {
-			summary: `About every ${FIXED_HOURS} hours, and not from ${OVERNIGHT}. No hours of the week stand out yet for when sellers post.`,
-			busyTimes: [],
-		};
-	}
+	const summary = `${SCHEDULE} (${zoneName(day.timeZone)} time). ${AFTER_SCHEDULE}`;
+	if (day.date !== localDate(now, day.timeZone)) return { summary, slots: [] };
+	const clock = new Intl.DateTimeFormat("en-US", {
+		timeZone: day.timeZone,
+		hour: "numeric",
+		minute: "2-digit",
+	});
 	return {
-		summary: `Sellers post most at these times (${zoneName(timing.timeZone)} time). It runs about every hour during them and the hour after, and at least every ${MAX_GAP_HOURS} hours otherwise, but not from ${OVERNIGHT}.`,
-		busyTimes: busyStretches(timing.busyHours).map(stretchLabel),
+		summary,
+		slots: day.slots.map((slot) => {
+			const time = clock.format(slot.at);
+			const note = SLOT_NOTES[slot.status];
+			return note === null ? time : `${time}, ${note}`;
+		}),
 	};
 }
 
 /** "America/New_York" reads "New York". */
 function zoneName(timeZone: string): string {
 	return (timeZone.split("/").pop() ?? timeZone).replaceAll("_", " ");
-}
-
-/**
- * Busy hours as stretches of consecutive hours: each its first hour and how
- * many. A stretch running past Saturday midnight joins the one from Sunday
- * midnight.
- */
-function busyStretches(
-	busyHours: readonly number[],
-): Array<{ start: number; hours: number }> {
-	const busy = new Set(busyHours);
-	if (busy.size === HOURS_IN_WEEK) return [{ start: 0, hours: HOURS_IN_WEEK }];
-	const stretches: Array<{ start: number; hours: number }> = [];
-	for (const hour of [...busy].sort((a, b) => a - b)) {
-		const previous = (hour + HOURS_IN_WEEK - 1) % HOURS_IN_WEEK;
-		if (busy.has(previous)) continue;
-		let hours = 1;
-		while (busy.has((hour + hours) % HOURS_IN_WEEK)) hours++;
-		stretches.push({ start: hour, hours });
-	}
-	return stretches;
-}
-
-/** "Sun 7–9 PM", "Mon 11 AM–1 PM", "Sat 11 PM–1 AM". */
-function stretchLabel({
-	start,
-	hours,
-}: { start: number; hours: number }): string {
-	const day = WEEKDAYS[Math.floor(start / 24)];
-	const from = start % 24;
-	const to = (from + hours) % 24;
-	const sameHalf = hours < 12 && from < 12 === to < 12 && to > from;
-	return `${day} ${clockHour(from, sameHalf ? "h" : "h a")}–${clockHour(to, "h a")}`;
-}
-
-/** An hour of the day on the clock: 19 reads "7 PM" ("h a") or "7" ("h"). */
-function clockHour(hour: number, pattern: "h" | "h a"): string {
-	return format(new Date(2000, 0, 1, hour), pattern);
 }

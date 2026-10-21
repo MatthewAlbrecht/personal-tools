@@ -23,7 +23,10 @@ const modules = import.meta.glob("/convex/**/*.ts");
 const SECRET = "test-server-secret-0123456789";
 const MINUTE = 60 * 1000;
 const HOUR = 60 * MINUTE;
-/** 10 AM in Denver, the time zone with no device: outside the overnight pause. */
+/**
+ * 10 AM in Denver, the time zone with no device: past the day's first slot,
+ * so a scheduled ask starts a full run.
+ */
 const NOW = Date.UTC(2026, 9, 20, 16, 0);
 
 const ASH = {
@@ -51,11 +54,15 @@ beforeEach(() => {
 	vi.stubEnv("CONVEX_SERVER_SECRET", SECRET);
 	vi.useFakeTimers();
 	vi.setSystemTime(NOW);
+	// Every draw 0.5: the day's slots are 7:30 AM, 11:30 AM, 3:30 PM and
+	// 7:30 PM in Denver, none skipped.
+	vi.spyOn(Math, "random").mockReturnValue(0.5);
 });
 
 afterEach(() => {
 	vi.unstubAllEnvs();
 	vi.useRealTimers();
+	vi.restoreAllMocks();
 });
 
 async function addCard(

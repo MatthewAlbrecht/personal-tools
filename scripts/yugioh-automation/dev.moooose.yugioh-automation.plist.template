@@ -5,7 +5,7 @@
 	A template: install.sh fills in __RUN_SCRIPT__ and __LOG_FILE__ and writes
 	it to ~/Library/LaunchAgents/dev.moooose.yugioh-automation.plist.
 	It asks the app every 10 minutes (a dict with only Minute fires every
-	hour); the app answers with a full run every 3 hours, a refresh run before
+	hour); the app answers with a full run about 4 times a day, a refresh run before
 	a matched auction ends, or nothing due (ticket 16).
 	StartCalendarInterval (not StartInterval) so an ask missed while the Mac
 	slept happens once on wake. launchd never starts a second copy while one

@@ -4,9 +4,10 @@
 # Asks the app for a run, opens the automation Chrome profile (its extension
 # claims the run and visits its pages), waits for the run to end, then quits
 # that Chrome if this script opened it. The LaunchAgent asks every 10 minutes;
-# the app answers with a full run about every 3 hours (never 1–7 AM), a refresh
-# run before a matched auction ends, or nothing due. A scheduled run waits a
-# moment the app picks (up to 4 minutes, 90 s for a refresh run) before it
+# the app answers with a full run at about 7 AM, 11 AM, 3 PM and 7 PM (a plan
+# drawn each day; eBay only, except about twice a day), a refresh run before
+# a matched auction ends, or nothing due. A scheduled run waits a moment the
+# app picks (up to 4 minutes, 90 s for a refresh run) before it
 # opens Chrome. T3 Code and hand runs are always full runs, and don't wait.
 # For 6 hours after a run stops on a check page (a captcha), the LaunchAgent's
 # asks get nothing; T3 Code and hand runs still start:

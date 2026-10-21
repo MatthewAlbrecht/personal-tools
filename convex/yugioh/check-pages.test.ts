@@ -287,20 +287,29 @@ describe("the push", () => {
 });
 
 describe("the cool-down", () => {
-	test("no scheduled run of any kind for 6 hours, then a full run", async () => {
+	test("no scheduled run of any kind for 6 hours; the slots in them are skipped, not made up for", async () => {
+		// Every draw 0.5: today's slots are 7:30 AM, 11:30 AM, 3:30 PM and
+		// 7:30 PM in Denver; the run stopped at 6 AM, so the cool-down runs to
+		// noon.
+		vi.spyOn(Math, "random").mockReturnValue(0.5);
 		const t = setup();
 		await deckWithSearches(t);
 		await runStoppedOnCheckPage(t);
+		const scheduledAsk = async () =>
+			await automation(t, { op: "request", trigger: "launchAgent" });
 
 		vi.setSystemTime(NOW + 5 * HOUR + 50 * MINUTE);
-		expect(
-			await automation(t, { op: "request", trigger: "launchAgent" }),
-		).toMatchObject({ runId: null, kind: null });
+		expect(await scheduledAsk()).toMatchObject({ runId: null, kind: null });
 
 		vi.setSystemTime(NOW + 6 * HOUR);
-		expect(
-			await automation(t, { op: "request", trigger: "launchAgent" }),
-		).toMatchObject({ kind: "full", alreadyOpen: false });
+		expect(await scheduledAsk()).toMatchObject({ runId: null, kind: null });
+
+		vi.setSystemTime(NOW + 9 * HOUR + 30 * MINUTE);
+		expect(await scheduledAsk()).toMatchObject({
+			kind: "full",
+			alreadyOpen: false,
+		});
+		vi.restoreAllMocks();
 	});
 
 	test.each(["manual", "t3"])(
