@@ -66,8 +66,9 @@ async function addCard(
 		rarity: string;
 		overloadedRarities?: string[];
 	},
+	copiesOwned = 0,
 ): Promise<Id<"yugiohPrintings">> {
-	await t.mutation(api.yugioh.decks.addCard, {
+	const deckCardId = await t.mutation(api.yugioh.decks.addCard, {
 		deckId,
 		section: "main",
 		copiesNeeded: 3,
@@ -77,6 +78,9 @@ async function addCard(
 		overloadedRarities: card.overloadedRarities ?? [],
 	});
 	await t.finishAllScheduledFunctions(vi.runAllTimers);
+	if (copiesOwned > 0) {
+		await t.mutation(api.yugioh.decks.updateCard, { deckCardId, copiesOwned });
+	}
 	const deck = await t.query(api.yugioh.decks.getDeck, { deckId });
 	const candidate = deck?.sections
 		.flatMap((s) => s.cards)
@@ -168,6 +172,28 @@ describe("the visit plan", () => {
 			},
 		]);
 		expect(searches).toHaveLength(2);
+	});
+
+	test("a full run has no pages for a Card with every copy owned", async () => {
+		const t = setup();
+		const deckId = await t.mutation(api.yugioh.decks.createDeck, {
+			name: "Snake-Eye",
+		});
+		const ash = await addCard(t, deckId, ASH, 3);
+		const called = await addCard(t, deckId, CALLED, 1);
+		await pasteProductUrl(t, ash, ASH.productUrl);
+		const calledUrl =
+			"https://www.tcgplayer.com/product/524870/called-by-the-grave";
+		await pasteProductUrl(t, called, calledUrl);
+
+		await automation(t, { op: "request", trigger: "manual" });
+		const run = ((await automation(t, { op: "claim" })).json as Claimed).run;
+
+		expect(run?.visits.map((visit) => [visit.kind, visit.label])).toEqual([
+			["ebayNewlyListed", CALLED.setCode],
+			["ebaySold", CALLED.setCode],
+			["tcgplayer", `${CALLED.cardName} ${CALLED.setCode}`],
+		]);
 	});
 
 	test("there's nothing to claim until a run is asked for, and a run is claimed once", async () => {

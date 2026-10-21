@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import { ExternalLink, Search as SearchIcon } from "lucide-react";
+import { CircleCheck, ExternalLink, Search as SearchIcon } from "lucide-react";
 import Link from "next/link";
 import type * as React from "react";
 import { Badge } from "~/components/ui/badge";
@@ -22,7 +22,7 @@ import {
 	EmptyTitle,
 } from "~/components/ui/empty";
 import { Skeleton } from "~/components/ui/skeleton";
-import { MAX_SET_CODES_PER_SEARCH } from "~/lib/yugioh/searches";
+import { MAX_SET_CODES_PER_SEARCH, missesCopies } from "~/lib/yugioh/searches";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import type { EbaySearch } from "../_utils/types";
@@ -45,6 +45,28 @@ export function SearchesPage({
 	}
 	// DeckShell (the layout) shows the missing-Deck state.
 	if (searches === null || deck === null) return null;
+
+	if (searches.length === 0 && deck.cardCount > 0 && !missesCopies(deck)) {
+		return (
+			<Empty className="border">
+				<EmptyHeader>
+					<EmptyMedia variant="icon">
+						<CircleCheck />
+					</EmptyMedia>
+					<EmptyTitle>You own every Card</EmptyTitle>
+					<EmptyDescription>
+						All {deck.copiesNeeded} copies are in hand, so there's nothing to
+						search for.
+					</EmptyDescription>
+				</EmptyHeader>
+				<EmptyContent>
+					<Button variant="outline" asChild>
+						<Link href={`/yugioh/decks/${deckId}`}>Go to Cards</Link>
+					</Button>
+				</EmptyContent>
+			</Empty>
+		);
+	}
 
 	if (searches.length === 0) {
 		return (
@@ -77,8 +99,9 @@ export function SearchesPage({
 						eBay Searches
 					</h2>
 					<p className="text-muted-foreground text-sm">
-						Up to {MAX_SET_CODES_PER_SEARCH} set codes each. Open Newly listed
-						for new supply, Sold for what Copies really go for.
+						For Cards you still need copies of, up to {MAX_SET_CODES_PER_SEARCH}{" "}
+						set codes each. Open Newly listed for new supply, Sold for what
+						Copies really go for.
 					</p>
 				</div>
 				<ul className="grid gap-3 md:grid-cols-2">

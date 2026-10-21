@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { exclusionWord } from "./searches";
+import { buildDeckSearches, exclusionWord } from "./searches";
 
 describe("exclusionWord", () => {
 	test.each([
@@ -14,5 +14,44 @@ describe("exclusionWord", () => {
 		["Common", "common"],
 	])("%s → -%s", (rarity, word) => {
 		expect(exclusionWord(rarity)).toBe(word);
+	});
+});
+
+describe("only Cards still missing copies are searched", () => {
+	test("a Card with every copy owned gets no Search; one still missing copies does", () => {
+		const searches = buildDeckSearches([
+			{
+				cardName: "Judgment Dragon",
+				copiesNeeded: 3,
+				copiesOwned: 3,
+				chosenPrintingId: null,
+				candidates: [
+					{
+						printingId: "p-owned",
+						setCode: "LODT-EN026",
+						rarity: "Secret Rare",
+						overloadedRarities: [],
+					},
+				],
+			},
+			{
+				cardName: "D.D. Crow",
+				copiesNeeded: 3,
+				copiesOwned: 1,
+				chosenPrintingId: null,
+				candidates: [
+					{
+						printingId: "p-missing",
+						setCode: "STON-EN024",
+						rarity: "Ultimate Rare",
+						overloadedRarities: [],
+					},
+				],
+			},
+		]);
+
+		const setCodes = searches.flatMap((search) => search.setCodes);
+		expect(setCodes).toContain("STON-EN024");
+		expect(setCodes).not.toContain("LODT-EN026");
 	});
 });

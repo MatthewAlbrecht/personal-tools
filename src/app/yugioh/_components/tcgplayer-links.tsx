@@ -16,7 +16,7 @@ import {
 import { Skeleton } from "~/components/ui/skeleton";
 import { Spinner } from "~/components/ui/spinner";
 import { rarityAbbreviation } from "~/lib/yugioh/deck";
-import { searchedCandidates } from "~/lib/yugioh/searches";
+import { missesCopies, searchedCandidates } from "~/lib/yugioh/searches";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import type { CandidatePrinting, DeckView } from "../_utils/types";
 
@@ -28,13 +28,13 @@ type LinkRow = {
 
 /**
  * The Printings the Deck searches for (the Chosen Printing, or every
- * Candidate while undecided), each once.
+ * Candidate while undecided) on Cards still missing copies, each once.
  */
 function searchedPrintings(deck: DeckView): LinkRow[] {
 	const rows: LinkRow[] = [];
 	const seen = new Set<string>();
 	for (const { cards } of deck.sections) {
-		for (const card of cards) {
+		for (const card of cards.filter(missesCopies)) {
 			for (const printing of searchedCandidates(card)) {
 				if (seen.has(printing.printingId)) continue;
 				seen.add(printing.printingId);

@@ -12,6 +12,8 @@ export type SearchPrinting = {
 
 export type SearchableCard = {
 	cardName: string;
+	copiesNeeded: number;
+	copiesOwned: number;
 	chosenPrintingId: string | null;
 	candidates: Array<{
 		printingId: string;
@@ -30,6 +32,14 @@ export type Search = {
 	newlyListedUrl: string;
 	soldUrl: string;
 };
+
+/** A Card still missing copies is searched; one with every copy owned is done. */
+export function missesCopies(card: {
+	copiesNeeded: number;
+	copiesOwned: number;
+}): boolean {
+	return card.copiesOwned < card.copiesNeeded;
+}
 
 /**
  * The Candidates a Card is searched for: its Chosen Printing, or every
@@ -72,6 +82,7 @@ export function searchedPrintingsByCard<
 /**
  * Packs a Deck's Printings into eBay Searches of at most 8 set codes.
  *
+ * - Only Cards still missing copies are searched; a done Card gets none.
  * - A Card with a Chosen Printing searches only that one; an undecided Card
  *   searches all its Candidates.
  * - An Overloaded set code gets one Exclusion per other rarity printed under
@@ -81,7 +92,7 @@ export function searchedPrintingsByCard<
 export function buildDeckSearches(cards: readonly SearchableCard[]): Search[] {
 	const byCode = new Map<string, SearchPrinting[]>();
 	const otherRaritiesByCode = new Map<string, Set<string>>();
-	for (const card of cards) {
+	for (const card of cards.filter(missesCopies)) {
 		for (const candidate of searchedCandidates(card)) {
 			const printings = byCode.get(candidate.setCode) ?? [];
 			// The same Printing on two Cards (Main and Side) is searched once.

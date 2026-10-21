@@ -20,6 +20,7 @@ import {
 import { MARKETPLACE_LABELS } from "../../../src/lib/yugioh/listing-format";
 import {
 	buildDeckSearches,
+	missesCopies,
 	searchedCandidates,
 } from "../../../src/lib/yugioh/searches";
 import type { Doc, Id } from "../../_generated/dataModel";
@@ -282,9 +283,10 @@ export async function claimRun(
 /**
  * The pages a run visits, across all Decks. First the refresh pages of
  * auctions ending within 45 minutes of `now` that await their push. Then, for a
- * full run, the Searches packed from every Card's searched Printings (as the
- * Searches tab packs one Deck's), then the TCGplayer product page of each of
- * those Printings that has one.
+ * full run, the Searches packed from the searched Printings of every Card
+ * still missing copies (as the Searches tab packs one Deck's), then the
+ * TCGplayer product page of each of those Printings that has one. Refresh
+ * pages come only from those Searches, so a done Card gets no page at all.
  */
 export async function readVisitPlan(
 	ctx: QueryCtx,
@@ -293,9 +295,10 @@ export async function readVisitPlan(
 ): Promise<PlannedVisit[]> {
 	const decks = await ctx.db.query("yugiohDecks").take(MAX_DECKS);
 	const views = await Promise.all(decks.map((deck) => readDeck(ctx, deck._id)));
-	const cards = views.flatMap(
-		(deck) => deck?.sections.flatMap((section) => section.cards) ?? [],
-	);
+	// A Card with every copy owned is done: no Search, no product page.
+	const cards = views
+		.flatMap((deck) => deck?.sections.flatMap((section) => section.cards) ?? [])
+		.filter(missesCopies);
 	const products = new Map<
 		string,
 		{ cardName: string; setCode: string; productUrl: string }
