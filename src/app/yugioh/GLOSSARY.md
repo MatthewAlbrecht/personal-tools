@@ -36,6 +36,14 @@ _Avoid_: Unit price, total
 What a Printing usually sells for on one marketplace, used to judge that marketplace's Listings. Each Printing has an eBay Reference price and a TCGplayer Reference price, kept separate.
 _Avoid_: Market price (that is TCGplayer's own figure), blended price
 
+**Cost to finish**:
+What the Copies a Deck still needs should cost: remaining Copies × the lower Reference price, per Card (an undecided Card takes its cheapest Candidate). Cards without a Reference price are named, not counted as $0.
+_Avoid_: Estimate, budget, total
+
+**Buy-now total**:
+What finishing would cost today: remaining Copies × the cheapest Qualifying buy-it-now Per-copy price of each Card. Cards with nothing to buy now are left out and counted.
+_Avoid_: Buy-now floor (that is one Printing's cheapest price), checkout total
+
 **Lowest acceptable condition**:
 The most-played condition you'd accept for a Card in a Deck (Near Mint, Lightly Played, Moderately Played or Heavily Played).
 _Avoid_: Min grade (grading is a different thing)

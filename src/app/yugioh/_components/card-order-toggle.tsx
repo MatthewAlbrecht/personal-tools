@@ -9,7 +9,7 @@ import type { CardOrder } from "~/lib/yugioh/deck";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { errorMessage } from "../_utils/errors";
-import { applyCardOrder } from "../_utils/optimistic";
+import { applyCardOrder, updateCachedDeck } from "../_utils/optimistic";
 import { cardOrderSchema } from "../_utils/schemas";
 
 const OPTIONS: Array<{ value: CardOrder; label: string }> = [
@@ -28,11 +28,7 @@ export function CardOrderToggle({
 	const setCardOrder = useMutation(
 		api.yugioh.decks.setCardOrder,
 	).withOptimisticUpdate((store, args) => {
-		const deck = store.getQuery(api.yugioh.decks.getDeck, { deckId });
-		if (!deck) return;
-		store.setQuery(
-			api.yugioh.decks.getDeck,
-			{ deckId },
+		updateCachedDeck(store, deckId, (deck) =>
 			applyCardOrder(deck, args.cardOrder),
 		);
 	});

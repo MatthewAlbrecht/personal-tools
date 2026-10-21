@@ -3,8 +3,11 @@ import { mutation, query } from "../_generated/server";
 import { requireAuth } from "../auth";
 import * as Decks from "../model/yugioh/decks";
 import {
+	yugiohCardCostValidator,
 	yugiohCardOrderValidator,
 	yugiohConditionValidator,
+	yugiohCostTotalsValidator,
+	yugiohDeckCostValidator,
 	yugiohSectionValidator,
 	yugiohTcgplayerStatusValidator,
 } from "../model/yugioh/validators";
@@ -15,6 +18,7 @@ const deckSummaryValidator = v.object({
 	cardCount: v.number(),
 	copiesOwned: v.number(),
 	copiesNeeded: v.number(),
+	cost: v.union(yugiohDeckCostValidator, v.null()),
 });
 
 const candidateValidator = v.object({
@@ -40,6 +44,7 @@ const deckCardValidator = v.object({
 	lowestAcceptableCondition: yugiohConditionValidator,
 	chosenPrintingId: v.union(v.id("yugiohPrintings"), v.null()),
 	candidates: v.array(candidateValidator),
+	cost: v.union(yugiohCardCostValidator, v.null()),
 });
 
 const deckValidator = deckSummaryValidator.extend({
@@ -47,6 +52,7 @@ const deckValidator = deckSummaryValidator.extend({
 	sections: v.array(
 		v.object({
 			section: yugiohSectionValidator,
+			cost: v.union(yugiohCostTotalsValidator, v.null()),
 			cards: v.array(deckCardValidator),
 		}),
 	),
@@ -58,12 +64,16 @@ const printingFields = {
 	overloadedRarities: v.array(v.string()),
 };
 
+/**
+ * Every Deck with its progress. Pass `now` (Unix ms; a query can't read the
+ * clock) to price each Deck's cost to finish; without it, `cost` is null.
+ */
 export const listDecks = query({
-	args: {},
+	args: { now: v.optional(v.number()) },
 	returns: v.array(deckSummaryValidator),
-	handler: async (ctx) => {
+	handler: async (ctx, args) => {
 		requireAuth(ctx);
-		return await Decks.listDeckSummaries(ctx);
+		return await Decks.listDeckSummaries(ctx, args.now);
 	},
 });
 
@@ -76,12 +86,19 @@ export const createDeck = mutation({
 	},
 });
 
+/**
+ * A Deck with its Cards by Section. Pass `now` (Unix ms; a query can't read
+ * the clock) to price it: cost to finish and buy-now totals per Card,
+ * Section and Deck, with By cost order sorted by cost. Without `now`, costs
+ * are null and By cost sorts by name, which suits callers that only need
+ * the Deck's name or Printings.
+ */
 export const getDeck = query({
-	args: { deckId: v.id("yugiohDecks") },
+	args: { deckId: v.id("yugiohDecks"), now: v.optional(v.number()) },
 	returns: v.union(deckValidator, v.null()),
 	handler: async (ctx, args) => {
 		requireAuth(ctx);
-		return await Decks.readDeck(ctx, args.deckId);
+		return await Decks.readDeck(ctx, args.deckId, args.now);
 	},
 });
 
@@ -95,12 +112,26 @@ export const setCardOrder = mutation({
 	},
 });
 
+/**
+ * Moves a Card within its Section's Custom order. Pass the `now` getDeck was
+ * priced at, so unpositioned Cards sit where the screen showed them; it
+ * defaults to the current time.
+ */
 export const moveCard = mutation({
-	args: { deckCardId: v.id("yugiohDeckCards"), toIndex: v.number() },
+	args: {
+		deckCardId: v.id("yugiohDeckCards"),
+		toIndex: v.number(),
+		now: v.optional(v.number()),
+	},
 	returns: v.null(),
 	handler: async (ctx, args) => {
 		requireAuth(ctx);
-		await Decks.moveCard(ctx, args.deckCardId, args.toIndex);
+		await Decks.moveCard(
+			ctx,
+			args.deckCardId,
+			args.toIndex,
+			args.now ?? Date.now(),
+		);
 		return null;
 	},
 });

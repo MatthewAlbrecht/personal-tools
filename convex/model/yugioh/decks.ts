@@ -1,5 +1,13 @@
 import { ConvexError } from "convex/values";
 import {
+	type CardCost,
+	type CostTotals,
+	type DeckCost,
+	byRemainingCost,
+	deckCost,
+	sumCosts,
+} from "../../../src/lib/yugioh/costs";
+import {
 	type CardOrder,
 	type Condition,
 	DEFAULT_LOWEST_ACCEPTABLE_CONDITION,
@@ -16,6 +24,8 @@ import {
 import { internal } from "../../_generated/api";
 import type { Doc, Id } from "../../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../../_generated/server";
+import { readCardCosts } from "./costs";
+import { type PriceReaders, loadPriceReaders } from "./deals";
 import { rematchSetCode } from "./matching";
 import { type TcgplayerView, tcgplayerView } from "./tcgplayer";
 
@@ -52,24 +62,58 @@ export type DeckSummary = {
 	cardCount: number;
 	copiesOwned: number;
 	copiesNeeded: number;
+	/** Null when no `now` was given to price it at. */
+	cost: DeckCost<Id<"yugiohDeckCards">> | null;
 };
 
-export async function listDeckSummaries(ctx: QueryCtx): Promise<DeckSummary[]> {
+/**
+ * Every Deck with its progress, newest first. Given `now` (a query can't read
+ * the clock), each also carries its cost to finish.
+ */
+export async function listDeckSummaries(
+	ctx: QueryCtx,
+	now?: number,
+): Promise<DeckSummary[]> {
 	const decks = await ctx.db.query("yugiohDecks").order("desc").take(MAX_DECKS);
+	const prices = now === undefined ? null : await loadPriceReaders(ctx, now);
 	return await Promise.all(
 		decks.map(async (deck) => {
-			const cards = await ctx.db
-				.query("yugiohDeckCards")
-				.withIndex("by_deckId", (q) => q.eq("deckId", deck._id))
-				.take(MAX_CARDS_PER_DECK);
+			const [cards, costs] = await readCardsAndCosts(ctx, deck._id, prices);
 			return {
 				_id: deck._id,
 				name: deck.name,
 				cardCount: cards.length,
 				...deckProgress(cards),
+				cost: costs === null ? null : deckCost(withCosts(cards, costs)),
 			};
 		}),
 	);
+}
+
+/** A Deck's Cards and, given price readers, each one's cost; null without. */
+async function readCardsAndCosts(
+	ctx: QueryCtx,
+	deckId: Id<"yugiohDecks">,
+	prices: PriceReaders | null,
+): Promise<
+	[Array<Doc<"yugiohDeckCards">>, Map<Id<"yugiohDeckCards">, CardCost> | null]
+> {
+	const [cards, candidates] = await Promise.all([
+		listDeckCards(ctx, deckId),
+		prices === null ? [] : listDeckCandidates(ctx, deckId),
+	]);
+	if (prices === null) return [cards, null];
+	return [cards, await readCardCosts(prices, cards, candidates)];
+}
+
+function withCosts(
+	cards: ReadonlyArray<Doc<"yugiohDeckCards">>,
+	costs: Map<Id<"yugiohDeckCards">, CardCost>,
+): Array<{ _id: Id<"yugiohDeckCards">; cardName: string; cost: CardCost }> {
+	return cards.flatMap((card) => {
+		const cost = costs.get(card._id);
+		return cost ? [{ _id: card._id, cardName: card.cardName, cost }] : [];
+	});
 }
 
 export type PrintingInput = {
@@ -266,6 +310,8 @@ export type DeckCardView = {
 	chosenPrintingId: Id<"yugiohPrintings"> | null;
 	/** The Chosen Printing first, then in the order they were added. */
 	candidates: CandidateView[];
+	/** Null when no `now` was given to price it at. */
+	cost: CardCost | null;
 };
 
 export type DeckView = {
@@ -275,25 +321,40 @@ export type DeckView = {
 	cardCount: number;
 	copiesOwned: number;
 	copiesNeeded: number;
-	sections: Array<{ section: Section; cards: DeckCardView[] }>;
+	/** Null when no `now` was given to price it at. */
+	cost: DeckCost<Id<"yugiohDeckCards">> | null;
+	sections: Array<{
+		section: Section;
+		/** The Section's subtotals; null without `now`. */
+		cost: CostTotals | null;
+		cards: DeckCardView[];
+	}>;
 };
 
+/**
+ * A Deck with its Cards by Section. Given `now` (a query can't read the
+ * clock), it's priced: cost to finish per Card, Section and Deck, and By cost
+ * order sorts by it. Without `now`, costs are null and By cost sorts by name.
+ */
 export async function readDeck(
 	ctx: QueryCtx,
 	deckId: Id<"yugiohDecks">,
+	now?: number,
 ): Promise<DeckView | null> {
 	const deck = await ctx.db.get("yugiohDecks", deckId);
 	if (!deck) return null;
 	const [cards, candidates] = await Promise.all([
-		ctx.db
-			.query("yugiohDeckCards")
-			.withIndex("by_deckId", (q) => q.eq("deckId", deckId))
-			.take(MAX_CARDS_PER_DECK),
-		ctx.db
-			.query("yugiohCandidatePrintings")
-			.withIndex("by_deckId", (q) => q.eq("deckId", deckId))
-			.take(MAX_CANDIDATES_PER_DECK),
+		listDeckCards(ctx, deckId),
+		listDeckCandidates(ctx, deckId),
 	]);
+	const costs =
+		now === undefined
+			? null
+			: await readCardCosts(
+					await loadPriceReaders(ctx, now),
+					cards,
+					candidates,
+				);
 	const printingIds = [...new Set(candidates.map((c) => c.printingId))];
 	const printings = new Map(
 		(
@@ -332,6 +393,7 @@ export async function readDeck(
 			lowestAcceptableCondition: card.lowestAcceptableCondition,
 			chosenPrintingId: card.chosenPrintingId,
 			candidates: [...chosen, ...others],
+			cost: costs?.get(card._id) ?? null,
 		};
 	}
 	const cardOrder = deck.cardOrder ?? "byCost";
@@ -341,24 +403,37 @@ export async function readDeck(
 		cardOrder,
 		cardCount: cards.length,
 		...deckProgress(cards),
-		sections: orderCards(cards, cardOrder).map((group) => ({
-			section: group.section,
-			cards: group.cards.map(view),
-		})),
+		cost: costs === null ? null : deckCost(withCosts(cards, costs)),
+		sections: orderCards(cards, cardOrder, costs).map((group) => {
+			const views = group.cards.map(view);
+			return {
+				section: group.section,
+				cost:
+					costs === null
+						? null
+						: sumCosts(views.flatMap((card) => card.cost ?? [])),
+				cards: views,
+			};
+		}),
 	};
 }
 
 /**
  * The one place Cards are put in order, so getDeck and moveCard always agree
- * on what a Section looks like. By cost: unfinished first, by name until
- * prices exist. Custom: saved positions, then any unpositioned Cards in their
- * By cost order.
+ * on what a Section looks like. By cost: unfinished first, highest cost to
+ * finish first, then Cards without a price; finished Cards last; ties by
+ * name. Without `costs`, by name. Custom: saved positions, then any
+ * unpositioned Cards in their By cost order.
  */
 function orderCards(
 	cards: ReadonlyArray<Doc<"yugiohDeckCards">>,
 	cardOrder: CardOrder,
+	costs: Map<Id<"yugiohDeckCards">, CardCost> | null,
 ): Array<{ section: Section; cards: Array<Doc<"yugiohDeckCards">> }> {
-	const byCost = groupCardsBySection(cards);
+	const byCost = groupCardsBySection(
+		cards,
+		byRemainingCost((card) => costs?.get(card._id)?.toFinish ?? null),
+	);
 	return cardOrder === "custom"
 		? customOrder(byCost, (card) => card.position)
 		: byCost;
@@ -382,16 +457,23 @@ export async function moveCard(
 	ctx: MutationCtx,
 	deckCardId: Id<"yugiohDeckCards">,
 	toIndex: number,
+	now: number,
 ): Promise<void> {
 	const card = await getDeckCardOrThrow(ctx, deckCardId);
 	if (!Number.isInteger(toIndex)) {
 		throw new ConvexError("Position must be a whole number.");
 	}
-	const deckCards = await listDeckCards(ctx, card.deckId);
+	// Unpositioned Cards sit in their By cost order, priced at the same `now`
+	// the screen's getDeck used, so a drop lands where it was shown.
+	const [deckCards, costs] = await readCardsAndCosts(
+		ctx,
+		card.deckId,
+		await loadPriceReaders(ctx, now),
+	);
 	const inSection = deckCards.filter(
 		(deckCard) => deckCard.section === card.section,
 	);
-	const current = orderCards(inSection, "custom")[0]?.cards ?? [];
+	const current = orderCards(inSection, "custom", costs)[0]?.cards ?? [];
 	const next = moveToIndex(current, deckCardId, toIndex);
 	for (const [position, sectionCard] of next.entries()) {
 		if (sectionCard.position !== position) {
@@ -454,6 +536,17 @@ async function findCandidate(
 			q.eq("deckCardId", deckCardId).eq("printingId", printingId),
 		)
 		.unique();
+}
+
+/** Every Candidate Printing of every Card in a Deck. */
+export async function listDeckCandidates(
+	ctx: QueryCtx,
+	deckId: Id<"yugiohDecks">,
+): Promise<Array<Doc<"yugiohCandidatePrintings">>> {
+	return await ctx.db
+		.query("yugiohCandidatePrintings")
+		.withIndex("by_deckId", (q) => q.eq("deckId", deckId))
+		.take(MAX_CANDIDATES_PER_DECK);
 }
 
 export async function listCandidates(

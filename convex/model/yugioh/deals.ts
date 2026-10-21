@@ -1,5 +1,6 @@
 // eBay Reference prices and Deal grades, judged in one Deck: Qualifying
 // depends on the Lowest acceptable condition of the Deck's Card.
+import { BUY_NOW_FRESH_MS } from "../../../src/lib/yugioh/costs";
 import {
 	type DealGrade,
 	REFERENCE_WINDOW_MS,
@@ -27,6 +28,9 @@ import { loadPricing } from "./pricing";
 
 /** Most sales one Reference price reads: the newest, within the window. */
 export const MAX_REFERENCE_SALES = 200;
+
+/** Most Listings still for sale one buy-now floor reads: the newest captured. */
+export const MAX_BUY_NOW_LISTINGS = 200;
 
 /** How a Listing compares with its Printing's eBay Reference price. */
 export type DealView = {
@@ -128,6 +132,35 @@ export async function readReferencePrices(
 	return prices;
 }
 
+/** Reads a Printing's prices for a Card wanting it at `condition`, at one moment. */
+export type PriceReaders = {
+	/** The eBay Reference price. */
+	reference: (
+		printingId: Id<"yugiohPrintings">,
+		condition: Condition,
+	) => Promise<Reference>;
+	/**
+	 * The cheapest Per-copy price of a Qualifying buy-it-now Listing still for
+	 * sale and seen in the last `BUY_NOW_FRESH_DAYS`; null when there's none.
+	 */
+	buyNow: (
+		printingId: Id<"yugiohPrintings">,
+		condition: Condition,
+	) => Promise<number | null>;
+};
+
+/** Price readers at `now`, each memoised per Printing and condition. */
+export async function loadPriceReaders(
+	ctx: QueryCtx,
+	now: number,
+): Promise<PriceReaders> {
+	const pricing = await loadPricing(ctx);
+	return {
+		reference: referenceReader(ctx, pricing, now),
+		buyNow: buyNowReader(ctx, pricing, now),
+	};
+}
+
 /**
  * A Listing's Per-copy price. A sale (sold, or an auction that has ended)
  * uses the exchange rate stored when it was last captured before it sold, so
@@ -158,11 +191,7 @@ function referenceReader(
 	printingId: Id<"yugiohPrintings">,
 	condition: Condition,
 ) => Promise<Reference> {
-	const cache = new Map<string, Promise<Reference>>();
-	async function read(
-		printingId: Id<"yugiohPrintings">,
-		condition: Condition,
-	): Promise<Reference> {
+	return memoised(async (printingId, condition): Promise<Reference> => {
 		const sales = await ctx.db
 			.query("yugiohListings")
 			.withIndex("by_matchedPrintingId_and_saleAt", (q) =>
@@ -181,15 +210,58 @@ function referenceReader(
 			if (price !== null) perCopyPrices.push(price.perCopy);
 		}
 		return referencePrice(perCopyPrices);
-	}
+	});
+}
+
+/**
+ * Reads buy-now floors, each Printing and condition once. Fixed-price
+ * Listings still for sale have no `saleAt`; graded and other non-Qualifying
+ * Listings don't count.
+ */
+function buyNowReader(
+	ctx: QueryCtx,
+	pricing: Pricing,
+	now: number,
+): (
+	printingId: Id<"yugiohPrintings">,
+	condition: Condition,
+) => Promise<number | null> {
+	return memoised(async (printingId, condition) => {
+		const forSale = await ctx.db
+			.query("yugiohListings")
+			.withIndex("by_matchedPrintingId_and_saleAt", (q) =>
+				q.eq("matchedPrintingId", printingId).eq("saleAt", null),
+			)
+			.order("desc")
+			.take(MAX_BUY_NOW_LISTINGS);
+		let cheapest: number | null = null;
+		for (const listing of forSale) {
+			if (matchedPrintingId(listing) !== printingId) continue;
+			if (listing.sold || listing.listingType === "auction") continue;
+			if (listing.lastSeenAt < now - BUY_NOW_FRESH_MS) continue;
+			if (!isQualifying(listing, condition)) continue;
+			const price = listingPerCopyPrice(listing, pricing, now);
+			if (price !== null && (cheapest === null || price.perCopy < cheapest)) {
+				cheapest = price.perCopy;
+			}
+		}
+		return cheapest;
+	});
+}
+
+/** Caches a Printing-and-condition read for the life of one query. */
+function memoised<R>(
+	read: (printingId: Id<"yugiohPrintings">, condition: Condition) => Promise<R>,
+): (printingId: Id<"yugiohPrintings">, condition: Condition) => Promise<R> {
+	const cache = new Map<string, Promise<R>>();
 	return (printingId, condition) => {
 		const key = `${printingId}:${condition}`;
-		let reference = cache.get(key);
-		if (reference === undefined) {
-			reference = read(printingId, condition);
-			cache.set(key, reference);
+		let result = cache.get(key);
+		if (result === undefined) {
+			result = read(printingId, condition);
+			cache.set(key, result);
 		}
-		return reference;
+		return result;
 	};
 }
 

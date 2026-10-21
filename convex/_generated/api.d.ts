@@ -97,6 +97,7 @@ import type * as migrations_backfillUserTracks from "../migrations/backfillUserT
 import type * as migrations_importMusicFunnelFromProd from "../migrations/importMusicFunnelFromProd.js";
 import type * as migrations_initializeRatingHistory from "../migrations/initializeRatingHistory.js";
 import type * as migrations_migrateRatingsToThreeTier from "../migrations/migrateRatingsToThreeTier.js";
+import type * as model_yugioh_costs from "../model/yugioh/costs.js";
 import type * as model_yugioh_deals from "../model/yugioh/deals.js";
 import type * as model_yugioh_decks from "../model/yugioh/decks.js";
 import type * as model_yugioh_exchangeRateSource from "../model/yugioh/exchangeRateSource.js";
@@ -228,6 +229,7 @@ declare const fullApi: ApiFromModules<{
   "migrations/importMusicFunnelFromProd": typeof migrations_importMusicFunnelFromProd;
   "migrations/initializeRatingHistory": typeof migrations_initializeRatingHistory;
   "migrations/migrateRatingsToThreeTier": typeof migrations_migrateRatingsToThreeTier;
+  "model/yugioh/costs": typeof model_yugioh_costs;
   "model/yugioh/deals": typeof model_yugioh_deals;
   "model/yugioh/decks": typeof model_yugioh_decks;
   "model/yugioh/exchangeRateSource": typeof model_yugioh_exchangeRateSource;

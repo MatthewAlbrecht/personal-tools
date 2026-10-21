@@ -65,7 +65,11 @@ import {
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { errorMessage } from "../_utils/errors";
-import { type CardPatch, applyCardPatch } from "../_utils/optimistic";
+import {
+	type CardPatch,
+	applyCardPatch,
+	updateCachedDeck,
+} from "../_utils/optimistic";
 import {
 	chosenPrintingSchema,
 	conditionSchema,
@@ -98,11 +102,7 @@ export function CardDrawer({
 	const updateCard = useMutation(
 		api.yugioh.decks.updateCard,
 	).withOptimisticUpdate((store, { deckCardId, ...patch }) => {
-		const deck = store.getQuery(api.yugioh.decks.getDeck, { deckId });
-		if (!deck) return;
-		store.setQuery(
-			api.yugioh.decks.getDeck,
-			{ deckId },
+		updateCachedDeck(store, deckId, (deck) =>
 			applyCardPatch(deck, deckCardId, patch),
 		);
 	});

@@ -1,5 +1,23 @@
+import type { OptimisticLocalStore } from "convex/browser";
 import { type CardOrder, deckProgress, moveToIndex } from "~/lib/yugioh/deck";
+import { api } from "../../../../convex/_generated/api";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import type { DeckCard, DeckView } from "./types";
+
+/**
+ * Applies an optimistic change to every cached getDeck for the Deck: the
+ * priced one (with `now`) on the Cards tab and the plain one in the shell.
+ */
+export function updateCachedDeck(
+	store: OptimisticLocalStore,
+	deckId: Id<"yugiohDecks">,
+	update: (deck: DeckView) => DeckView,
+): void {
+	for (const { args, value } of store.getAllQueries(api.yugioh.decks.getDeck)) {
+		if (args.deckId !== deckId || !value) continue;
+		store.setQuery(api.yugioh.decks.getDeck, args, update(value));
+	}
+}
 
 export type CardPatch = Partial<
 	Pick<

@@ -16,13 +16,20 @@ import {
 	EmptyTitle,
 } from "~/components/ui/empty";
 import { Skeleton } from "~/components/ui/skeleton";
+import { useHeldWhileLoading } from "~/lib/hooks/use-held-while-loading";
+import { useHourClock } from "~/lib/hooks/use-hour-clock";
 import { api } from "../../../../convex/_generated/api";
 import type { DeckSummary } from "../_utils/types";
+import { DeckCostLine } from "./deck-cost";
 import { DeckProgress } from "./deck-progress";
 import { NewDeckDrawer } from "./new-deck-drawer";
 
 export function DecksOverview(): React.ReactElement {
-	const decks = useQuery(api.yugioh.decks.listDecks, {});
+	const now = useHourClock();
+	const decks = useHeldWhileLoading(
+		useQuery(api.yugioh.decks.listDecks, { now }),
+		"decks",
+	);
 	const [creating, setCreating] = useState(false);
 
 	return (
@@ -85,6 +92,7 @@ export function DecksOverview(): React.ReactElement {
 }
 
 function DeckSummaryCard({ deck }: { deck: DeckSummary }): React.ReactElement {
+	const unpriced = deck.cost?.cardsWithoutPrice.length ?? 0;
 	return (
 		<Link
 			href={`/yugioh/decks/${deck._id}`}
@@ -96,11 +104,17 @@ function DeckSummaryCard({ deck }: { deck: DeckSummary }): React.ReactElement {
 						{deck.name}
 					</CardTitle>
 				</CardHeader>
-				<CardContent>
+				<CardContent className="flex flex-col gap-3">
+					<DeckCostLine cost={deck.cost} cardCount={deck.cardCount} />
 					<DeckProgress
 						copiesOwned={deck.copiesOwned}
 						copiesNeeded={deck.copiesNeeded}
 					/>
+					{unpriced > 0 && (
+						<p className="text-muted-foreground text-xs">
+							{unpriced} {unpriced === 1 ? "Card" : "Cards"} without a price
+						</p>
+					)}
 				</CardContent>
 			</Card>
 		</Link>
@@ -116,6 +130,7 @@ export function DecksOverviewSkeleton(): React.ReactElement {
 						<Skeleton className="h-7 w-2/3" />
 					</CardHeader>
 					<CardContent className="flex flex-col gap-3">
+						<Skeleton className="h-8 w-40" />
 						<Skeleton className="ml-auto h-5 w-24" />
 						<Skeleton className="h-1.5 w-full" />
 					</CardContent>

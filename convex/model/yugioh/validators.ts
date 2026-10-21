@@ -1,4 +1,9 @@
 import { type Infer, v } from "convex/values";
+import type {
+	CardCost,
+	CostTotals,
+	DeckCost,
+} from "../../../src/lib/yugioh/costs";
 import type { DealGrade, Reference } from "../../../src/lib/yugioh/deals";
 import type {
 	CardOrder,
@@ -16,6 +21,7 @@ import type {
 	TitleJudgments,
 	TitleRead,
 } from "../../../src/lib/yugioh/title-reading";
+import type { Id } from "../../_generated/dataModel";
 import type { DealView } from "./deals";
 
 export const yugiohSectionValidator = v.union(
@@ -182,6 +188,30 @@ export const yugiohDealValidator = v.object({
 	percentOfReference: v.union(v.number(), v.null()),
 });
 
+/** What finishing one Card costs, in USD; null figures: no price. */
+export const yugiohCardCostValidator = v.object({
+	remainingCopies: v.number(),
+	toFinish: v.union(v.number(), v.null()),
+	buyNow: v.union(v.number(), v.null()),
+});
+
+/** A Section's or Deck's cost to finish and buy-now total, in USD. */
+export const yugiohCostTotalsValidator = v.object({
+	toFinish: v.number(),
+	buyNow: v.number(),
+});
+
+/** A Deck's totals, and the unfinished Cards each total leaves out. */
+export const yugiohDeckCostValidator = v.object({
+	toFinish: v.number(),
+	buyNow: v.number(),
+	unfinishedCards: v.number(),
+	cardsWithoutPrice: v.array(
+		v.object({ _id: v.id("yugiohDeckCards"), cardName: v.string() }),
+	),
+	cardsWithoutBuyNow: v.number(),
+});
+
 // Compile-time check that the validators and the domain library agree.
 type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
 const sectionsAgree: Same<Infer<typeof yugiohSectionValidator>, Section> = true;
@@ -243,3 +273,18 @@ void referencesAgree;
 void dealGradesAgree;
 const dealsAgree: Same<Infer<typeof yugiohDealValidator>, DealView> = true;
 void dealsAgree;
+const cardCostsAgree: Same<
+	Infer<typeof yugiohCardCostValidator>,
+	CardCost
+> = true;
+const costTotalsAgree: Same<
+	Infer<typeof yugiohCostTotalsValidator>,
+	CostTotals
+> = true;
+const deckCostsAgree: Same<
+	Infer<typeof yugiohDeckCostValidator>,
+	DeckCost<Id<"yugiohDeckCards">>
+> = true;
+void cardCostsAgree;
+void costTotalsAgree;
+void deckCostsAgree;

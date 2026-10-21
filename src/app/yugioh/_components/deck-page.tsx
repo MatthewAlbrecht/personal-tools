@@ -16,7 +16,10 @@ import {
 	EmptyTitle,
 } from "~/components/ui/empty";
 import { Skeleton } from "~/components/ui/skeleton";
+import { useHeldWhileLoading } from "~/lib/hooks/use-held-while-loading";
+import { useHourClock } from "~/lib/hooks/use-hour-clock";
 import { cn } from "~/lib/utils";
+import { formatWholeDollars } from "~/lib/yugioh/costs";
 import { SECTION_LABELS } from "~/lib/yugioh/deck";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
@@ -25,7 +28,7 @@ import { AddCardDrawer } from "./add-card-drawer";
 import { CardDrawer } from "./card-drawer";
 import { CardOrderToggle } from "./card-order-toggle";
 import { CardRow } from "./card-row";
-import { DeckProgress } from "./deck-progress";
+import { DeckCostHeader, DeckCostHeaderSkeleton } from "./deck-cost";
 import { SortableCardList } from "./sortable-card-list";
 
 export function DeckPage({
@@ -33,7 +36,11 @@ export function DeckPage({
 }: {
 	deckId: Id<"yugiohDecks">;
 }): React.ReactElement | null {
-	const deck = useQuery(api.yugioh.decks.getDeck, { deckId });
+	const now = useHourClock();
+	const deck = useHeldWhileLoading(
+		useQuery(api.yugioh.decks.getDeck, { deckId, now }),
+		deckId,
+	);
 	const router = useRouter();
 	const pathname = usePathname() ?? `/yugioh/decks/${deckId}`;
 	const searchParams = useSearchParams() ?? new URLSearchParams();
@@ -65,12 +72,7 @@ export function DeckPage({
 
 	return (
 		<div className="flex flex-col gap-6">
-			<div className="max-w-sm">
-				<DeckProgress
-					copiesOwned={deck.copiesOwned}
-					copiesNeeded={deck.copiesNeeded}
-				/>
-			</div>
+			<DeckCostHeader deck={deck} cardHref={cardHref} />
 
 			{deck.cardCount === 0 ? (
 				<Empty className="border">
@@ -137,21 +139,35 @@ function SectionList({
 	cardHref: (cardId: string) => string;
 }): React.ReactElement {
 	const count = group.cards.length;
+	const subtotal = group.cost;
 	return (
 		<section
 			aria-labelledby={`section-${group.section}`}
 			className="flex flex-col gap-2"
 		>
-			<h2
-				id={`section-${group.section}`}
-				className="font-semibold text-muted-foreground text-sm uppercase tracking-wide"
-			>
-				{SECTION_LABELS[group.section]}
-				<span className="font-normal normal-case tracking-normal">
-					{" · "}
-					{count} {count === 1 ? "Card" : "Cards"}
-				</span>
-			</h2>
+			<div className="flex items-baseline justify-between gap-3">
+				<h2
+					id={`section-${group.section}`}
+					className="font-semibold text-muted-foreground text-sm uppercase tracking-wide"
+				>
+					{SECTION_LABELS[group.section]}
+					<span className="font-normal normal-case tracking-normal">
+						{" · "}
+						{count} {count === 1 ? "Card" : "Cards"}
+					</span>
+				</h2>
+				{subtotal !== null && subtotal.toFinish > 0 && (
+					<p className="text-right text-muted-foreground text-sm tabular-nums">
+						<span className="font-semibold text-foreground">
+							{formatWholeDollars(subtotal.toFinish)}
+						</span>
+						<span className="sr-only"> to finish</span>
+						{subtotal.buyNow > 0 && (
+							<> · {formatWholeDollars(subtotal.buyNow)} buy now</>
+						)}
+					</p>
+				)}
+			</div>
 			<Card className={cn("gap-0 py-0", !sortable && "overflow-hidden")}>
 				{sortable ? (
 					<SortableCardList
@@ -177,7 +193,7 @@ function SectionList({
 export function DeckPageSkeleton(): React.ReactElement {
 	return (
 		<div className="flex flex-col gap-6">
-			<Skeleton className="h-8 w-full max-w-sm" />
+			<DeckCostHeaderSkeleton />
 			<Skeleton className="h-9 w-28" />
 			<div className="flex flex-col gap-2">
 				<Skeleton className="h-5 w-32" />

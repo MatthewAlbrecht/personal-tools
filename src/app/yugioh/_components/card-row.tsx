@@ -2,6 +2,7 @@ import { Check } from "lucide-react";
 import Link from "next/link";
 import type * as React from "react";
 import { cn } from "~/lib/utils";
+import { formatWholeDollars } from "~/lib/yugioh/costs";
 import { isCardFinished, rarityAbbreviation } from "~/lib/yugioh/deck";
 import type { DeckCard } from "../_utils/types";
 import { CardArt } from "./card-art";
@@ -74,16 +75,43 @@ export function CardRow({
 					</span>
 				</span>
 			</div>
-			<div className="flex shrink-0 items-center justify-end text-right text-sm tabular-nums">
+			<div className="flex shrink-0 flex-col items-end justify-center text-right text-sm tabular-nums">
 				{finished ? (
 					<Check
 						aria-label="Finished"
 						className="size-4 text-muted-foreground"
 					/>
-				) : (
+				) : card.cost === null ? (
 					<span className="text-muted-foreground">{left} left</span>
+				) : (
+					<CardCostColumn cost={card.cost} />
 				)}
 			</div>
 		</Link>
+	);
+}
+
+/** Remaining cost (whole dollars) over the buy-now total, or "No price". */
+function CardCostColumn({
+	cost,
+}: {
+	cost: NonNullable<DeckCard["cost"]>;
+}): React.ReactElement {
+	return (
+		<>
+			{cost.toFinish === null ? (
+				<span className="text-muted-foreground">No price</span>
+			) : (
+				<span className="font-medium">
+					{formatWholeDollars(cost.toFinish)}
+					<span className="sr-only"> to finish</span>
+				</span>
+			)}
+			{cost.buyNow !== null && (
+				<span className="text-muted-foreground text-xs">
+					{formatWholeDollars(cost.buyNow)} buy now
+				</span>
+			)}
+		</>
 	);
 }

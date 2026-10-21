@@ -20,13 +20,14 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
+import { useHourClock } from "~/lib/hooks/use-hour-clock";
 import { cn } from "~/lib/utils";
 import { SECTION_LABELS, type Section } from "~/lib/yugioh/deck";
 import { dragTarget } from "~/lib/yugioh/drag-reorder";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { errorMessage } from "../_utils/errors";
-import { applyCardMove } from "../_utils/optimistic";
+import { applyCardMove, updateCachedDeck } from "../_utils/optimistic";
 import type { DeckCard } from "../_utils/types";
 import { CardRow } from "./card-row";
 
@@ -73,14 +74,12 @@ export function SortableCardList({
 	const [draggingId, setDraggingId] = useState<string | null>(null);
 	const [menuId, setMenuId] = useState<string | null>(null);
 	const [announcement, setAnnouncement] = useState("");
+	// The hour getDeck was priced at, so the server orders unpositioned Cards as shown.
+	const now = useHourClock();
 
 	const moveCard = useMutation(api.yugioh.decks.moveCard).withOptimisticUpdate(
 		(store, args) => {
-			const deck = store.getQuery(api.yugioh.decks.getDeck, { deckId });
-			if (!deck) return;
-			store.setQuery(
-				api.yugioh.decks.getDeck,
-				{ deckId },
+			updateCachedDeck(store, deckId, (deck) =>
 				applyCardMove(deck, args.deckCardId, args.toIndex),
 			);
 		},
@@ -92,7 +91,7 @@ export function SortableCardList({
 		setAnnouncement(
 			`${card.cardName} moved to ${index + 1} of ${cards.length} in ${SECTION_LABELS[section]}.`,
 		);
-		moveCard({ deckCardId: card._id, toIndex: index }).catch(
+		moveCard({ deckCardId: card._id, toIndex: index, now }).catch(
 			(error: unknown) => {
 				toast.error(errorMessage(error, "Couldn't move the Card. Try again."));
 			},
