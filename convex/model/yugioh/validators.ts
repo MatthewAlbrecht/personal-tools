@@ -327,6 +327,7 @@ export const yugiohRunStatusValidator = v.union(
 	v.literal("running"),
 	v.literal("finished"),
 	v.literal("failed"),
+	v.literal("challenged"),
 );
 
 /** Which kind of page an automated run visits. */
@@ -350,6 +351,24 @@ export const yugiohPageErrorValidator = v.object({
 	kind: yugiohVisitKindValidator,
 	label: v.string(),
 	error: v.string(),
+});
+
+/**
+ * The page a run stopped on: a check page (a captcha or bot challenge) that
+ * eBay or TCGplayer showed instead of results.
+ */
+export const yugiohCheckPageValidator = v.object({
+	marketplace: yugiohMarketplaceValidator,
+	...yugiohPlannedVisitValidator.fields,
+});
+
+/** Where and when the last run stopped on a check page (`requestRun`). */
+export const yugiohLastCheckPageValidator = v.object({
+	marketplace: yugiohMarketplaceValidator,
+	/** When the run stopped (Unix ms). */
+	at: v.number(),
+	/** When scheduled runs start again (Unix ms). */
+	coolDownEndsAt: v.number(),
 });
 
 /** A full run (every page) or a refresh run (auctions about to end). */
@@ -382,10 +401,18 @@ export const yugiohAutomationRunValidator = v.object({
 	 * end time (and no auction push). Missing on runs before it was counted.
 	 */
 	auctionsWithoutEndTime: v.optional(v.number()),
-	/** Why the run as a whole failed (never picked up, timed out, abandoned). */
+	/**
+	 * Why the run as a whole failed (never picked up, timed out, abandoned),
+	 * or where it stopped on a check page.
+	 */
 	error: v.union(v.string(), v.null()),
 	/** The first few pages that failed, for the runs list. */
 	pageErrors: v.array(yugiohPageErrorValidator),
+	/**
+	 * The check page a `challenged` run stopped on; null otherwise. Missing on
+	 * runs from before check pages stopped a run.
+	 */
+	checkPage: v.optional(v.union(yugiohCheckPageValidator, v.null())),
 });
 
 /**
@@ -416,6 +443,11 @@ export const yugiohVisitReportValidator = v.object({
 	auctionsWithoutEndTime: v.optional(v.number()),
 	/** Why the page captured nothing, or null when it worked. */
 	error: v.union(v.string(), v.null()),
+	/**
+	 * The page was a check page (a captcha or bot challenge): the run stops
+	 * here. Extensions from before this leave it out.
+	 */
+	challenged: v.optional(v.boolean()),
 });
 
 // Compile-time check that the validators and the domain library agree.
@@ -534,6 +566,7 @@ export const yugiohPushKindValidator = v.union(
 	v.literal("deal"),
 	v.literal("auction"),
 	v.literal("test"),
+	v.literal("checkPage"),
 );
 
 /**

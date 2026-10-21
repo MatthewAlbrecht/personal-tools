@@ -1977,6 +1977,8 @@ export default defineSchema({
 		newListings: v.number(),
 		auctionsWithoutEndTime: v.optional(v.number()),
 		error: v.union(v.string(), v.null()),
+		// A check page: the run stopped here (ticket 18).
+		challenged: v.optional(v.boolean()),
 	}).index("by_runId", ["runId"]),
 
 	// Devices with push turned on (ticket 13): one row per push subscription

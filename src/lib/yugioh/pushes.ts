@@ -4,6 +4,7 @@ import {
 	differenceInMinutes,
 } from "date-fns";
 import { millisecondsInHour } from "date-fns/constants";
+import { CHECK_PAGE_COOL_DOWN_MS } from "./automation";
 import type { DealGrade } from "./deals";
 import { DEAL_GRADE_LABELS } from "./deals";
 import { rarityAbbreviation } from "./deck";
@@ -113,6 +114,22 @@ export function auctionPushText(
 	return {
 		title: `Ending in ${minutesLeft} min: ${auction.cardName} ${rarityAbbreviation(auction.rarity)}`,
 		body: parts.join(" · "),
+	};
+}
+
+/**
+ * The push when a run stops on a check page: "Run stopped on a check page at
+ * eBay" over what to do about it.
+ */
+export function checkPagePushText(marketplace: Marketplace): {
+	title: string;
+	body: string;
+} {
+	const name = MARKETPLACE_LABELS[marketplace];
+	const hours = CHECK_PAGE_COOL_DOWN_MS / millisecondsInHour;
+	return {
+		title: `Run stopped on a check page at ${name}`,
+		body: `Open ${name} in the automation Chrome profile and solve it. Scheduled runs wait ${hours} hours.`,
 	};
 }
 

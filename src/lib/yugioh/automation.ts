@@ -13,13 +13,24 @@ export type RunTrigger = "launchAgent" | "t3" | "manual";
  */
 export type RunKind = "full" | "refresh";
 
-export type RunStatus = "requested" | "running" | "finished" | "failed";
+/** `challenged`: the run stopped on a check page (a captcha or bot challenge). */
+export type RunStatus =
+	| "requested"
+	| "running"
+	| "finished"
+	| "failed"
+	| "challenged";
 
 export type VisitKind =
 	| "ebayNewlyListed"
 	| "ebaySold"
 	| "ebayEndingSoon"
 	| "tcgplayer";
+
+/** The marketplace a visit's page is on. */
+export function visitMarketplace(kind: VisitKind): "ebay" | "tcgplayer" {
+	return kind === "tcgplayer" ? "tcgplayer" : "ebay";
+}
 
 export type PlannedVisit = {
 	url: string;
@@ -65,6 +76,23 @@ export const REFRESH_COALESCE_MS = 45 * MINUTE_MS;
  */
 export const REFRESH_MIN_GAP_MS = 15 * MINUTE_MS;
 
+/**
+ * After a run stops on a check page (a captcha or bot challenge), no
+ * scheduled run of any kind for this long, so one check page doesn't turn
+ * into a string of them. Hand runs still start.
+ */
+export const CHECK_PAGE_COOL_DOWN_MS = 6 * 60 * MINUTE_MS;
+
+/** Whether scheduled runs are still waiting after a run hit a check page. */
+export function inCheckPageCoolDown(
+	lastCheckPageAt: number | null,
+	now: number,
+): boolean {
+	return (
+		lastCheckPageAt !== null && now - lastCheckPageAt < CHECK_PAGE_COOL_DOWN_MS
+	);
+}
+
 /** A running auction that may want a refresh visit before its push. */
 export type EndingAuction = {
 	endsAt: number;
@@ -76,22 +104,26 @@ export type EndingAuction = {
  * Which run a scheduled ask starts: a full run when `timing` says one is due
  * (every 3 hours until posting times are learned, see `fullRunDue`), a
  * refresh run when an auction's refresh window is open and it hasn't been
- * seen since, or none. `auctions` are the matched, Qualifying auctions on
- * Cards still needed.
+ * seen since, or none. Nothing at all within 6 hours of a run stopping on a
+ * check page (`lastCheckPageAt`). `auctions` are the matched, Qualifying
+ * auctions on Cards still needed.
  */
 export function scheduledRunDue({
 	lastFullRunAt,
 	lastRunAt,
+	lastCheckPageAt,
 	auctions,
 	timing,
 	now,
 }: {
 	lastFullRunAt: number | null;
 	lastRunAt: number | null;
+	lastCheckPageAt: number | null;
 	auctions: readonly EndingAuction[];
 	timing: RunTiming;
 	now: number;
 }): RunKind | null {
+	if (inCheckPageCoolDown(lastCheckPageAt, now)) return null;
 	if (fullRunDue({ lastFullRunAt, timing, now })) return "full";
 	if (lastRunAt !== null && now - lastRunAt < REFRESH_MIN_GAP_MS) return null;
 	const windowOpen = auctions.some(

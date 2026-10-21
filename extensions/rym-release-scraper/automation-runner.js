@@ -15,8 +15,12 @@ const MAX_PAUSE_MS = 30_000;
  *   resolves with its JSON.
  * - `visitPage(visit)` opens the page, waits for its capture and closes it,
  *   resolving with `{ listingsCaptured, newListings, error }` (eBay pages
- *   add `auctionsWithoutEndTime`).
+ *   add `auctionsWithoutEndTime`; a check page adds `challenged: true`).
  * - `pause(ms)` waits; `random()` is Math.random.
+ *
+ * A check page (a captcha or bot challenge) ends the run at once: it's
+ * reported, and no further page is visited. The app ends the run on that
+ * report; an app from before check pages is told with a finish.
  */
 async function runAutomatedRun({ call, visitPage, pause, random }) {
 	const { run } = await call({ op: "claim" });
@@ -44,6 +48,16 @@ async function runAutomatedRun({ call, visitPage, pause, random }) {
 				runId: run.runId,
 				visit: { ...visit, ...outcome },
 			});
+			if (outcome.challenged) {
+				if (running) {
+					await call({
+						op: "finish",
+						runId: run.runId,
+						error: `Stopped on a check page: ${outcome.error}`,
+					});
+				}
+				return { runId: run.runId, pagesVisited, stoppedOnCheckPage: true };
+			}
 			// The script gave up on the run (it timed out): stop visiting.
 			if (!running) return { runId: run.runId, pagesVisited };
 		}
@@ -76,6 +90,7 @@ function visitOutcome(response) {
 		return {
 			...nothing,
 			error: typeof response.error === "string" ? response.error : null,
+			...(response.challenged === true ? { challenged: true } : {}),
 		};
 	}
 	const backend = response?.backend;
@@ -125,7 +140,31 @@ function visitOutcome(response) {
 	};
 }
 
+/**
+ * The marketplace whose check page a tab is on, from its URL alone: eBay
+ * sends its browser check and captcha to /splashui/* (where no content
+ * script runs), with the page asked for in `ru`. Null for any other page.
+ * docs/yugioh/references/marketplace-check-pages.md
+ */
+function checkPageAt(url) {
+	if (typeof url !== "string") return null;
+	let parsed;
+	try {
+		parsed = new URL(url);
+	} catch {
+		return null;
+	}
+	if (
+		parsed.hostname === "www.ebay.com" &&
+		parsed.pathname.startsWith("/splashui/")
+	) {
+		return "eBay";
+	}
+	return null;
+}
+
 globalThis.runAutomatedRun = runAutomatedRun;
+globalThis.checkPageAt = checkPageAt;
 globalThis.visitOutcome = visitOutcome;
 globalThis.MIN_PAUSE_MS = MIN_PAUSE_MS;
 globalThis.MAX_PAUSE_MS = MAX_PAUSE_MS;

@@ -78,10 +78,14 @@ function finishEbayCapture(response, count) {
 }
 
 // An automated run waits for each page's capture: say there's none coming,
-// and why when it's a problem.
-function tellNothingToSend(error) {
+// and why when it's a problem. A check page (`challenged`) stops the run.
+function tellNothingToSend(error, challenged = false) {
 	chrome.runtime.sendMessage(
-		{ type: "YUGIOH_CAPTURE_EMPTY", ...(error ? { error } : {}) },
+		{
+			type: "YUGIOH_CAPTURE_EMPTY",
+			...(error ? { error } : {}),
+			...(challenged ? { challenged } : {}),
+		},
 		function ignoreResponse() {
 			void chrome.runtime.lastError;
 		},
@@ -103,8 +107,17 @@ async function runEbayCapture() {
 		now: Date.now(),
 		url: location.href,
 	});
+	if (listings.length === 0 && isEbayCheckPage(document)) {
+		tellNothingToSend("eBay showed a check page instead of results.", true);
+		applyDockUpdate({
+			status: "warn",
+			headline: "eBay is checking for bots",
+			detail: "Solve the check on this page, then run again.",
+		});
+		return;
+	}
 	// A results page has its results list even with no matches; eBay's error
-	// and check pages don't.
+	// pages don't.
 	if (listings.length === 0 && !document.querySelector("ul.srp-results")) {
 		tellNothingToSend("eBay showed an error or check page instead of results.");
 		applyDockUpdate({

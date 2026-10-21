@@ -221,3 +221,31 @@ test("every fixture reads into what the ingest accepts", () => {
 		).toBe(true);
 	}
 });
+
+describe("check pages", () => {
+	const isTcgplayerCheckPage = (
+		globalThis as unknown as {
+			isTcgplayerCheckPage: (doc: Document) => boolean;
+		}
+	).isTcgplayerCheckPage;
+
+	test("a Cloudflare challenge and a CloudFront block are check pages", () => {
+		expect(
+			isTcgplayerCheckPage(documentOf("tcgplayer-check-cloudflare.html")),
+		).toBe(true);
+		expect(
+			isTcgplayerCheckPage(documentOf("tcgplayer-check-blocked.html")),
+		).toBe(true);
+	});
+
+	test("product pages aren't", () => {
+		for (const fixture of [
+			"tcgplayer-product.html",
+			"tcgplayer-no-listings.html",
+			"tcgplayer-latest-sales.html",
+			"tcgplayer-page-3.html",
+		]) {
+			expect(isTcgplayerCheckPage(documentOf(fixture))).toBe(false);
+		}
+	});
+});

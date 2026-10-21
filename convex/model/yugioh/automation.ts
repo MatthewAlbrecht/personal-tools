@@ -1,4 +1,6 @@
+import type { Infer } from "convex/values";
 import {
+	CHECK_PAGE_COOL_DOWN_MS,
 	type EndingAuction,
 	MAX_VISITS_PER_RUN,
 	type PlannedVisit,
@@ -10,8 +12,11 @@ import {
 	auctionsToRefresh,
 	buildRefreshVisits,
 	buildVisitPlan,
+	inCheckPageCoolDown,
 	scheduledRunDue,
+	visitMarketplace,
 } from "../../../src/lib/yugioh/automation";
+import { MARKETPLACE_LABELS } from "../../../src/lib/yugioh/listing-format";
 import {
 	buildDeckSearches,
 	searchedCandidates,
@@ -20,8 +25,9 @@ import type { Doc, Id } from "../../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../../_generated/server";
 import { matchedPrintingId } from "./deals";
 import { MAX_DECKS, readDeck } from "./decks";
-import { awaitsAuctionPush } from "./pushes";
+import { awaitsAuctionPush, queueCheckPagePush } from "./pushes";
 import { readRunTiming, relearnRunTiming } from "./runTiming";
+import type { yugiohLastCheckPageValidator } from "./validators";
 
 /** How many failed pages a run keeps on itself for the runs list. */
 export const MAX_PAGE_ERRORS_SHOWN = 20;
@@ -40,13 +46,17 @@ const MAX_ENDING_AUCTIONS = 100;
 
 /**
  * A run asked for (or the one already open), with its kind; `runId` and
- * `kind` are null when a scheduled ask finds nothing due.
+ * `kind` are null when a scheduled ask finds nothing due. `lastCheckPage`
+ * is set while scheduled runs wait after a run stopped on a check page.
  */
 export type RunRequest = {
 	runId: Id<"yugiohAutomationRuns"> | null;
 	alreadyOpen: boolean;
 	kind: RunKind | null;
+	lastCheckPage: LastCheckPage | null;
 };
+
+export type LastCheckPage = Infer<typeof yugiohLastCheckPageValidator>;
 
 export type ClaimedRun = {
 	runId: Id<"yugiohAutomationRuns">;
@@ -58,6 +68,8 @@ export type VisitReport = PlannedVisit & {
 	newListings: number;
 	auctionsWithoutEndTime?: number;
 	error: string | null;
+	/** A check page: the run stops here. */
+	challenged?: boolean;
 };
 
 const OPEN_STATUSES = ["requested", "running"] as const;
@@ -71,12 +83,17 @@ const OPEN_STATUSES = ["requested", "running"] as const;
  * minutes and gets a full run when the run timing says one is due (every 3
  * hours until posting times are learned), a refresh run when an auction
  * awaiting its push ends in about 20 minutes, or nothing.
+ *
+ * For 6 hours after a run stopped on a check page, the LaunchAgent gets no
+ * run. Hand and T3 Code runs (started with "Run now") still start, and the
+ * reply says where the last run stopped.
  */
 export async function requestRun(
 	ctx: MutationCtx,
 	trigger: RunTrigger,
 	now: number,
 ): Promise<RunRequest> {
+	const lastCheckPage = await readLastCheckPage(ctx, now);
 	for (const status of OPEN_STATUSES) {
 		const open = await ctx.db
 			.query("yugiohAutomationRuns")
@@ -88,6 +105,7 @@ export async function requestRun(
 					runId: run._id,
 					alreadyOpen: true,
 					kind: runKind(run),
+					lastCheckPage,
 				};
 			}
 			await ctx.db.patch("yugiohAutomationRuns", run._id, {
@@ -98,8 +116,12 @@ export async function requestRun(
 		}
 	}
 	const kind =
-		trigger === "launchAgent" ? await scheduledRun(ctx, now) : "full";
-	if (kind === null) return { runId: null, alreadyOpen: false, kind: null };
+		trigger === "launchAgent"
+			? await scheduledRun(ctx, lastCheckPage, now)
+			: "full";
+	if (kind === null) {
+		return { runId: null, alreadyOpen: false, kind: null, lastCheckPage };
+	}
 	const runId = await ctx.db.insert("yugiohAutomationRuns", {
 		trigger,
 		kind,
@@ -117,13 +139,39 @@ export async function requestRun(
 		auctionsWithoutEndTime: 0,
 		error: null,
 		pageErrors: [],
+		checkPage: null,
 	});
-	return { runId, alreadyOpen: false, kind };
+	return { runId, alreadyOpen: false, kind, lastCheckPage };
+}
+
+/**
+ * The last run that stopped on a check page, while scheduled runs still wait
+ * after it; null otherwise.
+ */
+async function readLastCheckPage(
+	ctx: QueryCtx,
+	now: number,
+): Promise<LastCheckPage | null> {
+	const run = await ctx.db
+		.query("yugiohAutomationRuns")
+		.withIndex("by_status", (q) => q.eq("status", "challenged"))
+		.order("desc")
+		.first();
+	const at = run?.endedAt ?? null;
+	if (!run?.checkPage || at === null || !inCheckPageCoolDown(at, now)) {
+		return null;
+	}
+	return {
+		marketplace: run.checkPage.marketplace,
+		at,
+		coolDownEndsAt: at + CHECK_PAGE_COOL_DOWN_MS,
+	};
 }
 
 /** Which run a scheduled ask starts now, if any. */
 async function scheduledRun(
 	ctx: QueryCtx,
+	lastCheckPage: LastCheckPage | null,
 	now: number,
 ): Promise<RunKind | null> {
 	const recent = await ctx.db
@@ -134,6 +182,7 @@ async function scheduledRun(
 	return scheduledRunDue({
 		lastFullRunAt: lastFull?.requestedAt ?? null,
 		lastRunAt: recent[0]?.requestedAt ?? null,
+		lastCheckPageAt: lastCheckPage?.at ?? null,
 		auctions: await readEndingAuctions(ctx, now),
 		timing: await readRunTiming(ctx),
 		now,
@@ -252,7 +301,8 @@ export async function readVisitPlan(
 /**
  * Records one visited page on a running run and adds it to the run's totals.
  * Returns whether the run is still running. A report for a run that isn't
- * (the script gave up on it) is dropped, and the extension stops.
+ * (the script gave up on it) is dropped, and the extension stops. A check
+ * page ends the run there (`stopOnCheckPage`).
  */
 export async function recordVisit(
 	ctx: MutationCtx,
@@ -287,7 +337,37 @@ export async function recordVisit(
 						{ kind: visit.kind, label: visit.label, error: visit.error },
 					],
 	});
+	if (visit.challenged) {
+		await stopOnCheckPage(ctx, run, visit, now);
+		return false;
+	}
 	return true;
+}
+
+/**
+ * Ends a run on the check page it hit: `challenged`, with the page, and a
+ * push to go and solve it. Scheduled runs then wait 6 hours.
+ */
+async function stopOnCheckPage(
+	ctx: MutationCtx,
+	run: Doc<"yugiohAutomationRuns">,
+	visit: PlannedVisit,
+	now: number,
+): Promise<void> {
+	const marketplace = visitMarketplace(visit.kind);
+	await ctx.db.patch("yugiohAutomationRuns", run._id, {
+		status: "challenged",
+		endedAt: now,
+		error: `Stopped on a check page at ${MARKETPLACE_LABELS[marketplace]}.`,
+		checkPage: {
+			marketplace,
+			url: visit.url,
+			kind: visit.kind,
+			label: visit.label,
+		},
+	});
+	await queueCheckPagePush(ctx, run._id, marketplace, now);
+	if (runKind(run) === "full") await relearnRunTiming(ctx, now);
 }
 
 /**
@@ -302,7 +382,7 @@ export async function finishRun(
 	now: number,
 ): Promise<void> {
 	const run = await ctx.db.get("yugiohAutomationRuns", runId);
-	if (!run || run.status === "finished" || run.status === "failed") return;
+	if (!run || !OPEN_STATUSES.some((status) => status === run.status)) return;
 	const failure =
 		error ?? (run.status === "requested" ? "The run never started." : null);
 	await ctx.db.patch("yugiohAutomationRuns", runId, {

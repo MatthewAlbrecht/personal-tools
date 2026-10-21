@@ -11,6 +11,7 @@ type Outcome = {
 	listingsCaptured: number;
 	newListings: number;
 	error: string | null;
+	challenged?: boolean;
 };
 type Call = Record<string, unknown> & { op: string };
 
@@ -22,6 +23,7 @@ declare global {
 		random: () => number;
 	}) => Promise<{ runId: string; pagesVisited: number } | null>;
 	var visitOutcome: (response: unknown) => Outcome;
+	var checkPageAt: (url: string | undefined) => string | null;
 	var MIN_PAUSE_MS: number;
 	var MAX_PAUSE_MS: number;
 }
@@ -172,6 +174,98 @@ describe("an automated run", () => {
 			"visit ebayNewlyListed",
 			"call visit",
 		]);
+	});
+});
+
+describe("a check page", () => {
+	const CHECK_PAGE: Outcome = {
+		listingsCaptured: 0,
+		newListings: 0,
+		error: "eBay showed a check page instead of results.",
+		challenged: true,
+	};
+
+	test("ends the run: the page is reported and no further page is visited", async () => {
+		const { deps, events, calls } = fakeRun(
+			[{ listingsCaptured: 48, newListings: 12, error: null }, CHECK_PAGE],
+			// The app ends the run when the check page is reported.
+			{ runningFor: 2 },
+		);
+
+		const result = await globalThis.runAutomatedRun(deps);
+
+		expect(result).toEqual({
+			runId: "run1",
+			pagesVisited: 2,
+			stoppedOnCheckPage: true,
+		});
+		expect(events).toEqual([
+			"call claim",
+			"visit ebayNewlyListed",
+			"call visit",
+			`pause ${(globalThis.MIN_PAUSE_MS + globalThis.MAX_PAUSE_MS) / 2}`,
+			"visit ebaySold",
+			"call visit",
+		]);
+		expect(calls.at(-1)).toEqual({
+			op: "visit",
+			runId: "run1",
+			visit: { ...PLAN[1], ...CHECK_PAGE },
+		});
+	});
+
+	test("stops even when the app doesn't end the run, and ends it with the reason", async () => {
+		const { deps, events, calls } = fakeRun([CHECK_PAGE]);
+
+		await globalThis.runAutomatedRun(deps);
+
+		expect(events).toEqual([
+			"call claim",
+			"visit ebayNewlyListed",
+			"call visit",
+			"call finish",
+		]);
+		expect(calls.at(-1)).toEqual({
+			op: "finish",
+			runId: "run1",
+			error:
+				"Stopped on a check page: eBay showed a check page instead of results.",
+		});
+	});
+
+	test("a check page the content script reported counts as challenged", () => {
+		expect(
+			globalThis.visitOutcome({
+				ok: true,
+				empty: true,
+				error: "eBay showed a check page instead of results.",
+				challenged: true,
+			}),
+		).toEqual(CHECK_PAGE);
+	});
+
+	test("eBay's check pages are known by their URL", () => {
+		expect(
+			globalThis.checkPageAt(
+				"https://www.ebay.com/splashui/captcha?ap=1&appName=orch&ru=https%3A%2F%2Fwww.ebay.com%2Fsch%2Fi.html",
+			),
+		).toBe("eBay");
+		expect(
+			globalThis.checkPageAt(
+				"https://www.ebay.com/splashui/challenge?ap=1&appName=orch",
+			),
+		).toBe("eBay");
+		expect(
+			globalThis.checkPageAt(
+				"https://www.ebay.com/sch/i.html?_nkw=splashui%2Fcaptcha",
+			),
+		).toBe(null);
+		expect(
+			globalThis.checkPageAt(
+				"https://signin.ebay.com/ws/eBayISAPI.dll?SignIn&ru=x",
+			),
+		).toBe(null);
+		expect(globalThis.checkPageAt(undefined)).toBe(null);
 	});
 });
 

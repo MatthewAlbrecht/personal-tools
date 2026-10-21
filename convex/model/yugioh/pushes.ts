@@ -8,11 +8,14 @@ import {
 	millisecondsInMinute,
 	millisecondsInSecond,
 } from "date-fns/constants";
+import { CHECK_PAGE_COOL_DOWN_MS } from "../../../src/lib/yugioh/automation";
 import { isRunningAuction, isSale } from "../../../src/lib/yugioh/deals";
 import { isCardFinished } from "../../../src/lib/yugioh/deck";
+import type { Marketplace } from "../../../src/lib/yugioh/listing-filters";
 import {
 	DEFAULT_TIME_ZONE,
 	auctionPushText,
+	checkPagePushText,
 	dealPushText,
 	pushDeliveryTime,
 } from "../../../src/lib/yugioh/pushes";
@@ -70,6 +73,8 @@ const TTL_SECONDS: Record<PushKind, number> = {
 	// Useless once the auction has ended.
 	auction: AUCTION_PUSH_LEAD_MS / millisecondsInSecond,
 	test: 60 * 60,
+	// Stale once scheduled runs resume.
+	checkPage: CHECK_PAGE_COOL_DOWN_MS / millisecondsInSecond,
 };
 
 /** Longer than any real push endpoint, key or time zone name. */
@@ -311,6 +316,32 @@ export async function queueTestPush(
 			body: "Deals and auctions will show up here like this.",
 			url: "/yugioh/settings",
 			tag: "test",
+		},
+		now,
+		now,
+	);
+}
+
+/**
+ * Tells me a run stopped on a check page at `marketplace`, so I can solve it
+ * in the automation profile. At any hour; nothing while no device has push
+ * on. The caller files it once per run.
+ */
+export async function queueCheckPagePush(
+	ctx: MutationCtx,
+	runId: Id<"yugiohAutomationRuns">,
+	marketplace: Marketplace,
+	now: number,
+): Promise<void> {
+	if ((await newestSubscription(ctx)) === null) return;
+	await queuePush(
+		ctx,
+		{
+			kind: "checkPage",
+			listingId: null,
+			...checkPagePushText(marketplace),
+			url: "/yugioh/settings#automated-runs",
+			tag: `check-page-${runId}`,
 		},
 		now,
 		now,

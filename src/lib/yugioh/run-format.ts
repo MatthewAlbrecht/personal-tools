@@ -9,11 +9,15 @@ import {
 } from "date-fns";
 import { millisecondsInHour } from "date-fns/constants";
 import {
+	CHECK_PAGE_COOL_DOWN_MS,
 	FULL_RUN_EVERY_MS,
+	type PlannedVisit,
 	type RunKind,
 	type RunStatus,
 	type RunTrigger,
 } from "./automation";
+import type { Marketplace } from "./listing-filters";
+import { MARKETPLACE_LABELS } from "./listing-format";
 import {
 	HOURS_IN_WEEK,
 	LEARNING_DAYS,
@@ -58,6 +62,8 @@ export type RunSummary = {
 	/** Matched running auctions shown with no time left; missing on older runs. */
 	auctionsWithoutEndTime?: number;
 	error: string | null;
+	/** The check page a `challenged` run stopped on; missing on older runs. */
+	checkPage?: (PlannedVisit & { marketplace: Marketplace }) | null;
 };
 
 export type RunLines = {
@@ -129,6 +135,15 @@ export function describeRun(run: RunSummary, now: number): RunLines {
 			tone: "running",
 		};
 	}
+	if (run.status === "challenged") {
+		return {
+			when,
+			outcome: checkPageOutcome(run, now),
+			pages,
+			listings,
+			tone: "failed",
+		};
+	}
 	if (run.status === "failed") {
 		return {
 			when,
@@ -148,6 +163,19 @@ export function describeRun(run: RunSummary, now: number): RunLines {
 				tone: "warn",
 			}
 		: { when, outcome: `Done in ${took}`, pages, listings, tone: "done" };
+}
+
+/**
+ * "Stopped on a check page at eBay (RA01-EN008).", plus what to do while
+ * scheduled runs still wait after it.
+ */
+function checkPageOutcome(run: RunSummary, now: number): string {
+	const page = run.checkPage;
+	if (!page) return run.error ?? "Stopped on a check page.";
+	const stopped = `Stopped on a check page at ${MARKETPLACE_LABELS[page.marketplace]} (${page.label}).`;
+	const resumesAt = (run.endedAt ?? now) + CHECK_PAGE_COOL_DOWN_MS;
+	if (now >= resumesAt) return stopped;
+	return `${stopped} Solve it in the automation Chrome profile. Scheduled runs wait until ${format(resumesAt, "h:mm a")}.`;
 }
 
 function plural(count: number, one: string): string {

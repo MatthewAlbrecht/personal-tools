@@ -5,13 +5,15 @@
 # claims the run and visits its pages), waits for the run to end, then quits
 # that Chrome if this script opened it. The LaunchAgent asks every 10 minutes;
 # the app answers with a full run every 3 hours, a refresh run before a matched
-# auction ends, or nothing due. T3 Code and hand runs are always full runs:
+# auction ends, or nothing due. T3 Code and hand runs are always full runs.
+# For 6 hours after a run stops on a check page (a captcha), the LaunchAgent's
+# asks get nothing; T3 Code and hand runs still start:
 #
 #   scripts/yugioh-automation/run.sh [--trigger launchAgent|t3|manual]
 #
 # Settings come from ~/.config/yugioh-automation/config (see install.sh).
 # Exit codes: 0 the run finished (or one was already going, or none was due),
-# 1 it failed, 64 bad arguments, 78 not set up.
+# 1 it failed, 2 it stopped on a check page, 64 bad arguments, 78 not set up.
 
 set -uo pipefail
 
@@ -44,7 +46,7 @@ while [ $# -gt 0 ]; do
 	case "$1" in
 	--trigger) trigger="${2:-}"; shift 2 ;;
 	--trigger=*) trigger="${1#*=}"; shift ;;
-	-h | --help) sed -n '2,14p' "$0"; exit 0 ;;
+	-h | --help) sed -n '2,16p' "$0"; exit 0 ;;
 	*) echo "Unknown argument: $1" >&2; exit 64 ;;
 	esac
 done
@@ -81,6 +83,18 @@ step() {
 
 # A field of a JSON reply (string, number or boolean), or nothing.
 field() { plutil -extract "$2" raw -o - - <<<"$1" 2>/dev/null; }
+
+# "eBay" or "TCGplayer" for the app's marketplace name.
+marketplace_name() {
+	case "$1" in
+	ebay) echo "eBay" ;;
+	tcgplayer) echo "TCGplayer" ;;
+	*) echo "$1" ;;
+	esac
+}
+
+# The clock time of a Unix ms timestamp, like 21:40.
+clock() { date -r "$(($1 / 1000))" '+%H:%M'; }
 
 # The PID of the Chrome running this profile, from its SingletonLock
 # (a symlink to "<host>-<pid>"), or nothing.
@@ -143,6 +157,12 @@ if [ "$(field "$reply" alreadyOpen)" = "true" ]; then
 	exit 0
 fi
 log "Asked for run $run_id ($trigger, ${kind:-full})."
+check_page="$(field "$reply" lastCheckPage.marketplace)"
+if [ -n "$check_page" ]; then
+	log "The last run stopped on a check page at $(marketplace_name "$check_page")" \
+		"at $(clock "$(field "$reply" lastCheckPage.at)"). Scheduled runs wait until" \
+		"$(clock "$(field "$reply" lastCheckPage.coolDownEndsAt)"); this one runs anyway."
+fi
 
 if [ -z "$(chrome_pid)" ]; then
 	mkdir -p "$profile"
@@ -169,7 +189,7 @@ while :; do
 		log "Couldn't check on the run: ${reply:0:200}"
 	fi
 	case "$status" in
-	finished | failed)
+	finished | failed | challenged)
 		ended=true
 		break
 		;;
@@ -196,6 +216,18 @@ if reply="$(step "{\"op\":\"status\",\"runId\":\"$run_id\"}")"; then
 		"$(field "$reply" run.listingsCaptured) Listings captured ($(field "$reply" run.newListings) new)," \
 		"$(field "$reply" run.failedPages) pages failed."
 	error="$(field "$reply" run.error)"
-	[ -n "$error" ] && log "Error: $error"
+	if [ "$status" = "challenged" ]; then
+		log "Stopped on a check page at" \
+			"$(marketplace_name "$(field "$reply" run.checkPage.marketplace)")" \
+			"($(field "$reply" run.checkPage.label)): $(field "$reply" run.checkPage.url)"
+		log "Open the automation profile (scripts/yugioh-automation/open-profile.sh)" \
+			"and solve it. Scheduled runs wait 6 hours; a hand run can go sooner."
+	elif [ -n "$error" ]; then
+		log "Error: $error"
+	fi
 fi
-[ "$status" = "finished" ]
+case "$status" in
+finished) exit 0 ;;
+challenged) exit 2 ;;
+*) exit 1 ;;
+esac

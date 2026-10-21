@@ -145,10 +145,14 @@ function finishTcgplayerCapture(response, product) {
 }
 
 // An automated run waits for each page's capture: say there's none coming,
-// and why when it's a problem.
-function tellTcgplayerNothingToSend(error) {
+// and why when it's a problem. A check page (`challenged`) stops the run.
+function tellTcgplayerNothingToSend(error, challenged = false) {
 	chrome.runtime.sendMessage(
-		{ type: "YUGIOH_CAPTURE_EMPTY", ...(error ? { error } : {}) },
+		{
+			type: "YUGIOH_CAPTURE_EMPTY",
+			...(error ? { error } : {}),
+			...(challenged ? { challenged } : {}),
+		},
 		function ignoreResponse() {
 			void chrome.runtime.lastError;
 		},
@@ -169,6 +173,18 @@ async function runTcgplayerCapture() {
 			countTcgplayerListings(document) > 0 || tcgplayerHasNoListings(document)
 		);
 	}, TCGPLAYER_LISTINGS_WAIT_MS);
+	if (isTcgplayerCheckPage(document)) {
+		tellTcgplayerNothingToSend(
+			"TCGplayer showed a check page instead of the product.",
+			true,
+		);
+		applyDockUpdate({
+			status: "warn",
+			headline: "TCGplayer is checking for bots",
+			detail: "Solve the check on this page, then run again.",
+		});
+		return;
+	}
 	await openLatestSales();
 
 	const product = readTcgplayerProduct(document, { url: location.href });

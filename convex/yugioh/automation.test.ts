@@ -353,6 +353,7 @@ describe("one run at a time", () => {
 			runId: (first.json as { runId: string }).runId,
 			alreadyOpen: true,
 			kind: "full",
+			lastCheckPage: null,
 		});
 		expect(await t.query(api.yugioh.automation.listRuns, {})).toHaveLength(1);
 	});

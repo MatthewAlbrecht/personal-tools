@@ -670,7 +670,8 @@ function settleAutomatedVisit(tabId, response) {
 	settle(visitOutcome(response));
 }
 
-// A page with nothing to send (a Search with no results).
+// A page with nothing to send (a Search with no results), or a check page
+// (`challenged`), which stops the run.
 chrome.runtime.onMessage.addListener((message, sender) => {
 	if (!message || message.type !== "YUGIOH_CAPTURE_EMPTY") {
 		return;
@@ -679,6 +680,7 @@ chrome.runtime.onMessage.addListener((message, sender) => {
 		ok: true,
 		empty: true,
 		error: message.error,
+		challenged: message.challenged === true,
 	});
 });
 
@@ -721,43 +723,61 @@ async function postAutomationStep(body) {
 	return JSON.parse(text);
 }
 
-/**
- * Why a page sent nothing. eBay's captcha lives at /splashui/captcha, where
- * the content script doesn't run (the host permission lets us read the URL).
- */
-async function silentPageReason(tabId) {
-	const tab = await chrome.tabs.get(tabId).catch(function gone() {
-		return null;
-	});
-	if (tab?.url?.includes("/splashui/captcha")) {
-		return "eBay asked for a captcha. Open eBay in the automation profile and solve it.";
-	}
-	return "The page sent nothing within 2 minutes.";
+/** A visit that landed on a check page `checkPageAt` knows by its URL. */
+function challengedVisit(marketplace) {
+	return {
+		listingsCaptured: 0,
+		newListings: 0,
+		error: `${marketplace} showed a check page instead of results.`,
+		challenged: true,
+	};
 }
 
-/** Opens one page in the run's window and waits for its capture, then closes it. */
+/**
+ * Opens one page in the run's window and waits for its capture, then closes
+ * it. eBay's check pages live at /splashui/*, where no content script runs:
+ * the tab's URL gives them away (the host permission lets us read it), so
+ * the visit settles as challenged the moment the tab gets there.
+ */
 async function visitPageInWindow(windowId, visit) {
 	const tab = await chrome.tabs.create({
 		windowId,
 		url: visit.url,
 		active: true,
 	});
+	let watchUrl = null;
 	try {
 		return await new Promise(function waitForCapture(resolve) {
-			const timer = setTimeout(async function giveUp() {
-				pendingAutomatedVisits.delete(tab.id);
-				resolve({
-					listingsCaptured: 0,
-					newListings: 0,
-					error: await silentPageReason(tab.id),
-				});
-			}, AUTOMATION_VISIT_TIMEOUT_MS);
-			pendingAutomatedVisits.set(tab.id, function settled(outcome) {
+			function settle(outcome) {
 				clearTimeout(timer);
+				pendingAutomatedVisits.delete(tab.id);
 				resolve(outcome);
-			});
+			}
+			const timer = setTimeout(async function giveUp() {
+				const current = await chrome.tabs.get(tab.id).catch(function gone() {
+					return null;
+				});
+				const marketplace = checkPageAt(current?.url);
+				settle(
+					marketplace
+						? challengedVisit(marketplace)
+						: {
+								listingsCaptured: 0,
+								newListings: 0,
+								error: "The page sent nothing within 2 minutes.",
+							},
+				);
+			}, AUTOMATION_VISIT_TIMEOUT_MS);
+			watchUrl = function onUpdated(tabId, changeInfo) {
+				if (tabId !== tab.id) return;
+				const marketplace = checkPageAt(changeInfo.url);
+				if (marketplace) settle(challengedVisit(marketplace));
+			};
+			chrome.tabs.onUpdated.addListener(watchUrl);
+			pendingAutomatedVisits.set(tab.id, settle);
 		});
 	} finally {
+		if (watchUrl) chrome.tabs.onUpdated.removeListener(watchUrl);
 		await chrome.tabs.remove(tab.id).catch(function alreadyClosed() {});
 	}
 }

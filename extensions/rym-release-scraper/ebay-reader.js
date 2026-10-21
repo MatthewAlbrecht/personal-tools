@@ -318,5 +318,36 @@ function readEbayResults(doc, { now, url }) {
 	};
 }
 
+// eBay's check pages (docs/yugioh/references/marketplace-check-pages.md):
+// its browser check ("Pardon Our Interruption..."), its captcha ("Security
+// Measure | eBay") and Akamai's edge block ("Error Page | eBay", "SORRY
+// Something went wrong on our end"). The first two live at /splashui/*,
+// where this script doesn't run; the service worker spots those by URL.
+const EBAY_CHECK_TITLES = [
+	/^Pardon Our Interruption/i,
+	/^Security Measure \| eBay$/i,
+	/^Error Page \| eBay$/i,
+];
+const EBAY_CHECK_SELECTORS =
+	"form#destForm, #_chlghost, form#captcha_form, #captcha_loading, .error-header__headline";
+const EBAY_CHECK_TEXT =
+	/Checking your browser before you access eBay|Please verify yourself to continue|made us think you were a bot|Something went wrong on our end/i;
+
+/**
+ * Whether eBay showed a check page (a captcha, a browser check or a bot
+ * block) instead of results. A results page always has its results list,
+ * even with no results, so it never counts.
+ */
+function isEbayCheckPage(doc) {
+	if (doc.querySelector("ul.srp-results")) return false;
+	const title = ebayText(doc.querySelector("title"));
+	return (
+		EBAY_CHECK_TITLES.some((pattern) => pattern.test(title)) ||
+		doc.querySelector(EBAY_CHECK_SELECTORS) !== null ||
+		EBAY_CHECK_TEXT.test(ebayText(doc.body))
+	);
+}
+
 globalThis.readEbayResults = readEbayResults;
 globalThis.countEbayResults = countEbayResults;
+globalThis.isEbayCheckPage = isEbayCheckPage;

@@ -14,12 +14,14 @@ Platform facts and sources: `references/automated-browser.md` (§8 covers how ex
    - for a full run, each Search's Newly Listed page, then its Sold page, with the Searches packed across all Decks;
    - then the TCGplayer product page of every searched Printing that has one.
 5. **Visit.** The extension opens each page in a window of its own and waits up to 2 minutes for the page to capture. It closes the tab, reports the page (Listings captured, new ones, any error), and waits 15–30 s before the next one.
-6. **Finish.** After the last page, the extension ends the run. The script, which checks every 20 s, then quits that Chrome (only if the script opened it) and logs a summary.
+6. **Check page.** If a page is a check page (a captcha or bot challenge), the run stops there. See "Check pages" below.
+7. **Finish.** After the last page, the extension ends the run. The script, which checks every 20 s, then quits that Chrome (only if the script opened it) and logs a summary.
 
 ## When a run is due
 
 T3 Code and hand runs are always full runs. The LaunchAgent asks every 10 minutes, and the app (`scheduledRunDue` in `src/lib/yugioh/automation.ts`) answers:
 
+0. **Nothing, for 6 hours after a run stopped on a check page** (`CHECK_PAGE_COOL_DOWN_MS`), neither full nor refresh runs. Hand and T3 Code runs (started with **Run now**) still start, and the script says the last run hit a check page and when scheduled runs resume. See "Check pages" below.
 1. **A full run** when the run timing says one is due (`fullRunDue` in `src/lib/yugioh/run-timing.ts`, see "Run timing" below): every 3 hours until posting times are learned (5 minutes' slack, half an ask). Any full run counts, failed ones too, so a broken run isn't retried every 10 minutes.
 2. **A refresh run** when an auction's refresh window is open and no capture has seen it since. See the next section.
 3. **Nothing** otherwise.
@@ -34,7 +36,7 @@ The auction push goes out 15 minutes before a matched auction ends (ticket 14) a
 - **Coalescing:** a run refreshes every such auction ending in the next 45 minutes, not just the one that opened the window. So auctions ending close together share one run, and the later ones count as seen.
 - **One page per Search:** the refresh page is the auction's Search, showing running auctions only, ending soonest first (`LH_Auction=1&_sop=1`, kind `ebayEndingSoon`, "Ending soon" in the runs list). It shows the price, bids and time left of every auction in that Search, so auctions in one Search share one page. Pages come soonest-ending first.
 - **Full runs too:** a full run puts these pages first.
-- **Captchas and errors:** a refresh page goes through the same capture and checks as any other page. A captcha or a failed page is recorded on the run, and the run shows in Settings as "Before an auction ends". No refresh run starts within 15 minutes of the last run asked for, so a failed refresh isn't retried at the next ask, and eBay isn't hit every 10 minutes while it shows a captcha. The push still goes out, with the older price.
+- **Captchas and errors:** a refresh page goes through the same capture and checks as any other page. A failed page is recorded on the run, and the run shows in Settings as "Before an auction ends". A check page stops the run, and no run starts for 6 hours (see "Check pages"). No refresh run starts within 15 minutes of the last run asked for, so a failed refresh isn't retried at the next ask. The auction push still goes out, with the older price.
 
 **Known gaps:**
 - If a full run is still going when an auction's window opens, the ask finds that run open and exits. The full run's plan was made when it started, so that auction gets no refresh. Full runs put the auctions ending in the next 45 minutes first, which narrows the gap.
@@ -42,6 +44,15 @@ The auction push goes out 15 minutes before a matched auction ends (ticket 14) a
 - Auctions with no end time (see ticket 14) get no refresh.
 
 The constants are in `src/lib/yugioh/automation.ts`: `SCHEDULE_TICK_MS`, `FULL_RUN_EVERY_MS`, `REFRESH_OPENS_BEFORE_END_MS`, `REFRESH_CLOSES_BEFORE_END_MS`, `REFRESH_COALESCE_MS` and `REFRESH_MIN_GAP_MS`. If you change how often the LaunchAgent asks, keep the window wider than the gap between asks.
+
+## Check pages
+
+When eBay or TCGplayer shows a check page (a captcha, "Pardon Our Interruption", a Cloudflare or Akamai challenge or block) instead of results, the run stops at once, so one check page doesn't turn into a string of them. What the pages look like, with sources: `references/marketplace-check-pages.md`.
+
+- **Spotting one.** eBay sends its browser check and captcha to `/splashui/*`, where no content script runs. The service worker watches the visit tab's URL (`checkPageAt` in `automation-runner.js`) and settles the visit the moment the tab gets there. Akamai's block ("Error Page | eBay") comes at the search URL itself, so the eBay content script spots it (`isEbayCheckPage` in `ebay-reader.js`). A results page always has its results list, even with no results, so it never counts. On TCGplayer, `isTcgplayerCheckPage` in `tcgplayer-reader.js` looks for the Cloudflare, AWS WAF and CloudFront shapes. None has been seen on TCGplayer yet. Every product page mentions hCaptcha for its sign-in form, so that name alone doesn't count.
+- **The run ends.** The page is reported as `challenged`, distinct from an empty Search and from a timeout. The app ends the run as `challenged`, with the page (`checkPage`), and answers `running: false`, so the extension visits nothing more. Settings → Automated runs shows "Stopped on a check page at eBay (RA01-EN008)", and until scheduled runs resume, when that is. `run.sh` logs the page and exits with code 2.
+- **A push.** Devices with push on get "Run stopped on a check page at eBay" at once, at any hour (quiet hours don't hold it). It opens Settings. One push per run.
+- **The cool-down.** For 6 hours after the run stopped, the LaunchAgent's asks get nothing. After that, the first ask gets a full run. A hand or T3 Code run during the cool-down still starts, and doesn't end the cool-down, even when it finishes cleanly.
 
 ## Limits
 
@@ -118,7 +129,7 @@ This boots the agent out and deletes its plist. It keeps the config, the logs an
 
 ## T3 Code scheduled task
 
-The task runs the same script, so it can be started and watched from T3 Code. A T3 run is always a full run (its plan still puts any auction about to end first). The LaunchAgent already asks every 10 minutes, so create the task disabled and start it with **Run now**. Don't make T3 Code the scheduler: refresh runs need an ask every 10 minutes, and each T3 run is a model turn that needs the T3 app open (`references/automated-browser.md` §8). If both fire at once, the second one finds the open run and exits.
+The task runs the same script, so it can be started and watched from T3 Code. A T3 run is always a full run (its plan still puts any auction about to end first). In the 6 hours after a run stopped on a check page it still starts, and the script says so. The LaunchAgent already asks every 10 minutes, so create the task disabled and start it with **Run now**. Don't make T3 Code the scheduler: refresh runs need an ask every 10 minutes, and each T3 run is a model turn that needs the T3 app open (`references/automated-browser.md` §8). If both fire at once, the second one finds the open run and exits.
 
 Create it from a T3 Code thread in the personal-tools project with the `schedule_task` tool:
 
@@ -161,7 +172,8 @@ Once Listings go back about 4 weeks (28 days since the first capture), the app l
 | Exit code 78 | No config, or `YUGIOH_INGEST_SECRET` is empty. Run `install.sh` and fill in the config. |
 | "The app at … doesn't have this capture yet (404)" | The origin's app doesn't have the route. Deploy it, or use `http://localhost:1333`. |
 | "The ingest secret doesn't match … (401)" | The secret in the extension's options, or in the config, isn't the app's `RYM_EXTENSION_INGEST_SECRET`. |
-| A page fails with "The page sent nothing within 2 minutes" | eBay sent a check page (a captcha), or the page didn't load. Open it in the automation profile and solve it once. |
+| A page fails with "The page sent nothing within 2 minutes" | The page didn't load, or it's a check page the extension doesn't know. Open it in the automation profile and look. |
+| "Stopped on a check page at eBay" (or TCGplayer), a push saying so, or `run.sh` exit code 2 | The marketplace showed a captcha or bot challenge. Run `open-profile.sh`, open the page the run names, and solve it. Scheduled runs wait 6 hours from the stop. To check sooner, run `run.sh` by hand. If check pages keep coming, run less often (see "Changing things"). |
 | Updated the repo, but runs still come only every 3 hours, and no refresh runs | The installed plist is the old one. Run `install.sh` again: it rewrites the plist and reloads the agent. |
 | Runs never happen | `launchctl print gui/$(id -u)/dev.moooose.yugioh-automation` shows whether the agent is loaded. Check Login Items, and read `~/Library/Logs/yugioh-automation/run.log`. |
 | Chrome stays open after a run | The profile was already open when the run started, so the script left it alone. Quit it with ⌘Q. |

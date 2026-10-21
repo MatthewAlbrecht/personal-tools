@@ -5,6 +5,7 @@ import * as Automation from "../model/yugioh/automation";
 import { readRunTiming } from "../model/yugioh/runTiming";
 import {
 	yugiohAutomationRunValidator,
+	yugiohLastCheckPageValidator,
 	yugiohPlannedVisitValidator,
 	yugiohRunKindValidator,
 	yugiohRunTimingValidator,
@@ -24,6 +25,7 @@ const runValidator = yugiohAutomationRunValidator.extend({
 /**
  * The script asks for a run; an open run is returned instead of a new one.
  * A scheduled ask with nothing due gets a null `runId` and `kind`.
+ * `lastCheckPage` is set while scheduled runs wait after a check page.
  */
 export const requestRun = internalMutation({
 	args: { trigger: yugiohRunTriggerValidator },
@@ -31,6 +33,7 @@ export const requestRun = internalMutation({
 		runId: v.union(v.id("yugiohAutomationRuns"), v.null()),
 		alreadyOpen: v.boolean(),
 		kind: v.union(yugiohRunKindValidator, v.null()),
+		lastCheckPage: v.union(yugiohLastCheckPageValidator, v.null()),
 	}),
 	handler: async (ctx, args) =>
 		await Automation.requestRun(ctx, args.trigger, Date.now()),

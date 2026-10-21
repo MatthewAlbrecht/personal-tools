@@ -83,6 +83,7 @@ describe("when a scheduled ask starts a run", () => {
 	const recent = {
 		lastFullRunAt: NOW - HOUR,
 		lastRunAt: NOW - HOUR,
+		lastCheckPageAt: null,
 		timing: learning,
 	};
 	/** An auction ending `minutesLeft` from now, last seen 2 hours ago. */
@@ -96,6 +97,7 @@ describe("when a scheduled ask starts a run", () => {
 			scheduledRunDue({
 				lastFullRunAt: NOW - 3 * HOUR + 4 * MINUTE,
 				lastRunAt: null,
+				lastCheckPageAt: null,
 				auctions: [],
 				timing: learning,
 				now: NOW,
@@ -105,6 +107,7 @@ describe("when a scheduled ask starts a run", () => {
 			scheduledRunDue({
 				lastFullRunAt: null,
 				lastRunAt: null,
+				lastCheckPageAt: null,
 				auctions: [],
 				timing: learning,
 				now: NOW,
@@ -132,6 +135,32 @@ describe("when a scheduled ask starts a run", () => {
 				auctions: [
 					{ endsAt: NOW + 25 * MINUTE, lastSeenAt: NOW - 20 * MINUTE },
 				],
+				now: NOW,
+			}),
+		).toBe(null);
+	});
+
+	test("nothing for 6 hours after a run stopped on a check page", () => {
+		const due = (hoursSinceCheckPage: number) =>
+			scheduledRunDue({
+				lastFullRunAt: NOW - 8 * HOUR,
+				lastRunAt: NOW - 8 * HOUR,
+				lastCheckPageAt: NOW - hoursSinceCheckPage * HOUR,
+				auctions: [endingIn(25)],
+				timing: learning,
+				now: NOW,
+			});
+		expect(due(1)).toBe(null);
+		expect(due(5.99)).toBe(null);
+		expect(due(6)).toBe("full");
+	});
+
+	test("a refresh run waits out the cool-down too", () => {
+		expect(
+			scheduledRunDue({
+				...recent,
+				lastCheckPageAt: NOW - 2 * HOUR,
+				auctions: [endingIn(25)],
 				now: NOW,
 			}),
 		).toBe(null);

@@ -1,10 +1,20 @@
-import { describe, expect, test } from "vitest";
+import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { captureStaleness, describeRun, describeRunTiming } from "./run-format";
 
 const HOUR = 60 * 60 * 1000;
 const MINUTE = 60 * 1000;
 // Tue Oct 20 2026, 15:00 local time.
 const NOW = new Date(2026, 9, 20, 15, 0).getTime();
+
+// "Today" is relative to the clock, so the clock is NOW.
+beforeAll(() => {
+	vi.useFakeTimers();
+	vi.setSystemTime(NOW);
+});
+
+afterAll(() => {
+	vi.useRealTimers();
+});
 
 const finished = {
 	trigger: "launchAgent" as const,
@@ -174,6 +184,40 @@ describe("a run in the list", () => {
 			listings: null,
 			tone: "failed",
 		});
+	});
+
+	const stopped = {
+		...finished,
+		status: "challenged" as const,
+		endedAt: NOW - 10 * MINUTE,
+		pagesVisited: 3,
+		searchPagesVisited: 3,
+		productPagesVisited: 0,
+		failedPages: 1,
+		error: "Stopped on a check page at eBay.",
+		checkPage: {
+			marketplace: "ebay" as const,
+			url: "https://www.ebay.com/sch/i.html?_nkw=RA01-EN008&_sop=10",
+			kind: "ebayNewlyListed" as const,
+			label: "RA01-EN008",
+		},
+	};
+
+	test("a run stopped on a check page says where, and when scheduled runs resume", () => {
+		expect(describeRun(stopped, NOW)).toEqual({
+			when: "Today, 2:41 PM · Scheduled",
+			outcome:
+				"Stopped on a check page at eBay (RA01-EN008). Solve it in the automation Chrome profile. Scheduled runs wait until 8:50 PM.",
+			pages: "3 Search pages",
+			listings: "340 Listings captured, 18 new",
+			tone: "failed",
+		});
+	});
+
+	test("once scheduled runs resume, it only says where it stopped", () => {
+		expect(describeRun(stopped, NOW + 7 * HOUR).outcome).toBe(
+			"Stopped on a check page at eBay (RA01-EN008).",
+		);
 	});
 });
 

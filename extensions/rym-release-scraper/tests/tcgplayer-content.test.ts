@@ -201,3 +201,48 @@ test("a capture the app refused shows the service worker's short reason as it is
 		detail: reason,
 	});
 });
+
+test("a check page instead of the product is reported as challenged, so the run stops", async () => {
+	vi.useFakeTimers();
+	const html = readFileSync(
+		new URL("./fixtures/tcgplayer-check-cloudflare.html", import.meta.url),
+		"utf8",
+	);
+	const { document, window } = parseHTML(html);
+	const sent: Array<Record<string, unknown>> = [];
+	const dock: DockUpdate[] = [];
+	vi.stubGlobal("document", document);
+	vi.stubGlobal("window", window);
+	vi.stubGlobal("MutationObserver", window.MutationObserver);
+	vi.stubGlobal("location", { href: ASH_URL });
+	vi.stubGlobal("mountScrapeDock", () => {});
+	vi.stubGlobal("applyDockUpdate", (patch: DockUpdate) => {
+		dock.push(patch);
+	});
+	vi.stubGlobal("chrome", {
+		runtime: {
+			lastError: undefined,
+			sendMessage(message: Record<string, unknown>) {
+				sent.push(message);
+			},
+		},
+	});
+
+	vi.resetModules();
+	await import("../tcgplayer-content.js");
+	await vi.advanceTimersByTimeAsync(30_000);
+
+	expect(sent).toEqual([
+		{
+			type: "YUGIOH_CAPTURE_EMPTY",
+			error: "TCGplayer showed a check page instead of the product.",
+			challenged: true,
+		},
+	]);
+	expect(dock.at(-1)).toMatchObject({
+		status: "warn",
+		headline: "TCGplayer is checking for bots",
+	});
+
+	vi.useRealTimers();
+});

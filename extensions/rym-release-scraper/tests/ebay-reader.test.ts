@@ -365,3 +365,45 @@ describe("the payload the app accepts", () => {
 		}
 	});
 });
+
+describe("check pages", () => {
+	const isEbayCheckPage = (
+		globalThis as unknown as { isEbayCheckPage: (doc: Document) => boolean }
+	).isEbayCheckPage;
+
+	function documentOf(fixture: string): Document {
+		const html = readFileSync(
+			new URL(`./fixtures/${fixture}`, import.meta.url),
+			"utf8",
+		);
+		return parseHTML(html).document as unknown as Document;
+	}
+
+	test("eBay's browser check, captcha and edge block are check pages", () => {
+		expect(isEbayCheckPage(documentOf("ebay-check-challenge.html"))).toBe(true);
+		expect(isEbayCheckPage(documentOf("ebay-check-captcha.html"))).toBe(true);
+		expect(isEbayCheckPage(documentOf("ebay-check-blocked.html"))).toBe(true);
+	});
+
+	test("results pages, with or without results, aren't", () => {
+		for (const fixture of [
+			"ebay-sold.html",
+			"ebay-newly-listed.html",
+			"ebay-newly-listed-grid.html",
+			"ebay-ending-soon.html",
+		]) {
+			expect(isEbayCheckPage(documentOf(fixture))).toBe(false);
+		}
+		const { document } = parseHTML(
+			"<html><head><title>RA01-EN999 | eBay</title></head><body><ul class='srp-results'></ul></body></html>",
+		);
+		expect(isEbayCheckPage(document as unknown as Document)).toBe(false);
+	});
+
+	test("an error page without a check page's markers isn't", () => {
+		const { document } = parseHTML(
+			"<html><head><title>eBay</title></head><body><p>This page is missing.</p></body></html>",
+		);
+		expect(isEbayCheckPage(document as unknown as Document)).toBe(false);
+	});
+});

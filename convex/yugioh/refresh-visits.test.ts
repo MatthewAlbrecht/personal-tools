@@ -244,6 +244,7 @@ describe("the schedule", () => {
 			runId: null,
 			alreadyOpen: false,
 			kind: null,
+			lastCheckPage: null,
 		});
 		at(NOW + 2 * HOUR + 50 * MINUTE);
 		expect((await scheduledAsk(t)).runId).toBeNull();
