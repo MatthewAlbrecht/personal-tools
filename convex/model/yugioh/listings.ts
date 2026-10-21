@@ -333,6 +333,15 @@ export type DeckListingsPage = {
 	total: number;
 	/** Every seller country among the Deck's shown Listings, A to Z: the location filter's options. */
 	locations: string[];
+	/** The Deck's Cards and the Printings each searches: which Card a Listing is for. */
+	cards: DeckCardPrintings[];
+};
+
+/** A Deck Card, and the Printings it searches. */
+export type DeckCardPrintings = {
+	_id: Id<"yugiohDeckCards">;
+	cardName: string;
+	printingIds: Id<"yugiohPrintings">[];
 };
 
 /**
@@ -353,10 +362,11 @@ export async function readDeckListingsPage(
 		listDeckCards(ctx, deckId),
 		listDeckCandidates(ctx, deckId),
 	]);
+	const searched = searchedPrintingsByCard(cards, candidates);
 	const context = {
 		now,
 		newSince,
-		cardPrintings: cardPrintings(cards, candidates),
+		cardPrintings: cardPrintings(searched),
 		neededPrintings: neededPrintingIds<string>(cards, candidates),
 	};
 	const shown = all.filter((listing) =>
@@ -390,6 +400,11 @@ export async function readDeckListingsPage(
 		).length,
 		total: shown.length,
 		locations: sellerCountries(shown),
+		cards: cards.map((card) => ({
+			_id: card._id,
+			cardName: card.cardName,
+			printingIds: searched.get(card._id) ?? [],
+		})),
 	};
 }
 
@@ -480,14 +495,10 @@ function sellerCountries(listings: Doc<"yugiohListings">[]): string[] {
 
 /** The Printings each of the Deck's Cards searches, by Card ID. */
 function cardPrintings(
-	cards: ReadonlyArray<Doc<"yugiohDeckCards">>,
-	candidates: ReadonlyArray<Doc<"yugiohCandidatePrintings">>,
+	searched: ReadonlyMap<string, readonly string[]>,
 ): Map<string, Set<string>> {
 	const byCard = new Map<string, Set<string>>();
-	for (const [cardId, printingIds] of searchedPrintingsByCard(
-		cards,
-		candidates,
-	)) {
+	for (const [cardId, printingIds] of searched) {
 		byCard.set(cardId, new Set(printingIds));
 	}
 	return byCard;

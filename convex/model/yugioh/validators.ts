@@ -338,6 +338,8 @@ export const yugiohListingFiltersValidator = v.object({
 	location: v.optional(v.string()),
 	/** A Deck Card ID, as it appears in the URL; an unknown one matches nothing. */
 	card: v.optional(v.string()),
+	/** Deck Card IDs whose Listings are hidden (`hide` in the URL). */
+	excludeCards: v.optional(v.array(v.string())),
 });
 
 /** What started an automated browser run. */

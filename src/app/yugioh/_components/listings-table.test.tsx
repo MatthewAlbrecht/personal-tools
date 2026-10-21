@@ -159,7 +159,6 @@ async function measureTable(listings: ListingView[], width: number) {
 		<div style={{ width }}>
 			<ListingsTable
 				listings={listings}
-				href={() => "#"}
 				now={NOW}
 				view="available"
 				sort={{ key: "date", direction: "desc" }}
@@ -235,8 +234,53 @@ describe("the Listings table's layout", () => {
 		expect(nameWidth).toBeGreaterThan(40);
 	});
 
+	test("the Card column gets the room the Actions column had", async () => {
+		const html = tableHtml([brionacSale()]);
+		expect(html).not.toContain("Actions");
+		expect(html.match(/<col[ />]/g)).toHaveLength(7);
+	});
+
 	test("every row is the same height, flags or not", async () => {
 		const { rows } = await measureTable([brionacSale(), busyListing()], 1024);
 		expect(rows[0]).toBeCloseTo(rows[1] ?? 0, 0);
+	});
+});
+
+/** The table's server markup, with editing on as on the Listings page. */
+function tableHtml(listings: ListingView[]): string {
+	return renderToStaticMarkup(
+		<ListingsTable
+			listings={listings}
+			now={NOW}
+			view="available"
+			sort={{ key: "date", direction: "desc" }}
+			onSort={() => {}}
+			onSetCondition={() => {}}
+			onSetRarity={() => {}}
+			onDetails={() => {}}
+			onHideCard={() => {}}
+		/>,
+	);
+}
+
+describe("a Listings table row", () => {
+	test("is one focusable control that opens the row menu", () => {
+		const html = tableHtml([brionacSale(), busyListing()]);
+		const rows = html.match(/<tr [^>]*tabindex="0"[^>]*>/g) ?? [];
+		expect(rows).toHaveLength(2);
+		for (const row of rows) {
+			expect(row).toContain('aria-haspopup="menu"');
+			expect(row).toContain('aria-expanded="false"');
+		}
+	});
+
+	test("no longer links to the drawer, nor carries its own action buttons", () => {
+		const html = tableHtml([brionacSale()]);
+		const body = html.slice(html.indexOf("<tbody"));
+		expect(body).not.toContain("<a ");
+		expect(body).not.toContain("Mark as wrong");
+		// The inline condition and rarity pickers stay.
+		expect(body).toContain("Condition:");
+		expect(body).toContain("Rarity:");
 	});
 });

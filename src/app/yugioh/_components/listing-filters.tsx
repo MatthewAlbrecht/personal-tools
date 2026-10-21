@@ -27,9 +27,11 @@ import {
 	type ListingKind,
 	type ListingsView,
 	type Marketplace,
+	activeFilterCount,
 	defaultListingFilters,
 	extraFilters,
 	isDefaultListingFilters,
+	withCardShown,
 } from "~/lib/yugioh/listing-filters";
 import { MARKETPLACE_LABELS } from "~/lib/yugioh/listing-format";
 import {
@@ -97,6 +99,7 @@ export function ListingsToolbar({
 	const deck = useQuery(api.yugioh.decks.getDeck, { deckId });
 	const cards: CardOption[] = cardOptions(deck);
 	const extra = extraFilters(filters);
+	const count = activeFilterCount(filters);
 
 	return (
 		<div className="flex flex-col gap-2">
@@ -115,9 +118,9 @@ export function ListingsToolbar({
 				>
 					<ListFilter data-icon="inline-start" />
 					Filters
-					{extra.length > 0 && (
+					{count > 0 && (
 						<Badge className="h-5 min-w-5 justify-center px-1.5 tabular-nums">
-							{extra.length}
+							{count}
 							<span className="sr-only"> set</span>
 						</Badge>
 					)}
@@ -126,19 +129,25 @@ export function ListingsToolbar({
 			{extra.length > 0 && (
 				<ul aria-label="Filters set" className="flex flex-wrap gap-1.5">
 					{extra.map((name) => {
+						if (name === "excludeCards") {
+							return (filters.excludeCards ?? []).map((cardId) => (
+								<li key={`hide-${cardId}`}>
+									<FilterChip
+										label={`Hiding ${cardLabel(cardId, cards)}`}
+										removeLabel={`Show ${cardLabel(cardId, cards)} again`}
+										onRemove={() => onChange(withCardShown(filters, cardId))}
+									/>
+								</li>
+							));
+						}
 						const label = filterLabel(name, filters, cards);
 						return (
 							<li key={name}>
-								<Button
-									variant="secondary"
-									size="sm"
-									className="h-11 rounded-full pr-2 md:h-8"
-									aria-label={`Remove filter: ${label}`}
-									onClick={() => onChange({ ...filters, [name]: undefined })}
-								>
-									{label}
-									<X data-icon="inline-end" aria-hidden />
-								</Button>
+								<FilterChip
+									label={label}
+									removeLabel={`Remove filter: ${label}`}
+									onRemove={() => onChange({ ...filters, [name]: undefined })}
+								/>
 							</li>
 						);
 					})}
@@ -166,6 +175,31 @@ export function ListingsToolbar({
 				onChange={onChange}
 			/>
 		</div>
+	);
+}
+
+/** A set filter as a removable chip. */
+function FilterChip({
+	label,
+	removeLabel,
+	onRemove,
+}: {
+	label: string;
+	removeLabel: string;
+	onRemove: () => void;
+}): React.ReactElement {
+	return (
+		<Button
+			variant="secondary"
+			size="sm"
+			className="h-11 max-w-72 rounded-full pr-2 md:h-8"
+			aria-label={removeLabel}
+			title={label}
+			onClick={onRemove}
+		>
+			<span className="truncate">{label}</span>
+			<X data-icon="inline-end" aria-hidden />
+		</Button>
 	);
 }
 
@@ -319,6 +353,7 @@ function filtersFrom(
 		rejected: filters.rejected,
 		location: set(values.location),
 		card: set(values.card),
+		excludeCards: filters.excludeCards,
 	};
 }
 
@@ -533,9 +568,13 @@ function filterLabel(
 		case "location":
 			return filters.location ?? "";
 		case "card":
-			return (
-				cards.find((card) => card._id === filters.card)?.label ??
-				"A removed Card"
-			);
+			return filters.card ? cardLabel(filters.card, cards) : "";
+		case "excludeCards":
+			return `Hiding ${filters.excludeCards?.length ?? 0} Cards`;
 	}
+}
+
+/** A Card's name as the Card filter shows it, or "A removed Card". */
+function cardLabel(cardId: string, cards: CardOption[]): string {
+	return cards.find((card) => card._id === cardId)?.label ?? "A removed Card";
 }

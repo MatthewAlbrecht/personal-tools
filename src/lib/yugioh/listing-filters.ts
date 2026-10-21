@@ -53,6 +53,11 @@ export type ListingFilters = {
 	location?: string;
 	/** A Card in the Deck (its ID): Listings matched to the Printings it searches. */
 	card?: string;
+	/**
+	 * Cards in the Deck (their IDs) whose Listings are hidden: the Printings
+	 * each searches, as with `card`. In the URL as `hide`.
+	 */
+	excludeCards?: string[];
 };
 
 /** What filtering needs to know about a stored Listing. */
@@ -164,6 +169,17 @@ function passes(
 	) {
 		return false;
 	}
+	if (filters.excludeCards?.length) {
+		const printingId = listing.matchedPrintingId ?? null;
+		if (
+			printingId !== null &&
+			filters.excludeCards.some((cardId) =>
+				cardPrintings.get(cardId)?.has(printingId),
+			)
+		) {
+			return false;
+		}
+	}
 	if (filters.card !== undefined) {
 		const printings = cardPrintings.get(filters.card);
 		const printingId = listing.matchedPrintingId ?? null;
@@ -192,6 +208,29 @@ export function defaultListingFilters(filters: ListingFilters): ListingFilters {
 	};
 }
 
+/** `filters` with the Card's Listings hidden too. */
+export function withCardHidden(
+	filters: ListingFilters,
+	cardId: string,
+): ListingFilters {
+	const hidden = filters.excludeCards ?? [];
+	return hidden.includes(cardId)
+		? filters
+		: { ...filters, excludeCards: [...hidden, cardId] };
+}
+
+/** `filters` with the Card's Listings shown again. */
+export function withCardShown(
+	filters: ListingFilters,
+	cardId: string,
+): ListingFilters {
+	const hidden = (filters.excludeCards ?? []).filter((id) => id !== cardId);
+	return withoutUnset({
+		...filters,
+		excludeCards: hidden.length > 0 ? hidden : undefined,
+	});
+}
+
 /** Whether only the defaults are set, beyond the view and the New toggle. */
 export function isDefaultListingFilters(filters: ListingFilters): boolean {
 	const extra = extraFilters(filters);
@@ -218,8 +257,27 @@ const FILTER_PARAMS = [
 	"graded",
 	"location",
 	"card",
+	"excludeCards",
 	"rejected",
 ] as const satisfies ReadonlyArray<keyof ListingFilters>;
+
+/** A filter's param in the URL: its own name, but for the hidden Cards. */
+function paramName(name: keyof ListingFilters): string {
+	return name === "excludeCards" ? "hide" : name;
+}
+
+/** The hidden Cards' IDs, comma-separated, once each; none when empty. */
+function idList(value: string | null): string[] | undefined {
+	const ids = [
+		...new Set(
+			(value ?? "")
+				.split(",")
+				.map((id) => id.trim())
+				.filter(Boolean),
+		),
+	];
+	return ids.length > 0 ? ids : undefined;
+}
 
 type ParamReader = { get(name: string): string | null };
 
@@ -274,6 +332,7 @@ export function listingFiltersFromParams(params: ParamReader): ListingFilters {
 				: (yesNo(params.get("graded")) ?? DEFAULT_FILTERS.graded),
 		location: text(params.get("location")),
 		card: text(params.get("card")),
+		excludeCards: idList(params.get("hide")),
 		rejected: params.get("rejected") === "1" || undefined,
 	};
 	return withoutUnset(filters);
@@ -285,10 +344,11 @@ export function withListingFilters(
 	filters: ListingFilters,
 ): URLSearchParams {
 	const next = new URLSearchParams(params);
-	for (const name of [...FILTER_PARAMS, ...LEGACY_PARAMS]) next.delete(name);
+	for (const name of LEGACY_PARAMS) next.delete(name);
+	for (const name of FILTER_PARAMS) next.delete(paramName(name));
 	for (const name of FILTER_PARAMS) {
 		const value = paramValue(name, filters[name]);
-		if (value !== undefined) next.set(name, value);
+		if (value !== undefined) next.set(paramName(name), value);
 	}
 	return next;
 }
@@ -306,6 +366,9 @@ function paramValue(
 		if (value === DEFAULT_FILTERS[name]) return undefined;
 	}
 	if (value === undefined) return undefined;
+	if (Array.isArray(value)) {
+		return value.length > 0 ? value.join(",") : undefined;
+	}
 	if (name === "view" && value === "available") return undefined;
 	if (name === "graded") return value ? "yes" : "no";
 	if (typeof value === "boolean") return value ? "1" : undefined;
@@ -332,11 +395,20 @@ export function extraFilters(
 			name !== "view" &&
 			name !== "new" &&
 			name !== "rejected" &&
-			filters[name] !== undefined,
+			filters[name] !== undefined &&
+			!(name === "excludeCards" && filters.excludeCards?.length === 0),
 	);
 }
 
-/** How many filters are set beyond the view and the New toggle. */
+/**
+ * How many filters are set beyond the view and the New toggle, each hidden
+ * Card counted on its own (each is its own chip).
+ */
 export function activeFilterCount(filters: ListingFilters): number {
-	return extraFilters(filters).length;
+	return extraFilters(filters).reduce(
+		(count, name) =>
+			count +
+			(name === "excludeCards" ? (filters.excludeCards?.length ?? 0) : 1),
+		0,
+	);
 }

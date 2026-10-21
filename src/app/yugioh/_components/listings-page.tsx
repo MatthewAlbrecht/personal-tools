@@ -7,16 +7,16 @@ import {
 	ArrowUp,
 	ArrowUpDown,
 	ChevronDown,
-	ExternalLink,
 	ListFilter,
 	PencilLine,
 	Tag,
-	Undo2,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useRef, useState } from "react";
 import type * as React from "react";
+import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
 import {
 	Empty,
@@ -52,6 +52,8 @@ import {
 	extraFilters,
 	isDefaultListingFilters,
 	listingFiltersFromParams,
+	withCardHidden,
+	withCardShown,
 	withListingFilters,
 } from "~/lib/yugioh/listing-filters";
 import {
@@ -75,6 +77,7 @@ import {
 	toggledSort,
 	withListingSort,
 } from "~/lib/yugioh/listing-sort";
+import { keyboardMenuPoint, rowClickOpensMenu } from "~/lib/yugioh/row-menu";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import type { ListingView } from "../_utils/types";
@@ -82,8 +85,9 @@ import { DealGradeBadge, DealGradeSummary } from "./deal-grade";
 import { ListingDrawer } from "./listing-drawer";
 import { ConditionMenu, RarityMenu, useListingEdits } from "./listing-edits";
 import { ListingsToolbar } from "./listing-filters";
+import { ListingRowMenu, type RowMenuAt } from "./listing-row-menu";
 import { ListingSortSelect } from "./listing-sort-select";
-import { MarkWrongButton, useListingRejection } from "./mark-wrong";
+import { useListingRejection } from "./mark-wrong";
 
 const SKELETON_ROWS = [0, 1, 2, 3, 4, 5, 6, 7];
 
@@ -208,6 +212,35 @@ export function ListingsPage({
 		return `${pathname}?${params.toString()}`;
 	}
 
+	/**
+	 * Hides the Listing's Card (the Card searching its Printing) from
+	 * Listings, with Undo. Undo reads the URL as it is then, so filters
+	 * changed in between stay.
+	 */
+	function hideCard(listing: ListingView): void {
+		const printingId = listing.match.printing?._id;
+		const card = page?.cards.find((c) =>
+			c.printingIds.some((id) => id === printingId),
+		);
+		if (!card) return;
+		setFilters(withCardHidden(filters, card._id));
+		toast(`Hiding ${card.cardName}`, {
+			description: "Its Listings are filtered out until you remove its chip.",
+			action: {
+				label: "Undo",
+				onClick: () => {
+					const current = new URLSearchParams(window.location.search);
+					replaceParams(
+						withListingFilters(
+							current,
+							withCardShown(listingFiltersFromParams(current), card._id),
+						),
+					);
+				},
+			},
+		});
+	}
+
 	function closeListing(): void {
 		const params = new URLSearchParams(searchParams.toString());
 		params.delete("listing");
@@ -257,8 +290,11 @@ export function ListingsPage({
 					<div className="hidden lg:block">
 						<ListingsTable
 							listings={listings}
-							href={listingHref}
 							now={now}
+							onDetails={(listing) =>
+								router.replace(listingHref(listing._id), { scroll: false })
+							}
+							onHideCard={hideCard}
 							view={view}
 							rejectedView={filters.rejected ?? false}
 							sort={sort}
@@ -447,13 +483,13 @@ function ListingRow({
 /**
  * The Listings table: one Listing a row, every row the same two lines (a
  * primary line and a muted one), every column a set width whose text is cut
- * short with the whole of it on hover. A row opens the Listing drawer; its
- * buttons mark it wrong (or, in Marked wrong, restore it) and open the
- * marketplace.
+ * short with the whole of it on hover. Clicking a row (or Enter on it)
+ * opens the row menu where I clicked: Details (the Listing drawer), Open on
+ * the marketplace, Change rarity and condition, Hide the Card, and Remove
+ * (mark wrong) or Restore.
  */
 export function ListingsTable({
 	listings,
-	href,
 	now,
 	view,
 	rejectedView = false,
@@ -464,10 +500,15 @@ export function ListingsTable({
 	onUnmark = () => {},
 	onSetCondition,
 	onSetRarity,
+	onDetails,
+	onHideCard,
 }: {
 	listings: ListingView[];
-	href: (listingId: string) => string;
 	now: number;
+	/** Opens the Listing drawer. */
+	onDetails?: (listing: ListingView) => void;
+	/** Hides the Listing's Card from Listings (a filter). */
+	onHideCard?: (listing: ListingView) => void;
 	view: ListingsView;
 	/** Marked wrong: the Grade column says why instead. */
 	rejectedView?: boolean;
@@ -491,176 +532,203 @@ export function ListingsTable({
 	const head = { sort, onSort };
 	// Marked wrong: restore a Listing before changing it.
 	const editable = !rejectedView;
+	const [menu, setMenu] = useState<RowMenuAt | null>(null);
+	// The row the menu came from, for focus to go back to.
+	const menuRow = useRef<HTMLElement | null>(null);
+
+	function openMenu(
+		listing: ListingView,
+		row: HTMLElement,
+		x: number,
+		y: number,
+	) {
+		menuRow.current = row;
+		setMenu({ listing, x, y });
+	}
+
 	return (
-		<Table className="table-fixed">
-			<colgroup>
-				<col />
-				<col className="w-30" />
-				<col className={rejectedView ? "w-40" : "w-28"} />
-				<col className="w-28" />
-				<col className="w-32" />
-				<col className="w-32" />
-				<col className="w-28" />
-				<col className="w-22" />
-			</colgroup>
-			<TableHeader>
-				<TableRow className="hover:bg-transparent">
-					<SortableHead {...head} column="card">
-						Card
-					</SortableHead>
-					<SortableHead {...head} column="price">
-						Per-copy
-					</SortableHead>
-					{rejectedView ? (
-						<TableHead className="px-3">Marked wrong</TableHead>
-					) : (
-						<SortableHead {...head} column="grade">
-							Grade
+		<>
+			<Table className="table-fixed">
+				<colgroup>
+					<col />
+					<col className="w-30" />
+					<col className={rejectedView ? "w-40" : "w-28"} />
+					<col className="w-28" />
+					<col className="w-32" />
+					<col className="w-32" />
+					<col className="w-28" />
+				</colgroup>
+				<TableHeader>
+					<TableRow className="hover:bg-transparent">
+						<SortableHead {...head} column="card">
+							Card
 						</SortableHead>
-					)}
-					<SortableHead {...head} column="condition">
-						Condition
-					</SortableHead>
-					<SortableHead {...head} column="date">
-						{view === "sold" ? "Sold" : "Type"}
-					</SortableHead>
-					<SortableHead {...head} column="seller">
-						Seller
-					</SortableHead>
-					<SortableHead {...head} column="seen">
-						Seen
-					</SortableHead>
-					<TableHead>
-						<span className="sr-only">Actions</span>
-					</TableHead>
-				</TableRow>
-			</TableHeader>
-			<TableBody>
-				{listings.map((listing) => {
-					const isLeaving = leaving.has(listing._id);
-					const type = listingTypeLabel(listing, now);
-					const seller =
-						listing.marketplace === "ebay"
-							? listing.sellerLocation
-							: (listing.tcgplayer?.seller ?? null);
-					const copies = listing.tcgplayer?.quantity ?? null;
-					// Below the Card's Lowest acceptable condition: it doesn't
-					// count, so it steps back.
-					const dim = listing.deal.belowCondition;
-					return (
-						<TableRow
-							key={listing._id}
-							data-leaving={isLeaving || undefined}
-							className="group/row relative data-[leaving]:border-transparent"
-						>
-							<RowCell dim={dim}>
-								<div className="flex min-w-0 items-start gap-3">
-									<CardThumb printing={listing.match.printing} />
-									<div className="flex min-w-0 flex-col">
-										{/* The whole row opens the Listing drawer through this link. */}
-										<Link
-											href={href(listing._id)}
-											replace
-											scroll={false}
-											className="flex min-w-0 outline-none after:absolute after:inset-0 focus-visible:after:ring-2 focus-visible:after:ring-ring focus-visible:after:ring-inset"
-										>
-											<CardName listing={listing} />
-										</Link>
-										<PrintingCell
-											listing={listing}
-											onPick={
-												editable && onSetRarity
-													? (choice) => onSetRarity(listing, choice)
-													: undefined
-											}
-										/>
-									</div>
-								</div>
-							</RowCell>
-							<RowCell dim={dim}>
-								<PerCopy listing={listing} />
-							</RowCell>
-							<RowCell dim={dim}>
-								{listing.rejection ? (
-									<RejectionCell rejection={listing.rejection} />
-								) : (
-									<GradeCell deal={listing.deal} />
-								)}
-							</RowCell>
-							<RowCell dim={dim}>
-								<ConditionCell
-									listing={listing}
-									onPick={
-										editable && onSetCondition
-											? (condition) => onSetCondition(listing, condition)
-											: undefined
+						<SortableHead {...head} column="price">
+							Per-copy
+						</SortableHead>
+						{rejectedView ? (
+							<TableHead className="px-3">Marked wrong</TableHead>
+						) : (
+							<SortableHead {...head} column="grade">
+								Grade
+							</SortableHead>
+						)}
+						<SortableHead {...head} column="condition">
+							Condition
+						</SortableHead>
+						<SortableHead {...head} column="date">
+							{view === "sold" ? "Sold" : "Type"}
+						</SortableHead>
+						<SortableHead {...head} column="seller">
+							Seller
+						</SortableHead>
+						<SortableHead {...head} column="seen">
+							Seen
+						</SortableHead>
+					</TableRow>
+				</TableHeader>
+				<TableBody>
+					{listings.map((listing) => {
+						const isLeaving = leaving.has(listing._id);
+						const type = listingTypeLabel(listing, now);
+						const seller =
+							listing.marketplace === "ebay"
+								? listing.sellerLocation
+								: (listing.tcgplayer?.seller ?? null);
+						const copies = listing.tcgplayer?.quantity ?? null;
+						// Below the Card's Lowest acceptable condition: it doesn't
+						// count, so it steps back.
+						const dim = listing.deal.belowCondition;
+						return (
+							<TableRow
+								key={listing._id}
+								data-leaving={isLeaving || undefined}
+								data-menu-open={menu?.listing._id === listing._id || undefined}
+								tabIndex={isLeaving ? -1 : 0}
+								aria-haspopup="menu"
+								aria-expanded={menu?.listing._id === listing._id}
+								aria-label={`${listing.match.printing?.cardName ?? listing.title}, ${MARKETPLACE_LABELS[listing.marketplace]}. Open actions`}
+								className="group/row relative cursor-default outline-none focus-visible:bg-muted active:bg-muted data-[leaving]:border-transparent data-[menu-open]:bg-muted"
+								onClick={(event) => {
+									const row = event.currentTarget;
+									if (
+										isLeaving ||
+										!rowClickOpensMenu({
+											button: event.button,
+											metaKey: event.metaKey,
+											ctrlKey: event.ctrlKey,
+											shiftKey: event.shiftKey,
+											altKey: event.altKey,
+											target: event.target as Element,
+											row,
+											selection: window.getSelection(),
+										})
+									) {
+										return;
 									}
-								/>
-							</RowCell>
-							<RowCell dim={dim}>
-								<Primary title={type}>{type}</Primary>
-								<Secondary>{MARKETPLACE_LABELS[listing.marketplace]}</Secondary>
-							</RowCell>
-							<RowCell dim={dim}>
-								<Primary title={seller ?? undefined}>
-									{seller ?? <span className="text-muted-foreground">—</span>}
-								</Primary>
-								<Secondary>
-									{copies !== null && copies > 1
-										? `${copies} Copies`
-										: "\u00a0"}
-								</Secondary>
-							</RowCell>
-							<RowCell dim={dim}>
-								<Primary>{ago(listing)}</Primary>
-								<Secondary>
-									{listing.listedAt === null ? "\u00a0" : "listed"}
-								</Secondary>
-							</RowCell>
-							<RowCell className="relative z-10 px-0">
-								<div className="-my-1.5 flex justify-end gap-0.5 pr-1">
+									openMenu(listing, row, event.clientX, event.clientY);
+								}}
+								onKeyDown={(event) => {
+									if (event.target !== event.currentTarget) return;
+									if (event.key !== "Enter" && event.key !== " ") return;
+									event.preventDefault();
+									const row = event.currentTarget;
+									const { x, y } = keyboardMenuPoint(
+										row.getBoundingClientRect(),
+										MENU_INSET,
+									);
+									openMenu(listing, row, x, y);
+								}}
+							>
+								<RowCell dim={dim}>
+									<div className="flex min-w-0 items-start gap-3">
+										<CardThumb printing={listing.match.printing} />
+										<div className="flex min-w-0 flex-col">
+											<CardName listing={listing} />
+											<PrintingCell
+												listing={listing}
+												onPick={
+													editable && onSetRarity
+														? (choice) => onSetRarity(listing, choice)
+														: undefined
+												}
+											/>
+										</div>
+									</div>
+								</RowCell>
+								<RowCell dim={dim}>
+									<PerCopy listing={listing} />
+								</RowCell>
+								<RowCell dim={dim}>
 									{listing.rejection ? (
-										<Button
-											variant="ghost"
-											size="icon"
-											className="text-muted-foreground hover:text-foreground"
-											aria-label={`Restore: ${listing.match.printing?.cardName ?? listing.title}`}
-											title="Restore"
-											onClick={() => onUnmark(listing)}
-										>
-											<Undo2 />
-										</Button>
+										<RejectionCell rejection={listing.rejection} />
 									) : (
-										<MarkWrongButton
-											listing={listing}
-											onPick={(reason) => onMarkWrong(listing, reason)}
-										/>
+										<GradeCell deal={listing.deal} />
 									)}
-									<Button
-										variant="ghost"
-										size="icon"
-										className="text-muted-foreground hover:text-foreground"
-										asChild
-									>
-										<a
-											href={listing.url}
-											target="_blank"
-											rel="noopener noreferrer"
-											title={`Open on ${MARKETPLACE_LABELS[listing.marketplace]}`}
-											aria-label={`Open on ${MARKETPLACE_LABELS[listing.marketplace]}: ${listing.title} (opens in a new tab)`}
-										>
-											<ExternalLink />
-										</a>
-									</Button>
-								</div>
-							</RowCell>
-						</TableRow>
-					);
-				})}
-			</TableBody>
-		</Table>
+								</RowCell>
+								<RowCell dim={dim}>
+									<ConditionCell
+										listing={listing}
+										onPick={
+											editable && onSetCondition
+												? (condition) => onSetCondition(listing, condition)
+												: undefined
+										}
+									/>
+								</RowCell>
+								<RowCell dim={dim}>
+									<Primary title={type}>{type}</Primary>
+									<Secondary>
+										{MARKETPLACE_LABELS[listing.marketplace]}
+									</Secondary>
+								</RowCell>
+								<RowCell dim={dim}>
+									<Primary title={seller ?? undefined}>
+										{seller ?? <span className="text-muted-foreground">—</span>}
+									</Primary>
+									<Secondary>
+										{copies !== null && copies > 1
+											? `${copies} Copies`
+											: "\u00a0"}
+									</Secondary>
+								</RowCell>
+								<RowCell dim={dim}>
+									<Primary>{ago(listing)}</Primary>
+									<Secondary>
+										{listing.listedAt === null ? "\u00a0" : "listed"}
+									</Secondary>
+								</RowCell>
+							</TableRow>
+						);
+					})}
+				</TableBody>
+			</Table>
+			<ListingRowMenu
+				at={menu}
+				onClose={() => setMenu(null)}
+				onCloseAutoFocus={(event) => {
+					// Back to the row, unless it left (marked wrong, hidden).
+					event.preventDefault();
+					const row = menuRow.current;
+					if (row?.isConnected) row.focus({ preventScroll: true });
+				}}
+				rejectedView={rejectedView}
+				onDetails={onDetails}
+				onHideCard={onHideCard}
+				onMarkWrong={onMarkWrong}
+				onUnmark={onUnmark}
+				onSetCondition={onSetCondition}
+				onSetRarity={onSetRarity}
+			/>
+		</>
 	);
 }
+
+/**
+ * From the keyboard, the row menu opens under the row, in line with the Card
+ * name: the cell's padding, the art and the gap (12 + 28 + 12).
+ */
+const MENU_INSET = 52;
 
 /**
  * A table cell that folds away with its row: the row's height collapses
@@ -972,7 +1040,7 @@ function PrintingCell({
 
 /**
  * A cell value that opens a picker: reads as the plain text it replaces,
- * lifted above the row's link so it doesn't open the drawer. A chevron
+ * lifted above the row; its clicks don't open the row menu. A chevron
  * shows on row hover and focus; hover, focus and open get a quiet fill.
  */
 function CellTrigger({

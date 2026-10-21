@@ -159,46 +159,64 @@ export function ConditionMenu({
 	align?: "start" | "end";
 	children: React.ReactElement;
 }): React.ReactElement {
-	const read = listing.titleRead?.condition ?? null;
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
 			<DropdownMenuContent align={align} className="w-56">
-				<DropdownMenuLabel className="font-normal text-muted-foreground text-xs">
-					Condition: yours wins over the title
-				</DropdownMenuLabel>
-				<DropdownMenuSeparator />
-				<DropdownMenuRadioGroup
-					value={conditionChoice(listing)}
-					onValueChange={(value) => onPick(value as ConditionChoice)}
-				>
-					{READ_CONDITIONS.map((condition) => (
-						<DropdownMenuRadioItem key={condition} value={condition}>
-							{READ_CONDITION_LABELS[condition]}
-							<DropdownMenuShortcut className="tracking-normal">
-								{READ_CONDITION_ABBREVIATIONS[condition]}
-							</DropdownMenuShortcut>
-						</DropdownMenuRadioItem>
-					))}
-					<DropdownMenuSeparator />
-					<DropdownMenuRadioItem value={NOT_STATED}>
-						Not stated
-					</DropdownMenuRadioItem>
-				</DropdownMenuRadioGroup>
-				{isConditionSetByYou(listing) ? (
-					<>
-						<DropdownMenuSeparator />
-						<DropdownMenuItem onSelect={() => onPick(null)}>
-							<Undo2 aria-hidden />
-							Use the title's
-							<DropdownMenuShortcut className="tracking-normal">
-								{titleConditionShort(read)}
-							</DropdownMenuShortcut>
-						</DropdownMenuItem>
-					</>
-				) : null}
+				<ConditionMenuItems listing={listing} onPick={onPick} />
 			</DropdownMenuContent>
 		</DropdownMenu>
+	);
+}
+
+/**
+ * The condition picker's items, for `ConditionMenu` and the row menu's
+ * "Change condition" submenu.
+ */
+export function ConditionMenuItems({
+	listing,
+	onPick,
+}: {
+	listing: ListingView;
+	onPick: (condition: ConditionChoice | null) => void;
+}): React.ReactElement {
+	const read = listing.titleRead?.condition ?? null;
+	return (
+		<>
+			<DropdownMenuLabel className="font-normal text-muted-foreground text-xs">
+				Condition: yours wins over the title
+			</DropdownMenuLabel>
+			<DropdownMenuSeparator />
+			<DropdownMenuRadioGroup
+				value={conditionChoice(listing)}
+				onValueChange={(value) => onPick(value as ConditionChoice)}
+			>
+				{READ_CONDITIONS.map((condition) => (
+					<DropdownMenuRadioItem key={condition} value={condition}>
+						{READ_CONDITION_LABELS[condition]}
+						<DropdownMenuShortcut className="tracking-normal">
+							{READ_CONDITION_ABBREVIATIONS[condition]}
+						</DropdownMenuShortcut>
+					</DropdownMenuRadioItem>
+				))}
+				<DropdownMenuSeparator />
+				<DropdownMenuRadioItem value={NOT_STATED}>
+					Not stated
+				</DropdownMenuRadioItem>
+			</DropdownMenuRadioGroup>
+			{isConditionSetByYou(listing) ? (
+				<>
+					<DropdownMenuSeparator />
+					<DropdownMenuItem onSelect={() => onPick(null)}>
+						<Undo2 aria-hidden />
+						Use the title's
+						<DropdownMenuShortcut className="tracking-normal">
+							{titleConditionShort(read)}
+						</DropdownMenuShortcut>
+					</DropdownMenuItem>
+				</>
+			) : null}
+		</>
 	);
 }
 
@@ -223,6 +241,27 @@ export function RarityMenu({
 	align?: "start" | "end";
 	children: React.ReactElement;
 }): React.ReactElement {
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
+			<DropdownMenuContent align={align} className="w-64">
+				<RarityMenuItems listing={listing} onPick={onPick} />
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+
+/**
+ * The rarity picker's items, for `RarityMenu` and the row menu's "Change
+ * rarity" submenu.
+ */
+export function RarityMenuItems({
+	listing,
+	onPick,
+}: {
+	listing: ListingView;
+	onPick: (choice: RarityChoice) => void;
+}): React.ReactElement {
 	const printing = listing.match.printing;
 	const mine = listing.rarityChoices.filter(
 		(choice) => choice.printingId !== null,
@@ -231,66 +270,61 @@ export function RarityMenu({
 		(choice) => choice.printingId === null,
 	);
 	return (
-		<DropdownMenu>
-			<DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
-			<DropdownMenuContent align={align} className="w-64">
-				<DropdownMenuLabel className="font-normal text-muted-foreground text-xs">
-					Rarity
-					{printing ? (
-						<>
-							{" "}
-							under{" "}
-							<span className="font-mono tracking-tight">
-								{printing.setCode}
-							</span>
-						</>
-					) : null}
-				</DropdownMenuLabel>
-				<DropdownMenuSeparator />
-				<DropdownMenuRadioGroup
-					value={printing?._id ?? ""}
-					onValueChange={(value) => {
-						const choice = mine.find((c) => c.printingId === value);
-						if (choice) onPick(choice);
-					}}
-				>
-					{mine.map((choice) => (
-						<DropdownMenuRadioItem
+		<>
+			<DropdownMenuLabel className="font-normal text-muted-foreground text-xs">
+				Rarity
+				{printing ? (
+					<>
+						{" "}
+						under{" "}
+						<span className="font-mono tracking-tight">{printing.setCode}</span>
+					</>
+				) : null}
+			</DropdownMenuLabel>
+			<DropdownMenuSeparator />
+			<DropdownMenuRadioGroup
+				value={printing?._id ?? ""}
+				onValueChange={(value) => {
+					const choice = mine.find((c) => c.printingId === value);
+					if (choice) onPick(choice);
+				}}
+			>
+				{mine.map((choice) => (
+					<DropdownMenuRadioItem
+						key={choice.rarity}
+						value={choice.printingId ?? ""}
+					>
+						<span className="truncate">{choice.rarity}</span>
+						<DropdownMenuShortcut className="tracking-normal">
+							{rarityAbbreviation(choice.rarity)}
+						</DropdownMenuShortcut>
+					</DropdownMenuRadioItem>
+				))}
+			</DropdownMenuRadioGroup>
+			{others.length > 0 ? (
+				<>
+					<DropdownMenuSeparator />
+					<DropdownMenuLabel className="font-normal text-muted-foreground text-xs">
+						Not one you need: marks it wrong
+					</DropdownMenuLabel>
+					{others.map((choice) => (
+						<DropdownMenuItem
 							key={choice.rarity}
-							value={choice.printingId ?? ""}
+							inset
+							onSelect={() => onPick(choice)}
 						>
 							<span className="truncate">{choice.rarity}</span>
 							<DropdownMenuShortcut className="tracking-normal">
 								{rarityAbbreviation(choice.rarity)}
 							</DropdownMenuShortcut>
-						</DropdownMenuRadioItem>
+						</DropdownMenuItem>
 					))}
-				</DropdownMenuRadioGroup>
-				{others.length > 0 ? (
-					<>
-						<DropdownMenuSeparator />
-						<DropdownMenuLabel className="font-normal text-muted-foreground text-xs">
-							Not one you need: marks it wrong
-						</DropdownMenuLabel>
-						{others.map((choice) => (
-							<DropdownMenuItem
-								key={choice.rarity}
-								inset
-								onSelect={() => onPick(choice)}
-							>
-								<span className="truncate">{choice.rarity}</span>
-								<DropdownMenuShortcut className="tracking-normal">
-									{rarityAbbreviation(choice.rarity)}
-								</DropdownMenuShortcut>
-							</DropdownMenuItem>
-						))}
-					</>
-				) : mine.length <= 1 ? (
-					<p className="px-2 pt-1 pb-1.5 text-muted-foreground text-xs">
-						No other rarity is known under this set code.
-					</p>
-				) : null}
-			</DropdownMenuContent>
-		</DropdownMenu>
+				</>
+			) : mine.length <= 1 ? (
+				<p className="px-2 pt-1 pb-1.5 text-muted-foreground text-xs">
+					No other rarity is known under this set code.
+				</p>
+			) : null}
+		</>
 	);
 }

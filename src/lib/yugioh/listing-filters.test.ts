@@ -8,6 +8,8 @@ import {
 	extraFilters,
 	isDefaultListingFilters,
 	listingFiltersFromParams,
+	withCardHidden,
+	withCardShown,
 	withListingFilters,
 } from "./listing-filters";
 
@@ -206,6 +208,30 @@ describe("applyListingFilters", () => {
 		expect(ids(all, { card: "gone" })).toEqual([]);
 	});
 
+	test("hidden Cards: their Listings leave, whatever else is set", () => {
+		const all = [
+			listing({ id: "p1" }),
+			listing({ id: "p2", matchedPrintingId: "p2" }),
+		];
+		const twoCards = {
+			...context,
+			cardPrintings: new Map([
+				["card1", new Set(["p1"])],
+				["card2", new Set(["p2"])],
+			]),
+		};
+		function hidden(excludeCards: string[]): string[] {
+			return applyListingFilters(all, { excludeCards }, twoCards).map(
+				(l) => l.id,
+			);
+		}
+		expect(hidden(["card1"])).toEqual(["p2"]);
+		expect(hidden(["card1", "card2"])).toEqual([]);
+		expect(hidden([])).toEqual(["p1", "p2"]);
+		// A Card no longer in the Deck hides nothing.
+		expect(hidden(["gone"])).toEqual(["p1", "p2"]);
+	});
+
 	test("new: first seen since my last visit, within the view", () => {
 		const all = [
 			listing({ id: "old", firstSeenAt: NOW - 3 * HOUR }),
@@ -243,9 +269,37 @@ describe("filters in the URL", () => {
 			rejected: true,
 			location: "United Kingdom",
 			card: "k57abc",
+			excludeCards: ["k57def", "k57ghi"],
 		};
 		const params = withListingFilters(new URLSearchParams(), filters);
 		expect(listingFiltersFromParams(params)).toEqual(filters);
+	});
+
+	test("hidden Cards are one comma-separated hide param", () => {
+		const params = withListingFilters(new URLSearchParams(), {
+			language: "english",
+			graded: false,
+			excludeCards: ["a1", "b2"],
+		});
+		expect(params.get("hide")).toBe("a1,b2");
+		expect(
+			withListingFilters(new URLSearchParams("hide=a1"), {
+				language: "english",
+				graded: false,
+				excludeCards: [],
+			}).toString(),
+		).toBe("");
+		expect(
+			listingFiltersFromParams(new URLSearchParams("hide=a1,,a1, b2,")),
+		).toEqual({
+			language: "english",
+			graded: false,
+			excludeCards: ["a1", "b2"],
+		});
+		expect(listingFiltersFromParams(new URLSearchParams("hide=,"))).toEqual({
+			language: "english",
+			graded: false,
+		});
 	});
 
 	test("Available, English and not graded are the defaults and leave no param", () => {
@@ -328,6 +382,7 @@ describe("the default filters", () => {
 				language: "korean",
 				graded: true,
 				card: "x",
+				excludeCards: ["y"],
 			}),
 		).toEqual({ view: "sold", new: true, language: "english", graded: false });
 	});
@@ -349,6 +404,31 @@ describe("the default filters", () => {
 				card: "x",
 			}),
 		).toBe(false);
+		expect(
+			isDefaultListingFilters({
+				language: "english",
+				graded: false,
+				excludeCards: ["x"],
+			}),
+		).toBe(false);
+	});
+});
+
+describe("hiding a Card", () => {
+	test("adds it once, keeping the other filters", () => {
+		const once = withCardHidden({ view: "sold", graded: false }, "a");
+		expect(once).toEqual({ view: "sold", graded: false, excludeCards: ["a"] });
+		expect(withCardHidden(once, "a")).toEqual(once);
+		expect(withCardHidden(once, "b").excludeCards).toEqual(["a", "b"]);
+	});
+
+	test("showing it again drops it, and the filter with the last one", () => {
+		expect(withCardShown({ excludeCards: ["a", "b"] }, "a")).toEqual({
+			excludeCards: ["b"],
+		});
+		expect(withCardShown({ new: true, excludeCards: ["a"] }, "a")).toEqual({
+			new: true,
+		});
 	});
 });
 
@@ -363,6 +443,16 @@ describe("the Filters button", () => {
 		expect(extraFilters({ view: "sold", graded: false, card: "x" })).toEqual([
 			"graded",
 			"card",
+		]);
+	});
+
+	test("counts each hidden Card", () => {
+		expect(activeFilterCount({ excludeCards: ["a", "b"], card: "x" })).toBe(3);
+		expect(activeFilterCount({ excludeCards: [] })).toBe(0);
+		expect(extraFilters({ excludeCards: [] })).toEqual([]);
+		expect(extraFilters({ excludeCards: ["a"], graded: true })).toEqual([
+			"graded",
+			"excludeCards",
 		]);
 	});
 });

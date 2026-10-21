@@ -507,4 +507,24 @@ describe("views, sorting and filters", () => {
 		const noSuchCard = await listings(t, deckId, { card: "not-an-id" });
 		expect(noSuchCard.matching).toBe(0);
 	});
+
+	test("hiding a Card takes its Listings out; the page says which Card searches what", async () => {
+		const t = setup();
+		const { deckId, deckCardId } = await ashDeck(t);
+		await capture(t, {}, { sellerLocation: "Japan" });
+
+		const everything = await listings(t, deckId);
+		const printingId = everything.listings[0]?.match.printing?._id;
+		expect(everything.cards).toEqual([
+			{
+				_id: deckCardId,
+				cardName: expect.any(String),
+				printingIds: [printingId],
+			},
+		]);
+		const hidden = await listings(t, deckId, { excludeCards: [deckCardId] });
+		expect(hidden.matching).toBe(0);
+		const unknown = await listings(t, deckId, { excludeCards: ["not-an-id"] });
+		expect(unknown.matching).toBe(2);
+	});
 });

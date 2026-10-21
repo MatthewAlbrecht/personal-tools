@@ -115,6 +115,14 @@ export const listListings = query({
 		total: v.number(),
 		/** Every seller country among the Deck's Listings, A to Z. */
 		locations: v.array(v.string()),
+		/** The Deck's Cards and the Printings each searches. */
+		cards: v.array(
+			v.object({
+				_id: v.id("yugiohDeckCards"),
+				cardName: v.string(),
+				printingIds: v.array(v.id("yugiohPrintings")),
+			}),
+		),
 	}),
 	handler: async (ctx, args) => {
 		requireAuth(ctx);

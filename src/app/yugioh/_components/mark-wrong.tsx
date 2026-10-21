@@ -1,11 +1,9 @@
 "use client";
 
 import { useMutation } from "convex/react";
-import { Ban } from "lucide-react";
 import { useState } from "react";
 import type * as React from "react";
 import { toast } from "sonner";
-import { Button } from "~/components/ui/button";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -148,39 +146,29 @@ export function MarkWrongMenu({
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
 			<DropdownMenuContent align={align} className="w-52">
-				<DropdownMenuLabel className="font-normal text-muted-foreground text-xs">
-					Mark as wrong: it won't count
-				</DropdownMenuLabel>
-				<DropdownMenuSeparator />
-				{REJECTION_REASONS.map((reason) => (
-					<DropdownMenuItem key={reason} onSelect={() => onPick(reason)}>
-						{REJECTION_REASON_LABELS[reason]}
-					</DropdownMenuItem>
-				))}
+				<MarkWrongMenuItems onPick={onPick} />
 			</DropdownMenuContent>
 		</DropdownMenu>
 	);
 }
 
-/** The row's icon button that opens `MarkWrongMenu`. */
-export function MarkWrongButton({
-	listing,
+/** The reasons, for `MarkWrongMenu` and the row menu's "Remove" submenu. */
+export function MarkWrongMenuItems({
 	onPick,
 }: {
-	listing: ListingView;
 	onPick: (reason: RejectionReason) => void;
 }): React.ReactElement {
 	return (
-		<MarkWrongMenu onPick={onPick}>
-			<Button
-				variant="ghost"
-				size="icon"
-				className="text-muted-foreground hover:text-foreground data-[state=open]:bg-accent data-[state=open]:text-foreground"
-				aria-label={`Mark as wrong: ${listingName(listing)}`}
-				title="Mark as wrong"
-			>
-				<Ban />
-			</Button>
-		</MarkWrongMenu>
+		<>
+			<DropdownMenuLabel className="font-normal text-muted-foreground text-xs">
+				Mark as wrong: it won't count
+			</DropdownMenuLabel>
+			<DropdownMenuSeparator />
+			{REJECTION_REASONS.map((reason) => (
+				<DropdownMenuItem key={reason} onSelect={() => onPick(reason)}>
+					{REJECTION_REASON_LABELS[reason]}
+				</DropdownMenuItem>
+			))}
+		</>
 	);
 }
