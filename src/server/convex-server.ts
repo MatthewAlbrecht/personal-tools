@@ -92,3 +92,11 @@ export function captureTcgplayerProduct(
 ): Promise<TcgplayerIngestReport> {
 	return callConvexServer("/server/yugioh/tcgplayer-product", { product });
 }
+
+/**
+ * One step of an automated browser run (`internal.yugioh.automation`), passed
+ * through as sent: `{ op: "request" | "claim" | "visit" | "finish" | "status", … }`.
+ */
+export function callYugiohAutomation(body: object): Promise<unknown> {
+	return callConvexServer("/server/yugioh/automation", body);
+}

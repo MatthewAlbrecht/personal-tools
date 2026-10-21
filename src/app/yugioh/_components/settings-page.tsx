@@ -44,10 +44,11 @@ import {
 import { api } from "../../../../convex/_generated/api";
 import { errorMessage } from "../_utils/errors";
 import { importFeeRateSchema, newImportFeeRateSchema } from "../_utils/schemas";
+import { AutomatedRuns } from "./automated-runs";
 
 const SAVE_FAILED = "Couldn't save. Try again.";
 
-/** /yugioh/settings: the import fee table and exchange-rate freshness. */
+/** /yugioh/settings: the import fee table, exchange-rate freshness and automated runs. */
 export function SettingsPage(): React.ReactElement {
 	const settings = useQuery(api.yugioh.pricing.getPricingSettings, {});
 
@@ -128,6 +129,7 @@ export function SettingsPage(): React.ReactElement {
 					</p>
 				</>
 			)}
+			<AutomatedRuns />
 		</div>
 	);
 }

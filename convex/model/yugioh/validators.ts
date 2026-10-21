@@ -1,5 +1,11 @@
 import { type Infer, v } from "convex/values";
 import type {
+	PlannedVisit,
+	RunStatus,
+	RunTrigger,
+	VisitKind,
+} from "../../../src/lib/yugioh/automation";
+import type {
 	CardCost,
 	CostTotals,
 	DeckCost,
@@ -289,6 +295,81 @@ export const yugiohListingFiltersValidator = v.object({
 	card: v.optional(v.string()),
 });
 
+/** What started an automated browser run. */
+export const yugiohRunTriggerValidator = v.union(
+	v.literal("launchAgent"),
+	v.literal("t3"),
+	v.literal("manual"),
+);
+
+/**
+ * An automated run: asked for by the script, running once the extension
+ * claims it, then finished (every page tried) or failed (the run as a whole
+ * broke: never picked up, timed out, abandoned).
+ */
+export const yugiohRunStatusValidator = v.union(
+	v.literal("requested"),
+	v.literal("running"),
+	v.literal("finished"),
+	v.literal("failed"),
+);
+
+/** Which kind of page an automated run visits. */
+export const yugiohVisitKindValidator = v.union(
+	v.literal("ebayNewlyListed"),
+	v.literal("ebaySold"),
+	v.literal("tcgplayer"),
+);
+
+/** One page in a run's visit plan. */
+export const yugiohPlannedVisitValidator = v.object({
+	url: v.string(),
+	kind: yugiohVisitKindValidator,
+	/** The set codes of a Search, or a Printing's Card name and set code. */
+	label: v.string(),
+});
+
+/** A page that failed in a run, as the runs list shows it. */
+export const yugiohPageErrorValidator = v.object({
+	kind: yugiohVisitKindValidator,
+	label: v.string(),
+	error: v.string(),
+});
+
+/**
+ * An automated run as stored (`yugiohAutomationRuns`). Times are Unix ms.
+ * The page counts are running totals of its `yugiohAutomationVisits`.
+ */
+export const yugiohAutomationRunValidator = v.object({
+	trigger: yugiohRunTriggerValidator,
+	status: yugiohRunStatusValidator,
+	requestedAt: v.number(),
+	startedAt: v.union(v.number(), v.null()),
+	endedAt: v.union(v.number(), v.null()),
+	pagesPlanned: v.number(),
+	pagesVisited: v.number(),
+	searchPagesVisited: v.number(),
+	productPagesVisited: v.number(),
+	failedPages: v.number(),
+	listingsCaptured: v.number(),
+	newListings: v.number(),
+	/** Why the run as a whole failed (never picked up, timed out, abandoned). */
+	error: v.union(v.string(), v.null()),
+	/** The first few pages that failed, for the runs list. */
+	pageErrors: v.array(yugiohPageErrorValidator),
+});
+
+/** What the extension reports after visiting one page. */
+export const yugiohVisitReportValidator = v.object({
+	...yugiohPlannedVisitValidator.fields,
+	/** Listings (and TCGplayer sales) the page sent; 0 when it sent none. */
+	listingsCaptured: v.number(),
+	/** Of those, the ones the app hadn't seen before. */
+	newListings: v.number(),
+	/** Why the page captured nothing, or null when it worked. */
+	error: v.union(v.string(), v.null()),
+});
+
 // Compile-time check that the validators and the domain library agree.
 type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
 const sectionsAgree: Same<Infer<typeof yugiohSectionValidator>, Section> = true;
@@ -370,3 +451,24 @@ const listingFiltersAgree: Same<
 	ListingFilters
 > = true;
 void listingFiltersAgree;
+
+const runTriggersAgree: Same<
+	Infer<typeof yugiohRunTriggerValidator>,
+	RunTrigger
+> = true;
+const runStatusesAgree: Same<
+	Infer<typeof yugiohRunStatusValidator>,
+	RunStatus
+> = true;
+const visitKindsAgree: Same<
+	Infer<typeof yugiohVisitKindValidator>,
+	VisitKind
+> = true;
+const plannedVisitsAgree: Same<
+	Infer<typeof yugiohPlannedVisitValidator>,
+	PlannedVisit
+> = true;
+void runTriggersAgree;
+void runStatusesAgree;
+void visitKindsAgree;
+void plannedVisitsAgree;

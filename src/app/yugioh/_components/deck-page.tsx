@@ -25,6 +25,7 @@ import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import type { DeckSection } from "../_utils/types";
 import { AddCardDrawer } from "./add-card-drawer";
+import { CaptureStalenessNote } from "./capture-staleness-note";
 import { CardDrawer } from "./card-drawer";
 import { CardOrderToggle } from "./card-order-toggle";
 import { CardRow } from "./card-row";
@@ -72,7 +73,11 @@ export function DeckPage({
 
 	return (
 		<div className="flex flex-col gap-6">
-			<DeckCostHeader deck={deck} cardHref={cardHref} />
+			<DeckCostHeader
+				deck={deck}
+				cardHref={cardHref}
+				note={<CaptureStalenessNote />}
+			/>
 
 			{deck.cardCount === 0 ? (
 				<Empty className="border">

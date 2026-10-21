@@ -53,3 +53,81 @@ test("a sold page is read and sent, and the dock shows the count", async () => {
 
 	vi.unstubAllGlobals();
 });
+
+test("a Search with no results tells the service worker there was nothing to send", async () => {
+	vi.useFakeTimers();
+	const { document, window } = parseHTML(
+		"<html><body><ul class='srp-results'></ul></body></html>",
+	);
+	const sent: Array<{ type: string }> = [];
+	vi.stubGlobal("document", document);
+	vi.stubGlobal("window", window);
+	vi.stubGlobal("MutationObserver", window.MutationObserver);
+	vi.stubGlobal("location", {
+		href: "https://www.ebay.com/sch/i.html?_nkw=RA01-EN999&_sop=10",
+	});
+	vi.stubGlobal("mountScrapeDock", () => {});
+	vi.stubGlobal("applyDockUpdate", () => {});
+	vi.stubGlobal("chrome", {
+		runtime: {
+			lastError: undefined,
+			sendMessage(message: { type: string }) {
+				sent.push(message);
+			},
+		},
+	});
+
+	vi.resetModules();
+	await import("../ebay-content.js");
+	await vi.advanceTimersByTimeAsync(10_000);
+
+	expect(sent).toEqual([{ type: "YUGIOH_CAPTURE_EMPTY" }]);
+
+	vi.useRealTimers();
+	vi.unstubAllGlobals();
+});
+
+test("an eBay error page instead of results is reported as an error, not as an empty Search", async () => {
+	vi.useFakeTimers();
+	const { document, window } = parseHTML(
+		"<html><head><title>Error Page | eBay</title></head><body><h1>SORRY</h1><p>Something went wrong on our end</p></body></html>",
+	);
+	const sent: Array<{ type: string; error?: string }> = [];
+	const dock: Array<{ status?: string; headline?: string }> = [];
+	vi.stubGlobal("document", document);
+	vi.stubGlobal("window", window);
+	vi.stubGlobal("MutationObserver", window.MutationObserver);
+	vi.stubGlobal("location", {
+		href: "https://www.ebay.com/sch/i.html?_nkw=RA01-EN008&_sop=10",
+	});
+	vi.stubGlobal("mountScrapeDock", () => {});
+	vi.stubGlobal("applyDockUpdate", (patch: (typeof dock)[number]) => {
+		dock.push(patch);
+	});
+	vi.stubGlobal("chrome", {
+		runtime: {
+			lastError: undefined,
+			sendMessage(message: { type: string; error?: string }) {
+				sent.push(message);
+			},
+		},
+	});
+
+	vi.resetModules();
+	await import("../ebay-content.js");
+	await vi.advanceTimersByTimeAsync(10_000);
+
+	expect(sent).toEqual([
+		{
+			type: "YUGIOH_CAPTURE_EMPTY",
+			error: "eBay showed an error or check page instead of results.",
+		},
+	]);
+	expect(dock.at(-1)).toMatchObject({
+		status: "warn",
+		headline: "Not a results page",
+	});
+
+	vi.useRealTimers();
+	vi.unstubAllGlobals();
+});

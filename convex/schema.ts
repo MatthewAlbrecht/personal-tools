@@ -28,6 +28,7 @@ import {
 import { zineInsideBackSectionsValidator } from "./_utils/zineInsideBackSections";
 import { zinePageRecommendationsValidator } from "./_utils/zinePageRecommendations";
 import {
+	yugiohAutomationRunValidator,
 	yugiohCapturedEbayListingValidator,
 	yugiohCardOrderValidator,
 	yugiohConditionValidator,
@@ -38,6 +39,7 @@ import {
 	yugiohTcgplayerStatusValidator,
 	yugiohTitleReadStatusValidator,
 	yugiohTitleReadValidator,
+	yugiohVisitKindValidator,
 } from "./model/yugioh/validators";
 
 const geniusCreditValidator = v.object({
@@ -1901,6 +1903,8 @@ export default defineSchema({
 		.index("by_marketplace_and_itemId", ["marketplace", "itemId"])
 		.index("by_setCodeKey", ["setCodeKey"])
 		.index("by_matchedPrintingId", ["matchedPrintingId"])
+		// "Last captured 9h ago" (ticket 15).
+		.index("by_lastSeenAt", ["lastSeenAt"])
 		// Each marketplace's Reference price and buy-now floor read their own
 		// Listings only: the two are never blended.
 		.index("by_matchedPrintingId_and_marketplace_and_saleAt", [
@@ -1939,4 +1943,25 @@ export default defineSchema({
 		countryKey: v.string(),
 		percent: v.number(),
 	}).index("by_countryKey", ["countryKey"]),
+
+	// Automated browser runs (ticket 15): the script on my Mac asks for one,
+	// the extension in the automation Chrome profile claims it, visits every
+	// page in the plan and reports each one. Times are Unix ms. Newest first
+	// is `_creationTime` (when it was asked for). Kept indefinitely.
+	yugiohAutomationRuns: defineTable(yugiohAutomationRunValidator).index(
+		"by_status",
+		["status"],
+	),
+
+	// One page an automated run visited, in the order visited.
+	yugiohAutomationVisits: defineTable({
+		runId: v.id("yugiohAutomationRuns"),
+		visitedAt: v.number(),
+		url: v.string(),
+		kind: yugiohVisitKindValidator,
+		label: v.string(),
+		listingsCaptured: v.number(),
+		newListings: v.number(),
+		error: v.union(v.string(), v.null()),
+	}).index("by_runId", ["runId"]),
 });

@@ -23,6 +23,7 @@ describe("isPublicPath", () => {
 		"/api/bandcamp/capture",
 		"/api/yugioh/ebay-capture",
 		"/api/yugioh/tcgplayer-capture",
+		"/api/yugioh/automation",
 		"/api/concerts/ical",
 		"/launch.html",
 		"/launch-dnd.mjs",

@@ -15,9 +15,12 @@ type DeckCostFigures = NonNullable<DeckView["cost"]>;
 export function DeckCostHeader({
 	deck,
 	cardHref,
+	note,
 }: {
 	deck: DeckView;
 	cardHref: (cardId: string) => string;
+	/** One more muted callout under the others, such as "Last captured 9h ago". */
+	note?: React.ReactNode;
 }): React.ReactElement {
 	const cost = deck.cost;
 	const complete = cost !== null && cost.unfinishedCards === 0;
@@ -84,6 +87,7 @@ export function DeckCostHeader({
 					</span>
 				</p>
 			)}
+			{note}
 		</section>
 	);
 }

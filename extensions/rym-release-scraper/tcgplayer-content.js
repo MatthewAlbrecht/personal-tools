@@ -120,8 +120,22 @@ function finishTcgplayerCapture(response, product) {
 	applyDockUpdate({
 		status: "error",
 		headline: "Couldn't send the page",
-		detail: `${detail}. Run again, or check the extension options.`,
+		// The service worker's reasons are whole sentences that say what to do.
+		detail: /[.!?]$/.test(detail)
+			? detail
+			: `${detail}. Run again, or check the extension options.`,
 	});
+}
+
+// An automated run waits for each page's capture: say there's none coming,
+// and why when it's a problem.
+function tellTcgplayerNothingToSend(error) {
+	chrome.runtime.sendMessage(
+		{ type: "YUGIOH_CAPTURE_EMPTY", ...(error ? { error } : {}) },
+		function ignoreResponse() {
+			void chrome.runtime.lastError;
+		},
+	);
 }
 
 async function runTcgplayerCapture() {
@@ -142,6 +156,7 @@ async function runTcgplayerCapture() {
 
 	const product = readTcgplayerProduct(document, { url: location.href });
 	if (!product) {
+		tellTcgplayerNothingToSend("Not a TCGplayer product page.");
 		applyDockUpdate({
 			status: "warn",
 			headline: "Not a product page",
@@ -150,6 +165,7 @@ async function runTcgplayerCapture() {
 		return;
 	}
 	if (product.listings.length === 0 && product.sales.length === 0) {
+		tellTcgplayerNothingToSend(null);
 		applyDockUpdate({
 			status: "warn",
 			headline: "Nothing to capture yet",

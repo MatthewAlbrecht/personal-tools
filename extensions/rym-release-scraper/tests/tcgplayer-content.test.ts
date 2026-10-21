@@ -101,3 +101,49 @@ test("a product that isn't one of my Printings says so", async () => {
 		headline: "Not one of your Printings",
 	});
 });
+
+test("a product page with nothing on it tells the service worker there was nothing to send", async () => {
+	vi.useFakeTimers();
+	const { document, window } = parseHTML("<html><body></body></html>");
+	const sent: Array<{ type: string }> = [];
+	vi.stubGlobal("document", document);
+	vi.stubGlobal("window", window);
+	vi.stubGlobal("MutationObserver", window.MutationObserver);
+	vi.stubGlobal("location", { href: ASH_URL });
+	vi.stubGlobal("mountScrapeDock", () => {});
+	vi.stubGlobal("applyDockUpdate", () => {});
+	vi.stubGlobal("chrome", {
+		runtime: {
+			lastError: undefined,
+			sendMessage(message: { type: string }) {
+				sent.push(message);
+			},
+		},
+	});
+
+	vi.resetModules();
+	await import("../tcgplayer-content.js");
+	await vi.advanceTimersByTimeAsync(30_000);
+
+	expect(sent).toHaveLength(1);
+	expect(sent[0]?.type).toBe("YUGIOH_CAPTURE_EMPTY");
+
+	vi.useRealTimers();
+});
+
+test("a capture the app refused shows the service worker's short reason as it is", async () => {
+	const reason =
+		"The app at www.moooose.dev doesn't have this capture yet (404). Deploy it, or point the extension at http://localhost:1333 in its options.";
+	const { dock } = await runOnSavedPage({
+		synced: false,
+		skipped: false,
+		status: 404,
+		error: reason,
+	});
+
+	expect(dock.at(-1)).toMatchObject({
+		status: "error",
+		headline: "Couldn't send the page",
+		detail: reason,
+	});
+});

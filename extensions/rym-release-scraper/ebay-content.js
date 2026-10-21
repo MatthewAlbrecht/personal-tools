@@ -62,8 +62,22 @@ function finishEbayCapture(response, count) {
 	applyDockUpdate({
 		status: "error",
 		headline: "Couldn't send the Listings",
-		detail: `${detail}. Run again, or check the extension options.`,
+		// The service worker's reasons are whole sentences that say what to do.
+		detail: /[.!?]$/.test(detail)
+			? detail
+			: `${detail}. Run again, or check the extension options.`,
 	});
+}
+
+// An automated run waits for each page's capture: say there's none coming,
+// and why when it's a problem.
+function tellNothingToSend(error) {
+	chrome.runtime.sendMessage(
+		{ type: "YUGIOH_CAPTURE_EMPTY", ...(error ? { error } : {}) },
+		function ignoreResponse() {
+			void chrome.runtime.lastError;
+		},
+	);
 }
 
 async function runEbayCapture() {
@@ -81,7 +95,19 @@ async function runEbayCapture() {
 		now: Date.now(),
 		url: location.href,
 	});
+	// A results page has its results list even with no matches; eBay's error
+	// and check pages don't.
+	if (listings.length === 0 && !document.querySelector("ul.srp-results")) {
+		tellNothingToSend("eBay showed an error or check page instead of results.");
+		applyDockUpdate({
+			status: "warn",
+			headline: "Not a results page",
+			detail: "eBay showed an error or check page. Reload it, then run again.",
+		});
+		return;
+	}
 	if (listings.length === 0) {
+		tellNothingToSend(null);
 		applyDockUpdate({
 			status: "warn",
 			headline: "No Listings on this page",

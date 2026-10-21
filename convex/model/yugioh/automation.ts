@@ -1,0 +1,236 @@
+import {
+	MAX_VISITS_PER_RUN,
+	type PlannedVisit,
+	RUN_ABANDONED_AFTER_MS,
+	type RunTrigger,
+	buildVisitPlan,
+} from "../../../src/lib/yugioh/automation";
+import {
+	buildDeckSearches,
+	searchedCandidates,
+} from "../../../src/lib/yugioh/searches";
+import type { Doc, Id } from "../../_generated/dataModel";
+import type { MutationCtx, QueryCtx } from "../../_generated/server";
+import { MAX_DECKS, readDeck } from "./decks";
+
+/** How many failed pages a run keeps on itself for the runs list. */
+export const MAX_PAGE_ERRORS_SHOWN = 20;
+
+/** How many runs the app lists. */
+export const MAX_RUNS_SHOWN = 20;
+
+export type RunRequest = {
+	runId: Id<"yugiohAutomationRuns">;
+	alreadyOpen: boolean;
+};
+
+export type ClaimedRun = {
+	runId: Id<"yugiohAutomationRuns">;
+	visits: PlannedVisit[];
+};
+
+export type VisitReport = PlannedVisit & {
+	listingsCaptured: number;
+	newListings: number;
+	error: string | null;
+};
+
+const OPEN_STATUSES = ["requested", "running"] as const;
+
+/**
+ * Asks for a run. While one is still open (asked for or running) it's
+ * returned instead, so two triggers never run at once. An open run older than
+ * RUN_ABANDONED_AFTER_MS is closed as failed first.
+ */
+export async function requestRun(
+	ctx: MutationCtx,
+	trigger: RunTrigger,
+	now: number,
+): Promise<RunRequest> {
+	for (const status of OPEN_STATUSES) {
+		const open = await ctx.db
+			.query("yugiohAutomationRuns")
+			.withIndex("by_status", (q) => q.eq("status", status))
+			.take(10);
+		for (const run of open) {
+			if (now - (run.startedAt ?? run.requestedAt) < RUN_ABANDONED_AFTER_MS) {
+				return { runId: run._id, alreadyOpen: true };
+			}
+			await ctx.db.patch("yugiohAutomationRuns", run._id, {
+				status: "failed",
+				endedAt: now,
+				error: "Didn't finish. Closed when the next run was asked for.",
+			});
+		}
+	}
+	const runId = await ctx.db.insert("yugiohAutomationRuns", {
+		trigger,
+		status: "requested",
+		requestedAt: now,
+		startedAt: null,
+		endedAt: null,
+		pagesPlanned: 0,
+		pagesVisited: 0,
+		searchPagesVisited: 0,
+		productPagesVisited: 0,
+		failedPages: 0,
+		listingsCaptured: 0,
+		newListings: 0,
+		error: null,
+		pageErrors: [],
+	});
+	return { runId, alreadyOpen: false };
+}
+
+/**
+ * The extension takes the oldest run asked for and gets its visit plan, or
+ * null when there's none. A run is claimed once.
+ */
+export async function claimRun(
+	ctx: MutationCtx,
+	now: number,
+): Promise<ClaimedRun | null> {
+	const run = await ctx.db
+		.query("yugiohAutomationRuns")
+		.withIndex("by_status", (q) => q.eq("status", "requested"))
+		.first();
+	if (!run) return null;
+	const visits = await readVisitPlan(ctx);
+	await ctx.db.patch("yugiohAutomationRuns", run._id, {
+		status: "running",
+		startedAt: now,
+		pagesPlanned: visits.length,
+	});
+	return { runId: run._id, visits };
+}
+
+/**
+ * Every page to visit, across all Decks: the Searches packed from every
+ * Card's searched Printings (as the Searches tab packs one Deck's), then
+ * the TCGplayer product page of each of those Printings that has one.
+ */
+export async function readVisitPlan(ctx: QueryCtx): Promise<PlannedVisit[]> {
+	const decks = await ctx.db.query("yugiohDecks").take(MAX_DECKS);
+	const views = await Promise.all(decks.map((deck) => readDeck(ctx, deck._id)));
+	const cards = views.flatMap(
+		(deck) => deck?.sections.flatMap((section) => section.cards) ?? [],
+	);
+	const products = new Map<
+		string,
+		{ cardName: string; setCode: string; productUrl: string }
+	>();
+	for (const card of cards) {
+		for (const candidate of searchedCandidates(card)) {
+			const productUrl = candidate.tcgplayer.productUrl;
+			if (productUrl === null || products.has(candidate.printingId)) continue;
+			products.set(candidate.printingId, {
+				cardName: card.cardName,
+				setCode: candidate.setCode,
+				productUrl,
+			});
+		}
+	}
+	const byName = [...products.values()].sort(
+		(a, b) =>
+			a.cardName.localeCompare(b.cardName) ||
+			a.setCode.localeCompare(b.setCode),
+	);
+	return buildVisitPlan(buildDeckSearches(cards), byName);
+}
+
+/**
+ * Records one visited page on a running run and adds it to the run's totals.
+ * Returns whether the run is still running. A report for a run that isn't
+ * (the script gave up on it) is dropped, and the extension stops.
+ */
+export async function recordVisit(
+	ctx: MutationCtx,
+	runId: Id<"yugiohAutomationRuns">,
+	visit: VisitReport,
+	now: number,
+): Promise<boolean> {
+	const run = await ctx.db.get("yugiohAutomationRuns", runId);
+	if (!run || run.status !== "running") return false;
+	// More reports than any plan has pages: stop the extension.
+	if (run.pagesVisited >= MAX_VISITS_PER_RUN) return false;
+	await ctx.db.insert("yugiohAutomationVisits", {
+		runId,
+		visitedAt: now,
+		...visit,
+	});
+	const isSearch = visit.kind !== "tcgplayer";
+	await ctx.db.patch("yugiohAutomationRuns", runId, {
+		pagesVisited: run.pagesVisited + 1,
+		searchPagesVisited: run.searchPagesVisited + (isSearch ? 1 : 0),
+		productPagesVisited: run.productPagesVisited + (isSearch ? 0 : 1),
+		failedPages: run.failedPages + (visit.error === null ? 0 : 1),
+		listingsCaptured: run.listingsCaptured + visit.listingsCaptured,
+		newListings: run.newListings + visit.newListings,
+		pageErrors:
+			visit.error === null || run.pageErrors.length >= MAX_PAGE_ERRORS_SHOWN
+				? run.pageErrors
+				: [
+						...run.pageErrors,
+						{ kind: visit.kind, label: visit.label, error: visit.error },
+					],
+	});
+	return true;
+}
+
+/**
+ * Ends a run: finished, or failed with `error`. A run that was never claimed
+ * can't finish, so it fails. Ending an ended run changes nothing.
+ */
+export async function finishRun(
+	ctx: MutationCtx,
+	runId: Id<"yugiohAutomationRuns">,
+	error: string | null,
+	now: number,
+): Promise<void> {
+	const run = await ctx.db.get("yugiohAutomationRuns", runId);
+	if (!run || run.status === "finished" || run.status === "failed") return;
+	const failure =
+		error ?? (run.status === "requested" ? "The run never started." : null);
+	await ctx.db.patch("yugiohAutomationRuns", runId, {
+		status: failure === null ? "finished" : "failed",
+		endedAt: now,
+		error: failure,
+	});
+}
+
+export type RunView = Omit<Doc<"yugiohAutomationRuns">, "_creationTime">;
+
+function runView(run: Doc<"yugiohAutomationRuns">): RunView {
+	const { _creationTime: _, ...view } = run;
+	return view;
+}
+
+/** One run, for the script waiting on it; null when there's no such run. */
+export async function readRun(
+	ctx: QueryCtx,
+	runId: Id<"yugiohAutomationRuns">,
+): Promise<RunView | null> {
+	const run = await ctx.db.get("yugiohAutomationRuns", runId);
+	return run ? runView(run) : null;
+}
+
+/** The latest runs, newest first. */
+export async function listRuns(ctx: QueryCtx): Promise<RunView[]> {
+	const runs = await ctx.db
+		.query("yugiohAutomationRuns")
+		.order("desc")
+		.take(MAX_RUNS_SHOWN);
+	return runs.map(runView);
+}
+
+/** When any capture (automated or by hand) last saw a Listing; null before any. */
+export async function readLastCapturedAt(
+	ctx: QueryCtx,
+): Promise<number | null> {
+	const latest = await ctx.db
+		.query("yugiohListings")
+		.withIndex("by_lastSeenAt")
+		.order("desc")
+		.first();
+	return latest?.lastSeenAt ?? null;
+}

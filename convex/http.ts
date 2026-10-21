@@ -1,11 +1,13 @@
 import { httpRouter } from "convex/server";
 import { internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import type { ActionCtx } from "./_generated/server";
 import { httpAction } from "./_generated/server";
 import {
 	MIN_SERVER_SECRET_LENGTH,
 	bearerMatchesSecret,
 } from "./_utils/serverSecret";
+import type { VisitReport } from "./model/yugioh/automation";
 import { MAX_LISTINGS_PER_CAPTURE } from "./model/yugioh/listings";
 import type { CapturedTcgplayerProduct } from "./model/yugioh/tcgplayerCapture";
 
@@ -190,6 +192,60 @@ http.route({
 			);
 		} catch (error) {
 			console.error("[yugioh/tcgplayer-product] ingest failed", error);
+			return badRequest();
+		}
+	}),
+});
+
+// Automated browser runs: one route, one `op` per step. The script asks for a
+// run ("request") and waits on it ("status", "finish" when it gives up); the
+// extension claims it ("claim"), reports each page ("visit") and ends it
+// ("finish"). The functions' argument validators check every field.
+const automationOps: Record<
+	string,
+	(ctx: ActionCtx, body: Body) => Promise<unknown>
+> = {
+	request: (ctx, body) =>
+		ctx.runMutation(internal.yugioh.automation.requestRun, {
+			trigger: body.trigger as "manual",
+		}),
+	claim: async (ctx) => ({
+		run: await ctx.runMutation(internal.yugioh.automation.claimRun, {}),
+	}),
+	visit: async (ctx, body) => ({
+		running: await ctx.runMutation(internal.yugioh.automation.recordVisit, {
+			runId: body.runId as Id<"yugiohAutomationRuns">,
+			visit: body.visit as VisitReport,
+		}),
+	}),
+	finish: async (ctx, body) => {
+		await ctx.runMutation(internal.yugioh.automation.finishRun, {
+			runId: body.runId as Id<"yugiohAutomationRuns">,
+			error: (body.error ?? null) as string | null,
+		});
+		return { ok: true };
+	},
+	status: async (ctx, body) => ({
+		run: await ctx.runQuery(internal.yugioh.automation.getRun, {
+			runId: body.runId as Id<"yugiohAutomationRuns">,
+		}),
+	}),
+};
+
+http.route({
+	path: "/server/yugioh/automation",
+	method: "POST",
+	handler: serverRoute(async (ctx, body) => {
+		const op = str(body, "op");
+		const run =
+			op !== null && Object.hasOwn(automationOps, op)
+				? automationOps[op]
+				: undefined;
+		if (!run) return badRequest();
+		try {
+			return json(await run(ctx, body));
+		} catch (error) {
+			console.error(`[yugioh/automation] ${op} failed`, error);
 			return badRequest();
 		}
 	}),

@@ -43,7 +43,19 @@
 				font-size: 13px;
 				cursor: pointer;
 			}
-			#status {
+			label.inline {
+				display: flex;
+				gap: 8px;
+				align-items: center;
+				font-weight: 400;
+				font-size: 13px;
+			}
+			label.inline input {
+				width: auto;
+				margin: 0;
+			}
+			#status,
+			#automation-status {
 				margin-top: 12px;
 				font-size: 13px;
 				min-height: 1.2em;
@@ -79,6 +91,18 @@
 		/>
 		<button id="save" type="button">Save</button>
 		<p id="status"></p>
+		<h2 style="margin-top: 24px">Automated captures</h2>
+		<p class="hint">
+			Turn this on only in the Chrome profile the Yu-Gi-Oh automation script
+			opens. While it's on, this profile checks the tracker every minute for a
+			run the script asked for, then opens every Search and TCGplayer page in
+			its own window. See <code>docs/yugioh/automation.md</code>.
+		</p>
+		<label class="inline" for="automation">
+			<input id="automation" type="checkbox" />
+			Run automated captures in this profile
+		</label>
+		<p id="automation-status"></p>
 		<script src="options.js"></script>
 	</body>
 </html>

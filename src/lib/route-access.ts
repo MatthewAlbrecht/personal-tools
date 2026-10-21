@@ -32,6 +32,8 @@ const PUBLIC_EXACT = new Set([
 	"/api/bandcamp/capture",
 	"/api/yugioh/ebay-capture",
 	"/api/yugioh/tcgplayer-capture",
+	// Also the automated-run script (scripts/yugioh-automation/run.sh)
+	"/api/yugioh/automation",
 	// Launch page (static public/launch.html): it loads these modules and /api/launch-config from the same origin
 	"/launch.html",
 	"/launch-dnd.mjs",

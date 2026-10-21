@@ -1,3 +1,5 @@
+importScripts("automation-runner.js", "ingest-errors.js");
+
 const STORAGE_KEY = "rymReleaseCaptures";
 const STORAGE_KEY_BANDCAMP = "bandcampAlbumCaptures";
 const SETTINGS_BACKEND_ORIGIN = "rymBackendOrigin";
@@ -567,20 +569,16 @@ async function postYugiohCapture(path, body, label) {
 			// keep raw response text for the error
 		}
 		if (!res.ok) {
-			const errorMessage =
-				typeof json?.error === "string" && json.error.trim()
-					? json.error.trim()
-					: text;
+			const failure = describeFailedResponse(origin, res.status, text);
 			console.error(
 				`[rym-release-scraper] ${label} capture failed`,
-				res.status,
-				errorMessage,
+				failure.log,
 			);
 			return {
 				synced: false,
 				skipped: false,
 				status: res.status,
-				error: errorMessage,
+				error: failure.message,
 			};
 		}
 		return { synced: true, skipped: false, ...json };
@@ -595,7 +593,7 @@ async function postYugiohCapture(path, body, label) {
 }
 
 // eBay search-results page → `{ captured, created, updated }`.
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 	if (!message || message.type !== "YUGIOH_EBAY_CAPTURE") {
 		return;
 	}
@@ -608,16 +606,18 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 				"eBay",
 			);
 			sendResponse({ ok: true, backend });
+			settleAutomatedVisit(sender.tab?.id, { ok: true, backend });
 		} catch (error) {
 			console.error("[rym-release-scraper] failed to send eBay capture", error);
 			sendResponse({ ok: false });
+			settleAutomatedVisit(sender.tab?.id, { ok: false });
 		}
 	})();
 	return true;
 });
 
 // TCGplayer product page → `{ printing, listings, sales, created, updated }`.
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 	if (!message || message.type !== "YUGIOH_TCGPLAYER_CAPTURE") {
 		return;
 	}
@@ -629,13 +629,209 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 				"TCGplayer",
 			);
 			sendResponse({ ok: true, backend });
+			settleAutomatedVisit(sender.tab?.id, { ok: true, backend });
 		} catch (error) {
 			console.error(
 				"[rym-release-scraper] failed to send TCGplayer capture",
 				error,
 			);
 			sendResponse({ ok: false });
+			settleAutomatedVisit(sender.tab?.id, { ok: false });
 		}
 	})();
 	return true;
+});
+
+// ---------------------------------------------------------------------------
+// Automated browser runs (docs/yugioh/automation.md). Only in a Chrome profile
+// where "Run automated captures" is on in the options (chrome.storage.local,
+// so it never syncs to my everyday profile). The script on my Mac asks the
+// app for a run and opens this profile; a 1-minute alarm (and browser start)
+// checks for it here, and `runAutomatedRun` (automation-runner.js) visits
+// every page in the plan.
+
+const SETTINGS_AUTOMATION_ENABLED = "yugiohAutomationEnabled";
+const AUTOMATION_ALARM = "yugioh-automation-check";
+// A TCGplayer page can take ~75 s to load its sales; then it's given up.
+const AUTOMATION_VISIT_TIMEOUT_MS = 120_000;
+// Extension API calls keep the service worker alive; a quiet pause between
+// pages would otherwise let Chrome stop it after 30 s (see
+// docs/yugioh/references/automated-browser.md).
+const AUTOMATION_KEEPALIVE_MS = 20_000;
+
+/** Tab ID → resolves that tab's visit with its capture outcome. */
+const pendingAutomatedVisits = new Map();
+let automationActive = false;
+
+function settleAutomatedVisit(tabId, response) {
+	const settle = pendingAutomatedVisits.get(tabId);
+	if (!settle) return;
+	pendingAutomatedVisits.delete(tabId);
+	settle(visitOutcome(response));
+}
+
+// A page with nothing to send (a Search with no results).
+chrome.runtime.onMessage.addListener((message, sender) => {
+	if (!message || message.type !== "YUGIOH_CAPTURE_EMPTY") {
+		return;
+	}
+	settleAutomatedVisit(sender.tab?.id, {
+		ok: true,
+		empty: true,
+		error: message.error,
+	});
+});
+
+async function automationSettings() {
+	const cfg = await chrome.storage.sync.get([
+		SETTINGS_BACKEND_ORIGIN,
+		SETTINGS_BACKEND_SECRET,
+	]);
+	const originRaw =
+		(typeof cfg[SETTINGS_BACKEND_ORIGIN] === "string" &&
+			cfg[SETTINGS_BACKEND_ORIGIN].trim()) ||
+		"https://www.moooose.dev";
+	return {
+		origin: originRaw.replace(/\/+$/, ""),
+		secret:
+			typeof cfg[SETTINGS_BACKEND_SECRET] === "string"
+				? cfg[SETTINGS_BACKEND_SECRET].trim()
+				: "",
+	};
+}
+
+/** Posts one run step to the app; throws with the app's reason on failure. */
+async function postAutomationStep(body) {
+	const { origin, secret } = await automationSettings();
+	if (!secret) throw new Error("The ingest secret isn't set");
+	const res = await fetch(`${origin}/api/yugioh/automation`, {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+			Authorization: `Bearer ${secret}`,
+		},
+		body: JSON.stringify(body),
+	});
+	const text = await res.text();
+	if (!res.ok) {
+		const failure = describeFailedResponse(origin, res.status, text);
+		console.error("[yugioh-automation] step failed", body.op, failure.log);
+		throw new Error(failure.message);
+	}
+	return JSON.parse(text);
+}
+
+/**
+ * Why a page sent nothing. eBay's captcha lives at /splashui/captcha, where
+ * the content script doesn't run (the host permission lets us read the URL).
+ */
+async function silentPageReason(tabId) {
+	const tab = await chrome.tabs.get(tabId).catch(function gone() {
+		return null;
+	});
+	if (tab?.url?.includes("/splashui/captcha")) {
+		return "eBay asked for a captcha. Open eBay in the automation profile and solve it.";
+	}
+	return "The page sent nothing within 2 minutes.";
+}
+
+/** Opens one page in the run's window and waits for its capture, then closes it. */
+async function visitPageInWindow(windowId, visit) {
+	const tab = await chrome.tabs.create({
+		windowId,
+		url: visit.url,
+		active: true,
+	});
+	try {
+		return await new Promise(function waitForCapture(resolve) {
+			const timer = setTimeout(async function giveUp() {
+				pendingAutomatedVisits.delete(tab.id);
+				resolve({
+					listingsCaptured: 0,
+					newListings: 0,
+					error: await silentPageReason(tab.id),
+				});
+			}, AUTOMATION_VISIT_TIMEOUT_MS);
+			pendingAutomatedVisits.set(tab.id, function settled(outcome) {
+				clearTimeout(timer);
+				resolve(outcome);
+			});
+		});
+	} finally {
+		await chrome.tabs.remove(tab.id).catch(function alreadyClosed() {});
+	}
+}
+
+async function checkForAutomatedRun() {
+	// Taken before any await, so browser start and the alarm can't both run.
+	if (automationActive) return;
+	automationActive = true;
+	const local = await chrome.storage.local.get(SETTINGS_AUTOMATION_ENABLED);
+	if (!local[SETTINGS_AUTOMATION_ENABLED]) {
+		automationActive = false;
+		return;
+	}
+	const keepAlive = setInterval(function ping() {
+		void chrome.runtime.getPlatformInfo();
+	}, AUTOMATION_KEEPALIVE_MS);
+	let windowId = null;
+	try {
+		const result = await runAutomatedRun({
+			call: postAutomationStep,
+			async visitPage(visit) {
+				if (windowId === null) {
+					const win = await chrome.windows.create({ focused: false });
+					windowId = win.id;
+				}
+				return await visitPageInWindow(windowId, visit);
+			},
+			pause: function pause(ms) {
+				return new Promise(function wait(resolve) {
+					setTimeout(resolve, ms);
+				});
+			},
+			random: Math.random,
+		});
+		if (result) {
+			console.info(
+				`[yugioh-automation] run ${result.runId}: ${result.pagesVisited} pages`,
+			);
+		}
+	} catch (error) {
+		console.error("[yugioh-automation] run failed", error);
+	} finally {
+		clearInterval(keepAlive);
+		if (windowId !== null) {
+			await chrome.windows.remove(windowId).catch(function alreadyClosed() {});
+		}
+		automationActive = false;
+	}
+}
+
+async function syncAutomationAlarm() {
+	const local = await chrome.storage.local.get(SETTINGS_AUTOMATION_ENABLED);
+	if (local[SETTINGS_AUTOMATION_ENABLED]) {
+		await chrome.alarms.create(AUTOMATION_ALARM, { periodInMinutes: 1 });
+	} else {
+		await chrome.alarms.clear(AUTOMATION_ALARM);
+	}
+}
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+	if (alarm.name === AUTOMATION_ALARM) void checkForAutomatedRun();
+});
+
+chrome.runtime.onStartup.addListener(() => {
+	void syncAutomationAlarm();
+	void checkForAutomatedRun();
+});
+
+chrome.runtime.onInstalled.addListener(() => {
+	void syncAutomationAlarm();
+});
+
+chrome.storage.onChanged.addListener((changes, area) => {
+	if (area === "local" && SETTINGS_AUTOMATION_ENABLED in changes) {
+		void syncAutomationAlarm();
+	}
 });
