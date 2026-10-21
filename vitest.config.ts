@@ -1,7 +1,7 @@
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
-// Only the Launch Convex suites run under Vitest. Every other `*.test.ts` in
+// Only the Launch and Yu-Gi-Oh Convex suites run under Vitest. Every other `*.test.ts` in
 // this repo is a node:test file, and `.worktrees` holds sibling checkouts, so a
 // bare `vitest run` must not collect either.
 export default defineConfig({
@@ -13,6 +13,8 @@ export default defineConfig({
 		include: [
 			"convex/launch-*.test.ts",
 			"convex/public-surface-lockdown.test.ts",
+			"convex/yugioh/**/*.test.ts",
+			"src/lib/yugioh/**/*.test.ts",
 			"convex/_utils/serverSecret.test.ts",
 			"src/server/convex-server.test.ts",
 			"src/lib/session-cookie.test.ts",

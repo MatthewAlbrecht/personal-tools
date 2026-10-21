@@ -27,6 +27,10 @@ import {
 } from "./_utils/zineInsideBackLayout";
 import { zineInsideBackSectionsValidator } from "./_utils/zineInsideBackSections";
 import { zinePageRecommendationsValidator } from "./_utils/zinePageRecommendations";
+import {
+	yugiohConditionValidator,
+	yugiohSectionValidator,
+} from "./model/yugioh/validators";
 
 const geniusCreditValidator = v.object({
 	label: v.string(),
@@ -1792,4 +1796,37 @@ export default defineSchema({
 		recentOperationIds: v.array(v.string()),
 		updatedAt: v.number(),
 	}).index("by_key", ["key"]),
+
+	// Yu-Gi-Oh max-rarity tracker (/yugioh). Terms: src/app/yugioh/GLOSSARY.md.
+	yugiohDecks: defineTable({
+		name: v.string(),
+	}),
+
+	// Shared across Decks: one row per set code + rarity.
+	yugiohPrintings: defineTable({
+		cardName: v.string(),
+		setCode: v.string(),
+		rarity: v.string(),
+		overloadedRarities: v.array(v.string()),
+	}).index("by_setCode_and_rarity", ["setCode", "rarity"]),
+
+	// A Card in one Deck. Ownership and condition are per Deck.
+	yugiohDeckCards: defineTable({
+		deckId: v.id("yugiohDecks"),
+		cardName: v.string(),
+		section: yugiohSectionValidator,
+		copiesNeeded: v.number(),
+		copiesOwned: v.number(),
+		lowestAcceptableCondition: yugiohConditionValidator,
+		chosenPrintingId: v.union(v.id("yugiohPrintings"), v.null()),
+	}).index("by_deckId", ["deckId"]),
+
+	yugiohCandidatePrintings: defineTable({
+		deckId: v.id("yugiohDecks"),
+		deckCardId: v.id("yugiohDeckCards"),
+		printingId: v.id("yugiohPrintings"),
+	})
+		.index("by_deckCardId_and_printingId", ["deckCardId", "printingId"])
+		.index("by_deckId", ["deckId"])
+		.index("by_printingId", ["printingId"]),
 });

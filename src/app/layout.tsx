@@ -7,6 +7,7 @@ import { AppShell } from "~/components/app-shell/app-shell";
 import { Toaster } from "~/components/ui/sonner";
 import { AuthProvider } from "~/lib/auth-context";
 import ConvexClientProvider from "~/providers/ConvexProvider";
+import { ThemeProvider } from "~/providers/theme-provider";
 import { TRPCReactProvider } from "~/trpc/react";
 
 const sourceSans = Source_Sans_3({
@@ -29,17 +30,23 @@ export default function RootLayout({
 	children,
 }: Readonly<{ children: React.ReactNode }>) {
 	return (
-		<html lang="en" className={`${sourceSans.variable} ${fraunces.variable}`}>
+		<html
+			lang="en"
+			className={`${sourceSans.variable} ${fraunces.variable}`}
+			suppressHydrationWarning
+		>
 			<body className="min-h-screen bg-background font-sans text-foreground antialiased">
-				<AuthProvider>
-					<ConvexClientProvider>
-						<TRPCReactProvider>
-							<SiteHeader />
-							<AppShell>{children}</AppShell>
-							<Toaster />
-						</TRPCReactProvider>
-					</ConvexClientProvider>
-				</AuthProvider>
+				<ThemeProvider>
+					<AuthProvider>
+						<ConvexClientProvider>
+							<TRPCReactProvider>
+								<SiteHeader />
+								<AppShell>{children}</AppShell>
+								<Toaster />
+							</TRPCReactProvider>
+						</ConvexClientProvider>
+					</AuthProvider>
+				</ThemeProvider>
 			</body>
 		</html>
 	);

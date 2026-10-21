@@ -1,0 +1,79 @@
+import { describe, expect, test } from "vitest";
+import {
+	normalizeOverloadedRarities,
+	normalizeRarity,
+	normalizeSetCode,
+	rarityAbbreviation,
+	rarityMatchesQuery,
+	suggestRarities,
+} from "./deck";
+
+describe("Printing normalization", () => {
+	test("set codes are trimmed and uppercased", () => {
+		expect(normalizeSetCode("  ra01-en008 ")).toBe("RA01-EN008");
+	});
+
+	test("known rarities resolve from any casing or their abbreviation", () => {
+		expect(normalizeRarity("quarter  century secret rare")).toBe(
+			"Quarter Century Secret Rare",
+		);
+		expect(normalizeRarity("QCSR")).toBe("Quarter Century Secret Rare");
+		expect(normalizeRarity("Platinum Secret Rare")).toBe(
+			"Platinum Secret Rare",
+		);
+	});
+
+	test("unknown rarities are title-cased so casing can't split a Printing", () => {
+		expect(normalizeRarity("platinum  secret rare")).toBe(
+			"Platinum Secret Rare",
+		);
+		expect(normalizeRarity("PREMIUM GOLD RARE")).toBe("Premium Gold Rare");
+	});
+
+	test("Overloaded rarities drop duplicates and the Printing's own rarity", () => {
+		expect(
+			normalizeOverloadedRarities(
+				["super rare", "Super Rare", "QCSR", " ", "Ultra Rare"],
+				"Quarter Century Secret Rare",
+			),
+		).toEqual(["Super Rare", "Ultra Rare"]);
+	});
+
+	test("rarity abbreviations fall back to the full name", () => {
+		expect(rarityAbbreviation("Starlight Rare")).toBe("StR");
+		expect(rarityAbbreviation("Platinum Secret Rare")).toBe(
+			"Platinum Secret Rare",
+		);
+	});
+});
+
+describe("rarity suggestions", () => {
+	test("match by any part of the name or the start of the abbreviation", () => {
+		expect(rarityMatchesQuery("Quarter Century Secret Rare", "qc")).toBe(true);
+		expect(rarityMatchesQuery("Quarter Century Secret Rare", "century")).toBe(
+			true,
+		);
+		expect(rarityMatchesQuery("Starlight Rare", "str")).toBe(true);
+		expect(rarityMatchesQuery("Super Rare", "qc")).toBe(false);
+		expect(rarityMatchesQuery("Super Rare", "  ")).toBe(true);
+	});
+});
+
+describe("ranked rarity suggestions", () => {
+	test("an exact abbreviation comes first, then name prefixes, then the rest", () => {
+		expect(suggestRarities("ur")[0]).toBe("Ultra Rare");
+		expect(suggestRarities("sec").slice(0, 1)).toEqual(["Secret Rare"]);
+		expect(suggestRarities("qc")).toEqual(["Quarter Century Secret Rare"]);
+	});
+
+	test("with no query, every known rarity in prize order", () => {
+		expect(suggestRarities("")[0]).toBe("Quarter Century Secret Rare");
+		expect(suggestRarities("")).toHaveLength(11);
+	});
+
+	test("extra rarities are suggested too", () => {
+		expect(suggestRarities("plat", ["Platinum Secret Rare"])).toEqual([
+			"Platinum Secret Rare",
+		]);
+	});
+});

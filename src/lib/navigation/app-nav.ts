@@ -84,6 +84,12 @@ export const APP_NAV_GROUPS: AppNavGroup[] = [
 			{ id: "articles", label: "Articles", href: "/articles" },
 			{ id: "books", label: "Books", href: "/books" },
 			{ id: "bookcase", label: "Bookcase", href: "/bookcase" },
+			{
+				id: "yugioh",
+				label: "Yu-Gi-Oh",
+				href: "/yugioh",
+				matchPrefixes: ["/yugioh"],
+			},
 		],
 	},
 ];

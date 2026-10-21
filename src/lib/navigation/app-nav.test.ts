@@ -49,3 +49,13 @@ test("album view active states do not bleed across peers", () => {
 	assert.equal(isNavItemActive("/albums/details/abc", library), true);
 	assert.equal(isNavItemActive("/albums/details/abc", listens), false);
 });
+
+test("Yu-Gi-Oh lives under More and stays active on Deck pages", () => {
+	const more = APP_NAV_GROUPS.find((g) => g.id === "more");
+	assert.ok(more);
+	const yugioh = more.items.find((i) => i.id === "yugioh");
+	assert.ok(yugioh);
+	assert.equal(yugioh.label, "Yu-Gi-Oh");
+	assert.equal(isNavItemActive("/yugioh", yugioh), true);
+	assert.equal(isNavItemActive("/yugioh/decks/abc", yugioh), true);
+});

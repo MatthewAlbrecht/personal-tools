@@ -1,0 +1,114 @@
+"use client";
+
+import { useQuery } from "convex/react";
+import { Layers, Plus } from "lucide-react";
+import Link from "next/link";
+import { useState } from "react";
+import type * as React from "react";
+import { Button } from "~/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import {
+	Empty,
+	EmptyContent,
+	EmptyDescription,
+	EmptyHeader,
+	EmptyMedia,
+	EmptyTitle,
+} from "~/components/ui/empty";
+import { Skeleton } from "~/components/ui/skeleton";
+import { api } from "../../../../convex/_generated/api";
+import type { DeckSummary } from "../_utils/types";
+import { DeckProgress } from "./deck-progress";
+import { NewDeckDrawer } from "./new-deck-drawer";
+
+export function DecksOverview(): React.ReactElement {
+	const decks = useQuery(api.yugioh.decks.listDecks, {});
+	const [creating, setCreating] = useState(false);
+
+	return (
+		<div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
+			<header className="flex items-center justify-between gap-4">
+				<h1 className="font-display font-semibold text-2xl md:text-3xl">
+					Decks
+				</h1>
+				<Button onClick={() => setCreating(true)}>
+					<Plus data-icon="inline-start" />
+					New Deck
+				</Button>
+			</header>
+
+			{decks === undefined ? (
+				<DecksOverviewSkeleton />
+			) : decks.length === 0 ? (
+				<Empty className="border">
+					<EmptyHeader>
+						<EmptyMedia variant="icon">
+							<Layers />
+						</EmptyMedia>
+						<EmptyTitle>No Decks yet</EmptyTitle>
+						<EmptyDescription>
+							Start a Deck to track what it costs to finish.
+						</EmptyDescription>
+					</EmptyHeader>
+					<EmptyContent>
+						<Button onClick={() => setCreating(true)}>
+							<Plus data-icon="inline-start" />
+							New Deck
+						</Button>
+					</EmptyContent>
+				</Empty>
+			) : (
+				<ul className="grid gap-4 md:grid-cols-2">
+					{decks.map((deck) => (
+						<li key={deck._id}>
+							<DeckSummaryCard deck={deck} />
+						</li>
+					))}
+				</ul>
+			)}
+
+			<NewDeckDrawer open={creating} onOpenChange={setCreating} />
+		</div>
+	);
+}
+
+function DeckSummaryCard({ deck }: { deck: DeckSummary }): React.ReactElement {
+	return (
+		<Link
+			href={`/yugioh/decks/${deck._id}`}
+			className="block rounded-xl outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+		>
+			<Card className="gap-3 transition-colors hover:bg-muted/40 active:bg-muted">
+				<CardHeader>
+					<CardTitle className="truncate font-display text-xl">
+						{deck.name}
+					</CardTitle>
+				</CardHeader>
+				<CardContent>
+					<DeckProgress
+						copiesOwned={deck.copiesOwned}
+						copiesNeeded={deck.copiesNeeded}
+					/>
+				</CardContent>
+			</Card>
+		</Link>
+	);
+}
+
+export function DecksOverviewSkeleton(): React.ReactElement {
+	return (
+		<div className="grid gap-4 md:grid-cols-2">
+			{[0, 1].map((key) => (
+				<Card key={key} className="gap-4">
+					<CardHeader>
+						<Skeleton className="h-7 w-2/3" />
+					</CardHeader>
+					<CardContent className="flex flex-col gap-3">
+						<Skeleton className="ml-auto h-5 w-24" />
+						<Skeleton className="h-1.5 w-full" />
+					</CardContent>
+				</Card>
+			))}
+		</div>
+	);
+}

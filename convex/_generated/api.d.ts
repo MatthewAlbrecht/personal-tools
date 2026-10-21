@@ -52,6 +52,7 @@ import type * as _utils_rateYourMusicTaxonomy from "../_utils/rateYourMusicTaxon
 import type * as _utils_robRankingArtistStats from "../_utils/robRankingArtistStats.js";
 import type * as _utils_robRankingGenreStats from "../_utils/robRankingGenreStats.js";
 import type * as _utils_rymGenreHierarchy from "../_utils/rymGenreHierarchy.js";
+import type * as _utils_serverSecret from "../_utils/serverSecret.js";
 import type * as _utils_smartPlaylistAddedWindow from "../_utils/smartPlaylistAddedWindow.js";
 import type * as _utils_smartPlaylistFilterModel from "../_utils/smartPlaylistFilterModel.js";
 import type * as _utils_smartPlaylistGenreMatch from "../_utils/smartPlaylistGenreMatch.js";
@@ -85,6 +86,7 @@ import type * as forLaterAlbums from "../forLaterAlbums.js";
 import type * as geniusAlbums from "../geniusAlbums.js";
 import type * as geniusCreditLabels from "../geniusCreditLabels.js";
 import type * as home from "../home.js";
+import type * as http from "../http.js";
 import type * as launch from "../launch.js";
 import type * as launchActions from "../launchActions.js";
 import type * as migrations_backfillCategorizedAt from "../migrations/backfillCategorizedAt.js";
@@ -95,6 +97,8 @@ import type * as migrations_backfillUserTracks from "../migrations/backfillUserT
 import type * as migrations_importMusicFunnelFromProd from "../migrations/importMusicFunnelFromProd.js";
 import type * as migrations_initializeRatingHistory from "../migrations/initializeRatingHistory.js";
 import type * as migrations_migrateRatingsToThreeTier from "../migrations/migrateRatingsToThreeTier.js";
+import type * as model_yugioh_decks from "../model/yugioh/decks.js";
+import type * as model_yugioh_validators from "../model/yugioh/validators.js";
 import type * as musicFunnel from "../musicFunnel.js";
 import type * as playlistLyrics from "../playlistLyrics.js";
 import type * as rankingSnapshots from "../rankingSnapshots.js";
@@ -107,6 +111,7 @@ import type * as smartPlaylists from "../smartPlaylists.js";
 import type * as spotify from "../spotify.js";
 import type * as spotifyListenRepair from "../spotifyListenRepair.js";
 import type * as spotifyPlayEvents from "../spotifyPlayEvents.js";
+import type * as yugioh_decks from "../yugioh/decks.js";
 
 import type {
   ApiFromModules,
@@ -159,6 +164,7 @@ declare const fullApi: ApiFromModules<{
   "_utils/robRankingArtistStats": typeof _utils_robRankingArtistStats;
   "_utils/robRankingGenreStats": typeof _utils_robRankingGenreStats;
   "_utils/rymGenreHierarchy": typeof _utils_rymGenreHierarchy;
+  "_utils/serverSecret": typeof _utils_serverSecret;
   "_utils/smartPlaylistAddedWindow": typeof _utils_smartPlaylistAddedWindow;
   "_utils/smartPlaylistFilterModel": typeof _utils_smartPlaylistFilterModel;
   "_utils/smartPlaylistGenreMatch": typeof _utils_smartPlaylistGenreMatch;
@@ -192,6 +198,7 @@ declare const fullApi: ApiFromModules<{
   geniusAlbums: typeof geniusAlbums;
   geniusCreditLabels: typeof geniusCreditLabels;
   home: typeof home;
+  http: typeof http;
   launch: typeof launch;
   launchActions: typeof launchActions;
   "migrations/backfillCategorizedAt": typeof migrations_backfillCategorizedAt;
@@ -202,6 +209,8 @@ declare const fullApi: ApiFromModules<{
   "migrations/importMusicFunnelFromProd": typeof migrations_importMusicFunnelFromProd;
   "migrations/initializeRatingHistory": typeof migrations_initializeRatingHistory;
   "migrations/migrateRatingsToThreeTier": typeof migrations_migrateRatingsToThreeTier;
+  "model/yugioh/decks": typeof model_yugioh_decks;
+  "model/yugioh/validators": typeof model_yugioh_validators;
   musicFunnel: typeof musicFunnel;
   playlistLyrics: typeof playlistLyrics;
   rankingSnapshots: typeof rankingSnapshots;
@@ -214,6 +223,7 @@ declare const fullApi: ApiFromModules<{
   spotify: typeof spotify;
   spotifyListenRepair: typeof spotifyListenRepair;
   spotifyPlayEvents: typeof spotifyPlayEvents;
+  "yugioh/decks": typeof yugioh_decks;
 }>;
 
 /**
