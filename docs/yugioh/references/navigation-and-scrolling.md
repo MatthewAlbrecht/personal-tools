@@ -9,7 +9,7 @@ What the request headers look like when the extension moves a tab to the next ma
 - **`chrome.tabs.create({url})` is browser-initiated with no initiator** (from source). It sends no `Referer` and `Sec-Fetch-Site: none`, which is what a typed URL or a bookmark sends. It sends no `Sec-Fetch-User`.
 - **`element.click()` on a link still navigates, but the click is untrusted** (verified). `isTrusted` is false and the navigation has no user involvement. The headers come out the same as `location.assign`.
 - **Scrolling from a content script is a real scroll** (verified). The browser fires the `scroll` event itself (`isTrusted: true`), and IntersectionObserver and `loading="lazy"` respond to the new scroll position. No `wheel`, `pointer` or `touch` events go with it.
-- **Decision: use content-script `location.assign` for the next eBay Search** (see §6).
+- **Decision: use content-script `location.assign` for the next eBay Search** (see §6), **and, since a follow-up to ticket 20, for the next TCGplayer product too** (see §7).
 
 ## 1. Content-script `location.assign` / `location.href`
 
@@ -101,3 +101,12 @@ What the request headers look like when the extension moves a tab to the next ma
   - The worker waits for `tabs.onUpdated` `status: "complete"` on that tab.
   - If the content script isn't there (for example on a `/splashui/` check page), stop the run as ticket 19 does. Don't fall back to `tabs.update`.
 - **Check before shipping.** Open DevTools on the capture tab and confirm `Referer`, `Sec-Fetch-Site: same-origin` and the missing `Sec-Fetch-User` on the second Search. The `tabs.update` `cross-site` value in §2 is read from source and hasn't been seen on the wire.
+
+## 7. Follow-up: TCGplayer products open from the TCGplayer page too
+
+Ticket 20 first loaded each next TCGplayer product with `chrome.tabs.update` (no `Referer`, by source `Sec-Fetch-Site: cross-site`, §2). That was the least person-like way to reach a page, so TCGplayer now works like eBay: the run's first TCGplayer product opens in a new tab (`tabs.create`, `Sec-Fetch-Site: none`), and each next product is opened by the product page already in the tab (`location.assign` from the content script, `run-navigation.js`). `chrome.tabs.update` is only the fallback when no content script answers.
+
+- **Headers (from spec, as §1).** Initiator `https://www.tcgplayer.com`, `Sec-Fetch-Site: same-origin`, no `Sec-Fetch-User`.
+- **Referer (inferred).** The saved product pages in `.scratch/yugioh-tracker/tcgplayer-raw/` have no `<meta name="referrer">`. Under the default `strict-origin-when-cross-origin` a same-origin navigation sends the full product URL. TCGplayer's `Referrer-Policy` response header is **unverified**; a stricter one (`same-origin`, `no-referrer`) would trim or drop it.
+- **Full page load.** TCGplayer is a client-side app, but `location.assign` to another URL is a normal document navigation, so it is still one page load per product, and the content script runs again on the new page.
+- **Which pages.** The page only opens a page a run opens on its own marketplace: `https://www.ebay.com/sch/*` from eBay, `https://www.tcgplayer.com/product/*` from TCGplayer (`MARKETPLACES` in `marketplaces.js`).

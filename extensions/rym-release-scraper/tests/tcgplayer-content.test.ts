@@ -311,3 +311,81 @@ test("on a run's visit, the product page is scrolled through to about its end be
 	]);
 	expect(await load(false)).toEqual(["send YUGIOH_TCGPLAYER_CAPTURE"]);
 });
+
+test("on a run, the next product is opened from this page, so TCGplayer sees its own page as the referrer; only TCGplayer products", async () => {
+	vi.useFakeTimers();
+	const html = readFileSync(
+		new URL("./fixtures/tcgplayer-latest-sales.html", import.meta.url),
+		"utf8",
+	);
+	const { document, window } = parseHTML(html);
+	const visited: string[] = [];
+	const listeners: Array<
+		(
+			message: Record<string, unknown>,
+			sender: unknown,
+			reply: (response: unknown) => void,
+		) => unknown
+	> = [];
+	vi.stubGlobal("document", document);
+	vi.stubGlobal("window", window);
+	vi.stubGlobal("MutationObserver", window.MutationObserver);
+	vi.stubGlobal("location", {
+		href: ASH_URL,
+		assign(url: string) {
+			visited.push(url);
+		},
+	});
+	vi.stubGlobal("mountScrapeDock", () => {});
+	vi.stubGlobal("applyDockUpdate", () => {});
+	vi.stubGlobal("chrome", {
+		runtime: {
+			lastError: undefined,
+			onMessage: {
+				addListener(listener: (typeof listeners)[number]) {
+					listeners.push(listener);
+				},
+			},
+			sendMessage(
+				message: { type: string },
+				reply?: (response: unknown) => void,
+			) {
+				if (message.type === "YUGIOH_AUTOMATED_VISIT") {
+					reply?.({ automated: false });
+				}
+			},
+		},
+	});
+	vi.resetModules();
+	await import("../marketplaces.js");
+	await import("../run-navigation.js");
+	await import("../page-scroll.js");
+	await import("../tcgplayer-content.js");
+	await vi.advanceTimersByTimeAsync(60_000);
+
+	function message(body: Record<string, unknown>): unknown {
+		let answer: unknown;
+		for (const listener of listeners) {
+			listener(body, {}, (response) => {
+				answer = response;
+			});
+		}
+		return answer;
+	}
+
+	for (const url of [
+		"https://www.ebay.com/sch/i.html?_nkw=RA01-EN008",
+		"https://www.tcgplayer.com/search/yugioh/product?q=ash",
+		"http://www.tcgplayer.com/product/600000/y",
+		"not a url",
+	]) {
+		expect(message({ type: "YUGIOH_NAVIGATE", url })).toEqual({ ok: false });
+	}
+	const next = "https://www.tcgplayer.com/product/600000/y?Language=English";
+	expect(message({ type: "YUGIOH_NAVIGATE", url: next })).toEqual({
+		ok: true,
+	});
+	expect(visited).toEqual([next]);
+
+	vi.useRealTimers();
+});

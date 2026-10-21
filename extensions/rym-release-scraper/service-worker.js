@@ -1,4 +1,4 @@
-importScripts("automation-runner.js", "ingest-errors.js");
+importScripts("marketplaces.js", "automation-runner.js", "ingest-errors.js");
 
 const STORAGE_KEY = "rymReleaseCaptures";
 const STORAGE_KEY_BANDCAMP = "bandcampAlbumCaptures";
@@ -803,7 +803,8 @@ async function visitPageInTab(openVisit, visit) {
 
 /**
  * The browser side of `makeVisitTabs` for one run's window: new tabs, tab
- * loads, and asking the eBay page to open the next Search itself.
+ * loads, and asking the marketplace page in a tab to open the next page
+ * itself (run-navigation.js).
  */
 function runTabs(runWindow) {
 	return makeVisitTabs({

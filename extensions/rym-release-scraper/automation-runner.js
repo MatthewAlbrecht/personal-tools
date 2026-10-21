@@ -190,23 +190,16 @@ function visitOutcome(response) {
  * The marketplace whose check page a tab is on, from its URL alone: eBay
  * sends its browser check and captcha to /splashui/* (where no content
  * script runs), with the page asked for in `ru`. Null for any other page.
+ * Hosts and paths are in `MARKETPLACES` (marketplaces.js).
  * docs/yugioh/references/marketplace-check-pages.md
  */
 function checkPageAt(url) {
 	if (typeof url !== "string") return null;
-	let parsed;
-	try {
-		parsed = new URL(url);
-	} catch {
-		return null;
-	}
-	if (
-		parsed.hostname === "www.ebay.com" &&
-		parsed.pathname.startsWith("/splashui/")
-	) {
-		return "eBay";
-	}
-	return null;
+	const marketplace = marketplaceAt(url);
+	if (!marketplace?.checkPath) return null;
+	return new URL(url).pathname.startsWith(marketplace.checkPath)
+		? marketplace.name
+		: null;
 }
 
 /**
@@ -214,12 +207,13 @@ function checkPageAt(url) {
  * the whole run, and exactly one page load per visit.
  *
  * - A marketplace's first page opens a new tab (`createTab(url)` → tab ID).
- * - Each next eBay Search is opened from the eBay page already in the tab
- *   (`navigateFromPage(tabId, url)`: the content script sets `location`), so
- *   the request carries an eBay referrer, like a click inside the site.
+ * - Each next page (an eBay Search, a TCGplayer product) is opened from the
+ *   marketplace's page already in the tab (`navigateFromPage(tabId, url)`:
+ *   the content script sets `location`), so the request carries that
+ *   marketplace's referrer, like a move inside the site.
  *   docs/yugioh/references/navigation-and-scrolling.md
- * - When the page can't (no content script answered), and for TCGplayer
- *   product pages, the tab loads the URL directly (`updateTab(tabId, url)`).
+ * - When the page can't (no content script answered), the tab loads the URL
+ *   directly (`updateTab(tabId, url)`).
  * - Both resolve false when the tab is gone; a new tab is opened instead.
  *
  * `ready(tabId)` is called before the page is asked for in a known tab (and
@@ -233,12 +227,7 @@ function makeVisitTabs({ createTab, updateTab, navigateFromPage }) {
 		const known = tabs.get(site);
 		if (known !== undefined) {
 			ready(known);
-			if (
-				site === "www.ebay.com" &&
-				(await navigateFromPage(known, visit.url))
-			) {
-				return known;
-			}
+			if (await navigateFromPage(known, visit.url)) return known;
 			if (await updateTab(known, visit.url)) return known;
 		}
 		const tabId = await createTab(visit.url);

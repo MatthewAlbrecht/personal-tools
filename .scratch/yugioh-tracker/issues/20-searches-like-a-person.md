@@ -37,6 +37,14 @@ Decision (Matt, 2026-10-21): no typing into the search bar and no clicking eBay'
 **Left for Matt:**
 - Reload the extension (0.10.0) in the automation profile.
 - On the next real run, confirm in DevTools (Network → the second eBay Search) that `Referer` is the previous Search and `Sec-Fetch-Site: same-origin`, and see whether `tabs.update` really sends `cross-site` for TCGplayer. Not checked end to end: no run against live eBay was made.
-- Question: TCGplayer product-to-product could also navigate from the page (same-origin referrer) instead of `tabs.update` (likely `cross-site`). The ticket said "load directly", so it wasn't done.
+- ~~Question: TCGplayer product-to-product could also navigate from the page~~ Done in the follow-up below.
 
 **Review (code-review, both axes):** fixed: stale capture in a reused tab (timed-out tab closed), the timeout starting only after the page opened, the run window closed mid-run, the duplicated scroll wiring (defaults moved into `page-scroll.js`), and the docs overclaiming "like a click" (now say `Sec-Fetch-User` is missing). Left as is: tabs are keyed by hostname, and `www.ebay.com` is written in three places (`checkPageAt`, `makeVisitTabs`, `isEbaySearchUrl`); the SW glue (`visitPageInTab`, `runTabs`) has no direct test, since its rules live in the tested `makeVisitTabs`.
+
+**Follow-up (Matt, 2026-10-21): TCGplayer navigates in-site too (extension 0.11.0).**
+- **Decision change:** the ticket said TCGplayer products "load the product page directly". They no longer do: like eBay, the run's first TCGplayer product opens in a new tab, and each next product is opened from the TCGplayer page already in the tab (`location.assign`, same-origin referrer), with the same `chrome.tabs.update` fallback when no content script answers. Reference §7 in `navigation-and-scrolling.md`.
+- `makeVisitTabs` now tries `navigateFromPage` for every known tab, not only eBay's.
+- `marketplaces.js` (new; loaded by the service worker and before the eBay/TCGplayer content scripts): `MARKETPLACES` holds each marketplace's host, run page path (`/sch/`, `/product/`) and check-page path (`/splashui/` on eBay). `checkPageAt` and the navigation check use it; `isEbaySearchUrl` is gone. This closes the review finding about `www.ebay.com` in three places (`ebay-reader.js` still builds `https://www.ebay.com/itm/…` item links; left as is).
+- `run-navigation.js` (new content script, both marketplaces): the `YUGIOH_NAVIGATE` listener moved out of `ebay-content.js`; it only opens a run page of the page's own marketplace (`isRunPageOf`).
+- Tests (Seam 2): `automation-runner.test.ts` (products open from the page; fallback for both marketplaces; one load per visit unchanged), `tcgplayer-content.test.ts` (the product page opens the next product; refuses eBay, non-product, http and bad URLs). eBay's `YUGIOH_NAVIGATE` tests now load `run-navigation.js`.
+- Left for Matt: reload the extension (0.11.0); on the next real run, check in DevTools that the second TCGplayer product has `Sec-Fetch-Site: same-origin` and a TCGplayer `Referer`.

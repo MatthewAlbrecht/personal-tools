@@ -1,7 +1,7 @@
 {
 	"manifest_version": 3,
 	"name": "RYM, Bandcamp, eBay & TCGplayer capture",
-	"version": "0.10.0",
+	"version": "0.11.0",
 	"description": "Locally saves Rate Your Music release and charts metadata, captures Bandcamp albums to your library, and sends eBay search results and TCGplayer product pages to the Yu-Gi-Oh tracker, via a floating capture dock. Can also run the tracker's automated captures.",
 	"permissions": ["storage", "alarms"],
 	"optional_host_permissions": ["http://*/*", "https://*/*"],
@@ -55,6 +55,8 @@
 			"matches": ["https://www.ebay.com/sch/*"],
 			"js": [
 				"scrape-dock.js",
+				"marketplaces.js",
+				"run-navigation.js",
 				"page-scroll.js",
 				"ebay-reader.js",
 				"ebay-content.js"
@@ -65,6 +67,8 @@
 			"matches": ["https://www.tcgplayer.com/product/*"],
 			"js": [
 				"scrape-dock.js",
+				"marketplaces.js",
+				"run-navigation.js",
 				"page-scroll.js",
 				"tcgplayer-reader.js",
 				"tcgplayer-content.js"

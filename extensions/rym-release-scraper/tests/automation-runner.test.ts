@@ -5,6 +5,7 @@
 // and the random draws are fakes.
 
 import { describe, expect, test } from "vitest";
+import "../marketplaces.js";
 import "../automation-runner.js";
 
 type Visit = { url: string; kind: string; label: string };
@@ -462,7 +463,7 @@ describe("how a run opens its pages", () => {
 		label: "Other",
 	};
 
-	test("one tab per marketplace; each next eBay Search is opened from the eBay page, products load in their tab", async () => {
+	test("one tab per marketplace; each next page is opened from the marketplace's page already in the tab", async () => {
 		const { browser, loads } = fakeBrowser();
 		const open = globalThis.makeVisitTabs(browser);
 		const ready: number[] = [];
@@ -475,7 +476,7 @@ describe("how a run opens its pages", () => {
 			`new tab 1 ${NEWLY.url}`,
 			`tab 1 page goes to ${SOLD.url}`,
 			`new tab 2 ${PRODUCT.url}`,
-			`tab 2 loads ${OTHER_PRODUCT.url}`,
+			`tab 2 page goes to ${OTHER_PRODUCT.url}`,
 		]);
 		expect(ready).toEqual([1, 1, 2, 2]);
 	});
@@ -496,16 +497,19 @@ describe("how a run opens its pages", () => {
 		expect(loads).toHaveLength(4);
 	});
 
-	test("when the eBay page can't navigate itself, the tab loads the Search instead", async () => {
+	test("when the page can't navigate itself, the tab loads the next page instead", async () => {
 		const { browser, loads } = fakeBrowser({ fromPage: false });
 		const open = globalThis.makeVisitTabs(browser);
 
-		await open(NEWLY, () => {});
-		await open(SOLD, () => {});
+		for (const visit of [NEWLY, SOLD, PRODUCT, OTHER_PRODUCT]) {
+			await open(visit, () => {});
+		}
 
 		expect(loads).toEqual([
 			`new tab 1 ${NEWLY.url}`,
 			`tab 1 loads ${SOLD.url}`,
+			`new tab 2 ${PRODUCT.url}`,
+			`tab 2 loads ${OTHER_PRODUCT.url}`,
 		]);
 	});
 

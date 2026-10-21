@@ -259,6 +259,8 @@ async function loadSoldPage({ automated }: { automated: boolean }) {
 	});
 
 	vi.resetModules();
+	await import("../marketplaces.js");
+	await import("../run-navigation.js");
 	await import("../page-scroll.js");
 	await import("../ebay-content.js");
 	await vi.advanceTimersByTimeAsync(60_000);
