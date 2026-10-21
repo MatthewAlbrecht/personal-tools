@@ -117,4 +117,4 @@ Raw pages are in `.scratch/yugioh-tracker/tcgplayer-raw/` (uncommitted).
   - otherwise (several, or the one is linked to another product): nothing stored, the reason names each candidate and keeps the paste instruction.
 - The report gains `linked` and `reason`; the dock ("Not captured") and automated runs (`visitOutcome`) show `reason`.
 - Tests: `convex/yugioh/tcgplayer-capture-linking.test.ts` (7), plus reader, content-script and runner tests. Manifest 0.7.1.
-- Open: a Printing already linked to another product can't be re-pasted in the UI (the paste form shows only for `needsPaste`), so that case's paste instruction isn't actionable yet.
+- ~~Open: a Printing already linked to another product can't be re-pasted in the UI.~~ Fixed by ticket 03's "Change TCGplayer link" (2026-10-20). Since the cleanup pass, the old product's rows no longer count toward the Printing's TCGplayer prices.

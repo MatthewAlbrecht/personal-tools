@@ -4,7 +4,7 @@
 
 **Blocked by:** 02 (eBay Searches and links), 06 (eBay capture into Listings)
 
-**Status:** ready-for-agent (the code, config and docs are built; the setup and the two hand checks below are left for Matt)
+**Status:** ready-for-human (the code, config and docs are built; the setup and the two hand checks below are left for Matt)
 
 Spec: docs/superpowers/specs/2026-10-19-yugioh-max-rarity-tracker-design.md
 

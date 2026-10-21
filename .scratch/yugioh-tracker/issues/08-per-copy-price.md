@@ -4,7 +4,7 @@
 
 **Blocked by:** 06 (eBay capture into Listings)
 
-**Status:** done (one step left for you: seed and refresh on prod, below)
+**Status:** done (prod seed and refresh left for you, below)
 
 Spec: docs/superpowers/specs/2026-10-19-yugioh-max-rarity-tracker-design.md
 

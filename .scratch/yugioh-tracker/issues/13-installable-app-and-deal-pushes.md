@@ -4,7 +4,7 @@
 
 **Blocked by:** 09 (eBay Reference price and Deal grades)
 
-**Status:** ready-for-agent
+**Status:** ready-for-human (only the hand check on the phone is left)
 
 Spec: docs/superpowers/specs/2026-10-19-yugioh-max-rarity-tracker-design.md
 

@@ -4,7 +4,7 @@
 
 **Blocked by:** 11 (Listings filters and what's new), 13 (Installable app and deal pushes)
 
-**Status:** ready-for-agent
+**Status:** done
 
 Spec: docs/superpowers/specs/2026-10-19-yugioh-max-rarity-tracker-design.md
 
@@ -13,7 +13,7 @@ Spec: docs/superpowers/specs/2026-10-19-yugioh-max-rarity-tracker-design.md
 - [x] Only for matched auctions on Cards still needed
 - [x] convex-test covers trigger timing and selection (Seam 1)
 
-**Left for you (a decision, then likely a ticket):** automated runs never learn when an auction ends, so in practice these pushes only fire for auctions I've seen on an "ending soonest" eBay page myself. See "Open question" below. Status stays until that's decided. Real delivery on the phone is still ticket 13's hand check.
+~~**Left for you (a decision, then likely a ticket):** automated runs never learn when an auction ends.~~ **Resolved:** a signed-in Newly Listed page does show time left, and the reader handles every layout (see "Fix: end times on any layout" below); ticket 16 adds refresh visits before an auction ends. Real delivery on the phone is still ticket 13's hand check.
 
 ## Notes from the build
 

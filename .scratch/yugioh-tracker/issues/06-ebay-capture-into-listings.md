@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 (Decks with Cards and Candidate Printings)
 
-**Status:** ready-for-agent
+**Status:** ready-for-human (only the real sold-page fixture is left, below)
 
 Spec: docs/superpowers/specs/2026-10-19-yugioh-max-rarity-tracker-design.md
 

@@ -4,16 +4,18 @@
 
 **Blocked by:** 01 (Decks with Cards and Candidate Printings)
 
-**Status:** ready-for-agent (the load and runbook are built; seeding waits on Matt's card list)
+**Status:** ready-for-human (the Chaos Lightsworn Deck is seeded on dev; the prod load waits on Matt)
 
 Spec: docs/superpowers/specs/2026-10-19-yugioh-max-rarity-tracker-design.md
 
 - [x] Internal (not public) Convex functions exist for loading a Deck
-- [ ] Agent asks me for the list and confirms anything ambiguous before writing
-- [ ] Loaded Deck matches the list: Cards, Candidates, copies, Sections
+- [x] Agent asks me for the list and confirms anything ambiguous before writing
+- [x] Loaded Deck matches the list: Cards, Candidates, copies, Sections (dev)
 - [ ] Running it against prod is confirmed with me first
 
-**Left:** the three unchecked criteria are the seeding run itself. It's waiting on Matt's card list. The seeding agent follows `docs/yugioh/seeding.md`.
+**Left for you:** "Running it against prod is confirmed with me first". The payload is `/tmp/yugioh-seed/chaos-lightsworn.json` (60 Cards, 66 Candidates); load it into prod with `docs/yugioh/seeding.md` after deploying. `/tmp` doesn't survive a reboot, so copy it somewhere safe first.
+
+**Cleanup check (2026-10-20):** the dev Deck "Chaos Lightsworn" matches the payload Card for Card: names, Sections, Copies needed and Candidates. One cosmetic difference: `normalizeRarity` title-cases unknown rarities word by word, so "Secret Rare (Pharaoh's Rare)" and "Ultra Rare (Pharaoh's Rare)" (MAMA-EN108, MAMA-EN110) are saved as "… (pharaoh's Rare)". Prod would get the same spelling. Left as is.
 
 ## Notes from the build
 
