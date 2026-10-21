@@ -36,6 +36,7 @@ import {
 	yugiohMatchStatusValidator,
 	yugiohPushKindValidator,
 	yugiohPushStatusValidator,
+	yugiohRejectionValidator,
 	yugiohRunTimingValidator,
 	yugiohSectionValidator,
 	yugiohTcgplayerDetailsValidator,
@@ -1894,6 +1895,10 @@ export default defineSchema({
 		matchedPrintingId: v.optional(v.union(v.id("yugiohPrintings"), v.null())),
 		// True once I set the match myself: it then wins over every later read.
 		matchOverridden: v.optional(v.boolean()),
+		// A Rejected Listing: I marked it wrong, with a reason. It then counts
+		// toward nothing (prices, deals, cost to finish, pushes) and keeps the
+		// rejection across recaptures. Missing or null: not rejected.
+		rejection: v.optional(v.union(yugiohRejectionValidator, v.null())),
 		// Reference prices (ticket 09). Optional because Listings captured
 		// before it have neither until `backfillSaleTimes` runs.
 		// When it sold (Unix ms; the sold date at midnight UTC) or, for an

@@ -132,6 +132,31 @@ async function capture(
 }
 
 async function listings(t: T, deckId: Id<"yugiohDecks">) {
+	// Every stored Listing, newest first, as this Deck grades it: the
+	// Listings table hides unsure ones and those for Printings not needed.
+	const ids = await t.run(async (ctx) =>
+		(await ctx.db.query("yugiohListings").order("desc").collect()).map(
+			(listing) => listing._id,
+		),
+	);
+	const views = await Promise.all(
+		ids.map((listingId) =>
+			t.query(api.yugioh.listings.getListing, {
+				listingId,
+				deckId,
+				now: Date.now(),
+			}),
+		),
+	);
+	return views.flatMap((view) => {
+		if (!view) return [];
+		const { observations: _, ...listing } = view;
+		return [listing];
+	});
+}
+
+/** What the Deck's Listings table shows, Available view, before filters. */
+async function tableListings(t: T, deckId: Id<"yugiohDecks">) {
 	const page = await t.query(api.yugioh.listings.listListings, {
 		deckId,
 		now: Date.now(),
@@ -238,7 +263,7 @@ describe("reading titles", () => {
 		await capture(t, "2", "Ash Blossom RA01-EN008");
 		await settle(t);
 
-		const all = await listings(t, deckId);
+		const all = await tableListings(t, deckId);
 		expect(all.map((l) => [l.title, l.match.status, l.titleRead])).toEqual([
 			["Ash Blossom MP23-EN001 Starlight", "match", null],
 		]);
@@ -312,8 +337,10 @@ describe("matching", () => {
 		await capture(t, "2", "Fallen of Albaz RA01-EN021 QCSR");
 		await settle(t);
 
-		expect((await listings(t, deckId)).map((l) => l.itemId)).toEqual(["1"]);
-		expect((await listings(t, other)).map((l) => l.itemId)).toEqual(["2"]);
+		expect((await tableListings(t, deckId)).map((l) => l.itemId)).toEqual([
+			"1",
+		]);
+		expect((await tableListings(t, other)).map((l) => l.itemId)).toEqual(["2"]);
 	});
 
 	test("a Printing added after the capture picks up its Listings", async () => {

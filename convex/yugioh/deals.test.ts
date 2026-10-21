@@ -176,19 +176,23 @@ async function ashReference(t: T, deckId: Id<"yugiohDecks">) {
 }
 
 async function listings(t: T, deckId: Id<"yugiohDecks">) {
-	// Available and Sold together, newest first: every Listing in the Deck.
-	const views = await Promise.all(
-		(["available", "sold"] as const).map((view) =>
-			t.query(api.yugioh.listings.listListings, {
-				deckId,
-				now: NOW,
-				filters: { view },
-			}),
+	// Every stored Listing, newest first, as this Deck grades it: the
+	// Listings table hides unsure ones and those for Printings not needed.
+	const ids = await t.run(async (ctx) =>
+		(await ctx.db.query("yugiohListings").order("desc").collect()).map(
+			(listing) => listing._id,
 		),
 	);
-	return views
-		.flatMap((page) => page.listings)
-		.sort((a, b) => b._creationTime - a._creationTime);
+	const views = await Promise.all(
+		ids.map((listingId) =>
+			t.query(api.yugioh.listings.getListing, { listingId, deckId, now: NOW }),
+		),
+	);
+	return views.flatMap((view) => {
+		if (!view) return [];
+		const { observations: _, ...listing } = view;
+		return [listing];
+	});
 }
 
 async function dealFor(t: T, deckId: Id<"yugiohDecks">, itemId: string) {
@@ -618,4 +622,123 @@ describe("backfill", () => {
 		expect(mod.backfillSaleTimes?.isInternal).toBe(true);
 		expect(mod.listReferencePrices?.isPublic).toBe(true);
 	});
+});
+
+describe("Rejected Listings", () => {
+	async function listingId(t: T, itemId: string) {
+		return await t.run(async (ctx) => {
+			const listing = await ctx.db
+				.query("yugiohListings")
+				.withIndex("by_marketplace_and_itemId", (q) =>
+					q.eq("marketplace", "ebay").eq("itemId", itemId),
+				)
+				.unique();
+			if (!listing) throw new Error(`missing Listing ${itemId}`);
+			return listing._id;
+		});
+	}
+
+	async function table(
+		t: T,
+		deckId: Id<"yugiohDecks">,
+		filters: { rejected?: boolean } = {},
+	) {
+		return await t.query(api.yugioh.listings.listListings, {
+			deckId,
+			now: NOW,
+			filters,
+		});
+	}
+
+	test("a Rejected sale doesn't count toward the Reference price until unmarked", async () => {
+		const t = setup();
+		const deckId = await ashDeck(t);
+		const [, , , fake] = await capture(
+			t,
+			sold(40),
+			sold(50),
+			sold(60),
+			sold(5),
+		);
+		expect(await ashReference(t, deckId)).toEqual({ price: 45, sales: 4 });
+
+		const id = await listingId(t, fake as string);
+		await t.mutation(api.yugioh.listings.setListingRejection, {
+			listingId: id,
+			reason: "fake",
+		});
+		expect(await ashReference(t, deckId)).toEqual({ price: 50, sales: 3 });
+
+		await t.mutation(api.yugioh.listings.setListingRejection, {
+			listingId: id,
+			reason: null,
+		});
+		expect(await ashReference(t, deckId)).toEqual({ price: 45, sales: 4 });
+	});
+
+	test("a Rejected Listing gets no grade, and stays rejected when captured again", async () => {
+		const t = setup();
+		const deckId = await ashDeck(t);
+		await capture(t, sold(40), sold(50), sold(60));
+		const [wrong] = await capture(t, { price: 30 });
+		const id = await listingId(t, wrong as string);
+		await t.mutation(api.yugioh.listings.setListingRejection, {
+			listingId: id,
+			reason: "wrongRarity",
+		});
+		await capture(t, { price: 29, itemId: wrong });
+
+		expect(await dealFor(t, deckId, wrong as string)).toMatchObject({
+			qualifying: false,
+			grade: null,
+		});
+		const [listing] = (await listings(t, deckId)).filter(
+			(l) => l.itemId === wrong,
+		);
+		expect(listing?.rejection).toEqual({ reason: "wrongRarity", at: NOW });
+	});
+
+	test("the table hides it; Marked wrong shows it with its reason", async () => {
+		const t = setup();
+		const deckId = await ashDeck(t);
+		const [kept, wrong] = await capture(t, { price: 30 }, { price: 31 });
+		await t.mutation(api.yugioh.listings.setListingRejection, {
+			listingId: await listingId(t, wrong as string),
+			reason: "wrongLanguage",
+		});
+
+		const available = await table(t, deckId);
+		expect(available.listings.map((l) => l.itemId)).toEqual([kept]);
+		expect(available.rejectedCount).toBe(1);
+		const rejected = await table(t, deckId, { rejected: true });
+		expect(
+			rejected.listings.map((l) => [l.itemId, l.rejection?.reason]),
+		).toEqual([[wrong, "wrongLanguage"]]);
+	});
+
+	test("the table leaves out a done Card's Listings", async () => {
+		const t = setup();
+		const deckId = await ashDeck(t);
+		await capture(t, { price: 30 });
+		expect((await table(t, deckId)).total).toBe(1);
+
+		const deck = await t.query(api.yugioh.decks.getDeck, { deckId });
+		const deckCardId = deck?.sections[0]?.cards[0]?._id;
+		if (!deckCardId) throw new Error("missing Card");
+		await t.mutation(api.yugioh.decks.updateCard, {
+			deckCardId,
+			copiesOwned: 3,
+		});
+		expect((await table(t, deckId)).total).toBe(0);
+	});
+});
+
+test("marking a Listing wrong is public; captures stay internal", async () => {
+	const listings = (await import("./listings")) as Record<
+		string,
+		{ isInternal?: boolean; isPublic?: boolean }
+	>;
+	expect(listings.setListingRejection?.isPublic).toBe(true);
+	expect(listings.ingestEbayListings?.isInternal).toBe(true);
+	expect(listings.ingestTcgplayerProduct?.isInternal).toBe(true);
 });

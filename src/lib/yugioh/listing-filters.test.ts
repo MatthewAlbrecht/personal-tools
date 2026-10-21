@@ -54,6 +54,7 @@ const context = {
 	now: NOW,
 	newSince: NOW - 2 * HOUR,
 	cardPrintings: new Map([["card1", new Set(["p1"])]]),
+	neededPrintings: new Set(["p1", "p2"]),
 };
 
 function ids(
@@ -66,11 +67,39 @@ function ids(
 describe("applyListingFilters", () => {
 	test("no filters: every Available Listing shows, in the order given", () => {
 		const all = [
-			listing({ id: "a", matchStatus: "notMatch", matchedPrintingId: null }),
+			listing({ id: "a" }),
 			listing({ id: "b", sold: true }),
 			listing({ id: "c", titleRead: { ...read, graded: true } }),
 		];
 		expect(ids(all, {})).toEqual(["a", "c"]);
+	});
+
+	test("only Listings matched to a Printing the Deck still needs show", () => {
+		const all = [
+			listing({ id: "match" }),
+			listing({ id: "unsure", matchStatus: "unsure", matchedPrintingId: null }),
+			listing({ id: "no", matchStatus: "notMatch", matchedPrintingId: null }),
+			listing({ id: "reading", titleReadStatus: "reading" }),
+			// My override wins over a read in progress.
+			listing({
+				id: "mine",
+				titleReadStatus: "reading",
+				matchOverridden: true,
+			}),
+			// A done Card's Printing, or one a Card didn't choose.
+			listing({ id: "done", matchedPrintingId: "p3" }),
+		];
+		expect(ids(all, {})).toEqual(["match", "mine"]);
+	});
+
+	test("Rejected Listings are hidden, and only they show when asked for", () => {
+		const all = [
+			listing({ id: "fine" }),
+			listing({ id: "wrong", rejection: { reason: "wrongCard", at: NOW } }),
+			listing({ id: "unmarked", rejection: null }),
+		];
+		expect(ids(all, {})).toEqual(["fine", "unmarked"]);
+		expect(ids(all, { rejected: true })).toEqual(["wrong"]);
 	});
 
 	test("Available and Sold never share a Listing", () => {
@@ -145,26 +174,6 @@ describe("applyListingFilters", () => {
 		expect(ids(all, { graded: false })).toEqual(["raw"]);
 	});
 
-	test("match status, with a title still being read as its own status", () => {
-		const all = [
-			listing({ id: "match" }),
-			listing({ id: "unsure", matchStatus: "unsure", matchedPrintingId: null }),
-			listing({ id: "no", matchStatus: "notMatch", matchedPrintingId: null }),
-			listing({ id: "reading", titleReadStatus: "reading" }),
-			// My override wins over a read in progress.
-			listing({
-				id: "mine",
-				titleReadStatus: "reading",
-				matchOverridden: true,
-				matchStatus: "notMatch",
-			}),
-		];
-		expect(ids(all, { match: "match" })).toEqual(["match"]);
-		expect(ids(all, { match: "unsure" })).toEqual(["unsure"]);
-		expect(ids(all, { match: "notMatch" })).toEqual(["no", "mine"]);
-		expect(ids(all, { match: "reading" })).toEqual(["reading"]);
-	});
-
 	test("marketplace, location and Card", () => {
 		const all = [
 			listing({ id: "us" }),
@@ -212,7 +221,7 @@ describe("filters in the URL", () => {
 			language: "korean",
 			condition: "unknown",
 			graded: false,
-			match: "notMatch",
+			rejected: true,
 			location: "United Kingdom",
 			card: "k57abc",
 		};
@@ -329,6 +338,7 @@ describe("the Filters button", () => {
 		expect(activeFilterCount({})).toBe(0);
 		expect(activeFilterCount({ new: true })).toBe(0);
 		expect(activeFilterCount({ view: "sold" })).toBe(0);
+		expect(activeFilterCount({ rejected: true })).toBe(0);
 		expect(activeFilterCount({ view: "sold", new: true, card: "x" })).toBe(1);
 		expect(activeFilterCount({ type: "auction", graded: false })).toBe(2);
 		expect(extraFilters({ view: "sold", graded: false, card: "x" })).toEqual([

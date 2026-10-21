@@ -10,7 +10,6 @@ import {
 	LISTING_KINDS,
 	LISTING_VIEWS,
 	MARKETPLACES,
-	MATCH_FILTERS,
 } from "~/lib/yugioh/listing-filters";
 import { SORT_DIRECTIONS, SORT_KEYS } from "~/lib/yugioh/listing-sort";
 import {
@@ -131,7 +130,6 @@ export const listingFiltersSchema = z.object({
 	language: z.enum([ANY, ...LANGUAGES]),
 	condition: z.enum([ANY, ...CONDITION_FILTERS]),
 	graded: z.enum([ANY, "yes", "no"]),
-	match: z.enum([ANY, ...MATCH_FILTERS]),
 	location: z.string(),
 	card: z.string(),
 });
@@ -140,6 +138,7 @@ export const listingFiltersSchema = z.object({
 export const listingsViewSchema = z.object({
 	view: z.enum(LISTING_VIEWS),
 	new: z.boolean(),
+	rejected: z.boolean(),
 });
 
 /** The Listings sort on small screens, where there are no column headers. */

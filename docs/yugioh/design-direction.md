@@ -29,7 +29,7 @@ What every `/yugioh` screen looks like and how it behaves. Builders follow this;
 ### Typography
 
 - **Families:** the app's own. Source Sans 3 (`font-sans`) for everything. Fraunces (`font-display`) only for the Deck name and the cost-to-finish figure on the Deck page and the Decks overview.
-- **Numbers:** every price, count and percentage uses `tabular-nums`, and is right-aligned in columns.
+- **Numbers:** every price, count and percentage uses `tabular-nums`. In the Listings table they're left-aligned like the rest of the row (Matt's call), so prices line up on their dollar sign.
 - **Set codes:** `font-mono text-[0.8125rem] tracking-tight` (e.g. `RA01-EN008`).
 
 | Role | Class | Where |
@@ -213,7 +213,8 @@ Ash Blossom · RA01-EN008 QCSR                       US · 3h ago
   - Line 3: the original title, one line, truncated, in `text-xs text-muted-foreground`, then flags.
   - Not a match: the whole row is `opacity-60`, labelled "Not a match".
   - Unsure: an "Unsure" outline badge with `CircleHelp`.
-- **Desktop:** the same data in a `Table`. Columns: Per-copy · Grade · Card / Printing · Title · Type · Seller · Seen. Seller is the country for eBay (all it shows) and the seller's name and Copies for TCGplayer (12). Clicking a row opens the Listing drawer; an external-link icon button opens the marketplace.
+- **Shown at all:** only Listings matched to a Printing the Deck still needs (a Card missing Copies; its Chosen Printing once it has one). Unsure, not-a-match and still-being-read Listings, and Listings for done Cards, aren't shown; Rejected Listings show only under the "Marked wrong" toggle.
+- **Desktop (lg and up):** a fixed-layout `Table`. Columns: Card (28×40 art, name, "SETCODE · rarity") · Per-copy · Grade (or, under Marked wrong, the reason) · Condition (acronym, then "Below minimum", "PSA 10", "×3 copies") · Type · Seller · Seen · actions. Every cell is two lines at most, primary then muted, top-aligned, cut short with the whole text on hover; nothing overflows its column. Clicking a row opens the Listing drawer; the row's icon buttons mark it wrong (a menu of reasons, one click) and open the marketplace. A marked row folds away (height and opacity, 200 ms ease-out, instant with reduced motion) and a toast offers Undo.
 
 **Listing drawer** (`?listing=`):
 
@@ -291,7 +292,7 @@ Always a text label; hue and fill reinforce it. Show "NN% of ref" beside it wher
 | **Great** | ≤ 80% of ref | solid `bg-deal-great text-deal-great-foreground`, `ArrowDown` icon |
 | **Good** | ≤ 95% | tinted `bg-deal-good/12 text-deal-good`, no icon |
 | **Fair** | ≤ 110% | `variant="outline"`, `text-foreground` |
-| **Poor** | > 110% | plain `text-xs text-muted-foreground` "Poor", no badge chrome |
+| **Poor** | > 110% | quiet muted pill, `bg-muted text-muted-foreground`, same size as the others |
 | none | running auction, no Reference price, not matched to a Printing the Deck wants, not English, or below the Card's Lowest acceptable condition. A Graded Listing isn't Qualifying but still gets a grade, with its Graded flag | no grade; auctions show the countdown instead |
 
 - Never red for Poor: overpriced isn't an error.
@@ -309,7 +310,7 @@ All are outline `Badge`s with an icon, placed after the grade. Flags explain; th
 | Not English | language code "KR", "DE" | not Qualifying |
 | Lot | "×3 copies" | Per-copy already divided |
 | Unsure match | "Unsure" | not Qualifying until resolved |
-| New since last visit | small `bg-primary` dot before the price, plus "New" for screen readers | none |
+| New since last visit | small uppercase "New" label after the Card name (`bg-primary/10 text-primary`); no dots | none |
 
 ### Thin data
 

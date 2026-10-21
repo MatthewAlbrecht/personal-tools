@@ -1,5 +1,6 @@
 // What's new in a Deck: my visits, for "new since my last visit", and how
 // many new Listings each Card gets a week.
+import { isRejected } from "../../../src/lib/yugioh/listing-rejection";
 import { searchedPrintingsByCard } from "../../../src/lib/yugioh/searches";
 import { shownMatchStatus } from "../../../src/lib/yugioh/title-reading";
 import {
@@ -81,7 +82,10 @@ export async function readNewListingRates(
 				.order("desc")
 				.take(MAX_RATE_LISTINGS)
 				.then((found) =>
-					found.filter((listing) => shownMatchStatus(listing) === "match"),
+					found.filter(
+						(listing) =>
+							shownMatchStatus(listing) === "match" && !isRejected(listing),
+					),
 				);
 			byPrinting.set(printingId, listings);
 		}

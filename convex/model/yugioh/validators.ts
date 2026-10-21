@@ -18,6 +18,7 @@ import type {
 	Section,
 } from "../../../src/lib/yugioh/deck";
 import type { ListingFilters } from "../../../src/lib/yugioh/listing-filters";
+import type { Rejection } from "../../../src/lib/yugioh/listing-rejection";
 import type { ListingSort } from "../../../src/lib/yugioh/listing-sort";
 import type {
 	ExchangeRate,
@@ -246,6 +247,24 @@ export const yugiohMatchStatusValidator = v.union(
 	v.literal("unsure"),
 );
 
+/** Why I marked a Listing wrong. */
+export const yugiohRejectionReasonValidator = v.union(
+	v.literal("wrongLanguage"),
+	v.literal("wrongCard"),
+	v.literal("wrongRarity"),
+	v.literal("wrongPrinting"),
+	v.literal("graded"),
+	v.literal("lot"),
+	v.literal("fake"),
+	v.literal("other"),
+);
+
+/** A Rejected Listing's reason and when I marked it (Unix ms). */
+export const yugiohRejectionValidator = v.object({
+	reason: yugiohRejectionReasonValidator,
+	at: v.number(),
+});
+
 /** A Printing's Reference price on one marketplace; null price: not enough sales. */
 export const yugiohReferenceValidator = v.object({
 	price: v.union(v.number(), v.null()),
@@ -304,7 +323,8 @@ export const yugiohListingFiltersValidator = v.object({
 		v.union(yugiohReadConditionValidator, v.literal("unknown")),
 	),
 	graded: v.optional(v.boolean()),
-	match: v.optional(v.union(yugiohMatchStatusValidator, v.literal("reading"))),
+	/** Only Rejected Listings; unset hides them. */
+	rejected: v.optional(v.boolean()),
 	location: v.optional(v.string()),
 	/** A Deck Card ID, as it appears in the URL; an unknown one matches nothing. */
 	card: v.optional(v.string()),
@@ -497,6 +517,11 @@ const titleJudgmentsAgree: Same<
 void titleReadsAgree;
 void titleJudgmentsAgree;
 void matchStatusesAgree;
+const rejectionsAgree: Same<
+	Infer<typeof yugiohRejectionValidator>,
+	Rejection
+> = true;
+void rejectionsAgree;
 const perCopyPricesAgree: Same<
 	Infer<typeof yugiohPerCopyPriceValidator>,
 	PerCopyPrice

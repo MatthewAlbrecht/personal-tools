@@ -7,6 +7,7 @@ import {
 	ebaySearchSetCodes,
 	ebaySoldUrl,
 	exclusionWord,
+	neededPrintingIds,
 	rarityTerms,
 } from "./searches";
 
@@ -500,5 +501,40 @@ describe("a Search of one Overloaded rarity requires that rarity", () => {
 		expect(
 			searches.map((search) => [search.setCodes, search.requiredRarity]),
 		).toEqual([[["PTDN-EN019", "STON-EN024", "TU02-EN007"], null]]);
+	});
+});
+
+describe("neededPrintingIds", () => {
+	const candidates = [
+		{ deckCardId: "ash", printingId: "ash-qcsr" },
+		{ deckCardId: "ash", printingId: "ash-ur" },
+		{ deckCardId: "nibiru", printingId: "nibiru-sr" },
+		{ deckCardId: "done", printingId: "done-ur" },
+	];
+	const card = (
+		_id: string,
+		chosenPrintingId: string | null,
+		copiesOwned = 0,
+	) => ({ _id, copiesNeeded: 3, copiesOwned, chosenPrintingId });
+
+	test("an undecided Card still missing copies needs every Candidate", () => {
+		expect(neededPrintingIds([card("ash", null)], candidates)).toEqual(
+			new Set(["ash-qcsr", "ash-ur"]),
+		);
+	});
+
+	test("a Card with a Chosen Printing needs only that one", () => {
+		expect(neededPrintingIds([card("ash", "ash-ur")], candidates)).toEqual(
+			new Set(["ash-ur"]),
+		);
+	});
+
+	test("a done Card needs none", () => {
+		expect(
+			neededPrintingIds(
+				[card("done", null, 3), card("nibiru", null)],
+				candidates,
+			),
+		).toEqual(new Set(["nibiru-sr"]));
 	});
 });

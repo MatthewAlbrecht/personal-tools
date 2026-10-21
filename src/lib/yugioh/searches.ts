@@ -92,6 +92,32 @@ export function searchedPrintingsByCard<
 }
 
 /**
+ * The Printings a Deck still needs: each Card still missing copies searches
+ * its Chosen Printing, or every Candidate while it's undecided. The same set
+ * the Searches look for; a done Card needs none.
+ */
+export function neededPrintingIds<PrintingId extends string>(
+	cards: ReadonlyArray<{
+		_id: string;
+		copiesNeeded: number;
+		copiesOwned: number;
+		chosenPrintingId: PrintingId | null;
+	}>,
+	candidates: ReadonlyArray<{ deckCardId: string; printingId: PrintingId }>,
+): Set<PrintingId> {
+	const needed = new Set<PrintingId>();
+	for (const card of cards.filter(missesCopies)) {
+		for (const candidate of searchedCandidates({
+			chosenPrintingId: card.chosenPrintingId,
+			candidates: candidates.filter((c) => c.deckCardId === card._id),
+		})) {
+			needed.add(candidate.printingId);
+		}
+	}
+	return needed;
+}
+
+/**
  * Packs a Deck's Printings into eBay Searches of at most 8 set codes.
  *
  * - Only Cards still missing copies are searched; a done Card gets none.

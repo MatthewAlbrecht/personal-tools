@@ -65,12 +65,16 @@ The most-played condition you'd accept for a Card in a Deck (Near Mint, Lightly 
 _Avoid_: Min grade (grading is a different thing)
 
 **Qualifying Listing**:
-A Listing that counts toward prices, deals and cost estimates: matched to a Printing you want, English, not graded, and at or above the Card's Lowest acceptable condition (or of unknown condition).
+A Listing that counts toward prices, deals and cost estimates: matched to a Printing you want, not Rejected, English, not graded, and at or above the Card's Lowest acceptable condition (or of unknown condition).
 _Avoid_: Valid listing, eligible listing
 
 **Deal grade**:
 How a Listing's Per-copy price compares to its Printing's Reference price: Great, Good, Fair or Poor.
 _Avoid_: Score, rating
+
+**Rejected Listing**:
+A Listing you marked wrong, with a reason (wrong language, wrong card, wrong rarity, wrong set or Printing, graded, lot, fake, other). It counts toward nothing (prices, deals, cost to finish, pushes), stays rejected when captured again, and shows only under Marked wrong, where you can restore it.
+_Avoid_: Hidden, blocked, bad listing
 
 **Graded Listing**:
 A Listing for a Copy sealed and graded by a grading company (e.g. PSA 10).

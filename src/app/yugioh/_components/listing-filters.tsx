@@ -2,7 +2,7 @@
 
 import { useForm } from "@tanstack/react-form";
 import { useQuery } from "convex/react";
-import { ListFilter, X } from "lucide-react";
+import { Ban, ListFilter, X } from "lucide-react";
 import { useState } from "react";
 import type * as React from "react";
 import { Badge } from "~/components/ui/badge";
@@ -27,7 +27,6 @@ import {
 	type ListingKind,
 	type ListingsView,
 	type Marketplace,
-	type MatchFilter,
 	defaultListingFilters,
 	extraFilters,
 	isDefaultListingFilters,
@@ -64,19 +63,13 @@ const CONDITION_FILTER_LABELS: Record<ConditionFilter, string> = {
 	unknown: "Not stated",
 };
 
-const MATCH_LABELS: Record<MatchFilter, string> = {
-	match: "Matched",
-	unsure: "Unsure",
-	notMatch: "Not a match",
-	reading: "Reading title",
-};
-
 /** A Card the Card filter can pick. */
 type CardOption = { _id: string; label: string };
 
 /**
  * The Listings toolbar: the view (Available · Sold), the New toggle within
- * it, the Filters button with how many more are set, and those filters as
+ * it, the Filters button with how many more are set, Marked wrong (the
+ * Rejected Listings, to restore a mistake), and those filters as
  * removable chips, the defaults (English, Not graded) included so it's clear
  * why some Listings are hidden. Every change is a URL change, through
  * `onChange`.
@@ -85,6 +78,7 @@ export function ListingsToolbar({
 	deckId,
 	filters,
 	newCount,
+	rejectedCount,
 	matching,
 	locations,
 	onChange,
@@ -93,6 +87,8 @@ export function ListingsToolbar({
 	filters: ListingFilters;
 	/** Null while loading. */
 	newCount: number | null;
+	/** How many of the view's Listings are marked wrong; null while loading. */
+	rejectedCount: number | null;
 	matching: number | null;
 	locations: string[];
 	onChange: (filters: ListingFilters) => void;
@@ -106,9 +102,10 @@ export function ListingsToolbar({
 		<div className="flex flex-col gap-2">
 			<div className="-mx-4 flex items-center gap-2 overflow-x-auto px-4 md:mx-0 md:px-0">
 				<ViewToggles
-					key={`${filters.view ?? "available"}-${filters.new ?? false}`}
+					key={`${filters.view ?? "available"}-${filters.new ?? false}-${filters.rejected ?? false}`}
 					filters={filters}
 					newCount={newCount}
+					rejectedCount={rejectedCount}
 					onChange={onChange}
 				/>
 				<Button
@@ -174,21 +171,25 @@ export function ListingsToolbar({
 
 /**
  * Available · Sold, then New: Listings first seen since my last visit, within
- * the view, with how many there are.
+ * the view, with how many there are; and Marked wrong, the view's Rejected
+ * Listings (shown when there are some, or it's on).
  */
 function ViewToggles({
 	filters,
 	newCount,
+	rejectedCount,
 	onChange,
 }: {
 	filters: ListingFilters;
 	newCount: number | null;
+	rejectedCount: number | null;
 	onChange: (filters: ListingFilters) => void;
 }): React.ReactElement {
 	const form = useForm({
 		defaultValues: {
 			view: filters.view ?? "available",
 			new: filters.new ?? false,
+			rejected: filters.rejected ?? false,
 		},
 		validators: { onSubmit: listingsViewSchema },
 		onSubmit: ({ value }) =>
@@ -196,8 +197,11 @@ function ViewToggles({
 				...filters,
 				view: value.view === "available" ? undefined : value.view,
 				new: value.new || undefined,
+				rejected: value.rejected || undefined,
 			}),
 	});
+	const showRejected =
+		filters.rejected || (rejectedCount !== null && rejectedCount > 0);
 	return (
 		<div className="flex items-center gap-2">
 			<form.Field name="view">
@@ -238,10 +242,6 @@ function ViewToggles({
 							void form.handleSubmit();
 						}}
 					>
-						<span
-							aria-hidden
-							className="size-2 shrink-0 rounded-full bg-primary"
-						/>
 						New
 						{newCount !== null && newCount > 0 && (
 							<span className="text-muted-foreground tabular-nums">
@@ -251,6 +251,29 @@ function ViewToggles({
 					</Toggle>
 				)}
 			</form.Field>
+			{showRejected ? (
+				<form.Field name="rejected">
+					{(field) => (
+						<Toggle
+							variant="outline"
+							className="h-11 px-3 md:h-9"
+							pressed={field.state.value}
+							onPressedChange={(pressed) => {
+								field.handleChange(pressed);
+								void form.handleSubmit();
+							}}
+						>
+							<Ban aria-hidden />
+							Marked wrong
+							{rejectedCount !== null && rejectedCount > 0 && (
+								<span className="text-muted-foreground tabular-nums">
+									{rejectedCount}
+								</span>
+							)}
+						</Toggle>
+					)}
+				</form.Field>
+			) : null}
 		</div>
 	);
 }
@@ -261,7 +284,6 @@ type FilterFormValues = {
 	language: Language | typeof ANY;
 	condition: ConditionFilter | typeof ANY;
 	graded: "yes" | "no" | typeof ANY;
-	match: MatchFilter | typeof ANY;
 	location: string;
 	card: string;
 };
@@ -273,7 +295,6 @@ function formValues(filters: ListingFilters): FilterFormValues {
 		language: filters.language ?? ANY,
 		condition: filters.condition ?? ANY,
 		graded: filters.graded === undefined ? ANY : filters.graded ? "yes" : "no",
-		match: filters.match ?? ANY,
 		location: filters.location ?? ANY,
 		card: filters.card ?? ANY,
 	};
@@ -295,7 +316,7 @@ function filtersFrom(
 		language: set(values.language),
 		condition: set(values.condition),
 		graded: values.graded === ANY ? undefined : values.graded === "yes",
-		match: set(values.match),
+		rejected: filters.rejected,
 		location: set(values.location),
 		card: set(values.card),
 	};
@@ -356,7 +377,6 @@ function ListingFiltersDrawer({
 	}> = [
 		{ name: "card", label: "Card", options: cardSelectOptions },
 		{ name: "type", label: "Type", options: entries(KIND_LABELS) },
-		{ name: "match", label: "Match", options: entries(MATCH_LABELS) },
 		{
 			name: "condition",
 			label: "Condition",
@@ -508,8 +528,8 @@ function filterLabel(
 					: "";
 		case "graded":
 			return filters.graded ? "Graded" : "Not graded";
-		case "match":
-			return filters.match ? MATCH_LABELS[filters.match] : "";
+		case "rejected":
+			return "Marked wrong";
 		case "location":
 			return filters.location ?? "";
 		case "card":

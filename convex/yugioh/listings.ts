@@ -15,6 +15,8 @@ import {
 	yugiohMarketplaceValidator,
 	yugiohMatchStatusValidator,
 	yugiohPerCopyPriceValidator,
+	yugiohRejectionReasonValidator,
+	yugiohRejectionValidator,
 	yugiohTcgplayerDetailsValidator,
 	yugiohTitleReadValidator,
 } from "../model/yugioh/validators";
@@ -38,6 +40,8 @@ const listingValidator = v.object({
 	isNew: v.boolean(),
 	/** Seller, condition and quantity, for a TCGplayer Listing or sale. */
 	tcgplayer: v.union(yugiohTcgplayerDetailsValidator, v.null()),
+	/** Why and when I marked it wrong; null when I haven't. */
+	rejection: v.union(yugiohRejectionValidator, v.null()),
 	/** What the AI read from the title; null until read, or when reading failed. */
 	titleRead: v.union(yugiohTitleReadValidator, v.null()),
 	match: v.object({
@@ -49,6 +53,7 @@ const listingValidator = v.object({
 				cardName: v.string(),
 				setCode: v.string(),
 				rarity: v.string(),
+				imageUrl: v.union(v.string(), v.null()),
 			}),
 			v.null(),
 		),
@@ -88,7 +93,9 @@ export const listListings = query({
 		matching: v.number(),
 		/** How many Listings the filters would let through with New on. */
 		newCount: v.number(),
-		/** How many Listings the Deck has, Available and Sold, before filters. */
+		/** How many of the view's Listings are Rejected, before other filters. */
+		rejectedCount: v.number(),
+		/** How many Listings the Deck shows, Available and Sold, before filters. */
 		total: v.number(),
 		/** Every seller country among the Deck's Listings, A to Z. */
 		locations: v.array(v.string()),
@@ -146,6 +153,29 @@ export const setListingMatch = mutation({
 	handler: async (ctx, args) => {
 		requireAuth(ctx);
 		await Matching.setMatchOverride(ctx, args.listingId, args.printingId);
+		return null;
+	},
+});
+
+/**
+ * Marks a Listing wrong with a reason, or (reason null) unmarks it. A Rejected
+ * Listing counts toward no price, deal, cost or push, and stays rejected
+ * through later captures.
+ */
+export const setListingRejection = mutation({
+	args: {
+		listingId: v.id("yugiohListings"),
+		reason: v.union(yugiohRejectionReasonValidator, v.null()),
+	},
+	returns: v.null(),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+		await Listings.setListingRejection(
+			ctx,
+			args.listingId,
+			args.reason,
+			Date.now(),
+		);
 		return null;
 	},
 });

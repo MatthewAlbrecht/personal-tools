@@ -71,19 +71,28 @@ async function listings(t: T) {
 		});
 		decks.set(t, deckId);
 	}
-	// Available and Sold together, newest first: every Listing in the Deck.
+	// Every stored Listing, newest first, as this Deck grades it: the
+	// Listings table hides unsure ones and those for Printings not needed.
+	const id = deckId;
+	const ids = await t.run(async (ctx) =>
+		(await ctx.db.query("yugiohListings").order("desc").collect()).map(
+			(listing) => listing._id,
+		),
+	);
 	const views = await Promise.all(
-		(["available", "sold"] as const).map((view) =>
-			t.query(api.yugioh.listings.listListings, {
-				deckId,
+		ids.map((listingId) =>
+			t.query(api.yugioh.listings.getListing, {
+				listingId,
+				deckId: id,
 				now: Date.now(),
-				filters: { view },
 			}),
 		),
 	);
-	return views
-		.flatMap((page) => page.listings)
-		.sort((a, b) => b._creationTime - a._creationTime);
+	return views.flatMap((view) => {
+		if (!view) return [];
+		const { observations: _, ...listing } = view;
+		return [listing];
+	});
 }
 
 beforeEach(() => {

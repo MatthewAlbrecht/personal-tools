@@ -2,7 +2,8 @@
 
 import { useForm } from "@tanstack/react-form";
 import { useMutation, useQuery } from "convex/react";
-import { ExternalLink } from "lucide-react";
+import { formatDistanceToNowStrict } from "date-fns";
+import { Ban, ExternalLink, Undo2 } from "lucide-react";
 import Link from "next/link";
 import type * as React from "react";
 import { toast } from "sonner";
@@ -34,6 +35,10 @@ import {
 	listingTypeLabel,
 } from "~/lib/yugioh/listing-format";
 import {
+	REJECTION_REASON_LABELS,
+	type RejectionReason,
+} from "~/lib/yugioh/listing-rejection";
+import {
 	LANGUAGE_LABELS,
 	READ_CONDITION_LABELS,
 	type TitleRead,
@@ -45,21 +50,29 @@ import { NOT_A_MATCH, listingMatchSchema } from "../_utils/schemas";
 import type { ListingView } from "../_utils/types";
 import { DealGradeBadge, ReferenceLine } from "./deal-grade";
 import { MatchSummary } from "./listing-match";
+import { MarkWrongMenu } from "./mark-wrong";
 import { YugiohDrawer } from "./yugioh-drawer";
 
 const SAVE_FAILED = "Couldn't save. Try again.";
 
-/** One Listing's details, read title and match, opened with `?listing=`. */
+/**
+ * One Listing's details, read title and match, opened with `?listing=`. Its
+ * footer marks it wrong (or restores it) and opens it on the marketplace.
+ */
 export function ListingDrawer({
 	deckId,
 	listing,
 	now,
 	onClose,
+	onMarkWrong,
+	onUnmark,
 }: {
 	deckId: Id<"yugiohDecks">;
 	listing: ListingView | null;
 	now: number;
 	onClose: () => void;
+	onMarkWrong: (listing: ListingView, reason: RejectionReason) => void;
+	onUnmark: (listing: ListingView) => void;
 }): React.ReactElement {
 	return (
 		<YugiohDrawer
@@ -78,18 +91,54 @@ export function ListingDrawer({
 							{MARKETPLACE_LABELS[listing.marketplace]} ·{" "}
 							{listingTypeLabel(listing, now)}
 						</p>
-						<DealLine deal={listing.deal} marketplace={listing.marketplace} />
+						{listing.rejection ? (
+							<p className="flex items-center gap-1.5 text-sm">
+								<Ban aria-hidden className="size-4 text-muted-foreground" />
+								Marked wrong:{" "}
+								{REJECTION_REASON_LABELS[listing.rejection.reason]}
+								<span className="text-muted-foreground">
+									·{" "}
+									{formatDistanceToNowStrict(listing.rejection.at, {
+										addSuffix: true,
+									})}
+								</span>
+							</p>
+						) : (
+							<DealLine deal={listing.deal} marketplace={listing.marketplace} />
+						)}
 					</DrawerHeader>
 				) : undefined
 			}
 			footer={
 				listing ? (
-					<Button asChild className="h-11 w-full md:h-9">
-						<a href={listing.url} target="_blank" rel="noopener noreferrer">
-							Open on {MARKETPLACE_LABELS[listing.marketplace]}
-							<ExternalLink data-icon="inline-end" />
-						</a>
-					</Button>
+					<div className="flex gap-2">
+						{listing.rejection ? (
+							<Button
+								variant="outline"
+								className="h-11 flex-1 md:h-9"
+								onClick={() => onUnmark(listing)}
+							>
+								<Undo2 data-icon="inline-start" />
+								Restore
+							</Button>
+						) : (
+							<MarkWrongMenu
+								align="start"
+								onPick={(reason) => onMarkWrong(listing, reason)}
+							>
+								<Button variant="outline" className="h-11 flex-1 md:h-9">
+									<Ban data-icon="inline-start" />
+									Mark as wrong
+								</Button>
+							</MarkWrongMenu>
+						)}
+						<Button asChild className="h-11 flex-1 md:h-9">
+							<a href={listing.url} target="_blank" rel="noopener noreferrer">
+								Open on {MARKETPLACE_LABELS[listing.marketplace]}
+								<ExternalLink data-icon="inline-end" />
+							</a>
+						</Button>
+					</div>
 				) : undefined
 			}
 		>

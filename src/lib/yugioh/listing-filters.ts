@@ -3,6 +3,7 @@
 // only narrow a view. Relative imports only (Convex imports this).
 
 import { isSale, listingLanguage } from "./deals";
+import { type Rejection, isRejected } from "./listing-rejection";
 import { countryKey } from "./pricing";
 import {
 	LANGUAGES,
@@ -29,14 +30,6 @@ export type ListingKind = (typeof LISTING_KINDS)[number];
 export const CONDITION_FILTERS = [...READ_CONDITIONS, "unknown"] as const;
 export type ConditionFilter = ReadCondition | "unknown";
 
-export const MATCH_FILTERS = [
-	"match",
-	"unsure",
-	"notMatch",
-	"reading",
-] as const;
-export type MatchFilter = MatchStatus | "reading";
-
 /**
  * Every filter is optional; an unset filter lets every Listing in the view
  * through. The URL is another matter: there, English and not graded are the
@@ -53,7 +46,8 @@ export type ListingFilters = {
 	/** As read from the title; "unknown" when the title doesn't say. */
 	condition?: ConditionFilter;
 	graded?: boolean;
-	match?: MatchFilter;
+	/** Only Rejected Listings (marked wrong), within the view; unset hides them. */
+	rejected?: boolean;
 	/** The seller's country, as eBay names it. */
 	location?: string;
 	/** A Card in the Deck (its ID): Listings matched to the Printings it searches. */
@@ -76,6 +70,7 @@ export type FilterableListing = {
 	matchStatus?: MatchStatus;
 	matchOverridden?: boolean;
 	matchedPrintingId?: string | null;
+	rejection?: Rejection | null;
 };
 
 /** What the filters are judged against, besides the Listing itself. */
@@ -85,7 +80,28 @@ export type FilterContext = {
 	newSince: number | null;
 	/** The Printings each Card of the Deck searches, by Card ID. */
 	cardPrintings: ReadonlyMap<string, ReadonlySet<string>>;
+	/** The Printings the Deck still needs (`neededPrintingIds`). */
+	neededPrintings: ReadonlySet<string>;
 };
+
+/**
+ * Whether a Listing shows in a Deck's Listings at all: matched to a Printing
+ * the Deck still needs (a Card missing copies; its Chosen Printing once it
+ * has one). Unsure, not-a-match, still-being-read Listings and Listings for
+ * done Cards or un-chosen Printings never show; they still count toward
+ * prices wherever they qualify.
+ */
+export function isShownInDeck(
+	listing: FilterableListing,
+	neededPrintings: ReadonlySet<string>,
+): boolean {
+	const printingId = listing.matchedPrintingId ?? null;
+	return (
+		shownMatchStatus(listing) === "match" &&
+		printingId !== null &&
+		neededPrintings.has(printingId)
+	);
+}
 
 /** Which view a Listing shows in: Sold once it's a sale, else Available. */
 export function listingsViewOf(
@@ -112,8 +128,10 @@ export function applyListingFilters<L extends FilterableListing>(
 function passes(
 	listing: FilterableListing,
 	filters: ListingFilters,
-	{ now, newSince, cardPrintings }: FilterContext,
+	{ now, newSince, cardPrintings, neededPrintings }: FilterContext,
 ): boolean {
+	if (!isShownInDeck(listing, neededPrintings)) return false;
+	if (isRejected(listing) !== (filters.rejected ?? false)) return false;
 	if (listingsViewOf(listing, now) !== (filters.view ?? "available")) {
 		return false;
 	}
@@ -135,9 +153,6 @@ function passes(
 		filters.graded !== undefined &&
 		(listing.titleRead?.graded ?? false) !== filters.graded
 	) {
-		return false;
-	}
-	if (filters.match && shownMatchStatus(listing) !== filters.match) {
 		return false;
 	}
 	if (
@@ -165,9 +180,14 @@ const DEFAULT_FILTERS = {
 	graded: false,
 } as const satisfies ListingFilters;
 
-/** The default filters, keeping the view and the New toggle. */
+/** The default filters, keeping the view and the New and Marked wrong toggles. */
 export function defaultListingFilters(filters: ListingFilters): ListingFilters {
-	return { view: filters.view, new: filters.new, ...DEFAULT_FILTERS };
+	return {
+		view: filters.view,
+		new: filters.new,
+		rejected: filters.rejected,
+		...DEFAULT_FILTERS,
+	};
 }
 
 /** Whether only the defaults are set, beyond the view and the New toggle. */
@@ -194,9 +214,9 @@ const FILTER_PARAMS = [
 	"language",
 	"condition",
 	"graded",
-	"match",
 	"location",
 	"card",
+	"rejected",
 ] as const satisfies ReadonlyArray<keyof ListingFilters>;
 
 type ParamReader = { get(name: string): string | null };
@@ -250,9 +270,9 @@ export function listingFiltersFromParams(params: ParamReader): ListingFilters {
 			params.get("graded") === ANY_PARAM
 				? undefined
 				: (yesNo(params.get("graded")) ?? DEFAULT_FILTERS.graded),
-		match: oneOf(MATCH_FILTERS, params.get("match")),
 		location: text(params.get("location")),
 		card: text(params.get("card")),
+		rejected: params.get("rejected") === "1" || undefined,
 	};
 	return withoutUnset(filters);
 }
@@ -299,14 +319,18 @@ function withoutUnset(filters: ListingFilters): ListingFilters {
 // --- The Filters button ----------------------------------------------------
 
 /**
- * The filters set beyond the view and the New toggle, in URL order: the ones
- * the Filters button counts and lists as removable chips.
+ * The filters set beyond the view and the New and Marked wrong toggles, in
+ * URL order: the ones the Filters button counts and lists as removable chips.
  */
 export function extraFilters(
 	filters: ListingFilters,
 ): Array<keyof ListingFilters> {
 	return FILTER_PARAMS.filter(
-		(name) => name !== "view" && name !== "new" && filters[name] !== undefined,
+		(name) =>
+			name !== "view" &&
+			name !== "new" &&
+			name !== "rejected" &&
+			filters[name] !== undefined,
 	);
 }
 

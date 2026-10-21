@@ -439,12 +439,27 @@ describe("views, sorting and filters", () => {
 		const { deckId } = await ashDeck(t);
 		// The cheapest is captured first, so it's the oldest: the 201st newest.
 		// (It has no set code: the Deck reads its set code's newest 200, plus
-		// up to 50 that could be for any Deck.)
+		// up to 50 that could be for any Deck. I matched it myself, so it shows.)
 		const [cheapest] = await capture(
 			t,
 			{ price: 1, title: "Yugioh Quarter Century Secret Rare binder lot" },
 			...Array.from({ length: 200 }, (_, i) => ({ price: 100 + i })),
 		);
+		await t.run(async (ctx) => {
+			const printing = await ctx.db.query("yugiohPrintings").first();
+			const listing = await ctx.db
+				.query("yugiohListings")
+				.withIndex("by_marketplace_and_itemId", (q) =>
+					q.eq("marketplace", "ebay").eq("itemId", cheapest ?? ""),
+				)
+				.unique();
+			if (!printing || !listing) throw new Error("missing");
+			await ctx.db.patch("yugiohListings", listing._id, {
+				matchStatus: "match",
+				matchedPrintingId: printing._id,
+				matchOverridden: true,
+			});
+		});
 		const page = await listings(
 			t,
 			deckId,
@@ -470,14 +485,15 @@ describe("views, sorting and filters", () => {
 		const [kr, , , graded] = await capture(
 			t,
 			{ title: "Ash Blossom RA01-KR008 Quarter Century Secret Rare" },
-			// No set code: it could be for any Deck, so it shows, unsure.
+			// No set code: unsure, so the table leaves it out.
 			{ title: "Yugioh Quarter Century Secret Rare binder lot" },
 			{ sellerLocation: "Japan" },
 			{ read: { graded: true, gradingCompany: "PSA" } },
 		);
 
 		const everything = await listings(t, deckId);
-		expect(everything.listings).toHaveLength(4);
+		expect(everything.listings).toHaveLength(3);
+		expect(everything.total).toBe(3);
 		// The location filter offers every seller country in the Deck's Listings.
 		expect(everything.locations).toEqual(["Japan", "United States"]);
 		const korean = await listings(t, deckId, { language: "korean" });

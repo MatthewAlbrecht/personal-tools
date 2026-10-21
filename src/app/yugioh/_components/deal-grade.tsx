@@ -13,9 +13,9 @@ import { MARKETPLACE_LABELS, formatMoney } from "~/lib/yugioh/listing-format";
 import type { ListingView } from "../_utils/types";
 
 /**
- * A Listing's Deal grade as text, with hue and fill reinforcing it: Great is
- * solid with a down arrow, Good tinted, Fair outlined, Poor plain muted text
- * (overpriced isn't an error). Nothing without a grade.
+ * A Listing's Deal grade as a 20px pill, its text reinforced by hue and fill:
+ * Great is solid with a down arrow, Good tinted, Fair outlined, Poor a quiet
+ * muted fill (overpriced isn't an error). Nothing without a grade.
  */
 export function DealGradeBadge({
 	deal,
@@ -26,18 +26,13 @@ export function DealGradeBadge({
 }): React.ReactElement | null {
 	if (deal.grade === null) return null;
 	const label = DEAL_GRADE_LABELS[deal.grade];
-	if (deal.grade === "poor") {
-		return (
-			<span className={cn("text-muted-foreground text-xs", className)}>
-				{label}
-			</span>
-		);
-	}
 	return (
 		<Badge
 			variant="outline"
 			className={cn(
-				"gap-1 font-medium [&>svg]:size-3",
+				"h-5 gap-1 px-2 py-0 align-middle font-medium leading-none [&>svg]:size-3",
+				deal.grade === "poor" &&
+					"border-transparent bg-muted text-muted-foreground",
 				deal.grade === "great" &&
 					"border-transparent bg-deal-great text-deal-great-foreground",
 				deal.grade === "good" &&

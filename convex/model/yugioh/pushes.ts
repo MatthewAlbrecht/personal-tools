@@ -12,6 +12,7 @@ import { CHECK_PAGE_COOL_DOWN_MS } from "../../../src/lib/yugioh/automation";
 import { isRunningAuction, isSale } from "../../../src/lib/yugioh/deals";
 import { isCardFinished } from "../../../src/lib/yugioh/deck";
 import type { Marketplace } from "../../../src/lib/yugioh/listing-filters";
+import { isRejected } from "../../../src/lib/yugioh/listing-rejection";
 import {
 	DEFAULT_TIME_ZONE,
 	auctionPushText,
@@ -361,8 +362,8 @@ export type Delivery = {
 
 /**
  * Starts delivering a push that's due. Null when there's nothing to send: it
- * was already handled, its Listing has since sold or ended (a held deal), or
- * no device has push on. Those are marked skipped.
+ * was already handled, its Listing has since sold or ended (a held deal) or
+ * been marked wrong, or no device has push on. Those are marked skipped.
  */
 export async function claimDelivery(
 	ctx: MutationCtx,
@@ -376,6 +377,10 @@ export async function claimDelivery(
 		const listing = await ctx.db.get("yugiohListings", push.listingId);
 		if (!listing || (await hasEnded(ctx, listing, now))) {
 			await skip(ctx, pushId, "The Listing has ended.");
+			return null;
+		}
+		if (isRejected(listing)) {
+			await skip(ctx, pushId, "The Listing was marked wrong.");
 			return null;
 		}
 		if (push.kind === "auction" && listing.endsAt !== null) {

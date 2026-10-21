@@ -19,6 +19,7 @@ import {
 } from "../../../src/lib/yugioh/deals";
 import type { Condition } from "../../../src/lib/yugioh/deck";
 import type { Marketplace } from "../../../src/lib/yugioh/listing-filters";
+import { isRejected } from "../../../src/lib/yugioh/listing-rejection";
 import {
 	type PerCopyPrice,
 	type Pricing,
@@ -397,12 +398,15 @@ function memoised<R>(read: PriceRead<R>): PriceRead<R> {
 }
 
 /**
- * The Printing a Listing is matched to, or null: unsure, not a match, or
- * being re-read (an override still counts while a new title is read).
+ * The Printing a Listing counts toward, or null: unsure, not a match, being
+ * re-read (an override still counts while a new title is read), or Rejected.
+ * Every price, deal, cost and push read goes through this, so a Rejected
+ * Listing counts toward nothing.
  */
 export function matchedPrintingId(
 	listing: Doc<"yugiohListings">,
 ): Id<"yugiohPrintings"> | null {
+	if (isRejected(listing)) return null;
 	if (listing.matchStatus !== "match") return null;
 	if (!listing.matchOverridden && listing.titleReadStatus === "reading") {
 		return null;

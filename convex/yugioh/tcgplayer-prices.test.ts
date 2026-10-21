@@ -267,19 +267,23 @@ async function ashPrices(t: T, deckId: Id<"yugiohDecks">) {
 }
 
 async function deckListings(t: T, deckId: Id<"yugiohDecks">) {
-	// Available and Sold together, newest first: every Listing in the Deck.
-	const views = await Promise.all(
-		(["available", "sold"] as const).map((view) =>
-			t.query(api.yugioh.listings.listListings, {
-				deckId,
-				now: NOW,
-				filters: { view },
-			}),
+	// Every stored Listing, newest first, as this Deck grades it: the
+	// Listings table hides unsure ones and those for Printings not needed.
+	const ids = await t.run(async (ctx) =>
+		(await ctx.db.query("yugiohListings").order("desc").collect()).map(
+			(listing) => listing._id,
 		),
 	);
-	return views
-		.flatMap((page) => page.listings)
-		.sort((a, b) => b._creationTime - a._creationTime);
+	const views = await Promise.all(
+		ids.map((listingId) =>
+			t.query(api.yugioh.listings.getListing, { listingId, deckId, now: NOW }),
+		),
+	);
+	return views.flatMap((view) => {
+		if (!view) return [];
+		const { observations: _, ...listing } = view;
+		return [listing];
+	});
 }
 
 async function ashCost(t: T, deckId: Id<"yugiohDecks">) {

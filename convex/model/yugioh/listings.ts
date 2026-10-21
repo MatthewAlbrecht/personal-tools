@@ -1,4 +1,4 @@
-import type { Infer } from "convex/values";
+import { ConvexError, type Infer } from "convex/values";
 import {
 	isRunningAuction,
 	isSale,
@@ -8,8 +8,13 @@ import {
 	type ListingFilters,
 	type ListingsView,
 	applyListingFilters,
+	isShownInDeck,
 } from "../../../src/lib/yugioh/listing-filters";
 import { listingSeller } from "../../../src/lib/yugioh/listing-format";
+import type {
+	Rejection,
+	RejectionReason,
+} from "../../../src/lib/yugioh/listing-rejection";
 import {
 	type ListingSort,
 	type SortKey,
@@ -24,6 +29,7 @@ import {
 } from "../../../src/lib/yugioh/pricing";
 import {
 	ebaySearchSetCodes,
+	neededPrintingIds,
 	searchedPrintingsByCard,
 } from "../../../src/lib/yugioh/searches";
 import {
@@ -313,9 +319,11 @@ export type DeckListingsPage = {
 	matching: number;
 	/** How many Listings the filters would let through with New on: the view's new ones. */
 	newCount: number;
-	/** How many Listings the Deck has, Available and Sold, before filters. */
+	/** How many of the view's Listings are Rejected, before other filters. */
+	rejectedCount: number;
+	/** How many Listings the Deck shows (`isShownInDeck`), Available and Sold, before filters. */
 	total: number;
-	/** Every seller country among the Deck's Listings, A to Z: the location filter's options. */
+	/** Every seller country among the Deck's shown Listings, A to Z: the location filter's options. */
 	locations: string[];
 };
 
@@ -333,14 +341,22 @@ export async function readDeckListingsPage(
 ): Promise<DeckListingsPage> {
 	const all = await readDeckListings(ctx, deckId);
 	const newSince = await readNewSince(ctx, deckId);
+	const [cards, candidates] = await Promise.all([
+		listDeckCards(ctx, deckId),
+		listDeckCandidates(ctx, deckId),
+	]);
 	const context = {
 		now,
 		newSince,
-		cardPrintings: await readCardPrintings(ctx, deckId),
+		cardPrintings: cardPrintings(cards, candidates),
+		neededPrintings: neededPrintingIds<string>(cards, candidates),
 	};
+	const shown = all.filter((listing) =>
+		isShownInDeck(listing, context.neededPrintings),
+	);
 	const view = filters.view ?? "available";
 	const order = sort ?? defaultListingSort(view);
-	const matching = applyListingFilters(all, filters, context);
+	const matching = applyListingFilters(shown, filters, context);
 	const deals = await loadDealContext(ctx, deckId, now);
 	const values = await sortValues(ctx, matching, order, view, now, deals);
 	const ordered = sortListings(
@@ -357,9 +373,14 @@ export async function readDeckListingsPage(
 		matching: matching.length,
 		newCount: filters.new
 			? matching.length
-			: applyListingFilters(all, { ...filters, new: true }, context).length,
-		total: all.length,
-		locations: sellerCountries(all),
+			: applyListingFilters(shown, { ...filters, new: true }, context).length,
+		rejectedCount: applyListingFilters(
+			shown,
+			{ view: filters.view, rejected: true },
+			context,
+		).length,
+		total: shown.length,
+		locations: sellerCountries(shown),
 	};
 }
 
@@ -449,14 +470,10 @@ function sellerCountries(listings: Doc<"yugiohListings">[]): string[] {
 }
 
 /** The Printings each of the Deck's Cards searches, by Card ID. */
-async function readCardPrintings(
-	ctx: QueryCtx,
-	deckId: Id<"yugiohDecks">,
-): Promise<Map<string, Set<string>>> {
-	const [cards, candidates] = await Promise.all([
-		listDeckCards(ctx, deckId),
-		listDeckCandidates(ctx, deckId),
-	]);
+function cardPrintings(
+	cards: ReadonlyArray<Doc<"yugiohDeckCards">>,
+	candidates: ReadonlyArray<Doc<"yugiohCandidatePrintings">>,
+): Map<string, Set<string>> {
 	const byCard = new Map<string, Set<string>>();
 	for (const [cardId, printingIds] of searchedPrintingsByCard(
 		cards,
@@ -501,6 +518,8 @@ export type ListingView = CapturedEbayListing & {
 	isNew: boolean;
 	/** Seller, condition and quantity, for a TCGplayer Listing or sale. */
 	tcgplayer: NonNullable<Doc<"yugiohListings">["tcgplayer"]> | null;
+	/** Why and when I marked it wrong; null when I haven't. */
+	rejection: Rejection | null;
 } & ListingMatchView;
 
 /**
@@ -540,6 +559,25 @@ export async function listingView(
 		deal: await deals.deal(listing, perCopyPrice),
 		isNew: isNewListing(listing, newSince),
 		tcgplayer: listing.tcgplayer ?? null,
+		rejection: listing.rejection ?? null,
 		...(await listingMatchView(ctx, listing)),
 	};
+}
+
+/**
+ * Marks a Listing wrong with a reason, making it a Rejected Listing, or
+ * (reason null) unmarks it. A Rejected Listing counts toward no price, deal,
+ * cost or push, and stays rejected through later captures.
+ */
+export async function setListingRejection(
+	ctx: MutationCtx,
+	listingId: Id<"yugiohListings">,
+	reason: RejectionReason | null,
+	now: number,
+): Promise<void> {
+	const listing = await ctx.db.get("yugiohListings", listingId);
+	if (!listing) throw new ConvexError("That Listing doesn't exist.");
+	await ctx.db.patch("yugiohListings", listingId, {
+		rejection: reason === null ? null : { reason, at: now },
+	});
 }

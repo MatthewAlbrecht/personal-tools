@@ -277,6 +277,8 @@ export type ListingMatchView = {
 			cardName: string;
 			setCode: string;
 			rarity: string;
+			/** The Printing's TCGplayer product image; null until it's linked. */
+			imageUrl: string | null;
 		} | null;
 		overridden: boolean;
 	};
@@ -300,6 +302,7 @@ export async function listingMatchView(
 				cardName: printing.cardName,
 				setCode: printing.setCode,
 				rarity: printing.rarity,
+				imageUrl: printing.tcgplayerImageUrl ?? null,
 			},
 			overridden,
 		},

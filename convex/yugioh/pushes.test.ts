@@ -555,6 +555,24 @@ describe("quiet hours", () => {
 		expect(fakes.sent).toEqual([]);
 	});
 
+	test("a held deal I mark wrong before 8am isn't sent", async () => {
+		const t = setup();
+		await ashDeck(t);
+		await fiftyDollarReference(t);
+		await turnOn(t, PHONE, "America/Denver");
+
+		const [itemId] = await captureNow(t, { price: 39 });
+		await t.mutation(api.yugioh.listings.setListingRejection, {
+			listingId: await listingId(t, itemId as string),
+			reason: "wrongCard",
+		});
+		await settle(t);
+
+		expect(fakes.sent).toEqual([]);
+		const [push] = await pushRows(t);
+		expect(push).toMatchObject({ status: "skipped" });
+	});
+
 	test("a held deal whose fixed-price Listing ends unsold before 8am isn't sent", async () => {
 		const t = setup();
 		await ashDeck(t);

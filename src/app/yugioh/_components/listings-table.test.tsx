@@ -52,6 +52,7 @@ function brionacSale(overrides: Partial<ListingView> = {}): ListingView {
 		},
 		isNew: false,
 		tcgplayer: { seller: null, condition: "Heavily Played", quantity: 1 },
+		rejection: null,
 		titleRead: null,
 		match: {
 			status: "match",
@@ -60,6 +61,7 @@ function brionacSale(overrides: Partial<ListingView> = {}): ListingView {
 				cardName: "Brionac",
 				setCode: "DT01-EN031",
 				rarity: "Duel Terminal Ultra Parallel Rare",
+				imageUrl: null,
 			},
 			overridden: false,
 		},
@@ -95,70 +97,138 @@ async function stylesFor(html: string): Promise<string> {
 	return compiler.build(candidates);
 }
 
-/** The table at a desktop width, measured: the Card / Printing cell and its text. */
-async function measureCardCell(listing: ListingView, width: number) {
+/** A busy eBay Listing: long name, a lot of graded Korean copies, an auction. */
+function busyListing(): ListingView {
+	return brionacSale({
+		_id: "listing2" as ListingView["_id"],
+		marketplace: "ebay",
+		sold: false,
+		soldDate: null,
+		listingType: "auction",
+		bids: 12,
+		endsAt: NOW + 3_600_000,
+		sellerLocation: "United Kingdom of Great Britain and Northern Ireland",
+		isNew: true,
+		tcgplayer: null,
+		titleRead: {
+			setCode: "DT01-EN031",
+			rarity: "Duel Terminal Ultra Parallel Rare",
+			condition: "lightlyPlayed",
+			copies: 3,
+			language: "korean",
+			graded: true,
+			gradingCompany: "PSA",
+			grade: "10",
+		},
+		deal: {
+			qualifying: false,
+			belowCondition: true,
+			reference: { price: 357, sales: 9 },
+			grade: "poor",
+			percentOfReference: 131,
+		},
+		match: {
+			status: "match",
+			printing: {
+				_id: "printing1" as never,
+				cardName: "Brionac, Dragon of the Ice Barrier",
+				setCode: "DT01-EN031",
+				rarity: "Duel Terminal Ultra Parallel Rare",
+				imageUrl: null,
+			},
+			overridden: false,
+		},
+	});
+}
+
+/**
+ * The table at a desktop width, measured: for every cell, how far its text
+ * reaches past the cell's right edge (text cut short with an ellipsis ends
+ * where its clipping box does), and each row's height.
+ */
+async function measureTable(listings: ListingView[], width: number) {
 	const html = renderToStaticMarkup(
 		<div style={{ width }}>
 			<ListingsTable
-				listings={[listing]}
+				listings={listings}
 				href={() => "#"}
 				now={NOW}
-				view="sold"
+				view="available"
 				sort={{ key: "date", direction: "desc" }}
 				onSort={() => {}}
 			/>
 		</div>,
 	);
 	const page = await browser.newPage({
-		viewport: { width: 1400, height: 800 },
+		viewport: { width: 1600, height: 800 },
 	});
 	await page.setContent(
 		`<style>${await stylesFor(html)}</style><body>${html}</body>`,
 	);
 	const result = await page.evaluate(() => {
-		const cell = document.querySelectorAll("tbody td")[2] as HTMLElement;
-		const cellBox = cell.getBoundingClientRect();
-		const name = [...cell.querySelectorAll("span, p, div")].find(
-			(el) => el.textContent === "Brionac",
-		) as HTMLElement | undefined;
-		const nameBox = name?.getBoundingClientRect();
-		// Where each piece of text ends on screen; text cut short with an
-		// ellipsis ends where its clipping box does.
-		const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
-		let textRight = 0;
-		for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-			const range = document.createRange();
-			range.selectNodeContents(node);
-			let right = range.getBoundingClientRect().right;
-			for (
-				let el = node.parentElement;
-				el && el !== cell;
-				el = el.parentElement
-			) {
-				if (getComputedStyle(el).overflowX !== "visible") {
-					right = Math.min(right, el.getBoundingClientRect().right);
+		const cells = [...document.querySelectorAll("tbody td")] as HTMLElement[];
+		const overflows = cells.map((cell) => {
+			const cellRight = cell.getBoundingClientRect().right;
+			const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
+			let textRight = 0;
+			for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+				const range = document.createRange();
+				range.selectNodeContents(node);
+				let right = range.getBoundingClientRect().right;
+				for (
+					let el = node.parentElement;
+					el && el !== cell;
+					el = el.parentElement
+				) {
+					if (getComputedStyle(el).overflowX !== "visible") {
+						right = Math.min(right, el.getBoundingClientRect().right);
+					}
 				}
+				textRight = Math.max(textRight, right);
 			}
-			textRight = Math.max(textRight, right);
-		}
+			return textRight - cellRight;
+		});
+		const name = [...document.querySelectorAll("tbody td span")].find((el) =>
+			el.textContent?.startsWith("Brionac"),
+		) as HTMLElement | undefined;
+		const rows = [...document.querySelectorAll("tbody tr")].map(
+			(row) => row.getBoundingClientRect().height,
+		);
+		const table = document.querySelector("table") as HTMLElement;
 		return {
-			cellRight: cellBox.right,
-			textRight,
-			nameWidth: nameBox?.width ?? 0,
+			overflows,
+			rows,
+			nameWidth: name?.getBoundingClientRect().width ?? 0,
+			tableWidth: table.getBoundingClientRect().width,
 		};
 	});
 	await page.close();
 	return result;
 }
 
-describe("the Listings table's Card / Printing column", () => {
-	test("shows the Card name beside a long rarity", async () => {
-		const { nameWidth } = await measureCardCell(brionacSale(), 1000);
-		expect(nameWidth).toBeGreaterThan(20);
+describe("the Listings table's layout", () => {
+	// The Deck page's content box at lg (1024 wide), and at 1280 and 1440
+	// wide (max-w-5xl).
+	test.each([976, 1024])(
+		"at %ipx, no cell's text spills into the next",
+		async (width) => {
+			const { overflows, tableWidth } = await measureTable(
+				[brionacSale(), busyListing()],
+				width,
+			);
+			expect(tableWidth).toBeLessThanOrEqual(width + 0.5);
+			for (const overflow of overflows)
+				expect(overflow).toBeLessThanOrEqual(0.5);
+		},
+	);
+
+	test("shows the Card name beside its art, however long the rarity", async () => {
+		const { nameWidth } = await measureTable([brionacSale()], 976);
+		expect(nameWidth).toBeGreaterThan(40);
 	});
 
-	test("keeps a long Printing inside its column, not over the next one", async () => {
-		const { cellRight, textRight } = await measureCardCell(brionacSale(), 1000);
-		expect(textRight).toBeLessThanOrEqual(cellRight + 0.5);
+	test("every row is the same height, flags or not", async () => {
+		const { rows } = await measureTable([brionacSale(), busyListing()], 1024);
+		expect(rows[0]).toBeCloseTo(rows[1] ?? 0, 0);
 	});
 });
