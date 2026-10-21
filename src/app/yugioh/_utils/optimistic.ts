@@ -22,7 +22,11 @@ export function updateCachedDeck(
 export type CardPatch = Partial<
 	Pick<
 		DeckCard,
-		"copiesNeeded" | "copiesOwned" | "lowestAcceptableCondition" | "section"
+		| "copiesNeeded"
+		| "copiesOwned"
+		| "lowestAcceptableCondition"
+		| "section"
+		| "priority"
 	>
 >;
 

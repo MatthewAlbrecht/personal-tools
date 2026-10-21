@@ -3,6 +3,7 @@ import {
 	CARD_ORDERS,
 	CONDITIONS,
 	MAX_COPIES_NEEDED,
+	PRIORITIES,
 	SECTIONS,
 } from "~/lib/yugioh/deck";
 import {
@@ -63,6 +64,10 @@ export const gridColumnsSchema = z.object({
 
 export const conditionSchema = z.object({
 	lowestAcceptableCondition: z.enum(CONDITIONS),
+});
+
+export const prioritySchema = z.object({
+	priority: z.enum(PRIORITIES),
 });
 
 export const chosenPrintingSchema = z.object({
@@ -132,6 +137,12 @@ export const listingFiltersSchema = z.object({
 	graded: z.enum([ANY, "yes", "no"]),
 	location: z.string(),
 	card: z.string(),
+	priority: z.array(z.enum(PRIORITIES)),
+});
+
+/** The Cards tab's priority filter: every Card, or one priority's. */
+export const cardsPriorityFilterSchema = z.object({
+	priority: z.enum([ANY, ...PRIORITIES]),
 });
 
 /** The Listings view (Available or Sold) and the New toggle within it. */

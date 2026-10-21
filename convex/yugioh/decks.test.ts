@@ -230,6 +230,48 @@ describe("owning Copies", () => {
 	});
 });
 
+describe("priority", () => {
+	test("a Card is Medium priority until set; High, Medium or Low can be set", async () => {
+		const t = setup();
+		const { deckId, deckCardId } = await deckWithCard(t);
+		expect(await cardView(t, deckId)).toMatchObject({ priority: "medium" });
+
+		await t.mutation(api.yugioh.decks.updateCard, {
+			deckCardId,
+			priority: "high",
+		});
+		expect(await cardView(t, deckId)).toMatchObject({ priority: "high" });
+
+		await t.mutation(api.yugioh.decks.updateCard, {
+			deckCardId,
+			priority: "low",
+		});
+		expect(await cardView(t, deckId)).toMatchObject({ priority: "low" });
+	});
+
+	test("setting priority leaves the Card's Copies and condition alone", async () => {
+		const t = setup();
+		const { deckId, deckCardId } = await deckWithCard(t);
+		await t.mutation(api.yugioh.decks.updateCard, {
+			deckCardId,
+			copiesOwned: 2,
+			lowestAcceptableCondition: "lightlyPlayed",
+		});
+
+		await t.mutation(api.yugioh.decks.updateCard, {
+			deckCardId,
+			priority: "high",
+		});
+
+		expect(await cardView(t, deckId)).toMatchObject({
+			priority: "high",
+			copiesOwned: 2,
+			copiesNeeded: 3,
+			lowestAcceptableCondition: "lightlyPlayed",
+		});
+	});
+});
+
 const ashStarlight = {
 	setCode: "MP23-EN001",
 	rarity: "Starlight Rare",

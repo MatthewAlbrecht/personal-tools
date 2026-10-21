@@ -15,6 +15,7 @@ import type { DealGrade, Reference } from "../../../src/lib/yugioh/deals";
 import type {
 	CardOrder,
 	Condition,
+	Priority,
 	Section,
 } from "../../../src/lib/yugioh/deck";
 import type { ConditionChoice } from "../../../src/lib/yugioh/listing-edits";
@@ -47,6 +48,12 @@ export const yugiohConditionValidator = v.union(
 	v.literal("lightlyPlayed"),
 	v.literal("moderatelyPlayed"),
 	v.literal("heavilyPlayed"),
+);
+
+export const yugiohPriorityValidator = v.union(
+	v.literal("high"),
+	v.literal("medium"),
+	v.literal("low"),
 );
 
 export const yugiohCardOrderValidator = v.union(
@@ -340,6 +347,8 @@ export const yugiohListingFiltersValidator = v.object({
 	card: v.optional(v.string()),
 	/** Deck Card IDs whose Listings are hidden (`hide` in the URL). */
 	excludeCards: v.optional(v.array(v.string())),
+	/** Only Listings for Cards of these priorities; empty lets all through. */
+	priority: v.optional(v.array(yugiohPriorityValidator)),
 });
 
 /** What started an automated browser run. */
@@ -523,6 +532,11 @@ const conditionsAgree: Same<
 	Infer<typeof yugiohConditionValidator>,
 	Condition
 > = true;
+const prioritiesAgree: Same<
+	Infer<typeof yugiohPriorityValidator>,
+	Priority
+> = true;
+void prioritiesAgree;
 const cardOrdersAgree: Same<
 	Infer<typeof yugiohCardOrderValidator>,
 	CardOrder

@@ -34,6 +34,7 @@ import type { Id } from "../../../../convex/_generated/dataModel";
 import { errorMessage } from "../_utils/errors";
 import { applyCardMove, updateCachedDeck } from "../_utils/optimistic";
 import type { DeckCard } from "../_utils/types";
+import { TilePriorityMenu } from "./card-priority";
 import { CardTile, CardTileSkeleton } from "./card-tile";
 
 /**
@@ -266,7 +267,10 @@ export function CardTileGrid({
 				{cards.map((card, index) => (
 					<li
 						key={card._id}
-						className={cn("relative", draggingId === card._id && "z-10")}
+						className={cn(
+							"group/card relative",
+							draggingId === card._id && "z-10",
+						)}
 					>
 						<CardTile
 							card={card}
@@ -274,6 +278,10 @@ export function CardTileGrid({
 							columns={columns}
 							dragging={draggingId === card._id}
 						/>
+						{/* Covers the art only, so the mark sits on its bottom corner. */}
+						<div className="pointer-events-none absolute inset-x-0 top-0 aspect-[59/86] *:pointer-events-auto">
+							<TilePriorityMenu deckId={deckId} card={card} />
+						</div>
 						{sortable && (
 							<DropdownMenu
 								open={menuId === card._id}

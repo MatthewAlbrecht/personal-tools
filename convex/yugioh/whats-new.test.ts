@@ -527,4 +527,25 @@ describe("views, sorting and filters", () => {
 		const unknown = await listings(t, deckId, { excludeCards: ["not-an-id"] });
 		expect(unknown.matching).toBe(2);
 	});
+
+	test("priority keeps the Listings of Cards with that priority", async () => {
+		const t = setup();
+		const { deckId, deckCardId } = await ashDeck(t);
+		await capture(t, {}, { sellerLocation: "Japan" });
+
+		// A Card never given a priority is Medium.
+		const medium = await listings(t, deckId, { priority: ["medium"] });
+		expect(medium.matching).toBe(2);
+		const high = await listings(t, deckId, { priority: ["high"] });
+		expect(high.matching).toBe(0);
+
+		await t.mutation(api.yugioh.decks.updateCard, {
+			deckCardId,
+			priority: "high",
+		});
+		const nowHigh = await listings(t, deckId, { priority: ["high", "low"] });
+		expect(nowHigh.matching).toBe(2);
+		const nowMedium = await listings(t, deckId, { priority: ["medium"] });
+		expect(nowMedium.matching).toBe(0);
+	});
 });

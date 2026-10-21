@@ -57,6 +57,7 @@ const context = {
 	newSince: NOW - 2 * HOUR,
 	cardPrintings: new Map([["card1", new Set(["p1"])]]),
 	neededPrintings: new Set(["p1", "p2"]),
+	cardPriorities: new Map([["card1", "medium" as const]]),
 };
 
 function ids(
@@ -232,6 +233,37 @@ describe("applyListingFilters", () => {
 		expect(hidden(["gone"])).toEqual(["p1", "p2"]);
 	});
 
+	test("priority: Listings for Cards of the chosen priorities", () => {
+		const all = [
+			listing({ id: "ash" }),
+			listing({ id: "nibiru", matchedPrintingId: "p2" }),
+			listing({ id: "droll", matchedPrintingId: "p3" }),
+		];
+		const threeCards = {
+			...context,
+			neededPrintings: new Set(["p1", "p2", "p3"]),
+			cardPrintings: new Map([
+				["ash", new Set(["p1"])],
+				["nibiru", new Set(["p2"])],
+				["droll", new Set(["p3"])],
+			]),
+			cardPriorities: new Map([
+				["ash", "high" as const],
+				["nibiru", "low" as const],
+				["droll", "medium" as const],
+			]),
+		};
+		function withPriority(priority: ListingFilters["priority"]): string[] {
+			return applyListingFilters(all, { priority }, threeCards).map(
+				(l) => l.id,
+			);
+		}
+		expect(withPriority(["high"])).toEqual(["ash"]);
+		expect(withPriority(["high", "low"])).toEqual(["ash", "nibiru"]);
+		expect(withPriority(["medium"])).toEqual(["droll"]);
+		expect(withPriority([])).toEqual(["ash", "nibiru", "droll"]);
+	});
+
 	test("new: first seen since my last visit, within the view", () => {
 		const all = [
 			listing({ id: "old", firstSeenAt: NOW - 3 * HOUR }),
@@ -270,9 +302,25 @@ describe("filters in the URL", () => {
 			location: "United Kingdom",
 			card: "k57abc",
 			excludeCards: ["k57def", "k57ghi"],
+			priority: ["high", "low"],
 		};
 		const params = withListingFilters(new URLSearchParams(), filters);
 		expect(listingFiltersFromParams(params)).toEqual(filters);
+	});
+
+	test("priority is one comma-separated param, unknown values dropped", () => {
+		const params = withListingFilters(new URLSearchParams(), {
+			language: "english",
+			graded: false,
+			priority: ["high", "medium"],
+		});
+		expect(params.toString()).toBe("priority=high%2Cmedium");
+		expect(
+			listingFiltersFromParams(new URLSearchParams("priority=low,urgent,low")),
+		).toEqual({ language: "english", graded: false, priority: ["low"] });
+		expect(
+			listingFiltersFromParams(new URLSearchParams("priority=urgent")),
+		).toEqual({ language: "english", graded: false });
 	});
 
 	test("hidden Cards are one comma-separated hide param", () => {
@@ -383,6 +431,7 @@ describe("the default filters", () => {
 				graded: true,
 				card: "x",
 				excludeCards: ["y"],
+				priority: ["high"],
 			}),
 		).toEqual({ view: "sold", new: true, language: "english", graded: false });
 	});
@@ -443,6 +492,15 @@ describe("the Filters button", () => {
 		expect(extraFilters({ view: "sold", graded: false, card: "x" })).toEqual([
 			"graded",
 			"card",
+		]);
+	});
+
+	test("counts priority once, however many are picked", () => {
+		expect(activeFilterCount({ priority: ["high", "low"] })).toBe(1);
+		expect(activeFilterCount({ priority: [] })).toBe(0);
+		expect(extraFilters({ priority: ["high"], card: "x" })).toEqual([
+			"card",
+			"priority",
 		]);
 	});
 

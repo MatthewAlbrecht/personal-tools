@@ -35,6 +35,7 @@ import {
 	yugiohConditionValidator,
 	yugiohMarketplaceValidator,
 	yugiohMatchStatusValidator,
+	yugiohPriorityValidator,
 	yugiohPushKindValidator,
 	yugiohPushStatusValidator,
 	yugiohRejectionValidator,
@@ -1855,6 +1856,9 @@ export default defineSchema({
 		// the Section is first reordered; a Card added to, or moved into, a
 		// reordered Section gets the next position (it goes last).
 		position: v.optional(v.number()),
+		// How much I want it. Missing reads as "medium" (Cards saved before
+		// priority existed); set from the Card drawer or its tile.
+		priority: v.optional(yugiohPriorityValidator),
 	}).index("by_deckId", ["deckId"]),
 
 	// My visits to each Deck (ticket 11): when I last looked, and where this

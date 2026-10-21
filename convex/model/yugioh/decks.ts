@@ -12,7 +12,9 @@ import {
 	type Condition,
 	DEFAULT_LOWEST_ACCEPTABLE_CONDITION,
 	MAX_COPIES_NEEDED,
+	type Priority,
 	type Section,
+	cardPriority,
 	customOrder,
 	deckProgress,
 	groupCardsBySection,
@@ -347,6 +349,8 @@ export type DeckCardView = {
 	copiesNeeded: number;
 	copiesOwned: number;
 	lowestAcceptableCondition: Condition;
+	/** Medium until set. */
+	priority: Priority;
 	chosenPrintingId: Id<"yugiohPrintings"> | null;
 	/** The Chosen Printing first, then in the order they were added. */
 	candidates: CandidateView[];
@@ -437,6 +441,7 @@ export async function readDeck(
 			copiesNeeded: card.copiesNeeded,
 			copiesOwned: card.copiesOwned,
 			lowestAcceptableCondition: card.lowestAcceptableCondition,
+			priority: cardPriority(card),
 			chosenPrintingId: card.chosenPrintingId,
 			candidates: [...chosen, ...others],
 			cost: costs?.get(card._id) ?? null,
@@ -534,6 +539,7 @@ export type CardUpdate = {
 	copiesOwned?: number;
 	lowestAcceptableCondition?: Condition;
 	section?: Section;
+	priority?: Priority;
 };
 
 /**
@@ -561,6 +567,7 @@ export async function updateCard(
 		...(update.lowestAcceptableCondition !== undefined && {
 			lowestAcceptableCondition: update.lowestAcceptableCondition,
 		}),
+		...(update.priority !== undefined && { priority: update.priority }),
 		...(update.section !== undefined &&
 			update.section !== card.section && {
 				section: update.section,

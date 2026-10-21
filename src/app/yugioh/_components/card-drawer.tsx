@@ -83,6 +83,7 @@ import type {
 	DeckCard,
 } from "../_utils/types";
 import { CardArt } from "./card-art";
+import { PriorityField } from "./card-priority";
 import { ReferenceLine } from "./deal-grade";
 import { OverloadedRaritiesCombobox, RarityCombobox } from "./printing-fields";
 import { TcgplayerLink } from "./tcgplayer-link";
@@ -186,6 +187,12 @@ export function CardDrawer({
 							/>
 						</div>
 					</FieldSet>
+
+					<PriorityField
+						key={`priority-${shown._id}`}
+						deckId={deckId}
+						card={shown}
+					/>
 
 					<ConditionField
 						key={`condition-${shown._id}-${shown.lowestAcceptableCondition}`}

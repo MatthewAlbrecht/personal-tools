@@ -4,6 +4,7 @@ import {
 	isSale,
 	saleTime,
 } from "../../../src/lib/yugioh/deals";
+import { type Priority, cardPriority } from "../../../src/lib/yugioh/deck";
 import {
 	type ConditionChoice,
 	type RarityChoice,
@@ -368,6 +369,9 @@ export async function readDeckListingsPage(
 		newSince,
 		cardPrintings: cardPrintings(searched),
 		neededPrintings: neededPrintingIds<string>(cards, candidates),
+		cardPriorities: new Map(
+			cards.map((card): [string, Priority] => [card._id, cardPriority(card)]),
+		),
 	};
 	const shown = all.filter((listing) =>
 		isShownInDeck(listing, context.neededPrintings),

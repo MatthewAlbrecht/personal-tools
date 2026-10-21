@@ -2,6 +2,8 @@ import { describe, expect, test } from "vitest";
 import {
 	largeTcgplayerImage,
 	parseGridColumns,
+	priorityFilterFromParam,
+	sectionsWithPriority,
 	shownGridColumns,
 	tileCopies,
 	tilePrintings,
@@ -125,5 +127,34 @@ describe("tileCopies", () => {
 			left: 0,
 			pips: [true],
 		});
+	});
+});
+
+describe("the priority filter", () => {
+	test("reads high, medium or low from the URL; anything else is All", () => {
+		expect(priorityFilterFromParam("high")).toBe("high");
+		expect(priorityFilterFromParam("low")).toBe("low");
+		expect(priorityFilterFromParam(null)).toBeUndefined();
+		expect(priorityFilterFromParam("urgent")).toBeUndefined();
+	});
+
+	test("keeps each Section's Cards of that priority, dropping empty Sections", () => {
+		const sections = [
+			{
+				section: "main",
+				cards: [
+					{ _id: "ash", priority: "high" as const },
+					{ _id: "droll", priority: "medium" as const },
+				],
+			},
+			{ section: "side", cards: [{ _id: "nibiru", priority: "low" as const }] },
+		];
+		expect(sectionsWithPriority(sections, "high")).toEqual([
+			{ section: "main", cards: [{ _id: "ash", priority: "high" }] },
+		]);
+		expect(sectionsWithPriority(sections, "low")).toEqual([
+			{ section: "side", cards: [{ _id: "nibiru", priority: "low" }] },
+		]);
+		expect(sectionsWithPriority(sections, undefined)).toBe(sections);
 	});
 });

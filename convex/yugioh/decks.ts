@@ -10,6 +10,7 @@ import {
 	yugiohConditionValidator,
 	yugiohCostTotalsValidator,
 	yugiohDeckCostValidator,
+	yugiohPriorityValidator,
 	yugiohSectionValidator,
 	yugiohTcgplayerStatusValidator,
 } from "../model/yugioh/validators";
@@ -45,6 +46,8 @@ const deckCardValidator = v.object({
 	copiesNeeded: v.number(),
 	copiesOwned: v.number(),
 	lowestAcceptableCondition: yugiohConditionValidator,
+	/** Medium until set. */
+	priority: yugiohPriorityValidator,
 	chosenPrintingId: v.union(v.id("yugiohPrintings"), v.null()),
 	candidates: v.array(candidateValidator),
 	cost: v.union(yugiohCardCostValidator, v.null()),
@@ -177,6 +180,7 @@ export const updateCard = mutation({
 		copiesOwned: v.optional(v.number()),
 		lowestAcceptableCondition: v.optional(yugiohConditionValidator),
 		section: v.optional(yugiohSectionValidator),
+		priority: v.optional(yugiohPriorityValidator),
 	},
 	returns: v.null(),
 	handler: async (ctx, { deckCardId, ...update }) => {

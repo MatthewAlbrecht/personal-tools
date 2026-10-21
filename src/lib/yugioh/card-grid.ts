@@ -1,6 +1,8 @@
 // The Deck page's Cards grid: column choice, which image a tile shows, and
 // how a Card's Copies read. Pure logic, relative imports only.
 
+import { PRIORITIES, type Priority } from "./deck";
+
 export const GRID_COLUMNS = [2, 3, 4] as const;
 export type GridColumns = (typeof GRID_COLUMNS)[number];
 
@@ -73,4 +75,25 @@ export function tileCopies(card: {
 			(_, index) => index < card.copiesOwned,
 		),
 	};
+}
+
+/** The Cards tab's priority filter from its `priority` param; unset is All. */
+export function priorityFilterFromParam(
+	value: string | null,
+): Priority | undefined {
+	return PRIORITIES.find((priority) => priority === value);
+}
+
+/**
+ * Each Section with only its Cards of `priority`, leaving out Sections left
+ * empty. Without a priority (All), the Sections as given.
+ */
+export function sectionsWithPriority<
+	S extends { cards: ReadonlyArray<{ priority: Priority }> },
+>(sections: S[], priority: Priority | undefined): S[] {
+	if (priority === undefined) return sections;
+	return sections.flatMap((group) => {
+		const cards = group.cards.filter((card) => card.priority === priority);
+		return cards.length > 0 ? [{ ...group, cards }] : [];
+	});
 }

@@ -3,6 +3,7 @@
 // only narrow a view. Relative imports only (Convex imports this).
 
 import { isSale, listingLanguage } from "./deals";
+import { PRIORITIES, type Priority } from "./deck";
 import { type ConditionChoice, listingCondition } from "./listing-edits";
 import { type Rejection, isRejected } from "./listing-rejection";
 import { countryKey } from "./pricing";
@@ -58,6 +59,11 @@ export type ListingFilters = {
 	 * each searches, as with `card`. In the URL as `hide`.
 	 */
 	excludeCards?: string[];
+	/**
+	 * Only Listings for Cards of these priorities (one or more): the Printings
+	 * each such Card searches, as with `card`. Empty lets everything through.
+	 */
+	priority?: Priority[];
 };
 
 /** What filtering needs to know about a stored Listing. */
@@ -89,6 +95,8 @@ export type FilterContext = {
 	cardPrintings: ReadonlyMap<string, ReadonlySet<string>>;
 	/** The Printings the Deck still needs (`neededPrintingIds`). */
 	neededPrintings: ReadonlySet<string>;
+	/** Each Card's priority, by Card ID. */
+	cardPriorities: ReadonlyMap<string, Priority>;
 };
 
 /**
@@ -135,7 +143,13 @@ export function applyListingFilters<L extends FilterableListing>(
 function passes(
 	listing: FilterableListing,
 	filters: ListingFilters,
-	{ now, newSince, cardPrintings, neededPrintings }: FilterContext,
+	{
+		now,
+		newSince,
+		cardPrintings,
+		neededPrintings,
+		cardPriorities,
+	}: FilterContext,
 ): boolean {
 	if (!isShownInDeck(listing, neededPrintings)) return false;
 	if (isRejected(listing) !== (filters.rejected ?? false)) return false;
@@ -179,6 +193,21 @@ function passes(
 		) {
 			return false;
 		}
+	}
+	if (filters.priority?.length) {
+		const printingId = listing.matchedPrintingId ?? null;
+		const wanted = new Set(filters.priority);
+		const forWantedCard =
+			printingId !== null &&
+			[...cardPrintings].some(([cardId, printings]) => {
+				const priority = cardPriorities.get(cardId);
+				return (
+					priority !== undefined &&
+					wanted.has(priority) &&
+					printings.has(printingId)
+				);
+			});
+		if (!forWantedCard) return false;
 	}
 	if (filters.card !== undefined) {
 		const printings = cardPrintings.get(filters.card);
@@ -258,6 +287,7 @@ const FILTER_PARAMS = [
 	"location",
 	"card",
 	"excludeCards",
+	"priority",
 	"rejected",
 ] as const satisfies ReadonlyArray<keyof ListingFilters>;
 
@@ -277,6 +307,13 @@ function idList(value: string | null): string[] | undefined {
 		),
 	];
 	return ids.length > 0 ? ids : undefined;
+}
+
+/** Priorities, comma-separated, once each and most first; unknown ones dropped. */
+function priorityList(value: string | null): Priority[] | undefined {
+	const named = new Set(idList(value));
+	const priorities = PRIORITIES.filter((priority) => named.has(priority));
+	return priorities.length > 0 ? priorities : undefined;
 }
 
 type ParamReader = { get(name: string): string | null };
@@ -333,6 +370,7 @@ export function listingFiltersFromParams(params: ParamReader): ListingFilters {
 		location: text(params.get("location")),
 		card: text(params.get("card")),
 		excludeCards: idList(params.get("hide")),
+		priority: priorityList(params.get("priority")),
 		rejected: params.get("rejected") === "1" || undefined,
 	};
 	return withoutUnset(filters);
@@ -396,7 +434,8 @@ export function extraFilters(
 			name !== "new" &&
 			name !== "rejected" &&
 			filters[name] !== undefined &&
-			!(name === "excludeCards" && filters.excludeCards?.length === 0),
+			!(name === "excludeCards" && filters.excludeCards?.length === 0) &&
+			!(name === "priority" && filters.priority?.length === 0),
 	);
 }
 

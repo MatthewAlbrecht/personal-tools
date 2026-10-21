@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import { Layers, Plus } from "lucide-react";
+import { Layers, ListFilter, Plus } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import type * as React from "react";
@@ -19,9 +19,18 @@ import { useCardGridColumns } from "~/lib/hooks/use-card-grid-columns";
 import { useHeldWhileLoading } from "~/lib/hooks/use-held-while-loading";
 import { useHourClock } from "~/lib/hooks/use-hour-clock";
 import { useMediaQuery } from "~/lib/hooks/use-media-query";
-import { type GridColumns, shownGridColumns } from "~/lib/yugioh/card-grid";
+import {
+	type GridColumns,
+	priorityFilterFromParam,
+	sectionsWithPriority,
+	shownGridColumns,
+} from "~/lib/yugioh/card-grid";
 import { formatWholeDollars } from "~/lib/yugioh/costs";
-import { SECTION_LABELS } from "~/lib/yugioh/deck";
+import {
+	PRIORITY_LABELS,
+	type Priority,
+	SECTION_LABELS,
+} from "~/lib/yugioh/deck";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import type { DeckSection } from "../_utils/types";
@@ -29,6 +38,7 @@ import { AddCardDrawer } from "./add-card-drawer";
 import { CaptureStalenessNote } from "./capture-staleness-note";
 import { CardDrawer } from "./card-drawer";
 import { CardOrderToggle } from "./card-order-toggle";
+import { CardsPriorityFilter } from "./card-priority";
 import { CardTileGrid, CardTileGridSkeleton } from "./card-tile-grid";
 import { DeckCostHeader, DeckCostHeaderSkeleton } from "./deck-cost";
 import { GridColumnsToggle } from "./grid-columns-toggle";
@@ -58,6 +68,21 @@ export function DeckPage({
 	const openCard = deck.sections
 		.flatMap((group) => group.cards)
 		.find((card) => card._id === openCardId);
+
+	const priority = priorityFilterFromParam(searchParams.get("priority"));
+	const shownSections = sectionsWithPriority(deck.sections, priority);
+	// Moving a Card among a filtered few would misplace it among the rest.
+	const sortable = deck.cardOrder === "custom" && priority === undefined;
+
+	function showPriority(next: Priority | undefined): void {
+		const params = new URLSearchParams(searchParams.toString());
+		if (next) params.set("priority", next);
+		else params.delete("priority");
+		const query = params.toString();
+		router.replace(query ? `${pathname}?${query}` : pathname, {
+			scroll: false,
+		});
+	}
 
 	function cardHref(cardId: string): string {
 		const params = new URLSearchParams(searchParams.toString());
@@ -104,10 +129,17 @@ export function DeckPage({
 				<>
 					<div className="flex flex-col gap-2">
 						<div className="flex flex-wrap items-center justify-between gap-2">
-							<Button className="h-11 md:h-9" onClick={() => setAdding(true)}>
-								<Plus data-icon="inline-start" />
-								Add Card
-							</Button>
+							<div className="flex flex-wrap items-center gap-2">
+								<Button className="h-11 md:h-9" onClick={() => setAdding(true)}>
+									<Plus data-icon="inline-start" />
+									Add Card
+								</Button>
+								<CardsPriorityFilter
+									key={priority ?? "all"}
+									value={priority}
+									onChange={showPriority}
+								/>
+							</div>
 							<div className="flex items-center gap-2">
 								<GridColumnsToggle value={shownGridColumns(columns, phone)} />
 								<CardOrderToggle deckId={deckId} value={deck.cardOrder} />
@@ -115,21 +147,47 @@ export function DeckPage({
 						</div>
 						{deck.cardOrder === "custom" && (
 							<p className="text-muted-foreground text-sm">
-								Drag a Card's handle to move it within its Section, or tap the
-								handle to move it earlier, later, to the start or to the end.
+								{sortable
+									? "Drag a Card's handle to move it within its Section, or tap the handle to move it earlier, later, to the start or to the end."
+									: "Show All Cards to move them."}
 							</p>
 						)}
 					</div>
-					{deck.sections.map((group) => (
-						<SectionList
-							key={group.section}
-							deckId={deckId}
-							group={group}
-							sortable={deck.cardOrder === "custom"}
-							columns={columns}
-							cardHref={cardHref}
-						/>
-					))}
+					{shownSections.length === 0 && priority !== undefined ? (
+						<Empty className="border">
+							<EmptyHeader>
+								<EmptyMedia variant="icon">
+									<ListFilter />
+								</EmptyMedia>
+								<EmptyTitle>
+									No {PRIORITY_LABELS[priority]} priority Cards
+								</EmptyTitle>
+								<EmptyDescription>
+									Set a Card's priority from its tile or its drawer.
+								</EmptyDescription>
+							</EmptyHeader>
+							<EmptyContent>
+								<Button
+									variant="outline"
+									onClick={() => showPriority(undefined)}
+								>
+									Show all Cards
+								</Button>
+							</EmptyContent>
+						</Empty>
+					) : (
+						shownSections.map((group) => (
+							<SectionList
+								key={group.section}
+								deckId={deckId}
+								group={group}
+								sortable={sortable}
+								filtered={priority !== undefined}
+								columns={columns}
+								cardHref={cardHref}
+							/>
+						))
+					)}
 				</>
 			)}
 
@@ -143,12 +201,15 @@ function SectionList({
 	deckId,
 	group,
 	sortable,
+	filtered,
 	columns,
 	cardHref,
 }: {
 	deckId: Id<"yugiohDecks">;
 	group: DeckSection;
 	sortable: boolean;
+	/** Showing only some Cards: the Section's subtotal would mislead. */
+	filtered: boolean;
 	columns: GridColumns;
 	cardHref: (cardId: string) => string;
 }): React.ReactElement {
@@ -170,7 +231,7 @@ function SectionList({
 						{count} {count === 1 ? "Card" : "Cards"}
 					</span>
 				</h2>
-				{subtotal !== null && subtotal.toFinish > 0 && (
+				{!filtered && subtotal !== null && subtotal.toFinish > 0 && (
 					<p className="text-right text-muted-foreground text-sm tabular-nums">
 						<span className="font-semibold text-foreground">
 							{formatWholeDollars(subtotal.toFinish)}

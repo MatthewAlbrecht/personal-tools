@@ -18,7 +18,12 @@ import {
 } from "~/components/ui/select";
 import { Toggle } from "~/components/ui/toggle";
 import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group";
-import { SECTION_LABELS } from "~/lib/yugioh/deck";
+import {
+	PRIORITIES,
+	PRIORITY_LABELS,
+	type Priority,
+	SECTION_LABELS,
+} from "~/lib/yugioh/deck";
 import {
 	CONDITION_FILTERS,
 	type ConditionFilter,
@@ -48,6 +53,7 @@ import {
 	listingsViewSchema,
 } from "../_utils/schemas";
 import type { DeckView } from "../_utils/types";
+import { PRIORITY_ICONS } from "./card-priority";
 import { YugiohDrawer } from "./yugioh-drawer";
 
 const VIEW_LABELS: Record<ListingsView, string> = {
@@ -320,6 +326,7 @@ type FilterFormValues = {
 	graded: "yes" | "no" | typeof ANY;
 	location: string;
 	card: string;
+	priority: Priority[];
 };
 
 function formValues(filters: ListingFilters): FilterFormValues {
@@ -331,6 +338,7 @@ function formValues(filters: ListingFilters): FilterFormValues {
 		graded: filters.graded === undefined ? ANY : filters.graded ? "yes" : "no",
 		location: filters.location ?? ANY,
 		card: filters.card ?? ANY,
+		priority: filters.priority ?? [],
 	};
 }
 
@@ -354,6 +362,7 @@ function filtersFrom(
 		location: set(values.location),
 		card: set(values.card),
 		excludeCards: filters.excludeCards,
+		priority: values.priority.length > 0 ? values.priority : undefined,
 	};
 }
 
@@ -404,7 +413,7 @@ function ListingFiltersDrawer({
 	}
 
 	const fields: Array<{
-		name: keyof FilterFormValues;
+		name: Exclude<keyof FilterFormValues, "priority">;
 		label: string;
 		options: SelectOption[];
 		/** What the field's "no filter" choice says. */
@@ -474,6 +483,44 @@ function ListingFiltersDrawer({
 			}
 		>
 			<FieldGroup>
+				<form.Field name="priority">
+					{(field) => (
+						<Field>
+							<FieldLabel id="listing-filter-priority-label">
+								Card priority
+							</FieldLabel>
+							<ToggleGroup
+								aria-labelledby="listing-filter-priority-label"
+								multiple
+								variant="outline"
+								spacing={0}
+								className="w-full"
+								value={filters.priority ?? []}
+								onValueChange={(next) => {
+									// As with the selects: start from the URL, then apply this.
+									form.reset(formValues(filters));
+									const picked = new Set(next);
+									field.handleChange(PRIORITIES.filter((p) => picked.has(p)));
+									void form.handleSubmit();
+								}}
+							>
+								{PRIORITIES.map((priority) => {
+									const Icon = PRIORITY_ICONS[priority];
+									return (
+										<ToggleGroupItem
+											key={priority}
+											value={priority}
+											className="h-11 flex-1 md:h-9"
+										>
+											<Icon aria-hidden data-icon="inline-start" />
+											{PRIORITY_LABELS[priority]}
+										</ToggleGroupItem>
+									);
+								})}
+							</ToggleGroup>
+						</Field>
+					)}
+				</form.Field>
 				{fields.map(({ name, label, options, anyLabel = "Any" }) => (
 					<form.Field key={name} name={name}>
 						{(field) => (
@@ -571,7 +618,19 @@ function filterLabel(
 			return filters.card ? cardLabel(filters.card, cards) : "";
 		case "excludeCards":
 			return `Hiding ${filters.excludeCards?.length ?? 0} Cards`;
+		case "priority":
+			return priorityLabel(filters.priority ?? []);
 	}
+}
+
+/** "High priority", "High or Low priority": the priority filter's chip. */
+function priorityLabel(priorities: Priority[]): string {
+	const names = priorities.map((priority) => PRIORITY_LABELS[priority]);
+	const list =
+		names.length > 1
+			? `${names.slice(0, -1).join(", ")} or ${names.at(-1)}`
+			: (names[0] ?? "");
+	return `${list} priority`;
 }
 
 /** A Card's name as the Card filter shows it, or "A removed Card". */

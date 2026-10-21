@@ -36,6 +36,26 @@ export const CONDITION_LABELS: Record<Condition, string> = {
 
 export const DEFAULT_LOWEST_ACCEPTABLE_CONDITION: Condition = "nearMint";
 
+/**
+ * How much I want a Card in a Deck, most first. A Card saved before priority
+ * existed has none and reads as Medium (`cardPriority`).
+ */
+export const PRIORITIES = ["high", "medium", "low"] as const;
+export type Priority = (typeof PRIORITIES)[number];
+
+export const PRIORITY_LABELS: Record<Priority, string> = {
+	high: "High",
+	medium: "Medium",
+	low: "Low",
+};
+
+export const DEFAULT_PRIORITY: Priority = "medium";
+
+/** A Card's priority, Medium when it has never been set. */
+export function cardPriority(card: { priority?: Priority }): Priority {
+	return card.priority ?? DEFAULT_PRIORITY;
+}
+
 /** A Deck never runs more than 3 Copies of a Card. */
 export const MAX_COPIES_NEEDED = 3;
 
