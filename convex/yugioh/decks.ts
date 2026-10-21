@@ -3,6 +3,7 @@ import { mutation, query } from "../_generated/server";
 import { requireAuth } from "../auth";
 import * as Decks from "../model/yugioh/decks";
 import {
+	yugiohCardOrderValidator,
 	yugiohConditionValidator,
 	yugiohSectionValidator,
 	yugiohTcgplayerStatusValidator,
@@ -42,6 +43,7 @@ const deckCardValidator = v.object({
 });
 
 const deckValidator = deckSummaryValidator.extend({
+	cardOrder: yugiohCardOrderValidator,
 	sections: v.array(
 		v.object({
 			section: yugiohSectionValidator,
@@ -80,6 +82,26 @@ export const getDeck = query({
 	handler: async (ctx, args) => {
 		requireAuth(ctx);
 		return await Decks.readDeck(ctx, args.deckId);
+	},
+});
+
+export const setCardOrder = mutation({
+	args: { deckId: v.id("yugiohDecks"), cardOrder: yugiohCardOrderValidator },
+	returns: v.null(),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+		await Decks.setCardOrder(ctx, args.deckId, args.cardOrder);
+		return null;
+	},
+});
+
+export const moveCard = mutation({
+	args: { deckCardId: v.id("yugiohDeckCards"), toIndex: v.number() },
+	returns: v.null(),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+		await Decks.moveCard(ctx, args.deckCardId, args.toIndex);
+		return null;
 	},
 });
 

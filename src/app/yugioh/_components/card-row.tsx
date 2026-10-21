@@ -6,13 +6,18 @@ import { isCardFinished, rarityAbbreviation } from "~/lib/yugioh/deck";
 import type { DeckCard } from "../_utils/types";
 import { CardArt } from "./card-art";
 
-/** One Card in a Section. Tapping opens the Card drawer via `?card=`. */
+/**
+ * One Card in a Section. Tapping opens the Card drawer via `?card=`.
+ * `withHandle` tightens the left edge for the Custom order grip handle.
+ */
 export function CardRow({
 	card,
 	href,
+	withHandle = false,
 }: {
 	card: DeckCard;
 	href: string;
+	withHandle?: boolean;
 }): React.ReactElement {
 	const chosen = card.candidates.find(
 		(candidate) => candidate.printingId === card.chosenPrintingId,
@@ -31,6 +36,7 @@ export function CardRow({
 			className={cn(
 				"flex min-h-14 items-center gap-3 px-3 py-2.5 outline-none transition-colors hover:bg-muted/40 focus-visible:bg-muted/60 active:bg-muted md:px-4",
 				finished && "opacity-60",
+				withHandle && "pl-0 md:pl-0",
 			)}
 		>
 			<CardArt

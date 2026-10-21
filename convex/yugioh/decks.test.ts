@@ -463,3 +463,189 @@ describe("Printing identity", () => {
 		).resolves.toBeDefined();
 	});
 });
+
+describe("Card order", () => {
+	test("a Deck starts in By cost order, and the Custom toggle persists", async () => {
+		const t = setup();
+		const deckId = await t.mutation(api.yugioh.decks.createDeck, {
+			name: "Snake-Eye",
+		});
+		expect(
+			(await t.query(api.yugioh.decks.getDeck, { deckId }))?.cardOrder,
+		).toBe("byCost");
+
+		await t.mutation(api.yugioh.decks.setCardOrder, {
+			deckId,
+			cardOrder: "custom",
+		});
+
+		expect(
+			(await t.query(api.yugioh.decks.getDeck, { deckId }))?.cardOrder,
+		).toBe("custom");
+	});
+
+	test("Custom order starts as the By cost order, then follows moves within a Section", async () => {
+		const t = setup();
+		const { deckId, add } = await orderedDeck(t);
+		const ash = await add("Ash Blossom", "main");
+		const bystial = await add("Bystial Druiswurm", "main");
+		await add("Called by the Grave", "main");
+		await add("Masquerena", "extra");
+		await t.mutation(api.yugioh.decks.updateCard, {
+			deckCardId: ash,
+			copiesOwned: 1,
+		});
+		await t.mutation(api.yugioh.decks.setCardOrder, {
+			deckId,
+			cardOrder: "custom",
+		});
+		expect(await names(t, deckId)).toEqual([
+			["main", ["Bystial Druiswurm", "Called by the Grave", "Ash Blossom"]],
+			["extra", ["Masquerena"]],
+		]);
+
+		await t.mutation(api.yugioh.decks.moveCard, {
+			deckCardId: ash,
+			toIndex: 0,
+		});
+		await t.mutation(api.yugioh.decks.moveCard, {
+			deckCardId: bystial,
+			toIndex: 2,
+		});
+
+		expect(await names(t, deckId)).toEqual([
+			["main", ["Ash Blossom", "Called by the Grave", "Bystial Druiswurm"]],
+			["extra", ["Masquerena"]],
+		]);
+	});
+
+	test("By cost ignores the Custom order, and switching back restores it", async () => {
+		const t = setup();
+		const { deckId, add } = await orderedDeck(t);
+		await add("Ash Blossom", "main");
+		const called = await add("Called by the Grave", "main");
+		await t.mutation(api.yugioh.decks.setCardOrder, {
+			deckId,
+			cardOrder: "custom",
+		});
+		await t.mutation(api.yugioh.decks.moveCard, {
+			deckCardId: called,
+			toIndex: 0,
+		});
+
+		await t.mutation(api.yugioh.decks.setCardOrder, {
+			deckId,
+			cardOrder: "byCost",
+		});
+		expect(await names(t, deckId)).toEqual([
+			["main", ["Ash Blossom", "Called by the Grave"]],
+		]);
+
+		await t.mutation(api.yugioh.decks.setCardOrder, {
+			deckId,
+			cardOrder: "custom",
+		});
+		expect(await names(t, deckId)).toEqual([
+			["main", ["Called by the Grave", "Ash Blossom"]],
+		]);
+	});
+
+	test("a Card added or moved to another Section goes to the end of that Section", async () => {
+		const t = setup();
+		const { deckId, add } = await orderedDeck(t);
+		await add("Ash Blossom", "main");
+		const bystial = await add("Bystial Druiswurm", "main");
+		const called = await add("Called by the Grave", "side");
+		await add("Droll & Lock Bird", "side");
+		await t.mutation(api.yugioh.decks.setCardOrder, {
+			deckId,
+			cardOrder: "custom",
+		});
+		await t.mutation(api.yugioh.decks.moveCard, {
+			deckCardId: bystial,
+			toIndex: 0,
+		});
+		await t.mutation(api.yugioh.decks.moveCard, {
+			deckCardId: called,
+			toIndex: 0,
+		});
+
+		await t.mutation(api.yugioh.decks.updateCard, {
+			deckCardId: called,
+			section: "main",
+		});
+		await add("Abyss Dweller", "main");
+
+		expect(await names(t, deckId)).toEqual([
+			[
+				"main",
+				[
+					"Bystial Druiswurm",
+					"Ash Blossom",
+					"Called by the Grave",
+					"Abyss Dweller",
+				],
+			],
+			["side", ["Droll & Lock Bird"]],
+		]);
+	});
+
+	test("a move stays inside the Card's Section, clamped to its ends", async () => {
+		const t = setup();
+		const { deckId, add } = await orderedDeck(t);
+		const ash = await add("Ash Blossom", "main");
+		await add("Bystial Druiswurm", "main");
+		await add("Called by the Grave", "side");
+		await t.mutation(api.yugioh.decks.setCardOrder, {
+			deckId,
+			cardOrder: "custom",
+		});
+
+		await t.mutation(api.yugioh.decks.moveCard, {
+			deckCardId: ash,
+			toIndex: 99,
+		});
+		expect(await names(t, deckId)).toEqual([
+			["main", ["Bystial Druiswurm", "Ash Blossom"]],
+			["side", ["Called by the Grave"]],
+		]);
+
+		await t.mutation(api.yugioh.decks.moveCard, {
+			deckCardId: ash,
+			toIndex: -3,
+		});
+		expect(await names(t, deckId)).toEqual([
+			["main", ["Ash Blossom", "Bystial Druiswurm"]],
+			["side", ["Called by the Grave"]],
+		]);
+
+		await expect(
+			t.mutation(api.yugioh.decks.moveCard, { deckCardId: ash, toIndex: 0.5 }),
+		).rejects.toThrow("whole number");
+	});
+});
+
+async function orderedDeck(t: ReturnType<typeof setup>) {
+	const deckId = await t.mutation(api.yugioh.decks.createDeck, {
+		name: "Snake-Eye",
+	});
+	let setNumber = 0;
+	async function add(cardName: string, section: "main" | "extra" | "side") {
+		setNumber += 1;
+		return await t.mutation(api.yugioh.decks.addCard, {
+			deckId,
+			cardName,
+			setCode: `RA01-EN${String(setNumber).padStart(3, "0")}`,
+			rarity: "Secret Rare",
+			overloadedRarities: [],
+			section,
+			copiesNeeded: 1,
+		});
+	}
+	return { deckId, add };
+}
+
+async function names(t: ReturnType<typeof setup>, deckId: Id<"yugiohDecks">) {
+	const deck = await t.query(api.yugioh.decks.getDeck, { deckId });
+	return deck?.sections.map((s) => [s.section, s.cards.map((c) => c.cardName)]);
+}

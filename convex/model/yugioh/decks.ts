@@ -1,11 +1,14 @@
 import { ConvexError } from "convex/values";
 import {
+	type CardOrder,
 	type Condition,
 	DEFAULT_LOWEST_ACCEPTABLE_CONDITION,
 	MAX_COPIES_NEEDED,
 	type Section,
+	customOrder,
 	deckProgress,
 	groupCardsBySection,
+	moveToIndex,
 	normalizeOverloadedRarities,
 	normalizeRarity,
 	normalizeSetCode,
@@ -160,6 +163,31 @@ export async function getDeckCardOrThrow(
 	return card;
 }
 
+async function listDeckCards(
+	ctx: QueryCtx,
+	deckId: Id<"yugiohDecks">,
+): Promise<Array<Doc<"yugiohDeckCards">>> {
+	return await ctx.db
+		.query("yugiohDeckCards")
+		.withIndex("by_deckId", (q) => q.eq("deckId", deckId))
+		.take(MAX_CARDS_PER_DECK);
+}
+
+/**
+ * Where a Card arriving in a Section goes in Custom order: after the last
+ * positioned Card. Undefined while the Section has no Custom order yet, so the
+ * Card takes its By cost place like the rest.
+ */
+function endPosition(
+	cards: ReadonlyArray<Doc<"yugiohDeckCards">>,
+	section: Section,
+): number | undefined {
+	const positions = cards
+		.filter((card) => card.section === section)
+		.flatMap((card) => (card.position === undefined ? [] : [card.position]));
+	return positions.length === 0 ? undefined : Math.max(...positions) + 1;
+}
+
 export type AddCardInput = PrintingInput & {
 	cardName: string;
 	section: Section;
@@ -179,10 +207,7 @@ export async function addCard(
 	checkCopiesNeeded(input.copiesNeeded);
 	const copiesOwned = input.copiesOwned ?? 0;
 	checkCopiesOwned(copiesOwned, input.copiesNeeded);
-	const existing = await ctx.db
-		.query("yugiohDeckCards")
-		.withIndex("by_deckId", (q) => q.eq("deckId", deckId))
-		.take(MAX_CARDS_PER_DECK);
+	const existing = await listDeckCards(ctx, deckId);
 	if (existing.length >= MAX_CARDS_PER_DECK) {
 		throw new ConvexError("This Deck is full.");
 	}
@@ -196,6 +221,7 @@ export async function addCard(
 		lowestAcceptableCondition:
 			input.lowestAcceptableCondition ?? DEFAULT_LOWEST_ACCEPTABLE_CONDITION,
 		chosenPrintingId: null,
+		position: endPosition(existing, input.section),
 	});
 	await ctx.db.insert("yugiohCandidatePrintings", {
 		deckId,
@@ -241,6 +267,7 @@ export type DeckCardView = {
 export type DeckView = {
 	_id: Id<"yugiohDecks">;
 	name: string;
+	cardOrder: CardOrder;
 	cardCount: number;
 	copiesOwned: number;
 	copiesNeeded: number;
@@ -273,7 +300,7 @@ export async function readDeck(
 			.filter((printing) => printing !== null)
 			.map((printing) => [printing._id, printing]),
 	);
-	const cardViews: DeckCardView[] = cards.map((card) => {
+	function view(card: Doc<"yugiohDeckCards">): DeckCardView {
 		const views = candidates
 			.filter((candidate) => candidate.deckCardId === card._id)
 			.flatMap((candidate): CandidateView[] => {
@@ -302,14 +329,71 @@ export async function readDeck(
 			chosenPrintingId: card.chosenPrintingId,
 			candidates: [...chosen, ...others],
 		};
-	});
+	}
+	const cardOrder = deck.cardOrder ?? "byCost";
 	return {
 		_id: deck._id,
 		name: deck.name,
+		cardOrder,
 		cardCount: cards.length,
 		...deckProgress(cards),
-		sections: groupCardsBySection(cardViews),
+		sections: orderCards(cards, cardOrder).map((group) => ({
+			section: group.section,
+			cards: group.cards.map(view),
+		})),
 	};
+}
+
+/**
+ * The one place Cards are put in order, so getDeck and moveCard always agree
+ * on what a Section looks like. By cost: unfinished first, by name until
+ * prices exist. Custom: saved positions, then any unpositioned Cards in their
+ * By cost order.
+ */
+function orderCards(
+	cards: ReadonlyArray<Doc<"yugiohDeckCards">>,
+	cardOrder: CardOrder,
+): Array<{ section: Section; cards: Array<Doc<"yugiohDeckCards">> }> {
+	const byCost = groupCardsBySection(cards);
+	return cardOrder === "custom"
+		? customOrder(byCost, (card) => card.position)
+		: byCost;
+}
+
+/** Switches a Deck between By cost and Custom order. Custom positions are kept either way. */
+export async function setCardOrder(
+	ctx: MutationCtx,
+	deckId: Id<"yugiohDecks">,
+	cardOrder: CardOrder,
+): Promise<void> {
+	await getDeckOrThrow(ctx, deckId);
+	await ctx.db.patch("yugiohDecks", deckId, { cardOrder });
+}
+
+/**
+ * Moves a Card to `toIndex` within its own Section's Custom order (clamped to
+ * the Section), then saves every position in that Section.
+ */
+export async function moveCard(
+	ctx: MutationCtx,
+	deckCardId: Id<"yugiohDeckCards">,
+	toIndex: number,
+): Promise<void> {
+	const card = await getDeckCardOrThrow(ctx, deckCardId);
+	if (!Number.isInteger(toIndex)) {
+		throw new ConvexError("Position must be a whole number.");
+	}
+	const deckCards = await listDeckCards(ctx, card.deckId);
+	const inSection = deckCards.filter(
+		(deckCard) => deckCard.section === card.section,
+	);
+	const current = orderCards(inSection, "custom")[0]?.cards ?? [];
+	const next = moveToIndex(current, deckCardId, toIndex);
+	for (const [position, sectionCard] of next.entries()) {
+		if (sectionCard.position !== position) {
+			await ctx.db.patch("yugiohDeckCards", sectionCard._id, { position });
+		}
+	}
 }
 
 export type CardUpdate = {
@@ -344,7 +428,14 @@ export async function updateCard(
 		...(update.lowestAcceptableCondition !== undefined && {
 			lowestAcceptableCondition: update.lowestAcceptableCondition,
 		}),
-		...(update.section !== undefined && { section: update.section }),
+		...(update.section !== undefined &&
+			update.section !== card.section && {
+				section: update.section,
+				position: endPosition(
+					await listDeckCards(ctx, card.deckId),
+					update.section,
+				),
+			}),
 	});
 }
 

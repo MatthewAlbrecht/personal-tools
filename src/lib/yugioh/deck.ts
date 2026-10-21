@@ -10,6 +10,14 @@ export const SECTION_LABELS: Record<Section, string> = {
 	side: "Side",
 };
 
+/**
+ * How a Deck orders Cards within each Section: "byCost" puts unfinished Cards
+ * first (by remaining cost once prices exist, by name until then); "custom"
+ * is the order set by dragging.
+ */
+export const CARD_ORDERS = ["byCost", "custom"] as const;
+export type CardOrder = (typeof CARD_ORDERS)[number];
+
 /** Best to worst. A Card accepts its Lowest acceptable condition and anything better. */
 export const CONDITIONS = [
 	"nearMint",
@@ -169,4 +177,40 @@ export function groupCardsBySection<
 			.sort(compare);
 		return { section, cards: [...unfinished, ...finished] };
 	}).filter((group) => group.cards.length > 0);
+}
+
+/**
+ * Custom order within each Section: Cards with a saved position first, by
+ * position; Cards without one (never moved, newly added, or moved in from
+ * another Section) keep their place from `sections` after them.
+ */
+export function customOrder<T>(
+	sections: ReadonlyArray<{ section: Section; cards: readonly T[] }>,
+	positionOf: (card: T) => number | undefined,
+): Array<{ section: Section; cards: T[] }> {
+	return sections.map((group) => ({
+		section: group.section,
+		// Array sort is stable, so unpositioned Cards keep their incoming order.
+		cards: [...group.cards].sort(
+			(a, b) =>
+				(positionOf(a) ?? Number.POSITIVE_INFINITY) -
+					(positionOf(b) ?? Number.POSITIVE_INFINITY) || 0,
+		),
+	}));
+}
+
+/**
+ * Moves the Card with `id` to `toIndex` (clamped to the list's ends) and
+ * returns the new list. An unknown id returns the list unchanged.
+ */
+export function moveToIndex<T extends { _id: string }>(
+	cards: readonly T[],
+	id: string,
+	toIndex: number,
+): T[] {
+	const moving = cards.find((card) => card._id === id);
+	if (!moving) return [...cards];
+	const others = cards.filter((card) => card._id !== id);
+	const index = Math.min(Math.max(toIndex, 0), others.length);
+	return [...others.slice(0, index), moving, ...others.slice(index)];
 }

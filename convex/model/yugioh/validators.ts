@@ -1,5 +1,9 @@
 import { type Infer, v } from "convex/values";
-import type { Condition, Section } from "../../../src/lib/yugioh/deck";
+import type {
+	CardOrder,
+	Condition,
+	Section,
+} from "../../../src/lib/yugioh/deck";
 
 export const yugiohSectionValidator = v.union(
 	v.literal("main"),
@@ -12,6 +16,11 @@ export const yugiohConditionValidator = v.union(
 	v.literal("lightlyPlayed"),
 	v.literal("moderatelyPlayed"),
 	v.literal("heavilyPlayed"),
+);
+
+export const yugiohCardOrderValidator = v.union(
+	v.literal("byCost"),
+	v.literal("custom"),
 );
 
 /**
@@ -31,5 +40,10 @@ const conditionsAgree: Same<
 	Infer<typeof yugiohConditionValidator>,
 	Condition
 > = true;
+const cardOrdersAgree: Same<
+	Infer<typeof yugiohCardOrderValidator>,
+	CardOrder
+> = true;
 void sectionsAgree;
+void cardOrdersAgree;
 void conditionsAgree;

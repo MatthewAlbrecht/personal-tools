@@ -1,4 +1,4 @@
-import { deckProgress } from "~/lib/yugioh/deck";
+import { type CardOrder, deckProgress, moveToIndex } from "~/lib/yugioh/deck";
 import type { DeckCard, DeckView } from "./types";
 
 export type CardPatch = Partial<
@@ -40,4 +40,28 @@ function stripUndefined(patch: CardPatch): CardPatch {
 	return Object.fromEntries(
 		Object.entries(patch).filter(([, value]) => value !== undefined),
 	) as CardPatch;
+}
+
+/** Moves a Card within its own Section of a cached Deck view, as moveCard does. */
+export function applyCardMove(
+	deck: DeckView,
+	deckCardId: DeckCard["_id"],
+	toIndex: number,
+): DeckView {
+	return {
+		...deck,
+		sections: deck.sections.map((group) =>
+			group.cards.some((card) => card._id === deckCardId)
+				? { ...group, cards: moveToIndex(group.cards, deckCardId, toIndex) }
+				: group,
+		),
+	};
+}
+
+/**
+ * Flips the toggle at once. The Cards re-sort when the server answers, since
+ * Custom positions only live on the server.
+ */
+export function applyCardOrder(deck: DeckView, cardOrder: CardOrder): DeckView {
+	return { ...deck, cardOrder };
 }

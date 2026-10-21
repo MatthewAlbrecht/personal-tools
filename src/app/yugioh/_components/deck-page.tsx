@@ -16,14 +16,17 @@ import {
 	EmptyTitle,
 } from "~/components/ui/empty";
 import { Skeleton } from "~/components/ui/skeleton";
+import { cn } from "~/lib/utils";
 import { SECTION_LABELS } from "~/lib/yugioh/deck";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import type { DeckSection } from "../_utils/types";
 import { AddCardDrawer } from "./add-card-drawer";
 import { CardDrawer } from "./card-drawer";
+import { CardOrderToggle } from "./card-order-toggle";
 import { CardRow } from "./card-row";
 import { DeckProgress } from "./deck-progress";
+import { SortableCardList } from "./sortable-card-list";
 
 export function DeckPage({
 	deckId,
@@ -89,16 +92,27 @@ export function DeckPage({
 				</Empty>
 			) : (
 				<>
-					<div className="flex items-center gap-2">
-						<Button onClick={() => setAdding(true)}>
-							<Plus data-icon="inline-start" />
-							Add Card
-						</Button>
+					<div className="flex flex-col gap-2">
+						<div className="flex items-center justify-between gap-2">
+							<Button className="h-11 md:h-9" onClick={() => setAdding(true)}>
+								<Plus data-icon="inline-start" />
+								Add Card
+							</Button>
+							<CardOrderToggle deckId={deckId} value={deck.cardOrder} />
+						</div>
+						{deck.cardOrder === "custom" && (
+							<p className="text-muted-foreground text-sm">
+								Drag a handle to move a Card within its Section, or tap it to
+								move the Card up, down, to the top or to the bottom.
+							</p>
+						)}
 					</div>
 					{deck.sections.map((group) => (
 						<SectionList
 							key={group.section}
+							deckId={deckId}
 							group={group}
+							sortable={deck.cardOrder === "custom"}
 							cardHref={cardHref}
 						/>
 					))}
@@ -112,10 +126,14 @@ export function DeckPage({
 }
 
 function SectionList({
+	deckId,
 	group,
+	sortable,
 	cardHref,
 }: {
+	deckId: Id<"yugiohDecks">;
 	group: DeckSection;
+	sortable: boolean;
 	cardHref: (cardId: string) => string;
 }): React.ReactElement {
 	const count = group.cards.length;
@@ -134,14 +152,23 @@ function SectionList({
 					{count} {count === 1 ? "Card" : "Cards"}
 				</span>
 			</h2>
-			<Card className="gap-0 overflow-hidden py-0">
-				<ul className="divide-y">
-					{group.cards.map((card) => (
-						<li key={card._id}>
-							<CardRow card={card} href={cardHref(card._id)} />
-						</li>
-					))}
-				</ul>
+			<Card className={cn("gap-0 py-0", !sortable && "overflow-hidden")}>
+				{sortable ? (
+					<SortableCardList
+						deckId={deckId}
+						section={group.section}
+						cards={group.cards}
+						cardHref={cardHref}
+					/>
+				) : (
+					<ul className="divide-y">
+						{group.cards.map((card) => (
+							<li key={card._id}>
+								<CardRow card={card} href={cardHref(card._id)} />
+							</li>
+						))}
+					</ul>
+				)}
 			</Card>
 		</section>
 	);

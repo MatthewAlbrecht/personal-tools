@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
+	moveToIndex,
 	normalizeOverloadedRarities,
 	normalizeRarity,
 	normalizeSetCode,
@@ -75,5 +76,40 @@ describe("ranked rarity suggestions", () => {
 		expect(suggestRarities("plat", ["Platinum Secret Rare"])).toEqual([
 			"Platinum Secret Rare",
 		]);
+	});
+});
+
+describe("moveToIndex", () => {
+	const cards = [{ _id: "a" }, { _id: "b" }, { _id: "c" }, { _id: "d" }];
+
+	test("moves a Card down or up to the given index", () => {
+		expect(moveToIndex(cards, "a", 2).map((c) => c._id)).toEqual([
+			"b",
+			"c",
+			"a",
+			"d",
+		]);
+		expect(moveToIndex(cards, "d", 1).map((c) => c._id)).toEqual([
+			"a",
+			"d",
+			"b",
+			"c",
+		]);
+	});
+
+	test("clamps to the ends and leaves the list alone for an unknown Card", () => {
+		expect(moveToIndex(cards, "b", 9).map((c) => c._id)).toEqual([
+			"a",
+			"c",
+			"d",
+			"b",
+		]);
+		expect(moveToIndex(cards, "c", -1).map((c) => c._id)).toEqual([
+			"c",
+			"a",
+			"b",
+			"d",
+		]);
+		expect(moveToIndex(cards, "x", 0)).toEqual(cards);
 	});
 });

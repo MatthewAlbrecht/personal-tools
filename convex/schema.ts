@@ -28,6 +28,7 @@ import {
 import { zineInsideBackSectionsValidator } from "./_utils/zineInsideBackSections";
 import { zinePageRecommendationsValidator } from "./_utils/zinePageRecommendations";
 import {
+	yugiohCardOrderValidator,
 	yugiohConditionValidator,
 	yugiohSectionValidator,
 	yugiohTcgplayerStatusValidator,
@@ -1801,6 +1802,8 @@ export default defineSchema({
 	// Yu-Gi-Oh max-rarity tracker (/yugioh). Terms: src/app/yugioh/GLOSSARY.md.
 	yugiohDecks: defineTable({
 		name: v.string(),
+		// Missing reads as "byCost" (Decks saved before ticket 04).
+		cardOrder: v.optional(yugiohCardOrderValidator),
 	}),
 
 	// Shared across Decks: one row per set code + rarity.
@@ -1825,6 +1828,10 @@ export default defineSchema({
 		copiesOwned: v.number(),
 		lowestAcceptableCondition: yugiohConditionValidator,
 		chosenPrintingId: v.union(v.id("yugiohPrintings"), v.null()),
+		// Place within its Section in Custom order (ticket 04). Missing until
+		// the Section is first reordered; a Card added to, or moved into, a
+		// reordered Section gets the next position (it goes last).
+		position: v.optional(v.number()),
 	}).index("by_deckId", ["deckId"]),
 
 	yugiohCandidatePrintings: defineTable({

@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { CONDITIONS, MAX_COPIES_NEEDED, SECTIONS } from "~/lib/yugioh/deck";
+import {
+	CARD_ORDERS,
+	CONDITIONS,
+	MAX_COPIES_NEEDED,
+	SECTIONS,
+} from "~/lib/yugioh/deck";
 import {
 	REJECTED_PRODUCT_URL,
 	checkTcgplayerProductUrl,
@@ -33,6 +38,10 @@ export const addCardSchema = printingSchema.extend({
 
 export const copiesSchema = z.object({
 	count: z.number().int().min(0),
+});
+
+export const cardOrderSchema = z.object({
+	cardOrder: z.enum(CARD_ORDERS),
 });
 
 export const conditionSchema = z.object({
