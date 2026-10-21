@@ -38,6 +38,20 @@ describe("middleware", () => {
 		expect(await res.json()).toEqual({ error: "Unauthorized" });
 	});
 
+	it("serves the service worker, manifest and app icons without a session", async () => {
+		for (const path of [
+			"/sw.js",
+			"/manifest.webmanifest",
+			"/icon-192.png",
+			"/icon-512.png",
+			"/icon-maskable-512.png",
+			"/apple-icon.png",
+		]) {
+			const res = await middleware(req(path));
+			expect(res.headers.get("x-middleware-next")).toBe("1");
+		}
+	});
+
 	it("lets a validly signed cookie through", async () => {
 		const token = await signSessionCookie("matt", SECRET);
 		const res = await middleware(req("/albums", token));

@@ -78,7 +78,7 @@ A `/yugioh` section of personal-tools that tracks my Decks and watches the marke
 
 41. As a collector, I want each Listing's Per-copy price (price + shipping + import fees, ÷ Copies in the lot), so that lots and singles compare fairly.
 42. As a collector, I want foreign-currency Listings converted with a daily exchange rate, so that every price is in dollars.
-43. As a collector, I want import fees estimated from a per-country rate table, with 10% for countries not in it, so that non-US Listings are comparable.
+43. As a collector, I want import fees estimated from a per-country rate table, with 15% for countries not in it, so that non-US Listings are comparable.
 44. As a collector, I want to edit a country's import fee rate, so that I can correct it after a real purchase.
 45. As a collector, I want an eBay Reference price per Printing (median Per-copy price of Qualifying sold Listings over the last 60 days), so that eBay deals are judged against real eBay sales.
 46. As a collector, I want a TCGplayer Reference price per Printing (median of Qualifying TCGplayer latest sales over the last 60 days, at or above the Card's Lowest acceptable condition), so that TCGplayer deals are judged against real TCGplayer sales.

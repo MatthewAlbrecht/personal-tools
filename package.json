@@ -68,6 +68,7 @@
 		"superjson": "^2.2.1",
 		"tailwind-merge": "^3.3.1",
 		"vaul": "^1.1.2",
+		"web-push": "^3.6.7",
 		"zod": "^3.24.2"
 	},
 	"devDependencies": {
@@ -81,6 +82,7 @@
 		"@types/node": "^26.6.3",
 		"@types/react": "^19.0.0",
 		"@types/react-dom": "^19.0.0",
+		"@types/web-push": "^3.6.4",
 		"convex-test": "^0.0.60",
 		"postcss": "^8.5.3",
 		"tailwindcss": "^4.0.15",

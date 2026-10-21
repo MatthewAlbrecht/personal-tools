@@ -29,6 +29,13 @@ describe("isPublicPath", () => {
 		"/launch-dnd.mjs",
 		"/launch-model.mjs",
 		"/api/launch-config",
+		// Installable app: fetched by the browser without a session
+		"/sw.js",
+		"/manifest.webmanifest",
+		"/icon-192.png",
+		"/icon-512.png",
+		"/icon-maskable-512.png",
+		"/apple-icon.png",
 	];
 
 	const denied = [
@@ -51,6 +58,9 @@ describe("isPublicPath", () => {
 		"/loginx",
 		"/_nextfoo",
 		"/api/rate-your-music/other",
+		"/sw.js.map",
+		"/manifest.json",
+		"/icon-1024.png",
 	];
 
 	it.each(allowed)("allows %s", (path) => {

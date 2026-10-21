@@ -50,7 +50,7 @@ Spec: docs/superpowers/specs/2026-10-19-yugioh-max-rarity-tracker-design.md
 **Decisions (assumptions)**
 - An unknown seller location pays the 10% default. Missing shipping counts as $0 and shows as "Not stated".
 - US territories (Guam, Puerto Rico) aren't special-cased; they pay 10% unless added. Add them in Settings at 0% if wanted.
-- **Question for you:** the spec's 10% fallback is lower than every researched rate (13-16%), so an unlisted country looks cheaper than a listed one. Consider raising `DEFAULT_IMPORT_FEE_PERCENT`.
+- **Question for you:** the spec's 10% fallback is lower than every researched rate (13-16%), so an unlisted country looks cheaper than a listed one. Consider raising `DEFAULT_IMPORT_FEE_PERCENT`. **Resolved in ticket 13:** approved and raised to 15%.
 - Per-copy price includes the 3-point fee allowance. Express couriers' flat brokerage fees ($15-30) aren't modelled.
 
 **UI**

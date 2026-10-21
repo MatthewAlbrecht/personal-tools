@@ -2,7 +2,7 @@
 // Relative imports only (Convex imports this).
 
 /** Import fee rate for a seller country that isn't in my table. */
-export const DEFAULT_IMPORT_FEE_PERCENT = 10;
+export const DEFAULT_IMPORT_FEE_PERCENT = 15;
 
 /** Longer than any country name. */
 export const MAX_COUNTRY_LENGTH = 80;

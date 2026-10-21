@@ -105,6 +105,7 @@ import type * as model_yugioh_exchangeRateSource from "../model/yugioh/exchangeR
 import type * as model_yugioh_listings from "../model/yugioh/listings.js";
 import type * as model_yugioh_matching from "../model/yugioh/matching.js";
 import type * as model_yugioh_pricing from "../model/yugioh/pricing.js";
+import type * as model_yugioh_pushes from "../model/yugioh/pushes.js";
 import type * as model_yugioh_searches from "../model/yugioh/searches.js";
 import type * as model_yugioh_seed from "../model/yugioh/seed.js";
 import type * as model_yugioh_tcgplayer from "../model/yugioh/tcgplayer.js";
@@ -114,6 +115,7 @@ import type * as model_yugioh_tcgplayerSearch from "../model/yugioh/tcgplayerSea
 import type * as model_yugioh_titleReader from "../model/yugioh/titleReader.js";
 import type * as model_yugioh_typesafe from "../model/yugioh/typesafe.js";
 import type * as model_yugioh_validators from "../model/yugioh/validators.js";
+import type * as model_yugioh_webPushSender from "../model/yugioh/webPushSender.js";
 import type * as model_yugioh_whatsNew from "../model/yugioh/whatsNew.js";
 import type * as musicFunnel from "../musicFunnel.js";
 import type * as playlistLyrics from "../playlistLyrics.js";
@@ -132,6 +134,8 @@ import type * as yugioh_deals from "../yugioh/deals.js";
 import type * as yugioh_decks from "../yugioh/decks.js";
 import type * as yugioh_listings from "../yugioh/listings.js";
 import type * as yugioh_pricing from "../yugioh/pricing.js";
+import type * as yugioh_pushDelivery from "../yugioh/pushDelivery.js";
+import type * as yugioh_pushes from "../yugioh/pushes.js";
 import type * as yugioh_searches from "../yugioh/searches.js";
 import type * as yugioh_seed from "../yugioh/seed.js";
 import type * as yugioh_tcgplayer from "../yugioh/tcgplayer.js";
@@ -241,6 +245,7 @@ declare const fullApi: ApiFromModules<{
   "model/yugioh/listings": typeof model_yugioh_listings;
   "model/yugioh/matching": typeof model_yugioh_matching;
   "model/yugioh/pricing": typeof model_yugioh_pricing;
+  "model/yugioh/pushes": typeof model_yugioh_pushes;
   "model/yugioh/searches": typeof model_yugioh_searches;
   "model/yugioh/seed": typeof model_yugioh_seed;
   "model/yugioh/tcgplayer": typeof model_yugioh_tcgplayer;
@@ -250,6 +255,7 @@ declare const fullApi: ApiFromModules<{
   "model/yugioh/titleReader": typeof model_yugioh_titleReader;
   "model/yugioh/typesafe": typeof model_yugioh_typesafe;
   "model/yugioh/validators": typeof model_yugioh_validators;
+  "model/yugioh/webPushSender": typeof model_yugioh_webPushSender;
   "model/yugioh/whatsNew": typeof model_yugioh_whatsNew;
   musicFunnel: typeof musicFunnel;
   playlistLyrics: typeof playlistLyrics;
@@ -268,6 +274,8 @@ declare const fullApi: ApiFromModules<{
   "yugioh/decks": typeof yugioh_decks;
   "yugioh/listings": typeof yugioh_listings;
   "yugioh/pricing": typeof yugioh_pricing;
+  "yugioh/pushDelivery": typeof yugioh_pushDelivery;
+  "yugioh/pushes": typeof yugioh_pushes;
   "yugioh/searches": typeof yugioh_searches;
   "yugioh/seed": typeof yugioh_seed;
   "yugioh/tcgplayer": typeof yugioh_tcgplayer;

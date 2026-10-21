@@ -472,3 +472,43 @@ void runTriggersAgree;
 void runStatusesAgree;
 void visitKindsAgree;
 void plannedVisitsAgree;
+
+// Pushes (ticket 13). Ticket 14 adds an auction kind.
+export const yugiohPushKindValidator = v.union(
+	v.literal("deal"),
+	v.literal("test"),
+);
+
+/**
+ * `pending` until its delivery time (held through quiet hours), `sending`
+ * while the push service is called, then `sent` (reached a device),
+ * `failed` (reached none) or `skipped` (no longer worth sending).
+ */
+export const yugiohPushStatusValidator = v.union(
+	v.literal("pending"),
+	v.literal("sending"),
+	v.literal("sent"),
+	v.literal("failed"),
+	v.literal("skipped"),
+);
+
+/** A device's push subscription, as `PushSubscription.toJSON()` gives it. */
+export const yugiohPushSubscriptionValidator = v.object({
+	endpoint: v.string(),
+	keys: v.object({ p256dh: v.string(), auth: v.string() }),
+});
+
+/** What the push service said about one device. */
+export const yugiohPushOutcomeValidator = v.union(
+	v.object({ status: v.literal("sent") }),
+	v.object({ status: v.literal("gone") }),
+	v.object({ status: v.literal("failed"), reason: v.string() }),
+);
+
+/** How the push service should treat one push. */
+export const yugiohPushOptionsValidator = v.object({
+	ttlSeconds: v.number(),
+	urgency: v.union(v.literal("normal"), v.literal("high")),
+	// Replaces a still-undelivered push with the same topic.
+	topic: v.union(v.string(), v.null()),
+});

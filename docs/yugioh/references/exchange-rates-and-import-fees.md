@@ -94,7 +94,7 @@ Other shapes, for reference (verified):
 
 ### Default rates
 
-Each rate is the tariff on a card at MFN 0% (Section 301 forced-labor tariff, plus Brazil's extra 25%) plus a 3-point fee allowance, rounded. Use **10% as the fallback for unlisted countries**. That covers 10% countries reasonably, under-counts 12.5% countries a little, and over-counts countries outside the 60, which pay 0% duty plus fees.
+Each rate is the tariff on a card at MFN 0% (Section 301 forced-labor tariff, plus Brazil's extra 25%) plus a 3-point fee allowance, rounded. Use **10% as the fallback for unlisted countries**. That covers 10% countries reasonably, under-counts 12.5% countries a little, and over-counts countries outside the 60, which pay 0% duty plus fees. **Update (ticket 13):** the app uses **15%**, approved by Matt, so an unlisted country never looks cheaper than a listed one.
 
 eBay's "Located in" names come from the `_salic` "Located in" dropdown on `https://www.ebay.com/sch/ebayadvsearch`, fetched 2026-10-20. Verified: United States, United Kingdom, Canada, Australia, Greece and Japan were also seen as literal `Located in <X>` text on saved result pages. **Korea:** the dropdown says "South Korea", but a country JSON list on the same page says "Korea, South". Match both.
 

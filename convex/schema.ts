@@ -34,6 +34,8 @@ import {
 	yugiohConditionValidator,
 	yugiohMarketplaceValidator,
 	yugiohMatchStatusValidator,
+	yugiohPushKindValidator,
+	yugiohPushStatusValidator,
 	yugiohSectionValidator,
 	yugiohTcgplayerDetailsValidator,
 	yugiohTcgplayerStatusValidator,
@@ -1936,7 +1938,7 @@ export default defineSchema({
 	}).index("by_currency", ["currency"]),
 
 	// My import fee table: one rate per seller country, as eBay names it
-	// ("United Kingdom"). Countries not in it pay the default (10%).
+	// ("United Kingdom"). Countries not in it pay the default (15%).
 	yugiohImportFeeRates: defineTable({
 		country: v.string(),
 		// `countryKey(country)`: lower case, single spaces.
@@ -1964,4 +1966,40 @@ export default defineSchema({
 		newListings: v.number(),
 		error: v.union(v.string(), v.null()),
 	}).index("by_runId", ["runId"]),
+
+	// Devices with push turned on (ticket 13): one row per push subscription
+	// endpoint. Deleted when I turn push off on that device or the push
+	// service says it's gone (404/410). `timeZone` is the device's IANA zone,
+	// for quiet hours.
+	yugiohPushSubscriptions: defineTable({
+		endpoint: v.string(),
+		p256dh: v.string(),
+		auth: v.string(),
+		timeZone: v.string(),
+		createdAt: v.number(),
+		lastSeenAt: v.number(),
+	})
+		.index("by_endpoint", ["endpoint"])
+		.index("by_lastSeenAt", ["lastSeenAt"]),
+
+	// Every push decided on, sent to every device at `deliverAt` (later than
+	// `createdAt` when held through quiet hours). The text is fixed when it's
+	// decided and delivered unchanged. Kept indefinitely: one deal push per
+	// Listing ever.
+	yugiohPushes: defineTable({
+		kind: yugiohPushKindValidator,
+		listingId: v.union(v.id("yugiohListings"), v.null()),
+		title: v.string(),
+		body: v.string(),
+		// An app path ("/yugioh/decks/…/listings?listing=…").
+		url: v.string(),
+		tag: v.string(),
+		createdAt: v.number(),
+		deliverAt: v.number(),
+		status: yugiohPushStatusValidator,
+		sentAt: v.union(v.number(), v.null()),
+		devicesReached: v.number(),
+		// Why it was skipped or failed.
+		note: v.union(v.string(), v.null()),
+	}).index("by_listingId_and_kind", ["listingId", "kind"]),
 });

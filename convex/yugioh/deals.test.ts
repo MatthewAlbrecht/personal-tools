@@ -224,7 +224,7 @@ describe("eBay Reference price", () => {
 			sold(50, { sellerLocation: "Chile" }),
 		);
 
-		// $50, $50 and $55 (10% default import fee) a copy.
+		// $50, $50 and $57.50 (15% default import fee) a copy.
 		expect(await ashReference(t, deckId)).toEqual({ price: 50, sales: 3 });
 	});
 

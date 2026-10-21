@@ -45,10 +45,14 @@ import { api } from "../../../../convex/_generated/api";
 import { errorMessage } from "../_utils/errors";
 import { importFeeRateSchema, newImportFeeRateSchema } from "../_utils/schemas";
 import { AutomatedRuns } from "./automated-runs";
+import { PushSettings } from "./push-settings";
 
 const SAVE_FAILED = "Couldn't save. Try again.";
 
-/** /yugioh/settings: the import fee table, exchange-rate freshness and automated runs. */
+/**
+ * /yugioh/settings: alerts on this device, the import fee table,
+ * exchange-rate freshness and automated runs.
+ */
 export function SettingsPage(): React.ReactElement {
 	const settings = useQuery(api.yugioh.pricing.getPricingSettings, {});
 
@@ -66,6 +70,8 @@ export function SettingsPage(): React.ReactElement {
 					Settings
 				</h1>
 			</header>
+
+			<PushSettings />
 
 			{settings === undefined ? (
 				<SettingsPageSkeleton />
@@ -235,7 +241,7 @@ function RateField({
 	);
 }
 
-/** Adds a country the table doesn't have yet, so its rate can differ from 10%. */
+/** Adds a country the table doesn't have yet, so its rate can differ from the default. */
 function AddCountryForm(): React.ReactElement {
 	const setImportFeeRate = useMutation(api.yugioh.pricing.setImportFeeRate);
 	const form = useForm({

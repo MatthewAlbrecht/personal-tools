@@ -15,6 +15,7 @@ import {
 	observationChanged,
 	observe,
 } from "./listings";
+import { queueDealCheck } from "./pushes";
 import type {
 	yugiohCapturedTcgplayerProductValidator,
 	yugiohTcgplayerDetailsValidator,
@@ -83,6 +84,16 @@ export async function ingestTcgplayerProduct(
 		setCode: printing.setCode,
 		rarity: printing.rarity,
 	};
+
+	// The first capture of a product page finds Listings that were already
+	// there: they aren't new deals, so only later captures ask for pushes.
+	const capturedBefore =
+		(await ctx.db
+			.query("yugiohListings")
+			.withIndex("by_matchedPrintingId_and_marketplace_and_saleAt", (q) =>
+				q.eq("matchedPrintingId", printing._id).eq("marketplace", "tcgplayer"),
+			)
+			.first()) !== null;
 
 	const url = printing.tcgplayerProductUrl ?? product.url;
 	const rows = new Map<string, Row>();
@@ -159,6 +170,9 @@ export async function ingestTcgplayerProduct(
 				capturedUsdPerUnit: 1,
 			});
 			await observe(ctx, listingId, fields, now);
+			if (capturedBefore && !fields.sold) {
+				await queueDealCheck(ctx, listingId);
+			}
 			report.created++;
 			continue;
 		}

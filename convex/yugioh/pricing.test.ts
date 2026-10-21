@@ -185,29 +185,29 @@ describe("Per-copy price", () => {
 		});
 	});
 
-	test("a country not in the table pays 10%", async () => {
+	test("a country not in the table pays 15%", async () => {
 		const t = setup();
 		const deckId = await ashDeck(t);
 		await capture(t, { price: 50, shipping: 10, sellerLocation: "Chile" });
 
 		expect(await perCopyPrice(t, deckId)).toMatchObject({
-			importFees: 6,
-			importFeePercent: 10,
+			importFees: 9,
+			importFeePercent: 15,
 			importFeeDefaulted: true,
-			perCopy: 66,
+			perCopy: 69,
 		});
 	});
 
-	test("a Listing whose seller location is unknown pays the default 10%", async () => {
+	test("a Listing whose seller location is unknown pays the default 15%", async () => {
 		const t = setup();
 		const deckId = await ashDeck(t);
 		await capture(t, { price: 50, shipping: 10, sellerLocation: null });
 
 		expect(await perCopyPrice(t, deckId)).toMatchObject({
-			importFees: 6,
-			importFeePercent: 10,
+			importFees: 9,
+			importFeePercent: 15,
 			importFeeDefaulted: true,
-			perCopy: 66,
+			perCopy: 69,
 		});
 	});
 
@@ -344,14 +344,14 @@ describe("Import fee table", () => {
 		expect(
 			after.importFeeRates.find((r) => r.country === "United Kingdom"),
 		).toEqual({ country: "United Kingdom", percent: 7.5 });
-		expect(after.defaultImportFeePercent).toBe(10);
+		expect(after.defaultImportFeePercent).toBe(15);
 	});
 
 	test("editing a country's rate changes its Listings' Per-copy price", async () => {
 		const t = setup();
 		const deckId = await ashDeck(t);
 		await capture(t, { price: 50, shipping: 0, sellerLocation: "Japan" });
-		expect(await perCopyPrice(t, deckId)).toMatchObject({ perCopy: 55 });
+		expect(await perCopyPrice(t, deckId)).toMatchObject({ perCopy: 57.5 });
 
 		await t.mutation(api.yugioh.pricing.setImportFeeRate, {
 			country: "japan ",

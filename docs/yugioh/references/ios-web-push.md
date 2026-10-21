@@ -126,3 +126,56 @@ Check on the iPhone, from the home-screen icon:
 3. A push with the app closed, backgrounded and foregrounded shows a banner each time.
 4. Tapping it with the app killed or backgrounded lands on the right screen.
 5. Removing the app from the home screen makes the next send return 410. **Device-only:** no Apple source says removal revokes the subscription.
+
+## Gaps filled (2026-10-20)
+
+**Confirmed** = read in the package source, installed `node_modules`, or official docs. **Reported** = secondhand or inferred, not verified on a deploy.
+
+### `web-push` (npm)
+
+Source: the `web-push@3.6.7` tarball from https://registry.npmjs.org/web-push/-/web-push-3.6.7.tgz (`src/web-push-lib.js`, `src/web-push-error.js`, `src/vapid-helper.js`, `src/web-push-constants.js`); repo https://github.com/web-push-libs/web-push
+
+- **Version and types (Confirmed):** the latest version is `3.6.7` and requires Node `>= 16`. The package has no `types` field, so it needs `@types/web-push` as a dev dependency (latest `3.6.4`, https://registry.npmjs.org/@types/web-push/latest). Runtime dependencies: `jws`, `asn1.js`, `http_ece@1.2.0`, `minimist`, `https-proxy-agent`.
+- **`sendNotification(subscription, payload, options)` (Confirmed):** these are the only allowed option keys. Any other key throws.
+  - `headers`: extra headers. A key that duplicates a top-level option throws.
+  - `gcmAPIKey`: legacy GCM only. Ignore it.
+  - `vapidDetails`: `{ subject, publicKey, privateKey }`. This overrides the global `setVapidDetails(subject, publicKey, privateKey)`.
+  - `TTL`: capital letters, a number of seconds, at least 0. The default is **2419200 (4 weeks)** when you leave it out.
+  - `contentEncoding`: `'aes128gcm'` (default) or `'aesgcm'`.
+  - `urgency`: `'very-low' | 'low' | 'normal' | 'high'`, default `'normal'`. Any other value throws.
+  - `topic`: must match `/^[A-Za-z0-9\-_]+$/` and be **32 characters or fewer**, otherwise it throws. A Convex `_id` has to pass both checks before you use it as a Topic. Hashing or truncating it is an option.
+  - `proxy`, `agent` (`https.Agent`), `timeout` (ms).
+  - The options map to the HTTP headers `TTL`, `Urgency` and `Topic`.
+- **Result (Confirmed):** a 2xx response resolves to `{ statusCode, body, headers }`.
+- **`WebPushError` (Confirmed):** a non-2xx response rejects with `new WebPushError('Received unexpected response code', statusCode, headers, body, endpoint)`.
+  - Instance fields: `name` (`'WebPushError'`), `message`, `statusCode` (number), `headers` (Node `IncomingHttpHeaders`), `body` (the response text as a string; APNs puts its JSON `{"reason": ...}` here), `endpoint`.
+  - It is exported as `webpush.WebPushError`, so `err instanceof WebPushError` works.
+  - Network and socket errors, including `'Socket timeout'`, reject with a plain `Error` that has no `statusCode`.
+- **`generateVAPIDKeys()` (Confirmed):** returns `{ publicKey, privateKey }`. Both are **URL-safe base64 with no `=` padding** (`Buffer#toString('base64url')`). The public key is 65 bytes (uncompressed P-256) and the private key is 32 bytes. `setVapidDetails` checks both lengths and the URL-safe format.
+- **VAPID subject (Confirmed):** must be an `https:` or `mailto:` URL, otherwise it throws. A `localhost` hostname only logs a warning in the library, but Apple rejects it with `BadJwtToken`.
+- **404/410 (Reported):** web.dev says 404 or 410 means the subscription has expired. Delete it and rethrow anything else. https://web.dev/articles/sending-messages-with-web-push-libraries
+
+### `web-push` in a Convex `"use node"` action
+
+- **Repo state (Confirmed):** there is no `convex.json` at the repo root, and `convex` is `1.46.0` in `node_modules`.
+- **Bundling (Confirmed):** Convex bundles every dependency with esbuild by default. `node.externalPackages` in `convex.json` is only needed for dynamic imports, packages that read local files (`sharp`, `tiktoken`, ...), or size limits. https://docs.convex.dev/functions/bundling
+- **What `web-push` loads (Confirmed in source):** only static `require()` calls: Node built-ins `crypto`, `https`, `url`, `util`, plus `asn1.js`, `jws`, `http_ece` and `https-proxy-agent`. The last is required lazily inside the proxy branch, but with a literal string, so esbuild still bundles it. It reads no local files and needs no WASM or native binaries.
+- **Conclusion (Reported):** a plain bundle should work and `externalPackages` shouldn't be needed. If bundling fails, the fallback is `{"node": {"externalPackages": ["web-push"]}}`.
+- **Runtime (Confirmed):** it has to run in a `"use node"` action, because the default runtime lacks `https` and `crypto.createECDH`. The Node.js runtime defaults to Node 20 and supports 20, 22 and 24 (configurable in `convex.json`), which satisfies `>= 16`. https://docs.convex.dev/functions/runtimes#nodejs-runtime
+- **Known issues:** no Convex-specific issues with `web-push` were found (search returned nothing relevant). Convex's official push component, `get-convex/expo-push-notifications`, targets Expo and not Web Push. https://github.com/get-convex/expo-push-notifications
+
+### Next.js manifest, `themeColor`, `appleWebApp`
+
+Installed Next is `15.2.8`. Facts below were checked in `node_modules/next/dist` and against https://nextjs.org/docs/15/app/api-reference/file-conventions/metadata/manifest, https://nextjs.org/docs/15/app/api-reference/functions/generate-viewport and https://nextjs.org/docs/15/app/api-reference/functions/generate-metadata.
+
+- **Manifest path (Confirmed):** `app/manifest.ts` (default export returning `MetadataRoute.Manifest`) is served at **`/manifest.webmanifest`**. `get-metadata-route.js` normalizes `/manifest` to `/manifest.webmanifest`. A static `app/manifest.json` or `app/manifest.webmanifest` keeps its own extension.
+- **Manifest link (Confirmed):** Next adds `<link rel="manifest" href="/manifest.webmanifest">` automatically. `build/webpack/loaders/metadata/discover.js` picks up the file and `generate/basic.js` renders the link. It adds `crossOrigin="use-credentials"` only when the manifest is on a different origin.
+- **Middleware gap (Confirmed, this repo):** `src/middleware.ts` runs on every path except `_next/static|_next/image`, and `src/lib/route-access.ts` does not list `/manifest.webmanifest` (or `/sw.js`) as public. The manifest would redirect to `/login` until it's added to `PUBLIC_EXACT`. Add the start-URL icons too.
+- **`themeColor` (Confirmed):** belongs in `export const viewport: Viewport` or `generateViewport`, not in `metadata` (deprecated there since 14). It accepts `string | { color, media? } | Array<{ color, media? }>`, so media queries like `[{ media: '(prefers-color-scheme: light)', color: '...' }, { media: '(prefers-color-scheme: dark)', color: '...' }]` are supported. Each entry renders as `<meta name="theme-color" media=... content=...>`.
+- **`appleWebApp` (Confirmed):** `metadata.appleWebApp` takes these fields:
+  - `capable?: boolean`. **In 15.2.8 it renders `<meta name="mobile-web-app-capable" content="yes">`, not `apple-mobile-web-app-capable`.**
+  - `title?: string` → `apple-mobile-web-app-title`
+  - `statusBarStyle?: 'default' | 'black' | 'black-translucent'` → `apple-mobile-web-app-status-bar-style`
+  - `startupImage?: string | { url, media? } | Array<...>` → `<link rel="apple-touch-startup-image">`
+- **Standalone mode (Reported):** standalone mode on iOS should come from the manifest's `display: 'standalone'` rather than the legacy Apple meta tag.
+- **Apple touch icon (Confirmed):** set it with `metadata.icons.apple` or an `app/apple-icon.png` file.

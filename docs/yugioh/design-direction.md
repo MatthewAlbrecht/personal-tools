@@ -85,7 +85,7 @@ What every `/yugioh` screen looks like and how it behaves. Builders follow this;
   - A deal push opens `/yugioh/decks/[deckId]/listings?listing=<id>`.
   - An auction push opens the eBay item URL directly, since time matters more than context.
   - When a Card is in several Decks, use the most recently viewed Deck.
-- **Manifest (13):** `start_url: "/yugioh"`, `scope: "/"`, `display: "standalone"`. Also `theme_color` and `<meta name="theme-color">` for both colour schemes, matching `--background`. See `references/ios-web-push.md` §6 for the middleware allowlist.
+- **Manifest (13):** `start_url: "/yugioh"`, `scope: "/"`, `display: "standalone"`. Also `theme_color` and `<meta name="theme-color">` for both colour schemes, matching `--background`. **Built in 13:** light only (`#ffffff`), because the root `ThemeProvider` defaults to light; add the dark entry (`#0a0a0a`) when it switches to "system". See `references/ios-web-push.md` §6 for the middleware allowlist.
 
 ## 4. Components
 
@@ -245,10 +245,11 @@ Per copy        $47.71
 
 - **Notifications** `Card`:
   - Inside the installed app with push available: a `Switch` "Deal and auction alerts on this device", with the description "Great and Good deals, 8am-11pm. Auctions 15 minutes before they end, any time."
+    - **Built in 13 (deals only):** "Deal alerts on this device", "Great and Good deals, 8am-11pm. Deals found overnight arrive at 8am." Ticket 14 restores the auction wording above once auction pushes exist. A "Send a test alert" button sits under the switch while it's on.
   - In a Safari tab on iPhone: numbered add-to-home-screen steps instead.
   - On desktop browsers that support push: the same `Switch`.
   - See `references/ios-web-push.md`.
-- **Import fees** `Card` (08): a `Table` of Country · Rate. Each rate is an inline TanStack form (`InputGroup` with a `%` suffix) that saves on blur or Enter, with "Other countries: 10%" as a footer row.
+- **Import fees** `Card` (08): a `Table` of Country · Rate. Each rate is an inline TanStack form (`InputGroup` with a `%` suffix) that saves on blur or Enter, with "Other countries: 15%" as a footer row.
 - **Exchange rates:** one muted line, "Updated today at 6:00 from <source>". No controls.
 
 ## 6. Treatments

@@ -114,6 +114,53 @@ export async function loadDealContext(
 	};
 }
 
+/** How a Listing grades for a Card wanting its Printing at one condition. */
+export type CardDeal = {
+	qualifying: boolean;
+	perCopy: number | null;
+	/** The Reference price on the Listing's own marketplace. */
+	reference: number | null;
+	grade: DealGrade | null;
+	percentOfReference: number | null;
+};
+
+/**
+ * Grades Listings for single Cards at `now`, each at the Card's own Lowest
+ * acceptable condition (`loadDealContext` grades for a whole Deck at its most
+ * lenient one). Reference prices are read once per Printing and condition.
+ */
+export async function loadCardDealGrader(
+	ctx: QueryCtx,
+	now: number,
+): Promise<
+	(listing: Doc<"yugiohListings">, condition: Condition) => Promise<CardDeal>
+> {
+	const pricing = await loadPricing(ctx);
+	const references = referenceReader(ctx, pricing, now);
+	return async (listing, condition) => {
+		const printingId = matchedPrintingId(listing);
+		const perCopy = listingPerCopyPrice(listing, pricing, now);
+		const reference =
+			printingId === null
+				? null
+				: (await references(listing.marketplace, printingId, condition)).price;
+		const percent =
+			reference === null ||
+			perCopy === null ||
+			!getsDealGrade(listing, condition) ||
+			isRunningAuction(listing, now)
+				? null
+				: percentOfReference(perCopy.perCopy, reference);
+		return {
+			qualifying: printingId !== null && isQualifying(listing, condition),
+			perCopy: perCopy?.perCopy ?? null,
+			reference,
+			grade: percent === null ? null : dealGrade(percent),
+			percentOfReference: percent,
+		};
+	};
+}
+
 /**
  * One Candidate Printing's prices for a Card in a Deck: its eBay and
  * TCGplayer Reference prices, side by side, and the TCGplayer buy-now floor.
@@ -322,7 +369,7 @@ function memoised<R>(read: PriceRead<R>): PriceRead<R> {
  * The Printing a Listing is matched to, or null: unsure, not a match, or
  * being re-read (an override still counts while a new title is read).
  */
-function matchedPrintingId(
+export function matchedPrintingId(
 	listing: Doc<"yugiohListings">,
 ): Id<"yugiohPrintings"> | null {
 	if (listing.matchStatus !== "match") return null;

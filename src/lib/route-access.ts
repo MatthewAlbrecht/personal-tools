@@ -11,6 +11,14 @@ const PUBLIC_EXACT = new Set([
 	"/favicon.ico",
 	"/favicon.svg",
 	"/sonemic-512.png",
+	// Installable app (/yugioh): the browser fetches these without a session,
+	// and a redirect to /login breaks service worker registration.
+	"/sw.js",
+	"/manifest.webmanifest",
+	"/icon-192.png",
+	"/icon-512.png",
+	"/icon-maskable-512.png",
+	"/apple-icon.png",
 	// Vercel cron: each handler checks `Authorization: Bearer CRON_SECRET` (src/pages/api/cron)
 	"/api/cron/rooleases-check",
 	"/api/cron/send-birthday-reminders",

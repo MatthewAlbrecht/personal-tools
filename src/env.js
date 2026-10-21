@@ -57,6 +57,15 @@ export const env = createEnv({
 	client: {
 		NEXT_PUBLIC_CONVEX_URL: z.string().url(),
 		NEXT_PUBLIC_CONVEX_PROD_URL: z.string().url().optional(),
+		/**
+		 * Web Push VAPID public key (URL-safe base64). Must be the pair of the
+		 * VAPID_PRIVATE_KEY in the Convex deployment's env; without it the app
+		 * can't turn on alerts.
+		 */
+		NEXT_PUBLIC_VAPID_PUBLIC_KEY: z
+			.string()
+			.regex(/^[A-Za-z0-9_-]{80,100}$/)
+			.optional(),
 	},
 
 	/**
@@ -74,6 +83,7 @@ export const env = createEnv({
 		NOTIFICATION_EMAIL: process.env.NOTIFICATION_EMAIL,
 		NEXT_PUBLIC_CONVEX_URL: process.env.NEXT_PUBLIC_CONVEX_URL,
 		NEXT_PUBLIC_CONVEX_PROD_URL: process.env.NEXT_PUBLIC_CONVEX_PROD_URL,
+		NEXT_PUBLIC_VAPID_PUBLIC_KEY: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
 		AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID,
 		AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY,
 		AWS_REGION: process.env.AWS_REGION,

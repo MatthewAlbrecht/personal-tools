@@ -137,3 +137,6 @@ export const listingFiltersSchema = z.object({
 
 /** The Listings quick views: All · New · Ending soon · Sold. */
 export const quickViewSchema = z.object({ view: z.enum(QUICK_VIEWS) });
+
+/** The alerts switch on Settings: on or off for this device. */
+export const pushAlertsSchema = z.object({ enabled: z.boolean() });

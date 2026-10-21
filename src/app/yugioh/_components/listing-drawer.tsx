@@ -241,8 +241,8 @@ function PriceBreakdown({
 }
 
 /**
- * "United Kingdom 13%", "Chile, default 10%", "none from United States" or
- * "location unknown, default 10%".
+ * "United Kingdom 13%", "Chile, default 15%", "none from United States" or
+ * "location unknown, default 15%".
  */
 function importFeeNote(
 	location: string | null,

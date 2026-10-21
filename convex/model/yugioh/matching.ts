@@ -17,6 +17,7 @@ import {
 import { internal } from "../../_generated/api";
 import type { Doc, Id } from "../../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../../_generated/server";
+import { queueDealCheck } from "./pushes";
 
 /** Most Printings one set code holds (one per rarity). */
 const MAX_PRINTINGS_PER_SET_CODE = 20;
@@ -110,17 +111,18 @@ export async function saveTitleRead(
 	if (!listing || listing.title !== title) return;
 	const read = judgments === null ? null : readTitle(title, judgments);
 	const setCode = read === null ? titleSetCode(title) : read.setCode;
+	const match = listing.matchOverridden
+		? null
+		: await automaticMatch(ctx, { setCode, rarity: read?.rarity ?? null });
 	await ctx.db.patch("yugiohListings", listingId, {
 		titleReadStatus: read === null ? "failed" : "read",
 		titleRead: read,
 		setCodeKey: setCode === null ? null : setCodeKey(setCode),
-		...(listing.matchOverridden
-			? {}
-			: await automaticMatch(ctx, {
-					setCode,
-					rarity: read?.rarity ?? null,
-				})),
+		...match,
 	});
+	if ((match?.matchStatus ?? listing.matchStatus) === "match") {
+		await queueDealCheck(ctx, listingId);
+	}
 }
 
 /**
@@ -183,6 +185,7 @@ export async function setMatchOverride(
 		matchedPrintingId: printingId,
 		matchOverridden: true,
 	});
+	if (printingId !== null) await queueDealCheck(ctx, listingId);
 }
 
 /** The set code and rarity a stored Listing is matched on. */
