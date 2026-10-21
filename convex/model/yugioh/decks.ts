@@ -16,6 +16,7 @@ import {
 import { internal } from "../../_generated/api";
 import type { Doc, Id } from "../../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../../_generated/server";
+import { rematchSetCode } from "./matching";
 import { type TcgplayerView, tcgplayerView } from "./tcgplayer";
 
 /** Bounds every Yu-Gi-Oh read. A Deck is at most 60 Main + 15 Extra + 15 Side Cards. */
@@ -114,6 +115,7 @@ export async function findOrCreatePrinting(
 			await ctx.db.patch("yugiohPrintings", existing._id, {
 				overloadedRarities: merged,
 			});
+			await rematchSetCode(ctx, setCode);
 		}
 		return existing._id;
 	}
@@ -126,6 +128,8 @@ export async function findOrCreatePrinting(
 		tcgplayerProductUrl: null,
 		tcgplayerImageUrl: null,
 	});
+	// Listings already captured for this set code may be for it.
+	await rematchSetCode(ctx, setCode);
 	// A new Printing gets its TCGplayer product page looked up once, now.
 	await ctx.scheduler.runAfter(0, internal.yugioh.tcgplayer.lookUpProduct, {
 		printingId,

@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vitest";
-import { formatMoney, listingTypeLabel, timeLeft } from "./listing-format";
+import {
+	formatMoney,
+	listingTypeLabel,
+	timeLeft,
+	titleFlags,
+} from "./listing-format";
 
 const NOW = Date.UTC(2026, 9, 20, 12, 0);
 const MINUTE = 60_000;
@@ -73,5 +78,53 @@ describe("listingTypeLabel", () => {
 			listingTypeLabel({ ...base, sold: true, soldDate: "2026-10-18" }, NOW),
 		).toBe("Sold Oct 18");
 		expect(listingTypeLabel({ ...base, sold: true }, NOW)).toBe("Sold");
+	});
+});
+
+describe("titleFlags", () => {
+	const raw = {
+		setCode: "RA01-EN008",
+		rarity: "Quarter Century Secret Rare",
+		condition: "nearMint" as const,
+		copies: 1,
+		language: "english" as const,
+		graded: false,
+		gradingCompany: null,
+		grade: null,
+	};
+
+	test("a raw English Near Mint single has no flags", () => {
+		expect(titleFlags(raw)).toEqual([]);
+	});
+
+	test("flags grading, unknown condition, language and lots", () => {
+		expect(
+			titleFlags({
+				...raw,
+				graded: true,
+				gradingCompany: "PSA",
+				grade: "10",
+				condition: null,
+				language: "korean",
+				copies: 3,
+			}),
+		).toEqual([
+			{ kind: "graded", label: "PSA 10" },
+			{ kind: "language", label: "KR" },
+			{ kind: "lot", label: "×3 copies" },
+		]);
+		expect(titleFlags({ ...raw, condition: null })).toEqual([
+			{ kind: "unknownCondition", label: "Condition?" },
+		]);
+	});
+
+	test("a graded Listing without a stated company still says Graded", () => {
+		expect(titleFlags({ ...raw, graded: true })).toEqual([
+			{ kind: "graded", label: "Graded" },
+		]);
+	});
+
+	test("an unread title has no flags", () => {
+		expect(titleFlags(null)).toEqual([]);
 	});
 });

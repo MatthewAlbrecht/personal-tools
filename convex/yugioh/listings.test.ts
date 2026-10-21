@@ -4,6 +4,7 @@
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api } from "../_generated/api";
+import type { Id } from "../_generated/dataModel";
 import schema from "../schema";
 
 // Root-relative so keys stay consistent from this subdirectory.
@@ -52,8 +53,25 @@ function capture(
 	});
 }
 
+const decks = new WeakMap<T, Id<"yugiohDecks">>();
+
+/** The Listings of a Deck that wants the Printing these titles are for. */
 async function listings(t: T) {
-	return await t.query(api.yugioh.listings.listListings, {});
+	let deckId = decks.get(t);
+	if (!deckId) {
+		deckId = await t.mutation(api.yugioh.decks.createDeck, { name: "Ash" });
+		await t.mutation(api.yugioh.decks.addCard, {
+			deckId,
+			cardName: "Ash Blossom & Joyous Spring",
+			section: "main",
+			copiesNeeded: 3,
+			setCode: "RA01-EN008",
+			rarity: "Quarter Century Secret Rare",
+			overloadedRarities: [],
+		});
+		decks.set(t, deckId);
+	}
+	return await t.query(api.yugioh.listings.listListings, { deckId });
 }
 
 beforeEach(() => {

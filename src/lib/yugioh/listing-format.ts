@@ -1,5 +1,7 @@
 import { format, intervalToDuration, parseISO } from "date-fns";
 
+import { LANGUAGE_CODES, type TitleRead } from "./title-reading";
+
 // Display helpers for Listings. Relative imports only.
 
 type ListingTypeFields = {
@@ -54,4 +56,43 @@ export function listingTypeLabel(
 		parts.push(`${listing.bids} ${listing.bids === 1 ? "bid" : "bids"}`);
 	}
 	return parts.join(" · ");
+}
+
+export type TitleFlag = {
+	kind: "graded" | "unknownCondition" | "language" | "lot";
+	label: string;
+};
+
+/**
+ * What a Listing's title says that sets it apart from a raw, English, Near
+ * Mint single: "PSA 10", "Condition?", "KR", "×3 copies". A Graded Listing
+ * never asks for its condition.
+ */
+export function titleFlags(read: TitleRead | null): TitleFlag[] {
+	if (read === null) return [];
+	const flags: TitleFlag[] = [];
+	if (read.graded) {
+		flags.push({ kind: "graded", label: gradingLabel(read) });
+	} else if (read.condition === null) {
+		flags.push({ kind: "unknownCondition", label: "Condition?" });
+	}
+	if (read.language !== "english") {
+		flags.push({ kind: "language", label: LANGUAGE_CODES[read.language] });
+	}
+	if (read.copies > 1) {
+		flags.push({ kind: "lot", label: `×${read.copies} copies` });
+	}
+	return flags;
+}
+
+/** "PSA 10", "Graded" when the title names no company, or "Not graded". */
+export function gradingLabel(
+	read: Pick<TitleRead, "graded" | "gradingCompany" | "grade">,
+): string {
+	if (!read.graded) return "Not graded";
+	return (
+		[read.gradingCompany, read.grade]
+			.filter((part) => part !== null)
+			.join(" ") || "Graded"
+	);
 }

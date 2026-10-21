@@ -32,8 +32,11 @@ import {
 	yugiohCardOrderValidator,
 	yugiohConditionValidator,
 	yugiohMarketplaceValidator,
+	yugiohMatchStatusValidator,
 	yugiohSectionValidator,
 	yugiohTcgplayerStatusValidator,
+	yugiohTitleReadStatusValidator,
+	yugiohTitleReadValidator,
 } from "./model/yugioh/validators";
 
 const geniusCreditValidator = v.object({
@@ -1853,7 +1856,21 @@ export default defineSchema({
 		...yugiohCapturedEbayListingValidator.fields,
 		firstSeenAt: v.number(),
 		lastSeenAt: v.number(),
-	}).index("by_marketplace_and_itemId", ["marketplace", "itemId"]),
+		// Title reading and matching (ticket 07). Optional because Listings
+		// captured before it have none; missing reads as unread and unsure.
+		titleReadStatus: v.optional(yugiohTitleReadStatusValidator),
+		titleRead: v.optional(v.union(yugiohTitleReadValidator, v.null())),
+		// The card the title's set code names in any language ("RA01-008"),
+		// null when the title has no single set code.
+		setCodeKey: v.optional(v.union(v.string(), v.null())),
+		matchStatus: v.optional(yugiohMatchStatusValidator),
+		matchedPrintingId: v.optional(v.union(v.id("yugiohPrintings"), v.null())),
+		// True once I set the match myself: it then wins over every later read.
+		matchOverridden: v.optional(v.boolean()),
+	})
+		.index("by_marketplace_and_itemId", ["marketplace", "itemId"])
+		.index("by_setCodeKey", ["setCodeKey"])
+		.index("by_matchedPrintingId", ["matchedPrintingId"]),
 
 	// A Listing's price over time: one row when it's first captured, then one
 	// each time a capture sees a different price, shipping, bid count or sold

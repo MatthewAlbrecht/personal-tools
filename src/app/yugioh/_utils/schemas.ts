@@ -71,3 +71,11 @@ export function productUrlSchema(printing: {
 			),
 	});
 }
+
+/** The "Not a match" choice in the Listing drawer's match form. */
+export const NOT_A_MATCH = "notMatch";
+
+/** A Listing's match, set by hand: a Printing ID or `NOT_A_MATCH`. */
+export const listingMatchSchema = z.object({
+	match: z.string().min(1, "Choose a Printing, or Not a match."),
+});

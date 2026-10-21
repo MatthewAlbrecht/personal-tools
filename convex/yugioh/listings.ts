@@ -1,10 +1,18 @@
 import { v } from "convex/values";
-import { internalMutation, query } from "../_generated/server";
+import {
+	type QueryCtx,
+	internalMutation,
+	mutation,
+	query,
+} from "../_generated/server";
 import { requireAuth } from "../auth";
 import * as Listings from "../model/yugioh/listings";
+import * as Matching from "../model/yugioh/matching";
 import {
 	yugiohCapturedEbayListingValidator,
 	yugiohMarketplaceValidator,
+	yugiohMatchStatusValidator,
+	yugiohTitleReadValidator,
 } from "../model/yugioh/validators";
 
 const listingValidator = v.object({
@@ -14,6 +22,23 @@ const listingValidator = v.object({
 	...yugiohCapturedEbayListingValidator.fields,
 	firstSeenAt: v.number(),
 	lastSeenAt: v.number(),
+	/** What the AI read from the title; null until read, or when reading failed. */
+	titleRead: v.union(yugiohTitleReadValidator, v.null()),
+	match: v.object({
+		/** "reading" while the AI reads a new or changed title. */
+		status: v.union(yugiohMatchStatusValidator, v.literal("reading")),
+		printing: v.union(
+			v.object({
+				_id: v.id("yugiohPrintings"),
+				cardName: v.string(),
+				setCode: v.string(),
+				rarity: v.string(),
+			}),
+			v.null(),
+		),
+		/** True when I set the match myself; it wins over later reads. */
+		overridden: v.boolean(),
+	}),
 });
 
 const observationValidator = v.object({
@@ -28,13 +53,16 @@ const observationValidator = v.object({
 	sold: v.boolean(),
 });
 
-/** Captured Listings, newest first. */
+/** A Deck's Listings, newest first (see `readDeckListings`). */
 export const listListings = query({
-	args: {},
+	args: { deckId: v.id("yugiohDecks") },
 	returns: v.array(listingValidator),
-	handler: async (ctx) => {
+	handler: async (ctx, args) => {
 		requireAuth(ctx);
-		return await Listings.readListings(ctx);
+		const listings = await Listings.readDeckListings(ctx, args.deckId);
+		return await Promise.all(
+			listings.map((listing) => Listings.listingView(ctx, listing)),
+		);
 	},
 });
 
@@ -47,7 +75,27 @@ export const getListing = query({
 	),
 	handler: async (ctx, args) => {
 		requireAuth(ctx);
-		return await Listings.readListing(ctx, args.listingId);
+		const listing = await Listings.readListing(ctx, args.listingId);
+		if (!listing) return null;
+		const { observations, ...doc } = listing;
+		return { ...(await Listings.listingView(ctx, doc)), observations };
+	},
+});
+
+/**
+ * Sets a Listing's match myself: one of my Printings, or null for "Not a
+ * match". It wins over the AI on every later capture.
+ */
+export const setListingMatch = mutation({
+	args: {
+		listingId: v.id("yugiohListings"),
+		printingId: v.union(v.id("yugiohPrintings"), v.null()),
+	},
+	returns: v.null(),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+		await Matching.setMatchOverride(ctx, args.listingId, args.printingId);
+		return null;
 	},
 });
 

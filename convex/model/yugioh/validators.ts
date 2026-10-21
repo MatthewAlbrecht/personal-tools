@@ -4,6 +4,13 @@ import type {
 	Condition,
 	Section,
 } from "../../../src/lib/yugioh/deck";
+import type {
+	Language,
+	MatchStatus,
+	ReadCondition,
+	TitleJudgments,
+	TitleRead,
+} from "../../../src/lib/yugioh/title-reading";
 
 export const yugiohSectionValidator = v.union(
 	v.literal("main"),
@@ -70,6 +77,63 @@ export const yugiohCapturedEbayListingValidator = v.object({
 	soldDate: v.union(v.string(), v.null()),
 });
 
+export const yugiohLanguageValidator = v.union(
+	v.literal("english"),
+	v.literal("japanese"),
+	v.literal("korean"),
+	v.literal("chinese"),
+	v.literal("german"),
+	v.literal("french"),
+	v.literal("italian"),
+	v.literal("spanish"),
+	v.literal("portuguese"),
+);
+
+export const yugiohReadConditionValidator = v.union(
+	v.literal("nearMint"),
+	v.literal("lightlyPlayed"),
+	v.literal("moderatelyPlayed"),
+	v.literal("heavilyPlayed"),
+	v.literal("damaged"),
+);
+
+/** Everything read from a Listing's title (null fields: the title doesn't say). */
+export const yugiohTitleReadValidator = v.object({
+	setCode: v.union(v.string(), v.null()),
+	rarity: v.union(v.string(), v.null()),
+	condition: v.union(yugiohReadConditionValidator, v.null()),
+	copies: v.number(),
+	language: yugiohLanguageValidator,
+	graded: v.boolean(),
+	gradingCompany: v.union(v.string(), v.null()),
+	grade: v.union(v.string(), v.null()),
+});
+
+/** What the AI judged from a title, before code checks it (see title-reading.ts). */
+export const yugiohTitleJudgmentsValidator = v.object({
+	setCode: v.union(v.string(), v.null()),
+	rarity: v.union(v.string(), v.null()),
+	condition: v.union(yugiohReadConditionValidator, v.null()),
+	copies: v.number(),
+	language: yugiohLanguageValidator,
+	graded: v.boolean(),
+	gradingCompany: v.union(v.string(), v.null()),
+});
+
+/** Where a Listing's title read stands. */
+export const yugiohTitleReadStatusValidator = v.union(
+	v.literal("reading"),
+	v.literal("read"),
+	v.literal("failed"),
+);
+
+/** Whether a Listing is for one of my Printings. */
+export const yugiohMatchStatusValidator = v.union(
+	v.literal("match"),
+	v.literal("notMatch"),
+	v.literal("unsure"),
+);
+
 // Compile-time check that the validators and the domain library agree.
 type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
 const sectionsAgree: Same<Infer<typeof yugiohSectionValidator>, Section> = true;
@@ -81,6 +145,31 @@ const cardOrdersAgree: Same<
 	Infer<typeof yugiohCardOrderValidator>,
 	CardOrder
 > = true;
+const languagesAgree: Same<
+	Infer<typeof yugiohLanguageValidator>,
+	Language
+> = true;
+const readConditionsAgree: Same<
+	Infer<typeof yugiohReadConditionValidator>,
+	ReadCondition
+> = true;
+const titleReadsAgree: Same<
+	Infer<typeof yugiohTitleReadValidator>,
+	TitleRead
+> = true;
+const matchStatusesAgree: Same<
+	Infer<typeof yugiohMatchStatusValidator>,
+	MatchStatus
+> = true;
+void languagesAgree;
+void readConditionsAgree;
+const titleJudgmentsAgree: Same<
+	Infer<typeof yugiohTitleJudgmentsValidator>,
+	TitleJudgments
+> = true;
+void titleReadsAgree;
+void titleJudgmentsAgree;
+void matchStatusesAgree;
 void sectionsAgree;
 void cardOrdersAgree;
 void conditionsAgree;

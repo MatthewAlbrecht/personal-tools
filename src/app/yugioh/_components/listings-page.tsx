@@ -4,6 +4,7 @@ import { useQuery } from "convex/react";
 import { formatDistanceToNowStrict } from "date-fns";
 import { ExternalLink, Tag } from "lucide-react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type * as React from "react";
 import { Button } from "~/components/ui/button";
 import {
@@ -29,19 +30,24 @@ import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { MAX_LISTINGS_SHOWN } from "../../../../convex/model/yugioh/listings";
 import type { ListingView } from "../_utils/types";
+import { ListingDrawer } from "./listing-drawer";
+import { MatchSummary, TitleFlagBadges } from "./listing-match";
 
 const SKELETON_ROWS = [0, 1, 2, 3, 4, 5, 6, 7];
 
 /**
- * Captured Listings, newest first. Until Listings are matched to Printings
- * (ticket 07) this shows every capture, from any Deck's Searches.
+ * The Deck's Listings, newest first: matched, unsure and not-a-match alike.
+ * Tapping one opens the Listing drawer (`?listing=`).
  */
 export function ListingsPage({
 	deckId,
 }: {
 	deckId: Id<"yugiohDecks">;
 }): React.ReactElement {
-	const listings = useQuery(api.yugioh.listings.listListings, {});
+	const listings = useQuery(api.yugioh.listings.listListings, { deckId });
+	const router = useRouter();
+	const pathname = usePathname() ?? `/yugioh/decks/${deckId}/listings`;
+	const searchParams = useSearchParams() ?? new URLSearchParams();
 
 	if (listings === undefined) return <ListingsPageSkeleton />;
 
@@ -70,6 +76,25 @@ export function ListingsPage({
 	}
 
 	const now = Date.now();
+	const openListingId = searchParams.get("listing");
+	const openListing =
+		listings.find((listing) => listing._id === openListingId) ?? null;
+
+	function listingHref(listingId: string): string {
+		const params = new URLSearchParams(searchParams.toString());
+		params.set("listing", listingId);
+		return `${pathname}?${params.toString()}`;
+	}
+
+	function closeListing(): void {
+		const params = new URLSearchParams(searchParams.toString());
+		params.delete("listing");
+		const query = params.toString();
+		router.replace(query ? `${pathname}?${query}` : pathname, {
+			scroll: false,
+		});
+	}
+
 	return (
 		<section aria-label="Listings" className="flex flex-col gap-3">
 			<p className="text-muted-foreground text-sm tabular-nums">
@@ -78,13 +103,23 @@ export function ListingsPage({
 			<ul className="-mx-4 flex flex-col divide-y border-y md:hidden">
 				{listings.map((listing) => (
 					<li key={listing._id}>
-						<ListingRow listing={listing} now={now} />
+						<ListingRow
+							listing={listing}
+							href={listingHref(listing._id)}
+							now={now}
+						/>
 					</li>
 				))}
 			</ul>
 			<div className="hidden md:block">
-				<ListingsTable listings={listings} now={now} />
+				<ListingsTable listings={listings} href={listingHref} now={now} />
 			</div>
+			<ListingDrawer
+				deckId={deckId}
+				listing={openListing}
+				now={now}
+				onClose={closeListing}
+			/>
 		</section>
 	);
 }
@@ -97,17 +132,23 @@ function countLine(count: number): string {
 
 function ListingRow({
 	listing,
+	href,
 	now,
 }: {
 	listing: ListingView;
+	href: string;
 	now: number;
 }): React.ReactElement {
+	const notMatch = listing.match.status === "notMatch";
 	return (
-		<a
-			href={listing.url}
-			target="_blank"
-			rel="noopener noreferrer"
-			className="flex min-h-14 flex-col gap-1 px-4 py-3 outline-none focus-visible:bg-muted active:bg-muted"
+		<Link
+			href={href}
+			replace
+			scroll={false}
+			className={cn(
+				"flex min-h-14 flex-col gap-1 px-4 py-3 outline-none focus-visible:bg-muted active:bg-muted",
+				notMatch && "opacity-60",
+			)}
 		>
 			<span className="flex items-baseline justify-between gap-3">
 				<span className="flex items-baseline gap-1.5">
@@ -118,23 +159,29 @@ function ListingRow({
 					eBay · {listingTypeLabel(listing, now)}
 				</span>
 			</span>
-			{/* Line 2's left side is reserved for the matched Card and Printing (ticket 07). */}
-			<span className="self-end text-muted-foreground text-xs">
-				{whereAndWhen(listing)}
-			</span>
-			<span className="truncate text-muted-foreground text-xs">
-				{listing.title}
-			</span>
-			<span className="sr-only">(opens eBay in a new tab)</span>
-		</a>
+			<div className="flex items-center justify-between gap-3 text-sm">
+				<MatchSummary match={listing.match} className="max-w-[70%] shrink-0" />
+				<span className="min-w-0 truncate text-right text-muted-foreground text-xs">
+					{whereAndWhen(listing)}
+				</span>
+			</div>
+			<div className="flex items-center gap-2">
+				<span className="min-w-0 flex-1 truncate text-muted-foreground text-xs">
+					{listing.title}
+				</span>
+				<TitleFlagBadges titleRead={listing.titleRead} />
+			</div>
+		</Link>
 	);
 }
 
 function ListingsTable({
 	listings,
+	href,
 	now,
 }: {
 	listings: ListingView[];
+	href: (listingId: string) => string;
 	now: number;
 }): React.ReactElement {
 	return (
@@ -142,6 +189,7 @@ function ListingsTable({
 			<TableHeader>
 				<TableRow>
 					<TableHead className="text-right">Price</TableHead>
+					<TableHead>Card / Printing</TableHead>
 					<TableHead className="w-full">Title</TableHead>
 					<TableHead>Type</TableHead>
 					<TableHead>Location</TableHead>
@@ -153,17 +201,37 @@ function ListingsTable({
 			</TableHeader>
 			<TableBody>
 				{listings.map((listing) => (
-					<TableRow key={listing._id}>
+					<TableRow
+						key={listing._id}
+						className={cn(
+							"relative",
+							listing.match.status === "notMatch" && "opacity-60",
+						)}
+					>
 						<TableCell className="text-right align-top">
 							<div className="flex flex-col items-end">
 								<Price listing={listing} />
 								<Shipping listing={listing} className="text-xs" />
 							</div>
 						</TableCell>
+						<TableCell className="max-w-72 align-top">
+							{/* The whole row opens the Listing drawer through this link. */}
+							<Link
+								href={href(listing._id)}
+								replace
+								scroll={false}
+								className="flex min-w-0 outline-none after:absolute after:inset-0 focus-visible:underline"
+							>
+								<MatchSummary match={listing.match} />
+							</Link>
+						</TableCell>
 						<TableCell className="max-w-0 align-top">
-							<p className="truncate" title={listing.title}>
-								{listing.title}
-							</p>
+							<div className="flex items-center gap-2">
+								<p className="min-w-0 flex-1 truncate" title={listing.title}>
+									{listing.title}
+								</p>
+								<TitleFlagBadges titleRead={listing.titleRead} />
+							</div>
 						</TableCell>
 						<TableCell className="align-top tabular-nums">
 							{listingTypeLabel(listing, now)}
@@ -174,7 +242,7 @@ function ListingsTable({
 						<TableCell className="align-top text-muted-foreground">
 							{freshness(listing)}
 						</TableCell>
-						<TableCell className="align-top">
+						<TableCell className="relative z-10 align-top">
 							<Button variant="ghost" size="icon" asChild>
 								<a
 									href={listing.url}

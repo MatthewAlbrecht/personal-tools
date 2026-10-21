@@ -1,7 +1,8 @@
 // The AI step of the TCGplayer lookup: TypeSafe picks which product, if any,
 // is the Printing. Tests replace this module with fixed picks.
-import { TypeSafeClient, choice, noul } from "@typesafe-ai/sdk";
+import { choice, noul } from "@typesafe-ai/sdk";
 import type { TcgplayerProduct } from "../../../src/lib/yugioh/tcgplayer";
+import { typesafeClient } from "./typesafe";
 
 export type TcgplayerPick = {
 	/** The picked product, or null when the AI says none of them is it. */
@@ -11,17 +12,6 @@ export type TcgplayerPick = {
 };
 
 const NONE = "none";
-
-function typesafeClient(): TypeSafeClient {
-	const apiKey = process.env.TYPESAFE_API_KEY;
-	if (!apiKey) {
-		throw new Error(
-			"TYPESAFE_API_KEY isn't set on this Convex deployment. Set it with `npx convex env set TYPESAFE_API_KEY <key>`.",
-		);
-	}
-	// The Convex runtime has no zstd, so send requests uncompressed.
-	return new TypeSafeClient({ apiKey, compression: false });
-}
 
 export async function pickTcgplayerProduct(
 	printing: { cardName: string; setCode: string; rarity: string },
