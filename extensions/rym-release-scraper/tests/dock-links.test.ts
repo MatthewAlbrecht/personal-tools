@@ -23,7 +23,8 @@ type QuickView = {
 };
 declare function ebayQuickViews(url: string): QuickView[] | null;
 
-const KEYWORDS = "(RA01-EN008,RA01-EN024) -super -ultra";
+// A Search requiring its rarity: the quick views keep the whole query.
+const KEYWORDS = "(RA01-EN008,RA01-EN024) (quarter,qcsr,qcscr) -super -ultra";
 
 /** The three views' links, keyed, for `url`. */
 function hrefs(url: string): Record<string, string> | null {

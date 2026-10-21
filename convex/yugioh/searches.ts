@@ -5,6 +5,8 @@ import * as Searches from "../model/yugioh/searches";
 
 const searchValidator = v.object({
 	setCodes: v.array(v.string()),
+	requiredRarity: v.union(v.string(), v.null()),
+	requiredTerms: v.array(v.string()),
 	exclusions: v.array(v.string()),
 	printings: v.array(
 		v.object({ cardName: v.string(), setCode: v.string(), rarity: v.string() }),

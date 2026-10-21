@@ -36,6 +36,10 @@ _Avoid_: Fresh, recent
 One marketplace query covering a group of Printings' set codes at once, viewed as Newly Listed or Sold, or as Ending soon (its running auctions, ending soonest first) shortly before one of them ends.
 _Avoid_: Query, feed
 
+**Required rarity**:
+The rarity a Search makes every title say (e.g. "(ultimate,utr)": the rarity's word or its abbreviation), when all the Printings it looks for have that rarity and one of its set codes is Overloaded. Rare and Common have none, having no word of their own.
+_Avoid_: Rarity filter, rarity term
+
 **Exclusion**:
 A term a Search leaves out (e.g. "-super") so an Overloaded set code doesn't pull in rarities you don't want. Never a word of a rarity or Card name that Search looks for, so set codes share a Search only when their Exclusions spare each other's Printings.
 _Avoid_: Filter, negative keyword

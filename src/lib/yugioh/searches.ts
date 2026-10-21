@@ -1,6 +1,7 @@
 // eBay Search packing and links. Pure logic shared by Convex (relative imports
 // only) and the /yugioh UI. Formats: docs/yugioh/references/tcgplayer-ebay-links.md.
 
+import { RARITIES } from "./deck";
 import { findSetCodes } from "./title-reading";
 
 /** eBay takes about 8 set codes in one `(A,B,…)` Search. */
@@ -27,11 +28,18 @@ export type SearchableCard = {
 
 export type Search = {
 	setCodes: string[];
+	/**
+	 * The rarity every Printing in this Search has, when one of its set codes
+	 * is Overloaded and the rarity has words of its own; else null.
+	 */
+	requiredRarity: string | null;
+	/** Words a title must have one of for `requiredRarity`: ["ultimate", "utr"]. */
+	requiredTerms: string[];
 	/** Exclusion words, without the leading minus (e.g. "super"). */
 	exclusions: string[];
 	/** The Printings this Search looks for, by set code then Card name. */
 	printings: SearchPrinting[];
-	/** The eBay query its pages run: "(RA01-EN008,RA01-EN024) -super". */
+	/** The eBay query its pages run: "(RA01-EN008,RA01-EN024) (quarter,qcsr,qcscr) -super". */
 	keywords: string;
 	newlyListedUrl: string;
 	soldUrl: string;
@@ -93,6 +101,9 @@ export function searchedPrintingsByCard<
  *   it. Set codes share a Search when the union of their Exclusions drops none
  *   of the Search's Printings (no word of a wanted rarity or Card name), and
  *   a Search leaves out that union.
+ * - A Search whose Printings all have one rarity, with an Overloaded set code
+ *   among them, requires that rarity (`rarityTerms`); packing gives those set
+ *   codes Searches of their own when it costs no Searches (`packByRarity`).
  * - Packed to few Searches, deterministically (`packSearches`); set codes
  *   inside a Search are sorted.
  */
@@ -117,24 +128,55 @@ export function buildDeckSearches(cards: readonly SearchableCard[]): Search[] {
 		}
 	}
 
-	return packSearches(
-		[...byCode].map(([setCode, printings]) => ({
+	const packed = [...byCode].map(([setCode, printings]) => {
+		const otherRarities = [...(otherRaritiesByCode.get(setCode) ?? [])];
+		const rarities = new Set(printings.map((printing) => printing.rarity));
+		const [onlyRarity] = rarities;
+		return {
 			setCode,
-			exclusions: exclusionsFor(
-				[...(otherRaritiesByCode.get(setCode) ?? [])],
-				printings,
-			),
+			exclusions: exclusionsFor(otherRarities, printings),
 			protectedWords: protectedWordsOf(printings),
-		})),
-	).map((bin) =>
-		toSearch(bin.setCodes.sort(), [...bin.exclusions].sort(), byCode),
+			rarity:
+				rarities.size === 1 &&
+				onlyRarity !== undefined &&
+				rarityTerms(onlyRarity).length > 0
+					? onlyRarity
+					: null,
+			overloaded: otherRarities.some((rarity) => !rarities.has(rarity)),
+		};
+	});
+	const overloadedByCode = new Map(
+		packed.map((code) => [code.setCode, code.overloaded]),
 	);
+
+	return packByRarity(packed).map((bin) => {
+		const setCodes = bin.setCodes.sort();
+		const printings = setCodes.flatMap((code) => byCode.get(code) ?? []);
+		const rarities = new Set(printings.map((printing) => printing.rarity));
+		const [onlyRarity] = rarities;
+		const requiredRarity =
+			rarities.size === 1 &&
+			onlyRarity !== undefined &&
+			setCodes.some((code) => overloadedByCode.get(code))
+				? onlyRarity
+				: null;
+		return toSearch(
+			setCodes,
+			requiredRarity,
+			[...bin.exclusions].sort(),
+			printings,
+		);
+	});
 }
 
 type PackedSetCode = {
 	setCode: string;
 	exclusions: string[];
 	protectedWords: Set<string>;
+	/** The one rarity this set code is searched for, when it has words of its own. */
+	rarity: string | null;
+	/** Other rarities share the set code. */
+	overloaded: boolean;
 };
 
 type Bin = {
@@ -144,22 +186,74 @@ type Bin = {
 };
 
 /**
- * First-fit decreasing: set codes with the most Exclusions first (then by
- * Exclusion words, then set code), each into the first Search with room whose
- * Exclusions and its own spare each other's Printings, else a new Search.
- * Depends only on the set codes and their Printings, never on Card order, so
- * an unchanged Deck gets the same Searches in the same order every run. A
- * Deck change can shift set codes between later Searches; anything keyed to
- * a Search reads its set codes back from the URL, not its number.
+ * Rarity-scoped first: for each rarity with an Overloaded set code wanted in
+ * it alone, those set codes get Searches of their own (so each can require
+ * the rarity), topped up with that rarity's other set codes while there's
+ * room; everything else is packed after. When that takes more Searches than
+ * packing all set codes together, packs them together instead.
  */
-function packSearches(setCodes: readonly PackedSetCode[]): Bin[] {
+function packByRarity(codes: readonly PackedSetCode[]): Bin[] {
+	const together = packSearches([], codes, true).bins;
+
+	const scoped: Bin[] = [];
+	const scopedRarities = [
+		...new Set(
+			codes.flatMap((code) =>
+				code.overloaded && code.rarity !== null ? [code.rarity] : [],
+			),
+		),
+	].sort();
+	const placed = new Set<string>();
+	for (const rarity of scopedRarities) {
+		const ofRarity = codes.filter((code) => code.rarity === rarity);
+		const { bins } = packSearches(
+			[],
+			ofRarity.filter((code) => code.overloaded),
+			true,
+		);
+		packSearches(
+			bins,
+			ofRarity.filter((code) => !code.overloaded),
+			false,
+		);
+		for (const bin of bins) {
+			for (const setCode of bin.setCodes) placed.add(setCode);
+		}
+		scoped.push(...bins);
+	}
+	const rest = packSearches(
+		[],
+		codes.filter((code) => !placed.has(code.setCode)),
+		true,
+	).bins;
+
+	return scoped.length + rest.length <= together.length
+		? [...scoped, ...rest]
+		: together;
+}
+
+/**
+ * First-fit decreasing into `bins`: set codes with the most Exclusions first
+ * (then by Exclusion words, then set code), each into the first Search with
+ * room whose Exclusions and its own spare each other's Printings, else a new
+ * Search (when `open`; otherwise it's left over). Depends only on the set
+ * codes and their Printings, never on Card order, so an unchanged Deck gets
+ * the same Searches in the same order every run. A Deck change can shift set
+ * codes between later Searches; anything keyed to a Search reads its set
+ * codes back from the URL, not its number.
+ */
+function packSearches(
+	bins: Bin[],
+	setCodes: readonly PackedSetCode[],
+	open: boolean,
+): { bins: Bin[]; leftover: PackedSetCode[] } {
 	const ordered = [...setCodes].sort(
 		(a, b) =>
 			b.exclusions.length - a.exclusions.length ||
 			a.exclusions.join(" ").localeCompare(b.exclusions.join(" ")) ||
 			a.setCode.localeCompare(b.setCode),
 	);
-	const bins: Bin[] = [];
+	const leftover: PackedSetCode[] = [];
 	for (const code of ordered) {
 		const fits = (bin: Bin): boolean =>
 			bin.setCodes.length < MAX_SET_CODES_PER_SEARCH &&
@@ -170,15 +264,39 @@ function packSearches(setCodes: readonly PackedSetCode[]): Bin[] {
 			bin.setCodes.push(code.setCode);
 			for (const word of code.exclusions) bin.exclusions.add(word);
 			for (const word of code.protectedWords) bin.protectedWords.add(word);
-		} else {
+		} else if (open) {
 			bins.push({
 				setCodes: [code.setCode],
 				exclusions: new Set(code.exclusions),
 				protectedWords: new Set(code.protectedWords),
 			});
+		} else {
+			leftover.push(code);
 		}
 	}
-	return bins;
+	return { bins, leftover };
+}
+
+/**
+ * The words a title must have one of to be a rarity: its first distinctive
+ * word and its abbreviations, lowercased ("Ultimate Rare" → ["ultimate",
+ * "utr"]). None for a rarity with no word of its own (Rare, Common) or one
+ * the app doesn't know. "25th" isn't one for Quarter Century Secret Rare:
+ * RA01–RA04's other rarities say "25th Anniversary" too.
+ */
+export function rarityTerms(rarity: string): string[] {
+	const known = RARITIES.find((entry) => entry.name === rarity);
+	if (!known) return [];
+	const word = exclusionWord(known.name);
+	if (word === "rare" || word === "common") return [];
+	const abbreviations = [
+		known.abbreviation,
+		...("otherAbbreviations" in known ? known.otherAbbreviations : []),
+	];
+	return [
+		word,
+		...abbreviations.map((abbreviation) => abbreviation.toLowerCase()),
+	];
 }
 
 /**
@@ -232,27 +350,40 @@ function words(text: string): string[] {
 
 function toSearch(
 	setCodes: string[],
+	requiredRarity: string | null,
 	exclusions: string[],
-	byCode: ReadonlyMap<string, SearchPrinting[]>,
+	printings: SearchPrinting[],
 ): Search {
-	const keywords = searchKeywords(setCodes, exclusions);
+	const requiredTerms =
+		requiredRarity === null ? [] : rarityTerms(requiredRarity);
+	const keywords = searchKeywords(setCodes, exclusions, requiredTerms);
 	return {
 		setCodes,
+		requiredRarity,
+		requiredTerms,
 		exclusions,
-		printings: setCodes.flatMap((code) => byCode.get(code) ?? []),
+		printings,
 		keywords,
 		newlyListedUrl: ebayNewlyListedUrl(keywords),
 		soldUrl: ebaySoldUrl(keywords),
 	};
 }
 
-/** eBay's OR form, then Exclusions: "(RA01-EN008,RA01-EN024) -super -ultra". */
+/**
+ * eBay's OR form, then the required rarity's OR group (ANDed with the set
+ * codes), then Exclusions: "(TDGS-EN040,TDGS-EN041) (ultimate,utr) -ultra".
+ */
 export function searchKeywords(
 	setCodes: readonly string[],
 	exclusions: readonly string[],
+	requiredTerms: readonly string[] = [],
 ): string {
 	const codes = setCodes.length === 1 ? setCodes[0] : `(${setCodes.join(",")})`;
-	return [codes, ...exclusions.map((word) => `-${word}`)].join(" ");
+	return [
+		codes,
+		...(requiredTerms.length > 0 ? [`(${requiredTerms.join(",")})`] : []),
+		...exclusions.map((word) => `-${word}`),
+	].join(" ");
 }
 
 const EBAY_SEARCH_URL = "https://www.ebay.com/sch/i.html";

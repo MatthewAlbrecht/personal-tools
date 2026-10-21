@@ -3,8 +3,11 @@ import {
 	type Search,
 	type SearchableCard,
 	buildDeckSearches,
+	ebayNewlyListedUrl,
 	ebaySearchSetCodes,
+	ebaySoldUrl,
 	exclusionWord,
+	rarityTerms,
 } from "./searches";
 
 describe("exclusionWord", () => {
@@ -20,6 +23,32 @@ describe("exclusionWord", () => {
 		["Common", "common"],
 	])("%s → -%s", (rarity, word) => {
 		expect(exclusionWord(rarity)).toBe(word);
+	});
+});
+
+describe("rarityTerms", () => {
+	test.each([
+		["Ultimate Rare", ["ultimate", "utr"]],
+		["Secret Rare", ["secret", "scr"]],
+		["Ultra Rare", ["ultra", "ur"]],
+		["Super Rare", ["super", "sr"]],
+		["Ghost Rare", ["ghost", "gr"]],
+		["Starlight Rare", ["starlight", "str"]],
+		["Collector's Rare", ["collector", "cr"]],
+		// Not "25th": RA01–RA04 Super, Ultra and Secret Rares say "25th
+		// Anniversary" too, and a wanted QCSR can't leave out -secret.
+		["Quarter Century Secret Rare", ["quarter", "qcsr", "qcscr"]],
+	])("%s → %j", (rarity, terms) => {
+		expect(rarityTerms(rarity)).toEqual(terms);
+	});
+
+	test.each([
+		"Rare",
+		"Common",
+		"Ultra Rare (Pharaoh's Rare)",
+		"Duel Terminal Ultra Parallel Rare",
+	])("%s has none: no word of its own, or not a known rarity", (rarity) => {
+		expect(rarityTerms(rarity)).toEqual([]);
 	});
 });
 
@@ -98,6 +127,17 @@ describe("ebaySearchSetCodes", () => {
 		]);
 	});
 
+	test("reads past the required rarity and the Exclusions", () => {
+		expect(
+			ebaySearchSetCodes(
+				ebayNewlyListedUrl("(STON-EN024,TDGS-EN041) (ultimate,utr) -ultra"),
+			),
+		).toEqual(["STON-EN024", "TDGS-EN041"]);
+		expect(
+			ebaySearchSetCodes(ebaySoldUrl("RA01-EN008 (quarter,qcsr,qcscr) -super")),
+		).toEqual(["RA01-EN008"]);
+	});
+
 	test("one set code, typed in lower case", () => {
 		expect(
 			ebaySearchSetCodes(
@@ -142,7 +182,9 @@ describe("a Search's keywords", () => {
 		]);
 		if (!search) throw new Error("no Search");
 
-		expect(search.keywords).toBe("(MP21-EN021,RA01-EN008) -super -ultra");
+		expect(search.keywords).toBe(
+			"(MP21-EN021,RA01-EN008) (quarter,qcsr,qcscr) -super -ultra",
+		);
 		for (const url of [search.newlyListedUrl, search.soldUrl]) {
 			expect(new URL(url).searchParams.get("_nkw")).toBe(search.keywords);
 		}
@@ -242,7 +284,11 @@ describe("set codes share a Search when its Exclusions drop none of its Printing
 		const searches = buildDeckSearches(chaosLightsworn);
 
 		expect(
-			searches.map((search) => [search.setCodes, search.exclusions]),
+			searches.map((search) => [
+				search.setCodes,
+				search.requiredTerms,
+				search.exclusions,
+			]),
 		).toEqual([
 			[
 				[
@@ -255,6 +301,7 @@ describe("set codes share a Search when its Exclusions drop none of its Printing
 					"TDGS-EN041",
 					"TDGS-EN042",
 				],
+				["ultimate", "utr"],
 				["ghost", "super", "ultra"],
 			],
 			[
@@ -268,8 +315,12 @@ describe("set codes share a Search when its Exclusions drop none of its Printing
 					"TU02-EN007",
 					"TU03-EN000",
 				],
+				[],
 				["secret"],
 			],
+			// Searches of their own for the Ultimate Rares would split the
+			// Secret Rare from the Ultra Rare (Pharaoh's Rare) leaving out
+			// -secret: 4 Searches, so they stay mixed.
 			[
 				[
 					"PTDN-EN019",
@@ -279,6 +330,7 @@ describe("set codes share a Search when its Exclusions drop none of its Printing
 					"TU06-EN000",
 					"TU07-EN000",
 				],
+				[],
 				["ultra"],
 			],
 		]);
@@ -327,5 +379,126 @@ describe("set codes share a Search when its Exclusions drop none of its Printing
 		expect(
 			buildDeckSearches(cards).map((search) => search.setCodes.length),
 		).toEqual([8, 8, 1]);
+	});
+});
+
+describe("a Search of one Overloaded rarity requires that rarity", () => {
+	// TU* aren't Overloaded; the rest share their set code with Ultra, Super,
+	// Ghost or plain Rare, and a Super, a Secret and a Rare are wanted besides.
+	const ultimates = [
+		wanting("Caius the Shadow Monarch", "TU03-EN000", "Ultimate Rare"),
+		wanting("Tragoedia", "TU04-EN000", "Ultimate Rare"),
+		wanting("Stardust Dragon", "TDGS-EN040", "Ultimate Rare", [
+			"Ghost Rare",
+			"Ultra Rare",
+		]),
+		wanting("Red Dragon Archfiend", "TDGS-EN041", "Ultimate Rare", [
+			"Ultra Rare",
+		]),
+		wanting("Black Rose Dragon", "CSOC-EN039", "Ultimate Rare", [
+			"Ghost Rare",
+			"Ultra Rare",
+		]),
+		wanting("Pot of Avarice", "EEN-EN037", "Ultimate Rare", ["Super Rare"]),
+		wanting("Monster Reincarnation", "RDS-EN045", "Ultimate Rare", [
+			"Super Rare",
+		]),
+		wanting("D.D. Crow", "STON-EN024", "Ultimate Rare", ["Rare"]),
+	];
+	const others = [
+		wanting("Dark Armed Dragon", "PTDN-EN019", "Secret Rare"),
+		wanting("Breaker the Magical Warrior", "TP7-EN005", "Super Rare"),
+		wanting("My Body as a Shield", "TU02-EN007", "Rare"),
+	];
+
+	test("the Ultimate Rares share one Search that must say ultimate or utr, in as many Searches as before", () => {
+		const searches = buildDeckSearches([...others, ...ultimates]);
+
+		expect(
+			searches.map((search) => [
+				search.setCodes,
+				search.requiredRarity,
+				search.keywords,
+			]),
+		).toEqual([
+			[
+				[
+					"CSOC-EN039",
+					"EEN-EN037",
+					"RDS-EN045",
+					"STON-EN024",
+					"TDGS-EN040",
+					"TDGS-EN041",
+					"TU03-EN000",
+					"TU04-EN000",
+				],
+				"Ultimate Rare",
+				"(CSOC-EN039,EEN-EN037,RDS-EN045,STON-EN024,TDGS-EN040,TDGS-EN041,TU03-EN000,TU04-EN000) (ultimate,utr) -ghost -super -ultra",
+			],
+			[
+				["PTDN-EN019", "TP7-EN005", "TU02-EN007"],
+				null,
+				"(PTDN-EN019,TP7-EN005,TU02-EN007)",
+			],
+		]);
+	});
+
+	test("one Overloaded set code goes bare before the term", () => {
+		const [search] = buildDeckSearches([
+			wanting("D.D. Crow", "STON-EN024", "Ultimate Rare", ["Rare"]),
+		]);
+
+		expect(search?.keywords).toBe("STON-EN024 (ultimate,utr)");
+	});
+
+	test("a Search wanting Ultimate and Secret Rares under one set code requires neither", () => {
+		const [search] = buildDeckSearches([
+			{
+				cardName: "Dark Armed Dragon",
+				copiesNeeded: 1,
+				copiesOwned: 0,
+				chosenPrintingId: null,
+				candidates: [
+					{
+						printingId: "ultimate",
+						setCode: "PTDN-EN019",
+						rarity: "Ultimate Rare",
+						overloadedRarities: ["Secret Rare", "Super Rare"],
+					},
+					{
+						printingId: "secret",
+						setCode: "PTDN-EN019",
+						rarity: "Secret Rare",
+						overloadedRarities: ["Ultimate Rare", "Super Rare"],
+					},
+				],
+			},
+		]);
+
+		expect(search?.requiredRarity).toBeNull();
+		expect(search?.requiredTerms).toEqual([]);
+		expect(search?.keywords).toBe("PTDN-EN019 -super");
+	});
+
+	test("Ultimate Rares none of which is Overloaded require nothing", () => {
+		const [search] = buildDeckSearches([
+			wanting("Caius the Shadow Monarch", "TU03-EN000", "Ultimate Rare"),
+			wanting("Tragoedia", "TU04-EN000", "Ultimate Rare"),
+		]);
+
+		expect(search?.requiredRarity).toBeNull();
+		expect(search?.keywords).toBe("(TU03-EN000,TU04-EN000)");
+	});
+
+	test("set codes stay mixed when a Search of their own would add one", () => {
+		const searches = buildDeckSearches([
+			wanting("D.D. Crow", "STON-EN024", "Ultimate Rare", ["Rare"]),
+			wanting("Dark Armed Dragon", "PTDN-EN019", "Secret Rare"),
+			wanting("My Body as a Shield", "TU02-EN007", "Rare"),
+		]);
+
+		expect(
+			searches.map((search) => [search.setCodes, search.requiredRarity]),
+		).toEqual([[["PTDN-EN019", "STON-EN024", "TU02-EN007"], null]]);
 	});
 });

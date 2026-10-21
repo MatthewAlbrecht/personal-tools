@@ -39,9 +39,16 @@ export const DEFAULT_LOWEST_ACCEPTABLE_CONDITION: Condition = "nearMint";
 /** A Deck never runs more than 3 Copies of a Card. */
 export const MAX_COPIES_NEEDED = 3;
 
-/** Known rarities, most prized first, with the abbreviation used on mobile rows. */
+/**
+ * Known rarities, most prized first, with the abbreviation used on mobile rows
+ * and any other abbreviation sellers write.
+ */
 export const RARITIES = [
-	{ name: "Quarter Century Secret Rare", abbreviation: "QCSR" },
+	{
+		name: "Quarter Century Secret Rare",
+		abbreviation: "QCSR",
+		otherAbbreviations: ["QCScR"],
+	},
 	{ name: "Starlight Rare", abbreviation: "StR" },
 	{ name: "Prismatic Secret Rare", abbreviation: "PScR" },
 	{ name: "Collector's Rare", abbreviation: "CR" },

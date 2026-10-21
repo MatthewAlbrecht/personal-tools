@@ -3,7 +3,7 @@
 // How the runs are driven: docs/yugioh/automation.md.
 
 import { type RunTiming, fullRunDue } from "./run-timing";
-import { type Search, ebayEndingSoonUrl, searchKeywords } from "./searches";
+import { type Search, ebayEndingSoonUrl } from "./searches";
 
 export type RunTrigger = "launchAgent" | "t3" | "manual";
 
@@ -187,16 +187,14 @@ function needsRefresh(auction: EndingAuction, now: number): boolean {
  * soonest first. One page per Search; set codes no Search holds are skipped.
  */
 export function buildRefreshVisits(
-	searches: ReadonlyArray<Pick<Search, "setCodes" | "exclusions">>,
+	searches: ReadonlyArray<Pick<Search, "setCodes" | "keywords">>,
 	setCodes: readonly string[],
 ): PlannedVisit[] {
 	const visits: PlannedVisit[] = [];
 	for (const setCode of setCodes) {
 		const search = searches.find((s) => s.setCodes.includes(setCode));
 		if (!search) continue;
-		const url = ebayEndingSoonUrl(
-			searchKeywords(search.setCodes, search.exclusions),
-		);
+		const url = ebayEndingSoonUrl(search.keywords);
 		if (visits.some((visit) => visit.url === url)) continue;
 		visits.push({
 			url,

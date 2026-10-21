@@ -50,7 +50,7 @@ const NOW = Date.UTC(2026, 9, 20, 12, 0);
 const ASH_ENDING_SOON =
 	"https://www.ebay.com/sch/i.html?_nkw=RA01-EN008&LH_Auction=1&_sop=1";
 const CALLED_ENDING_SOON =
-	"https://www.ebay.com/sch/i.html?_nkw=RA01-EN060+-quarter+-super&LH_Auction=1&_sop=1";
+	"https://www.ebay.com/sch/i.html?_nkw=RA01-EN060+%28ultra%2Cur%29+-quarter+-super&LH_Auction=1&_sop=1";
 
 function setup() {
 	return convexTest(schema, modules);

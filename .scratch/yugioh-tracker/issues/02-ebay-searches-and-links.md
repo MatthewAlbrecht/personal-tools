@@ -23,13 +23,14 @@ Spec: docs/superpowers/specs/2026-10-19-yugioh-max-rarity-tracker-design.md
 - Packing:
   - A Card with a Chosen Printing searches only that Printing; an undecided Card searches every Candidate.
   - ~~Set codes are grouped by identical Exclusion sets, then split into even chunks of ≤ 8; fewest Exclusions first.~~ Superseded: set codes share a Search when the union of their Exclusions drops none of its Printings (no word of a wanted rarity or Card name), packed first-fit with the most Exclusions first, ≤ 8 per Search. The Chaos Lightsworn seed went from 7 Searches to 5.
+  - **Required rarity** (2026-10-21): a Search whose Printings all share one rarity, with an Overloaded set code among them, adds the rarity's OR group, `(ultimate,utr)` (`rarityTerms`, from `RARITIES`; QCSR also `qcscr`, not "25th"). Packing gives each such rarity's Overloaded set codes Searches of their own first, filled up with its other set codes, unless that costs Searches compared with packing everything together. Chaos Lightsworn seed: still 5 Searches, the first two now `(ultimate,utr)`. `Search` gained `requiredRarity` and `requiredTerms`; refresh visits now use `search.keywords`.
   - Set codes inside a Search are sorted.
   - The same Printing on two Cards is searched once.
 - Exclusions:
   - For an Overloaded set code, each other rarity contributes its first word ("Super Rare" → `super`, "Collector's Rare" → `collector`).
   - **Decision:** a word is dropped if any wanted rarity **or Card name** under that code contains it. Excluding `-secret` would drop Quarter Century Secret Rare, and `-super` would drop Super Polymerization. As a result, a wanted QCSR can never exclude Secret Rare, and plain "Rare" is never excluded, so those Searches stay a bit noisy.
   - Overloaded rarities come from the shared Printing, so rarities learned in another Deck apply here too.
-- Keywords: `(A,B) -super -ultra`. A single set code goes bare, without brackets.
+- Keywords: `(A,B) (ultimate,utr) -super -ultra`. A single set code goes bare, without brackets.
 - URLs:
   - Newly Listed: `https://www.ebay.com/sch/i.html?_nkw=…&_sop=10`.
   - Sold: `…&LH_Sold=1&LH_Complete=1&_sop=13`.

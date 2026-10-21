@@ -176,3 +176,50 @@ Auction, ending-soonest sort (`auctions.html`, item 940016620219, attributes onl
 ```
 
 Sold card: none captured (see Sold results).
+
+## Keyword syntax (checked 2026-10-21)
+
+How eBay reads the `_nkw` keyword string. The live checks below were signed-out `curl` fetches using the recipe in "Fetching", with `_sop=10&_ipg=240` so every result fits on one page. The pages are saved in `.scratch/yugioh-tracker/ebay-raw/syntax-2026-10-21/`, each next to a `.url` file holding the exact URL. None of them had a "Results matching fewer words" row, so every card counted was an exact match. The home-page `GET` returned `403`, but the cookie jar still let the searches through. The fourth search got the `403` "Something went wrong" page (`d-short-tokens-403.html`), so live checking stopped there.
+
+**Sources.** eBay's buyer help page on search tips could not be found. `https://www.ebay.com/help/buying/search-tips/search-tips?id=4011` serves an unrelated page about seller problems, and community threads say eBay removed its Boolean-search help text. The legacy Finding API keyword guide (`developer.ebay.com/api-docs/user-guides/static/finding-user-guide/finding-searching-by-keywords.html`) now returns `404`. The only first-party text found is the Browse API `q` parameter reference ([developer.ebay.com/develop/api/buy/browse_api.md](https://developer.ebay.com/develop/api/buy/browse_api.md), saved as `browse_api.md`). It documents the API, not the website, but it describes the same operators:
+
+> When successive keywords are separated by a space, the list of keywords is processed as an `AND` request. … When successive keywords are comma-separated and surrounded by a single pair of parentheses … the list of keywords is processed as an `OR` request. … The `*` wildcard character is **not** allowed in this field. … Strings longer than 100-characters are truncated.
+
+The 100-character limit is documented for the API only. **Unverified** on the website, but keep packed `_nkw` strings under 100 characters to be safe.
+
+Searches run:
+
+| File | `_nkw` | Results |
+|---|---|---|
+| `a-codes.html` | `(TDGS-EN040,TDGS-EN041)` | 142 |
+| `b-codes-and-rarity.html` | `(TDGS-EN040,TDGS-EN041) (ultimate,utr)` | 43 |
+| `c-quoted-phrase-in-or.html` | `(TDGS-EN040,TDGS-EN041) (ghost,"ultimate rare")` | 86 |
+| `d-short-tokens-403.html` | `(TDGS-EN040,TDGS-EN041) (ur,sr)` | `403`, not checked |
+
+### 1. Two OR groups in one query are ANDed: Verified
+
+`b` returned 43 results. In all 43 titles, one of the two codes appears and `ultimate` or `utr` appears as a whole word. In the 142 titles of `a`, 43 have `ultimate` or `utr` as a whole word, so `b` is exactly `a` filtered by the second group. This also agrees with the Browse API text above: a space means AND, and parentheses with commas mean OR.
+
+### 2. Quotes work inside an OR group: Verified
+
+`c` returned 86 results, and every title contains `ghost` or the adjacent phrase `ultimate rare`. In `a`, 86 titles match that rule. Three titles in `a` have "Ultimate" without "Rare" right after it ("…Unl Ed Ultimate TDGS-EN041…", twice "…Duelist Genesis Holo Ultimate"), and all three are missing from `c`. So a quoted item inside `( , )` is matched as a phrase, not as two loose words. Only a two-word phrase was tested. A single quoted token such as `"25th"`, as in `(quarter,qcsr,"25th")`, was not tested: **Unverified**, but nothing suggests eBay would handle it differently.
+
+### 3. Short tokens and `-word` with a group
+
+- **Whole-word vs substring matching for `ur` / `sr`: Unverified.** The test search got the `403`. Here is what the saved pages do show:
+  - `b` behaves like whole-word matching on `ultimate` and `utr` (see 1).
+  - In `a`, the only title with `UR` as a word is "Stardust Dragon - TDGS-EN040 - Ultra Rare - Unlimited - UR - …". Two titles hold `ur` only inside "Euro" (both Ultimate Rare listings), so `(ur,sr)` against those two codes would tell substring matching apart. Re-run it when allowed.
+- **A hyphen splits a token (Verified, `multi.html` from 2026-10-20).** `(RA01-EN008,MP23-EN001) -super` matched "Yugioh Ash Blossom & Joyous Spring RA01 EN008 Quarter Century Secret Rare 1st Ed", which has a space where the query has a hyphen. So eBay breaks `RA01-EN008` into `RA01` and `EN008`. If the website matches on whole tokens, `sr` would match "SR" in "SR01-EN001" only when the title also has `SR` as a separate word, or by a quirk of how the hyphen is split. **Unverified.**
+- **Minus combined with an OR group: Verified (`multi.html`).** In all 60 exact titles there, no title contains "super", and every title contains one of the codes. `-ultra` next to a required group such as `(ultimate,utr)` was not run. **Unverified**, but it is the same pattern.
+
+### 4. Stemming or fuzzy matching of `(ultimate,utr)` to "Ultra": Verified that it does not happen
+
+In `a`, 37 titles have "Ultra" but neither `ultimate` nor `utr` (for example "Red Dragon Archfiend - TDGS-EN041 - Ultra Rare - Unlimited Edition"). None of them appear among the 43 results in `b`. So eBay did not stem or fuzzy-match `ultimate` or `utr` to "Ultra". This test does not show how eBay handles plurals: whether `rare` also matches "rares" is **Unverified**. A community thread and a third-party guide say any advanced operator (quotes, `-`, parentheses) turns off eBay's keyword expansion. Those are not first-party sources, so treat that claim as **Unverified**, but it is consistent with these results.
+
+### What the app does with this
+
+- A Search whose Printings all have one rarity, with at least one Overloaded set code, adds that rarity's OR group after the set codes: `(TDGS-EN040,TDGS-EN041) (ultimate,utr) -ghost`. Per 1 and 4 this keeps only titles that say the rarity, without pulling in "Ultra" (`rarityTerms` in `src/lib/yugioh/searches.ts`).
+- `ur` and `sr` are kept for Ultra and Super Rare even though whole-word matching is Unverified (3). Since the group is ANDed with the set codes, a substring hit can only let in a Listing of a wanted set code, which title matching then sorts out.
+- `"25th"` is left out of Quarter Century Secret Rare's group. The question isn't syntax: RA01–RA04 Super, Ultra and Secret Rare titles say "25th Anniversary" too, and a Search for a QCSR can't leave out `-secret`.
+- 8 set codes plus a group and Exclusions run past 100 characters (about 120 for the Chaos Lightsworn Ultimate Rares). That limit is documented only for the Browse API. **Unverified** on the website; eBay returned the expected results for the 8-code Searches so far.
+

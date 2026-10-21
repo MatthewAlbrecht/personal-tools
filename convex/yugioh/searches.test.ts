@@ -171,10 +171,13 @@ describe("Exclusions", () => {
 			{ setCodes: ["RA01-EN008"], exclusions: ["super", "ultra"] },
 			{ setCodes: ["RA01-EN024"], exclusions: [] },
 		]);
+		// One Overloaded rarity alone, so its Search must say it too.
 		expect(keywords(result[0]?.newlyListedUrl ?? "")).toBe(
-			"RA01-EN008 -super -ultra",
+			"RA01-EN008 (quarter,qcsr,qcscr) -super -ultra",
 		);
-		expect(keywords(result[0]?.soldUrl ?? "")).toBe("RA01-EN008 -super -ultra");
+		expect(keywords(result[0]?.soldUrl ?? "")).toBe(
+			"RA01-EN008 (quarter,qcsr,qcscr) -super -ultra",
+		);
 		expect(keywords(result[1]?.newlyListedUrl ?? "")).toBe("RA01-EN024");
 	});
 

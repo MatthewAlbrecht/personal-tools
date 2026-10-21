@@ -163,6 +163,29 @@ function SearchCard({
 						</li>
 					))}
 				</ul>
+				{search.requiredRarity !== null && (
+					<div
+						className="flex flex-wrap items-center gap-1.5"
+						title={`Listings that don't say ${search.requiredRarity} are left out`}
+					>
+						<span className="text-muted-foreground text-xs">Must say</span>
+						<ul
+							aria-label="Required rarity"
+							className="flex flex-wrap items-center gap-1.5"
+						>
+							{search.requiredTerms.map((term, index) => (
+								<li key={term} className="flex items-center gap-1.5">
+									{index > 0 && (
+										<span className="text-muted-foreground text-xs">or</span>
+									)}
+									<Badge variant="secondary" className="font-medium">
+										{term}
+									</Badge>
+								</li>
+							))}
+						</ul>
+					</div>
+				)}
 				{search.exclusions.length > 0 && (
 					<div className="flex flex-wrap items-center gap-1.5">
 						<span className="text-muted-foreground text-xs">Leaves out</span>
