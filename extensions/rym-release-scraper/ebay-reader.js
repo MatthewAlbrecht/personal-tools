@@ -84,6 +84,94 @@ function parseEbayDuration(text) {
 	return found ? total : null;
 }
 
+// One unit of eBay's time left: "4d", "12h", "30m" (not "4 days").
+const EBAY_TIME_UNIT = String.raw`\d+\s*[dhm](?![a-z])`;
+const EBAY_DURATION = `${EBAY_TIME_UNIT}(?:\\s*${EBAY_TIME_UNIT}){0,2}`;
+// "Time left 1d 2h", "Ends in 3h", "Ending in 45m".
+const EBAY_TIME_LEFT_AFTER_LABEL = new RegExp(
+	String.raw`\b(?:time left|ends in|ending in):?\s*(${EBAY_DURATION})`,
+	"i",
+);
+// "4d 12h left", "45m left".
+const EBAY_TIME_LEFT_BEFORE_LEFT = new RegExp(
+	String.raw`(?:^|[^\w])(${EBAY_DURATION})\s+left\b`,
+	"i",
+);
+// "Ending today 5:12 PM", "Ends tomorrow 9:05 AM", "Ends Sat, 5:12 PM".
+const EBAY_END_CLOCK =
+	/\b(?:ending|ends)\s+(today|tomorrow|sun|mon|tue|wed|thu|fri|sat)[a-z]*,?\s+(?:at\s+)?(\d{1,2}):(\d{2})\s*(am|pm)?/i;
+const EBAY_WEEKDAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+
+/**
+ * The card's own text, each text node apart, leaving out the title (a title
+ * could say anything) and eBay's hidden decoys.
+ */
+function ebayCardText(li) {
+	const parts = [];
+	(function walk(node) {
+		for (const child of node.childNodes) {
+			if (child.nodeType === 3) {
+				const text = child.textContent.replace(/\s+/g, " ").trim();
+				if (text) parts.push(text);
+			} else if (
+				child.nodeType === 1 &&
+				!child.classList.contains("s-card__title") &&
+				child.getAttribute("aria-hidden") !== "true"
+			) {
+				walk(child);
+			}
+		}
+	})(li);
+	return parts.join(" ");
+}
+
+/**
+ * When an auction ends (Unix ms), from whatever time-left text its card
+ * shows, or null when it shows none. `.s-card__time-left` wins; otherwise any
+ * of eBay's formats: "4d 12h left", "Ends in 3h", "Time left 1d 2h",
+ * "Ending today 5:12 PM", "Ends Sat, 5:12 PM". Clock times are the viewer's.
+ */
+function ebayEndsAt(li, now) {
+	const marked = parseEbayDuration(
+		ebayText(li.querySelector(".s-card__time-left")),
+	);
+	if (marked !== null) return now + marked;
+
+	const text = ebayCardText(li);
+	const duration =
+		text.match(EBAY_TIME_LEFT_AFTER_LABEL) ??
+		text.match(EBAY_TIME_LEFT_BEFORE_LEFT);
+	if (duration) {
+		const ms = parseEbayDuration(duration[1]);
+		if (ms !== null) return now + ms;
+	}
+
+	const clock = text.match(EBAY_END_CLOCK);
+	if (!clock) return null;
+	const day = clock[1].toLowerCase();
+	let hour = Number(clock[2]);
+	const minute = Number(clock[3]);
+	const meridiem = clock[4]?.toLowerCase();
+	if (meridiem === "pm" && hour < 12) hour += 12;
+	if (meridiem === "am" && hour === 12) hour = 0;
+	const today = new Date(now);
+	let daysAhead = 0;
+	if (day === "tomorrow") {
+		daysAhead = 1;
+	} else if (day !== "today") {
+		// A weekday is the coming one; today would have said "today".
+		const target = EBAY_WEEKDAYS.indexOf(day.slice(0, 3));
+		daysAhead = (target - today.getDay() + 7) % 7 || 7;
+	}
+	return new Date(
+		today.getFullYear(),
+		today.getMonth(),
+		today.getDate() + daysAhead,
+		hour,
+		minute,
+	).getTime();
+}
+
 /** "Sold  Oct 18, 2026" → "2026-10-18". */
 function parseEbaySoldDate(text) {
 	const match = text.match(
@@ -146,10 +234,6 @@ function readEbayCard(li, now, soldPage) {
 		}
 	}
 
-	const timeLeftMs = parseEbayDuration(
-		ebayText(li.querySelector(".s-card__time-left")),
-	);
-
 	const caption = ebayText(li.querySelector(".s-card__caption"));
 	const soldDate = parseEbaySoldDate(caption);
 
@@ -169,7 +253,7 @@ function readEbayCard(li, now, soldPage) {
 			listingType:
 				bids !== null ? "auction" : bestOffer ? "bestOffer" : "buyItNow",
 			bids,
-			endsAt: timeLeftMs === null ? null : now + timeLeftMs,
+			endsAt: ebayEndsAt(li, now),
 			listedAt: null,
 			sellerLocation,
 			sold: soldPage || soldDate !== null,
@@ -213,7 +297,8 @@ function ebayListedTimes(listedDates, now) {
 
 /**
  * Reads every result on an eBay search-results page.
- * `now` (Unix ms) turns "time left" and year-less dates into timestamps.
+ * `now` (Unix ms) turns time left, end clock times and year-less dates into
+ * timestamps.
  * `url` is the page URL; on a sold search (`LH_Sold=1`) every result is sold.
  */
 function readEbayResults(doc, { now, url }) {

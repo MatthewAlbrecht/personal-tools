@@ -50,6 +50,24 @@ describe("a run in the list", () => {
 		});
 	});
 
+	test("a run counts the matched auctions it found no end time for", () => {
+		expect(
+			describeRun({ ...finished, auctionsWithoutEndTime: 2 }, NOW).listings,
+		).toBe("340 Listings captured, 18 new, 2 auctions with no end time");
+		expect(
+			describeRun({ ...finished, auctionsWithoutEndTime: 1 }, NOW).listings,
+		).toBe("340 Listings captured, 18 new, 1 auction with no end time");
+	});
+
+	test("says nothing about end times when every auction had one, or before it was counted", () => {
+		expect(
+			describeRun({ ...finished, auctionsWithoutEndTime: 0 }, NOW).listings,
+		).toBe("340 Listings captured, 18 new");
+		expect(describeRun(finished, NOW).listings).toBe(
+			"340 Listings captured, 18 new",
+		);
+	});
+
 	test("a finished run with failed pages says how many", () => {
 		expect(
 			describeRun({ ...finished, failedPages: 2, trigger: "t3" }, NOW),

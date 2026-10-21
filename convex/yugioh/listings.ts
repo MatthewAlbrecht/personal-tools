@@ -153,6 +153,7 @@ export const ingestEbayListings = internalMutation({
 		captured: v.number(),
 		created: v.number(),
 		updated: v.number(),
+		auctionsWithoutEndTime: v.number(),
 	}),
 	handler: async (ctx, args) => {
 		return await Listings.ingestEbayListings(ctx, args.listings, Date.now());

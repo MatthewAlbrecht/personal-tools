@@ -32,6 +32,7 @@ export type ClaimedRun = {
 export type VisitReport = PlannedVisit & {
 	listingsCaptured: number;
 	newListings: number;
+	auctionsWithoutEndTime?: number;
 	error: string | null;
 };
 
@@ -76,6 +77,7 @@ export async function requestRun(
 		failedPages: 0,
 		listingsCaptured: 0,
 		newListings: 0,
+		auctionsWithoutEndTime: 0,
 		error: null,
 		pageErrors: [],
 	});
@@ -166,6 +168,8 @@ export async function recordVisit(
 		failedPages: run.failedPages + (visit.error === null ? 0 : 1),
 		listingsCaptured: run.listingsCaptured + visit.listingsCaptured,
 		newListings: run.newListings + visit.newListings,
+		auctionsWithoutEndTime:
+			(run.auctionsWithoutEndTime ?? 0) + (visit.auctionsWithoutEndTime ?? 0),
 		pageErrors:
 			visit.error === null || run.pageErrors.length >= MAX_PAGE_ERRORS_SHOWN
 				? run.pageErrors

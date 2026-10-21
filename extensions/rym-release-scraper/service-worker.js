@@ -592,7 +592,7 @@ async function postYugiohCapture(path, body, label) {
 	}
 }
 
-// eBay search-results page → `{ captured, created, updated }`.
+// eBay search-results page → `{ captured, created, updated, auctionsWithoutEndTime }`.
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 	if (!message || message.type !== "YUGIOH_EBAY_CAPTURE") {
 		return;

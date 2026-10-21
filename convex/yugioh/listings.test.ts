@@ -89,12 +89,98 @@ afterEach(() => {
 	vi.useRealTimers();
 });
 
+/** Matches captured Listings to the Deck's Printing by hand, as an override would. */
+async function matchToPrinting(t: T, itemIds: string[]): Promise<void> {
+	await listings(t);
+	await t.run(async (ctx) => {
+		const printing = await ctx.db.query("yugiohPrintings").first();
+		if (!printing) throw new Error("missing Printing");
+		for (const itemId of itemIds) {
+			const listing = await ctx.db
+				.query("yugiohListings")
+				.withIndex("by_marketplace_and_itemId", (q) =>
+					q.eq("marketplace", "ebay").eq("itemId", itemId),
+				)
+				.unique();
+			if (!listing) throw new Error(`missing Listing ${itemId}`);
+			await ctx.db.patch("yugiohListings", listing._id, {
+				matchStatus: "match",
+				matchedPrintingId: printing._id,
+				matchOverridden: true,
+			});
+		}
+	});
+}
+
+describe("auctions without an end time", () => {
+	test("a capture counts the matched running auctions its page showed no time left for", async () => {
+		const t = setup();
+		const auction = (itemId: string, endsAt: number | null) =>
+			ebayListing({
+				itemId,
+				url: `https://www.ebay.com/itm/${itemId}`,
+				listingType: "auction",
+				bids: 2,
+				endsAt,
+			});
+		const page = [
+			auction("1", null),
+			auction("2", Date.now() + 3_600_000),
+			auction("3", null),
+			ebayListing({ itemId: "4", url: "https://www.ebay.com/itm/4" }),
+		];
+		await capture(t, page);
+		// 1, 2 and 4 are matched to a Printing; 3 isn't.
+		await matchToPrinting(t, ["1", "2", "4"]);
+
+		const res = await capture(t, page);
+
+		expect(await res.json()).toMatchObject({ auctionsWithoutEndTime: 1 });
+	});
+
+	test("an end time from an earlier page doesn't hide that this page had none", async () => {
+		const t = setup();
+		const withEnd = ebayListing({
+			listingType: "auction",
+			bids: 1,
+			endsAt: Date.now() + 3_600_000,
+		});
+		await capture(t, [withEnd]);
+		await matchToPrinting(t, [withEnd.itemId as string]);
+
+		const res = await capture(t, [{ ...withEnd, endsAt: null }]);
+
+		expect(await res.json()).toMatchObject({ auctionsWithoutEndTime: 1 });
+	});
+
+	test("sold auctions don't count", async () => {
+		const t = setup();
+		const sold = ebayListing({
+			listingType: "auction",
+			bids: 4,
+			sold: true,
+			soldDate: "2026-10-19",
+		});
+		await capture(t, [sold]);
+		await matchToPrinting(t, [sold.itemId as string]);
+
+		const res = await capture(t, [sold]);
+
+		expect(await res.json()).toMatchObject({ auctionsWithoutEndTime: 0 });
+	});
+});
+
 describe("eBay capture", () => {
 	test("a captured result becomes a Listing", async () => {
 		const t = setup();
 		const res = await capture(t, [ebayListing()]);
 		expect(res.status).toBe(200);
-		expect(await res.json()).toEqual({ captured: 1, created: 1, updated: 0 });
+		expect(await res.json()).toEqual({
+			captured: 1,
+			created: 1,
+			updated: 0,
+			auctionsWithoutEndTime: 0,
+		});
 
 		const [listing, ...rest] = await listings(t);
 		expect(rest).toEqual([]);
@@ -126,7 +212,12 @@ describe("eBay capture", () => {
 		const res = await capture(t, [
 			ebayListing({ title: "Ash Blossom RA01-EN008 QCSR (price drop)" }),
 		]);
-		expect(await res.json()).toEqual({ captured: 1, created: 0, updated: 1 });
+		expect(await res.json()).toEqual({
+			captured: 1,
+			created: 0,
+			updated: 1,
+			auctionsWithoutEndTime: 0,
+		});
 
 		const all = await listings(t);
 		expect(all).toHaveLength(1);
@@ -221,7 +312,12 @@ describe("eBay capture", () => {
 	test("the same result twice on one page is one Listing", async () => {
 		const t = setup();
 		const res = await capture(t, [ebayListing(), ebayListing()]);
-		expect(await res.json()).toEqual({ captured: 1, created: 1, updated: 0 });
+		expect(await res.json()).toEqual({
+			captured: 1,
+			created: 1,
+			updated: 0,
+			auctionsWithoutEndTime: 0,
+		});
 		expect(await listings(t)).toHaveLength(1);
 	});
 

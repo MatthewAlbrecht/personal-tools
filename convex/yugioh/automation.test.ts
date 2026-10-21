@@ -195,6 +195,7 @@ type Run = {
 	failedPages: number;
 	listingsCaptured: number;
 	newListings: number;
+	auctionsWithoutEndTime?: number;
 	error: string | null;
 	pageErrors: Array<{ kind: string; label: string; error: string }>;
 };
@@ -284,6 +285,41 @@ describe("recording a run", () => {
 		// The script sees the same run while it waits.
 		const status = await automation(t, { op: "status", runId });
 		expect((status.json as { run: Run }).run.status).toBe("finished");
+	});
+
+	test("a run totals the matched auctions its pages showed no end time for", async () => {
+		const t = setup();
+		const deckId = await t.mutation(api.yugioh.decks.createDeck, {
+			name: "Snake-Eye",
+		});
+		await addCard(t, deckId, ASH);
+		const { runId, visits } = await startRun(t);
+
+		await automation(t, {
+			op: "visit",
+			runId,
+			visit: {
+				...visits[0],
+				listingsCaptured: 48,
+				newListings: 2,
+				auctionsWithoutEndTime: 3,
+				error: null,
+			},
+		});
+		// An extension from before this count reports none.
+		await automation(t, {
+			op: "visit",
+			runId,
+			visit: {
+				...visits[1],
+				listingsCaptured: 20,
+				newListings: 0,
+				error: null,
+			},
+		});
+
+		const runs = (await t.query(api.yugioh.automation.listRuns, {})) as Run[];
+		expect(runs[0]).toMatchObject({ auctionsWithoutEndTime: 3 });
 	});
 
 	test("runs are listed newest first", async () => {

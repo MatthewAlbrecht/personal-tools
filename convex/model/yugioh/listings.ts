@@ -46,6 +46,12 @@ export type IngestReport = {
 	created: number;
 	/** Listings already known, updated in place. */
 	updated: number;
+	/**
+	 * Running auctions matched to a Printing that this page showed no time
+	 * left for, so it couldn't set their end time. A new Listing isn't matched
+	 * yet (its title is still to be read), so it counts from its next capture.
+	 */
+	auctionsWithoutEndTime: number;
 };
 
 /** Most Listings one capture may carry (an eBay page shows up to 240). */
@@ -76,6 +82,7 @@ export async function ingestEbayListings(
 		captured: byItemId.size,
 		created: 0,
 		updated: 0,
+		auctionsWithoutEndTime: 0,
 	};
 
 	for (const captured of byItemId.values()) {
@@ -105,6 +112,15 @@ export async function ingestEbayListings(
 			continue;
 		}
 
+		if (
+			captured.listingType === "auction" &&
+			captured.endsAt === null &&
+			!captured.sold &&
+			!existing.sold &&
+			matchedPrintingId(existing) !== null
+		) {
+			report.auctionsWithoutEndTime++;
+		}
 		const merged = mergeCapture(existing, captured);
 		// A sale keeps the exchange rate of the last capture before it sold.
 		const rateFrozen =

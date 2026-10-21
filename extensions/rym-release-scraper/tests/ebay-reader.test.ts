@@ -99,7 +99,7 @@ describe("newly listed, list view", () => {
 describe("newly listed details", () => {
 	const listings = read("ebay-newly-listed.html");
 
-	test("an auction on the newly-listed sort has bids but no end time", () => {
+	test("an auction whose card shows no time left has no end time", () => {
 		expect(byId(listings, "137849721063")).toMatchObject({
 			price: 10.5,
 			shipping: 5.56,
@@ -210,6 +210,75 @@ describe("ending soonest", () => {
 			shipping: null,
 			sellerLocation: "Greece",
 		});
+	});
+});
+
+describe("time left on any card layout (reconstructed fixture)", () => {
+	// SAVED_AT is Tuesday 2026-10-20, noon, in the viewer's local time.
+	const listings = read("ebay-time-left-layouts.html");
+	const HOUR = 60 * MINUTE;
+	const DAY = 24 * HOUR;
+
+	function endsAt(itemId: string): number | null {
+		return byId(listings, itemId).endsAt;
+	}
+
+	test("the time-left element, even outside the bids row", () => {
+		expect(endsAt("100000000001")).toBe(SAVED_AT + 4 * DAY + 12 * HOUR);
+	});
+
+	test('"4d 12h left" after the bids', () => {
+		expect(endsAt("100000000002")).toBe(SAVED_AT + 4 * DAY + 12 * HOUR);
+	});
+
+	test('"12h 30m left" on its own row', () => {
+		expect(endsAt("100000000003")).toBe(SAVED_AT + 12 * HOUR + 30 * MINUTE);
+	});
+
+	test('"Ends in 3h"', () => {
+		expect(endsAt("100000000004")).toBe(SAVED_AT + 3 * HOUR);
+	});
+
+	test('"45m left"', () => {
+		expect(endsAt("100000000005")).toBe(SAVED_AT + 45 * MINUTE);
+	});
+
+	test('"Ending today 5:12 PM" is today at that clock time', () => {
+		expect(endsAt("100000000006")).toBe(
+			new Date(2026, 9, 20, 17, 12).getTime(),
+		);
+	});
+
+	test('"Time left" then the duration, with no time-left class', () => {
+		expect(endsAt("100000000007")).toBe(SAVED_AT + DAY + 2 * HOUR);
+	});
+
+	test('"Ending tomorrow 9:05 AM"', () => {
+		expect(endsAt("100000000008")).toBe(new Date(2026, 9, 21, 9, 5).getTime());
+	});
+
+	test('"Ends Sat, 5:12 PM" is the coming Saturday', () => {
+		expect(endsAt("100000000009")).toBe(
+			new Date(2026, 9, 24, 17, 12).getTime(),
+		);
+	});
+
+	test("time left in the secondary rows, beside the listing date", () => {
+		expect(endsAt("100000000010")).toBe(SAVED_AT + 6 * DAY + 23 * HOUR);
+	});
+
+	test("delivery estimates and other rows aren't read as an end time", () => {
+		expect(byId(listings, "100000000011")).toMatchObject({
+			listingType: "buyItNow",
+			endsAt: null,
+		});
+		expect(endsAt("100000000012")).toBeNull();
+	});
+
+	test("the listing date still reads beside a time left", () => {
+		expect(byId(listings, "100000000010").listedAt).toBe(
+			new Date(2026, 9, 19, 2, 24).getTime(),
+		);
 	});
 });
 

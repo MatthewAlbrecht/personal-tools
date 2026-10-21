@@ -366,6 +366,11 @@ export const yugiohAutomationRunValidator = v.object({
 	failedPages: v.number(),
 	listingsCaptured: v.number(),
 	newListings: v.number(),
+	/**
+	 * Matched running auctions its eBay pages showed no time left for, so no
+	 * end time (and no auction push). Missing on runs before it was counted.
+	 */
+	auctionsWithoutEndTime: v.optional(v.number()),
 	/** Why the run as a whole failed (never picked up, timed out, abandoned). */
 	error: v.union(v.string(), v.null()),
 	/** The first few pages that failed, for the runs list. */
@@ -379,6 +384,11 @@ export const yugiohVisitReportValidator = v.object({
 	listingsCaptured: v.number(),
 	/** Of those, the ones the app hadn't seen before. */
 	newListings: v.number(),
+	/**
+	 * Matched running auctions the page showed no time left for. Extensions
+	 * from before this count leave it out.
+	 */
+	auctionsWithoutEndTime: v.optional(v.number()),
 	/** Why the page captured nothing, or null when it worked. */
 	error: v.union(v.string(), v.null()),
 });

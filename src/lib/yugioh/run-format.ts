@@ -40,6 +40,8 @@ export type RunSummary = {
 	failedPages: number;
 	listingsCaptured: number;
 	newListings: number;
+	/** Matched running auctions shown with no time left; missing on older runs. */
+	auctionsWithoutEndTime?: number;
 	error: string | null;
 };
 
@@ -50,7 +52,10 @@ export type RunLines = {
 	outcome: string;
 	/** "8 Search pages, 3 TCGplayer pages"; null before any page */
 	pages: string | null;
-	/** "340 Listings captured, 18 new"; null before any page */
+	/**
+	 * "340 Listings captured, 18 new", plus ", 2 auctions with no end time"
+	 * when some had none; null before any page
+	 */
 	listings: string | null;
 	tone: "running" | "done" | "warn" | "failed";
 };
@@ -77,10 +82,15 @@ export function describeRun(run: RunSummary, now: number): RunLines {
 				]
 					.filter(Boolean)
 					.join(", ");
+	const noEndTime = run.auctionsWithoutEndTime ?? 0;
 	const listings =
 		run.pagesVisited === 0
 			? null
-			: `${plural(run.listingsCaptured, "Listing")} captured, ${run.newListings} new`;
+			: `${plural(run.listingsCaptured, "Listing")} captured, ${run.newListings} new${
+					noEndTime > 0
+						? `, ${plural(noEndTime, "auction")} with no end time`
+						: ""
+				}`;
 
 	if (run.status === "requested") {
 		return {

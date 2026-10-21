@@ -14,7 +14,8 @@ const MAX_PAUSE_MS = 30_000;
  * - `call(body)` posts one step to the app (`/api/yugioh/automation`) and
  *   resolves with its JSON.
  * - `visitPage(visit)` opens the page, waits for its capture and closes it,
- *   resolving with `{ listingsCaptured, newListings, error }`.
+ *   resolving with `{ listingsCaptured, newListings, error }` (eBay pages
+ *   add `auctionsWithoutEndTime`).
  * - `pause(ms)` waits; `random()` is Math.random.
  */
 async function runAutomatedRun({ call, visitPage, pause, random }) {
@@ -116,6 +117,10 @@ function visitOutcome(response) {
 		listingsCaptured:
 			typeof backend.captured === "number" ? backend.captured : 0,
 		newListings,
+		auctionsWithoutEndTime:
+			typeof backend.auctionsWithoutEndTime === "number"
+				? backend.auctionsWithoutEndTime
+				: 0,
 		error: null,
 	};
 }

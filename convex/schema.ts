@@ -1964,6 +1964,7 @@ export default defineSchema({
 		label: v.string(),
 		listingsCaptured: v.number(),
 		newListings: v.number(),
+		auctionsWithoutEndTime: v.optional(v.number()),
 		error: v.union(v.string(), v.null()),
 	}).index("by_runId", ["runId"]),
 

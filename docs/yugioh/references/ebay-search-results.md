@@ -4,6 +4,8 @@ How a content script can read each result on an eBay US search page (`https://ww
 
 This is the server-rendered HTML that eBay sends before any JavaScript runs. A real browser runs scripts afterwards, which may change some attributes, for example swapping lazy image `src` values.
 
+**Signed-out pages differ from what a signed-in browser shows (corrected 2026-10-20).** Every page here was a signed-out `curl` fetch, and those Newly Listed pages held only one or two auctions. Looking at Newly Listed in a signed-in browser, the user sees auctions with "4d 12h left"-style time left, and the dev data has end times for 6 of the 9 auctions captured. So **don't read "no time left on Newly Listed" below as a rule.** It is only what these signed-out pages showed. The reader looks for time left on every card, whatever the sort (see "Time left on any layout").
+
 ## Fetching
 
 - **Plain `curl` gets a 403 (verified).** `curl -A "<Chrome UA>" -H 'Accept-Language: en-US'` with no other headers returned `403` and a 1.8 KB "SORRY Something went wrong on our end" page. It was not a "Pardon our interruption" captcha.
@@ -53,7 +55,7 @@ Everything below is relative to one `li.s-card`.
 | Attribute rows | `.su-card-container__attributes__primary > .s-card__attribute-row` | all | Each row is plain text in a `span.su-styled-text.secondary`. Tell rows apart by their text (see formats below), not by position |
 | Listing date | `.su-card-container__attributes__secondary > .s-card__attribute-row:first-child span` | `active.html`, `range.html`, `multi.html` | Only on the newly-listed sort |
 | Seller | `.su-card-container__attributes__secondary .s-card__attribute-row` with two `span.su-styled-text.primary.large` | `active-list.html`, `multi.html` | **List view only**. Grid view (`active.html`) has none (0 matches) |
-| Auction time left | `.s-card__time > .s-card__time-left` | `auctions.html`, `ending-soon.html` | Has a modifier `s-card__time--soon` or `s-card__time--urgent` |
+| Auction time left | `.s-card__time > .s-card__time-left`, else any card text in a time-left format | `auctions.html`, `ending-soon.html` (the class) | Has a modifier `s-card__time--soon` or `s-card__time--urgent`. Signed-in Newly Listed shows time left too, but the layout wasn't saved (see "Time left on any layout") |
 | Badges | `.s-card__program-badge-container--<kind>` | various | `--topRatedSeller` (icon only, `aria-label="Top Rated Plus"`, so its row text is `''`), `--authenticityGuarantee` "Authenticity Guarantee" |
 | Caption | `.s-card__caption` (above the title link) | `active.html` etc. | Only seen holding `<span class="signal signal--trustworthy">NEW LOW PRICE</span>`. **Unverified:** the sold date probably goes here on sold pages |
 | Sponsored | `.s-card__sep > b[aria-labelledby]` → resolve the ids | all | See Page structure |
@@ -70,11 +72,11 @@ All prices on ebay.com were in USD, including sellers in the UK, Canada, Austral
 | Price range (variation listing) | `$A to $B` in one `s-card__price` span | `$0.99 to $10.00`, `$1.89 to $109.99` (`range.html`) |
 | Discount | price span, spacer, strikethrough span | `$3.40` + `$5.00` (`range.html`) |
 | Format | its own row | `Buy It Now`, `or Best Offer` (`active.html`) |
-| Auction (newly-listed sort) | `N bids` / `N bid` row, **no time left** | `0 bids` (`active.html`, item 900018651245) |
+| Auction (newly-listed sort, signed out) | `N bids` / `N bid` row, with no time left in these signed-out pages | `0 bids` (`active.html`, item 900018651245). A signed-in browser shows time left here too (user report, unverified markup) |
 | Auction + Buy It Now | two `s-card__price` rows | `$1.19`, `0 bids`, `$3.25`, `Buy It Now` (`active.html`). **Read the first price as the current bid and the second as the Buy It Now price** |
 | Auction (ending-soonest sort) | `N bids · Time left Xd Yh` in one row. The `·` is its own span, and "Time left" is `span.clipped` | `0 bids · Time left 4m`, `2 bids · Time left 10m`, `0 bids · Time left 1h 56m`, `1 bid · Time left 1d 2h` (`ending-soon.html`) |
 | Time-left units | `Nd Nh`, `Nd`, `Nh Nm`, `Nh`, `Nm` | from the tally across `auctions.html` |
-| End clock time `(Today 08:12 PM)` | **not present** in any file | — |
+| End clock time | **not present** in any saved file. The reader still accepts `Ending today 5:12 PM`, `Ending tomorrow 9:05 AM` and `Ends Sat, 5:12 PM` | — |
 | Auction with Best Offer | both rows appear | `0 bids · Time left 5m`, then `or Best Offer` (`auctions.html`, item 940016620219) |
 | Shipping | `+$N.NN delivery`, `Free delivery`, `+$N.NN shipping estimate`, `Free delivery in 2-4 days`, `+$N.NN delivery in N-N days`, `Free local pickup` | `+$4.99 delivery`, `+$25.88 shipping estimate` (`active.html`). "Shipping not specified" **not seen** |
 | Import fees (extra row) | `Import fees due prior to delivery`, `Import fees paid at checkout`, `Customs services and international tracking provided` | `active.html`, `multi.html` |
@@ -85,7 +87,23 @@ All prices on ebay.com were in USD, including sellers in the UK, Canada, Austral
 
 **Listing date has no year.** `range.html` (newly listed) goes `Sep-9 11:09`, `Aug-15 19:41`, `Jan-11 08:05`, `Apr-18 23:40`, `Nov-27 14:38`… The order is newest first, so Apr-18 and Nov-27 must be from earlier years. To get the year, walk down the list and subtract a year each time the month goes up. The page shows no timezone. **Unverified:** whether the time is the viewer's local time or US Pacific time.
 
-**Which rows appear depends on the sort (verified).** On the newly-listed sort (`_sop=10`), cards have a listing-date row and auctions show only `N bids`. On the ending-soonest sort (`_sop=1`), cards have `Time left` and no listing date (0 date rows in `auctions.html` and `ending-soon.html`).
+**Which rows appear depends on the sort, and on sign-in.** In these signed-out pages, newly-listed cards (`_sop=10`) have a listing-date row and auctions show only `N bids`. Ending-soonest cards (`_sop=1`) have `Time left` and no listing date (0 date rows in `auctions.html` and `ending-soon.html`). A signed-in browser shows time left on Newly Listed auctions as well (user report, 2026-10-20). That layout wasn't saved, so the reader doesn't rely on one.
+
+## Time left on any layout
+
+The reader (`ebayEndsAt` in `extensions/rym-release-scraper/ebay-reader.js`) takes `.s-card__time-left` when a card has it. Otherwise it searches the card's text, leaving out the title and `aria-hidden` decoys, for:
+
+| Format | Read as |
+|---|---|
+| `4d 12h left`, `12h 30m left`, `45m left` | now + the duration |
+| `Time left 1d 2h` (label and value in separate spans, no class) | now + the duration |
+| `Ends in 3h`, `Ending in 45m` | now + the duration |
+| `Ending today 5:12 PM`, `Ends tomorrow 9:05 AM` | that clock time today or tomorrow, in the viewer's time |
+| `Ends Sat, 5:12 PM` | the coming Saturday at that time |
+
+A unit must be a bare letter (`4d`, not `4 days`), so `Free delivery in 2-4 days` is never read as an end time. Tests: `tests/fixtures/ebay-time-left-layouts.html`. That fixture is **reconstructed**: real list-view card markup with each format dropped in. **To verify against the real thing,** save a signed-in Newly Listed page with auctions as `.scratch/yugioh-tracker/ebay-raw/newly-listed-signed-in.html` ("Save Page As → HTML only"), and trim it into a fixture.
+
+Each automated run counts the matched running auctions whose page showed no time left. Settings → Automated runs shows the count ("2 auctions with no end time"). A count that keeps climbing means a layout the reader doesn't know yet.
 
 ## Sold results (unverified)
 

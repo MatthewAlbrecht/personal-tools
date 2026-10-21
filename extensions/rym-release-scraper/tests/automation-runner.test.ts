@@ -176,13 +176,24 @@ describe("an automated run", () => {
 });
 
 describe("what a page's capture counts as", () => {
-	test("an eBay page counts its Listings and the new ones", () => {
+	test("an eBay page counts its Listings, the new ones and the auctions with no end time", () => {
 		expect(
 			globalThis.visitOutcome({
 				ok: true,
-				backend: { synced: true, captured: 48, created: 12, updated: 36 },
+				backend: {
+					synced: true,
+					captured: 48,
+					created: 12,
+					updated: 36,
+					auctionsWithoutEndTime: 2,
+				},
 			}),
-		).toEqual({ listingsCaptured: 48, newListings: 12, error: null });
+		).toEqual({
+			listingsCaptured: 48,
+			newListings: 12,
+			auctionsWithoutEndTime: 2,
+			error: null,
+		});
 	});
 
 	test("a TCGplayer page counts its Listings and sales", () => {
