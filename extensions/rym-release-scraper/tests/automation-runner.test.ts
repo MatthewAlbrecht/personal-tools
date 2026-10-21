@@ -1,7 +1,8 @@
 // @vitest-environment node
 // The automated run as the service worker drives it: claim a run, visit each
-// page in its plan with a modest pause between them, report every page, then
-// finish. The app, the tabs and the clock are fakes.
+// page in its plan (Searches and products shuffled) with a varied pause
+// between them, report every page, then finish. The app, the tabs, the clock
+// and the random draws are fakes.
 
 import { describe, expect, test } from "vitest";
 import "../automation-runner.js";
@@ -24,8 +25,22 @@ declare global {
 	}) => Promise<{ runId: string; pagesVisited: number } | null>;
 	var visitOutcome: (response: unknown) => Outcome;
 	var checkPageAt: (url: string | undefined) => string | null;
-	var MIN_PAUSE_MS: number;
-	var MAX_PAUSE_MS: number;
+}
+
+/**
+ * The pauses of a two-page run (a Search page, then a TCGplayer page, so
+ * nothing to shuffle) whose random() gives `draws` in order.
+ */
+async function pauses(...draws: number[]): Promise<string[]> {
+	const { deps, events } = fakeRun([], { plan: [PLAN[0], PLAN[2]] as Visit[] });
+	deps.random = scripted(...draws);
+	await globalThis.runAutomatedRun(deps);
+	return events.filter((event) => event.startsWith("pause"));
+}
+
+/** A random() that gives `draws` in order, then 0.5. */
+function scripted(...draws: number[]): () => number {
+	return () => draws.shift() ?? 0.5;
 }
 
 const PLAN: Visit[] = [
@@ -91,7 +106,7 @@ describe("an automated run", () => {
 		const result = await globalThis.runAutomatedRun(deps);
 
 		expect(result).toEqual({ runId: "run1", pagesVisited: 3 });
-		const pause = `pause ${(globalThis.MIN_PAUSE_MS + globalThis.MAX_PAUSE_MS) / 2}`;
+		const pause = "pause 40000";
 		expect(events).toEqual([
 			"call claim",
 			"visit ebayNewlyListed",
@@ -112,9 +127,42 @@ describe("an automated run", () => {
 		expect(calls.at(-1)).toEqual({ op: "finish", runId: "run1", error: null });
 	});
 
-	test("pauses a modest 15 to 30 seconds between pages", () => {
-		expect(globalThis.MIN_PAUSE_MS).toBe(15_000);
-		expect(globalThis.MAX_PAUSE_MS).toBe(30_000);
+	test("pauses 20 to 60 seconds between pages, by a draw", async () => {
+		// The first draw picks a short or long pause, the second its length.
+		expect(await pauses(0.5, 0)).toEqual(["pause 20000"]);
+		expect(await pauses(1, 1)).toEqual(["pause 60000"]);
+	});
+
+	test("about 1 in 6 pauses is a longer 1½ to 3 minutes", async () => {
+		expect(await pauses(0.16, 0)).toEqual(["pause 90000"]);
+		expect(await pauses(0, 1)).toEqual(["pause 180000"]);
+		expect(await pauses(0.17, 0)).toEqual(["pause 20000"]);
+	});
+
+	test("shuffles the Search pages and the TCGplayer pages; pages before an auction ends stay first", async () => {
+		function page(kind: string, label: string): Visit {
+			return { url: `https://example.com/${label}`, kind, label };
+		}
+		const plan = [
+			page("ebayEndingSoon", "soon-1"),
+			page("ebayEndingSoon", "soon-2"),
+			page("ebayNewlyListed", "a"),
+			page("ebaySold", "b"),
+			page("ebayNewlyListed", "c"),
+			page("tcgplayer", "p"),
+			page("tcgplayer", "q"),
+		];
+		const { deps, calls } = fakeRun([], { plan });
+		// Fisher–Yates from the end, each draw 0: every page swaps with the first.
+		deps.random = () => 0;
+
+		await globalThis.runAutomatedRun(deps);
+
+		expect(
+			calls
+				.filter((c) => c.op === "visit")
+				.map((c) => (c.visit as Visit).label),
+		).toEqual(["soon-1", "soon-2", "b", "c", "a", "q", "p"]);
 	});
 
 	test("does nothing when no run was asked for", async () => {
@@ -203,7 +251,7 @@ describe("a check page", () => {
 			"call claim",
 			"visit ebayNewlyListed",
 			"call visit",
-			`pause ${(globalThis.MIN_PAUSE_MS + globalThis.MAX_PAUSE_MS) / 2}`,
+			"pause 40000",
 			"visit ebaySold",
 			"call visit",
 		]);

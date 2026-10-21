@@ -225,7 +225,7 @@ describe("run timing", () => {
 	const DAY = 24 * HOUR;
 	const zone = { timeZone: "America/New_York" };
 
-	test("before any Listing, it runs every 3 hours", () => {
+	test("before any Listing, it runs about every 3 hours", () => {
 		expect(
 			describeRunTiming(
 				{ status: "learning", dataSince: null, busyHours: [], ...zone },
@@ -233,7 +233,7 @@ describe("run timing", () => {
 			),
 		).toEqual({
 			summary:
-				"Every 3 hours for now. Once it has about 4 weeks of Listings, it learns when sellers post and runs around those times.",
+				"About every 3 hours for now, and not from 1 to 7 AM. Once it has about 4 weeks of Listings, it learns when sellers post and runs around those times.",
 			busyTimes: [],
 		});
 	});
@@ -250,7 +250,7 @@ describe("run timing", () => {
 				NOW,
 			).summary,
 		).toBe(
-			"Every 3 hours for now. Still learning when sellers post: 12 days of data so far, of about 28.",
+			"About every 3 hours for now, and not from 1 to 7 AM. Still learning when sellers post: 12 days of data so far, of about 28.",
 		);
 		expect(
 			describeRunTiming(
@@ -278,7 +278,7 @@ describe("run timing", () => {
 			NOW,
 		);
 		expect(learned.summary).toBe(
-			"Sellers post most at these times (New York time). It runs every hour during them and the hour after, and at least every 6 hours otherwise.",
+			"Sellers post most at these times (New York time). It runs about every hour during them and the hour after, and at least every 6 hours otherwise, but not from 1 to 7 AM.",
 		);
 		expect(learned.busyTimes).toEqual([
 			"Sun 7–9 PM",
@@ -300,7 +300,7 @@ describe("run timing", () => {
 			),
 		).toEqual({
 			summary:
-				"Every 3 hours. No hours of the week stand out yet for when sellers post.",
+				"About every 3 hours, and not from 1 to 7 AM. No hours of the week stand out yet for when sellers post.",
 			busyTimes: [],
 		});
 	});

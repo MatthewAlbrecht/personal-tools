@@ -63,11 +63,14 @@ beforeEach(() => {
 	vi.useFakeTimers();
 	vi.setSystemTime(NOW);
 	fakes.reads = new Map();
+	// Each full run's gap draw (ticket 19): 0.4 is the fixed 3 hours.
+	vi.spyOn(Math, "random").mockReturnValue(0.4);
 });
 
 afterEach(() => {
 	vi.unstubAllEnvs();
 	vi.useRealTimers();
+	vi.restoreAllMocks();
 });
 
 /** Runs what's due in the next few seconds (title reads), not later pushes. */
@@ -245,6 +248,7 @@ describe("the schedule", () => {
 			alreadyOpen: false,
 			kind: null,
 			lastCheckPage: null,
+			startDelayMs: 0,
 		});
 		at(NOW + 2 * HOUR + 50 * MINUTE);
 		expect((await scheduledAsk(t)).runId).toBeNull();
@@ -282,6 +286,24 @@ describe("refresh visits", () => {
 		expect((await scheduledAsk(t)).runId).toBeNull();
 		at(endsAt - 25 * MINUTE);
 		expect((await scheduledAsk(t)).kind).toBe("refresh");
+
+		expect((await claim(t)).visits).toEqual([
+			{ url: ASH_ENDING_SOON, kind: "ebayEndingSoon", label: "RA01-EN008" },
+		]);
+	});
+
+	test("a refresh run claimed after its start delay still visits the auction asked for near the window's end", async () => {
+		const t = setup();
+		await deck(t);
+		const endsAt = NOW + 2 * HOUR;
+		await capture(t, { endsAt });
+		at(endsAt - HOUR);
+		await fullRun(t);
+
+		at(endsAt - 18 * MINUTE);
+		expect((await scheduledAsk(t)).kind).toBe("refresh");
+		// Up to 90 s of start delay, then Chrome opens and the extension claims.
+		at(endsAt - 16 * MINUTE);
 
 		expect((await claim(t)).visits).toEqual([
 			{ url: ASH_ENDING_SOON, kind: "ebayEndingSoon", label: "RA01-EN008" },

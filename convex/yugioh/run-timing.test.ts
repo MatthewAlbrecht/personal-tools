@@ -55,11 +55,15 @@ beforeEach(() => {
 	vi.stubEnv("CONVEX_SERVER_SECRET", SECRET);
 	vi.useFakeTimers();
 	vi.setSystemTime(NOW);
+	// Each full run's gap draw (ticket 19): 0.4 is the fixed 3 hours while
+	// learning, and an hour less 1 minute in busy hours.
+	vi.spyOn(Math, "random").mockReturnValue(0.4);
 });
 
 afterEach(() => {
 	vi.unstubAllEnvs();
 	vi.useRealTimers();
+	vi.restoreAllMocks();
 });
 
 function at(time: number): void {
@@ -234,6 +238,8 @@ describe("once the posting times are learned", () => {
 	});
 
 	test("outside busy hours, full runs spread out but never more than 6 hours apart", async () => {
+		// The longest gap draw.
+		vi.spyOn(Math, "random").mockReturnValue(1);
 		const t = setup();
 		await deck(t);
 		await dataFor(t, 30);

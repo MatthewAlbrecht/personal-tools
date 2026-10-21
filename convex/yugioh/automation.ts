@@ -26,6 +26,7 @@ const runValidator = yugiohAutomationRunValidator.extend({
  * The script asks for a run; an open run is returned instead of a new one.
  * A scheduled ask with nothing due gets a null `runId` and `kind`.
  * `lastCheckPage` is set while scheduled runs wait after a check page.
+ * `startDelayMs`: how long the script waits before opening Chrome.
  */
 export const requestRun = internalMutation({
 	args: { trigger: yugiohRunTriggerValidator },
@@ -34,6 +35,7 @@ export const requestRun = internalMutation({
 		alreadyOpen: v.boolean(),
 		kind: v.union(yugiohRunKindValidator, v.null()),
 		lastCheckPage: v.union(yugiohLastCheckPageValidator, v.null()),
+		startDelayMs: v.number(),
 	}),
 	handler: async (ctx, args) =>
 		await Automation.requestRun(ctx, args.trigger, Date.now()),

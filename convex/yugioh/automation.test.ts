@@ -23,7 +23,8 @@ const modules = import.meta.glob("/convex/**/*.ts");
 const SECRET = "test-server-secret-0123456789";
 const MINUTE = 60 * 1000;
 const HOUR = 60 * MINUTE;
-const NOW = Date.UTC(2026, 9, 20, 12, 0);
+/** 10 AM in Denver, the time zone with no device: outside the overnight pause. */
+const NOW = Date.UTC(2026, 9, 20, 16, 0);
 
 const ASH = {
 	cardName: "Ash Blossom & Joyous Spring",
@@ -354,14 +355,19 @@ describe("one run at a time", () => {
 			alreadyOpen: true,
 			kind: "full",
 			lastCheckPage: null,
+			startDelayMs: 0,
 		});
 		expect(await t.query(api.yugioh.automation.listRuns, {})).toHaveLength(1);
 	});
 
-	test("a run left open for over 2 hours is closed as failed when the next is asked for", async () => {
+	test("a run left open for over 3½ hours is closed as failed when the next is asked for", async () => {
 		const t = setup();
 		const { runId: stuck } = await startRun(t);
-		vi.setSystemTime(NOW + 2 * HOUR + MINUTE);
+		// Within the script's 3-hour limit, a long run is still live.
+		vi.setSystemTime(NOW + 3 * HOUR);
+		const during = await automation(t, { op: "request", trigger: "manual" });
+		expect((during.json as { alreadyOpen: boolean }).alreadyOpen).toBe(true);
+		vi.setSystemTime(NOW + 3.5 * HOUR + MINUTE);
 
 		// By hand: a scheduled ask wouldn't be due for a full run yet.
 		const next = await automation(t, { op: "request", trigger: "manual" });
@@ -371,7 +377,7 @@ describe("one run at a time", () => {
 		expect(runs[1]).toMatchObject({
 			_id: stuck,
 			status: "failed",
-			endedAt: NOW + 2 * HOUR + MINUTE,
+			endedAt: NOW + 3.5 * HOUR + MINUTE,
 			error: "Didn't finish. Closed when the next run was asked for.",
 		});
 		expect(runs[0]?.status).toBe("requested");

@@ -14,6 +14,7 @@ import {
 	buildVisitPlan,
 	inCheckPageCoolDown,
 	scheduledRunDue,
+	startDelay,
 	visitMarketplace,
 } from "../../../src/lib/yugioh/automation";
 import { MARKETPLACE_LABELS } from "../../../src/lib/yugioh/listing-format";
@@ -41,6 +42,12 @@ export const MAX_RUNS_SHOWN = 20;
  */
 const RECENT_RUNS_READ = 50;
 
+/**
+ * The gap draw for a full run that has none (from before ticket 19): the
+ * 3 hours of the fixed schedule while learning.
+ */
+const LEGACY_GAP_DRAW = 0.4;
+
 /** Most auctions ending in the next 45 minutes read for refresh visits. */
 const MAX_ENDING_AUCTIONS = 100;
 
@@ -48,12 +55,15 @@ const MAX_ENDING_AUCTIONS = 100;
  * A run asked for (or the one already open), with its kind; `runId` and
  * `kind` are null when a scheduled ask finds nothing due. `lastCheckPage`
  * is set while scheduled runs wait after a run stopped on a check page.
+ * `startDelayMs`: how long the script waits before opening Chrome for a new
+ * run (0 unless a new scheduled run).
  */
 export type RunRequest = {
 	runId: Id<"yugiohAutomationRuns"> | null;
 	alreadyOpen: boolean;
 	kind: RunKind | null;
 	lastCheckPage: LastCheckPage | null;
+	startDelayMs: number;
 };
 
 export type LastCheckPage = Infer<typeof yugiohLastCheckPageValidator>;
@@ -87,6 +97,9 @@ const OPEN_STATUSES = ["requested", "running"] as const;
  * For 6 hours after a run stopped on a check page, the LaunchAgent gets no
  * run. Hand and T3 Code runs (started with "Run now") still start, and the
  * reply says where the last run stopped.
+ *
+ * A new scheduled run comes with a random start delay (`startDelay`), so
+ * runs don't start on the 10-minute marks. Draws come from Math.random.
  */
 export async function requestRun(
 	ctx: MutationCtx,
@@ -106,12 +119,14 @@ export async function requestRun(
 					alreadyOpen: true,
 					kind: runKind(run),
 					lastCheckPage,
+					startDelayMs: 0,
 				};
 			}
 			await ctx.db.patch("yugiohAutomationRuns", run._id, {
 				status: "failed",
 				endedAt: now,
 				error: "Didn't finish. Closed when the next run was asked for.",
+				...nextGapDraw(run),
 			});
 		}
 	}
@@ -120,7 +135,13 @@ export async function requestRun(
 			? await scheduledRun(ctx, lastCheckPage, now)
 			: "full";
 	if (kind === null) {
-		return { runId: null, alreadyOpen: false, kind: null, lastCheckPage };
+		return {
+			runId: null,
+			alreadyOpen: false,
+			kind: null,
+			lastCheckPage,
+			startDelayMs: 0,
+		};
 	}
 	const runId = await ctx.db.insert("yugiohAutomationRuns", {
 		trigger,
@@ -141,7 +162,13 @@ export async function requestRun(
 		pageErrors: [],
 		checkPage: null,
 	});
-	return { runId, alreadyOpen: false, kind, lastCheckPage };
+	return {
+		runId,
+		alreadyOpen: false,
+		kind,
+		lastCheckPage,
+		startDelayMs: startDelay(trigger, kind, Math.random()),
+	};
 }
 
 /**
@@ -183,6 +210,7 @@ async function scheduledRun(
 		lastFullRunAt: lastFull?.requestedAt ?? null,
 		lastRunAt: recent[0]?.requestedAt ?? null,
 		lastCheckPageAt: lastCheckPage?.at ?? null,
+		gapDraw: lastFull?.gapDraw ?? LEGACY_GAP_DRAW,
 		auctions: await readEndingAuctions(ctx, now),
 		timing: await readRunTiming(ctx),
 		now,
@@ -240,7 +268,9 @@ export async function claimRun(
 		.withIndex("by_status", (q) => q.eq("status", "requested"))
 		.first();
 	if (!run) return null;
-	const visits = await readVisitPlan(ctx, runKind(run), now);
+	// The auctions to refresh are those of the ask, not the claim: a
+	// scheduled run's start delay must not push one under 17 minutes.
+	const visits = await readVisitPlan(ctx, runKind(run), run.requestedAt);
 	await ctx.db.patch("yugiohAutomationRuns", run._id, {
 		status: "running",
 		startedAt: now,
@@ -251,7 +281,7 @@ export async function claimRun(
 
 /**
  * The pages a run visits, across all Decks. First the refresh pages of
- * auctions ending in the next 45 minutes that await their push. Then, for a
+ * auctions ending within 45 minutes of `now` that await their push. Then, for a
  * full run, the Searches packed from every Card's searched Printings (as the
  * Searches tab packs one Deck's), then the TCGplayer product page of each of
  * those Printings that has one.
@@ -365,6 +395,7 @@ async function stopOnCheckPage(
 			kind: visit.kind,
 			label: visit.label,
 		},
+		...nextGapDraw(run),
 	});
 	await queueCheckPagePush(ctx, run._id, marketplace, now);
 	if (runKind(run) === "full") await relearnRunTiming(ctx, now);
@@ -389,8 +420,17 @@ export async function finishRun(
 		status: failure === null ? "finished" : "failed",
 		endedAt: now,
 		error: failure,
+		...nextGapDraw(run),
 	});
 	if (runKind(run) === "full") await relearnRunTiming(ctx, now);
+}
+
+/**
+ * A full run that ends draws where the gap to the next scheduled full run
+ * falls, stored on it so every ask until then gets the same answer.
+ */
+function nextGapDraw(run: Doc<"yugiohAutomationRuns">): { gapDraw?: number } {
+	return runKind(run) === "full" ? { gapDraw: Math.random() } : {};
 }
 
 /** Runs from before refresh runs have no kind: they were all full runs. */

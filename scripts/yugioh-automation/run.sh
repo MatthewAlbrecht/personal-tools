@@ -4,8 +4,10 @@
 # Asks the app for a run, opens the automation Chrome profile (its extension
 # claims the run and visits its pages), waits for the run to end, then quits
 # that Chrome if this script opened it. The LaunchAgent asks every 10 minutes;
-# the app answers with a full run every 3 hours, a refresh run before a matched
-# auction ends, or nothing due. T3 Code and hand runs are always full runs.
+# the app answers with a full run about every 3 hours (never 1–7 AM), a refresh
+# run before a matched auction ends, or nothing due. A scheduled run waits a
+# moment the app picks (up to 4 minutes, 90 s for a refresh run) before it
+# opens Chrome. T3 Code and hand runs are always full runs, and don't wait.
 # For 6 hours after a run stops on a check page (a captcha), the LaunchAgent's
 # asks get nothing; T3 Code and hand runs still start:
 #
@@ -19,7 +21,7 @@ set -uo pipefail
 
 # Overridable for trying the script out; the defaults suit real runs.
 PICKUP_TIMEOUT_S="${YUGIOH_PICKUP_TIMEOUT_S:-180}" # the extension checks every minute
-RUN_TIMEOUT_S="${YUGIOH_RUN_TIMEOUT_S:-5400}"      # the app abandons open runs after 2 hours
+RUN_TIMEOUT_S="${YUGIOH_RUN_TIMEOUT_S:-10800}"     # the app abandons open runs after 3½ hours
 POLL_S="${YUGIOH_POLL_S:-20}"
 
 minutes() {
@@ -46,7 +48,7 @@ while [ $# -gt 0 ]; do
 	case "$1" in
 	--trigger) trigger="${2:-}"; shift 2 ;;
 	--trigger=*) trigger="${1#*=}"; shift ;;
-	-h | --help) sed -n '2,16p' "$0"; exit 0 ;;
+	-h | --help) sed -n '2,18p' "$0"; exit 0 ;;
 	*) echo "Unknown argument: $1" >&2; exit 64 ;;
 	esac
 done
@@ -162,6 +164,16 @@ if [ -n "$check_page" ]; then
 	log "The last run stopped on a check page at $(marketplace_name "$check_page")" \
 		"at $(clock "$(field "$reply" lastCheckPage.at)"). Scheduled runs wait until" \
 		"$(clock "$(field "$reply" lastCheckPage.coolDownEndsAt)"); this one runs anyway."
+fi
+
+# A scheduled run starts a moment after the ask, so runs don't start on the
+# 10-minute marks. The extension claims it once Chrome opens (at once, if
+# the profile is already open).
+start_delay_ms="$(field "$reply" startDelayMs)"
+start_delay_s=$((${start_delay_ms:-0} / 1000))
+if [ "$start_delay_s" -gt 0 ]; then
+	log "Starting in ${start_delay_s}s."
+	pause "$start_delay_s"
 fi
 
 if [ -z "$(chrome_pid)" ]; then

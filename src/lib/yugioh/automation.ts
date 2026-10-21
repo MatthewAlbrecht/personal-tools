@@ -42,17 +42,11 @@ export type PlannedVisit = {
 /**
  * A run still open this long is treated as abandoned (the Mac slept, the
  * script was killed): the next request closes it as failed. Longer than the
- * script's own 90-minute limit, so a live run is never cut short.
+ * script's own 3-hour limit, so a live run is never cut short.
  */
-export const RUN_ABANDONED_AFTER_MS = 2 * 60 * 60 * 1000;
+export const RUN_ABANDONED_AFTER_MS = 3.5 * 60 * 60 * 1000;
 
 const MINUTE_MS = 60 * 1000;
-
-/** The LaunchAgent asks the app whether a run is due this often. */
-export const SCHEDULE_TICK_MS = 10 * MINUTE_MS;
-
-/** A scheduled full run this often, until posting times are learned (run-timing.ts). */
-export const FULL_RUN_EVERY_MS = 3 * 60 * MINUTE_MS;
 
 /**
  * An auction's refresh window, before it ends: it opens 28 minutes before
@@ -93,6 +87,31 @@ export function inCheckPageCoolDown(
 	);
 }
 
+/** A scheduled full run waits up to this long before it starts… */
+export const MAX_FULL_START_DELAY_MS = 4 * MINUTE_MS;
+/**
+ * …and a refresh run up to this long, so its visits still land about 20
+ * minutes before the auction ends.
+ */
+export const MAX_REFRESH_START_DELAY_MS = 90 * 1000;
+
+/**
+ * How long `run.sh` waits after asking before it opens Chrome, from a draw
+ * in [0, 1], so scheduled runs don't start on the 10-minute marks. The app
+ * doesn't hold the run back: an automation profile that's already open
+ * claims it at once. T3 Code and hand runs don't wait.
+ */
+export function startDelay(
+	trigger: RunTrigger,
+	kind: RunKind,
+	draw: number,
+): number {
+	if (trigger !== "launchAgent") return 0;
+	const max =
+		kind === "refresh" ? MAX_REFRESH_START_DELAY_MS : MAX_FULL_START_DELAY_MS;
+	return Math.round(draw * max);
+}
+
 /** A running auction that may want a refresh visit before its push. */
 export type EndingAuction = {
 	endsAt: number;
@@ -102,7 +121,8 @@ export type EndingAuction = {
 
 /**
  * Which run a scheduled ask starts: a full run when `timing` says one is due
- * (every 3 hours until posting times are learned, see `fullRunDue`), a
+ * (about every 3 hours until posting times are learned, never 1–7 AM; the
+ * last full run's `gapDraw` varies the gap, see `fullRunDue`), a
  * refresh run when an auction's refresh window is open and it hasn't been
  * seen since, or none. Nothing at all within 6 hours of a run stopping on a
  * check page (`lastCheckPageAt`). `auctions` are the matched, Qualifying
@@ -112,6 +132,7 @@ export function scheduledRunDue({
 	lastFullRunAt,
 	lastRunAt,
 	lastCheckPageAt,
+	gapDraw,
 	auctions,
 	timing,
 	now,
@@ -119,12 +140,13 @@ export function scheduledRunDue({
 	lastFullRunAt: number | null;
 	lastRunAt: number | null;
 	lastCheckPageAt: number | null;
+	gapDraw: number;
 	auctions: readonly EndingAuction[];
 	timing: RunTiming;
 	now: number;
 }): RunKind | null {
 	if (inCheckPageCoolDown(lastCheckPageAt, now)) return null;
-	if (fullRunDue({ lastFullRunAt, timing, now })) return "full";
+	if (fullRunDue({ lastFullRunAt, gapDraw, timing, now })) return "full";
 	if (lastRunAt !== null && now - lastRunAt < REFRESH_MIN_GAP_MS) return null;
 	const windowOpen = auctions.some(
 		(auction) =>

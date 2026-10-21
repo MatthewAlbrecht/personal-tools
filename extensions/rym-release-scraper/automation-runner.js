@@ -4,9 +4,13 @@
 // page, then finishes the run. No chrome APIs here: the service worker passes
 // them in, so Vitest can drive a run with fakes.
 
-// Modest pacing: a human-like 15–30 s between page loads.
-const MIN_PAUSE_MS = 15_000;
-const MAX_PAUSE_MS = 30_000;
+// Varied pacing (ticket 19): 20–60 s between page loads, and about 1 pause
+// in 6 a longer 1½–3 minutes, so a run has no fixed rhythm.
+const MIN_PAUSE_MS = 20_000;
+const MAX_PAUSE_MS = 60_000;
+const LONG_PAUSE_CHANCE = 1 / 6;
+const MIN_LONG_PAUSE_MS = 90_000;
+const MAX_LONG_PAUSE_MS = 180_000;
 
 /**
  * Runs the oldest run asked for, or returns null when there's none.
@@ -18,6 +22,10 @@ const MAX_PAUSE_MS = 30_000;
  *   add `auctionsWithoutEndTime`; a check page adds `challenged: true`).
  * - `pause(ms)` waits; `random()` is Math.random.
  *
+ * The plan's Search pages, and its TCGplayer pages, are shuffled
+ * (`shuffleVisits`); the pages of auctions about to end stay first. Pauses
+ * vary (`pauseLength`).
+ *
  * A check page (a captcha or bot challenge) ends the run at once: it's
  * reported, and no further page is visited. The app ends the run on that
  * report; an app from before check pages is told with a finish.
@@ -28,10 +36,8 @@ async function runAutomatedRun({ call, visitPage, pause, random }) {
 
 	let pagesVisited = 0;
 	try {
-		for (const [index, visit] of run.visits.entries()) {
-			if (index > 0) {
-				await pause(MIN_PAUSE_MS + random() * (MAX_PAUSE_MS - MIN_PAUSE_MS));
-			}
+		for (const [index, visit] of shuffleVisits(run.visits, random).entries()) {
+			if (index > 0) await pause(pauseLength(random));
 			let outcome;
 			try {
 				outcome = await visitPage(visit);
@@ -73,6 +79,46 @@ async function runAutomatedRun({ call, visitPage, pause, random }) {
 
 	await call({ op: "finish", runId: run.runId, error: null });
 	return { runId: run.runId, pagesVisited };
+}
+
+/**
+ * The plan in visiting order: the pages of auctions about to end first, as
+ * planned (soonest ending first), then the Search pages shuffled, then the
+ * TCGplayer pages shuffled.
+ */
+function shuffleVisits(visits, random) {
+	const endingSoon = visits.filter((visit) => visit.kind === "ebayEndingSoon");
+	const searches = visits.filter(
+		(visit) => visit.kind !== "ebayEndingSoon" && visit.kind !== "tcgplayer",
+	);
+	const products = visits.filter((visit) => visit.kind === "tcgplayer");
+	return [
+		...endingSoon,
+		...shuffled(searches, random),
+		...shuffled(products, random),
+	];
+}
+
+/** A Fisher–Yates shuffle of a copy of `items`. */
+function shuffled(items, random) {
+	const copy = [...items];
+	for (let i = copy.length - 1; i > 0; i--) {
+		const j = Math.floor(random() * (i + 1));
+		[copy[i], copy[j]] = [copy[j], copy[i]];
+	}
+	return copy;
+}
+
+/**
+ * How long to wait before the next page: 20–60 s, or about 1 time in 6 a
+ * longer 1½–3 minutes. Two draws: which kind, then how long.
+ */
+function pauseLength(random) {
+	const long = random() < LONG_PAUSE_CHANCE;
+	const [min, max] = long
+		? [MIN_LONG_PAUSE_MS, MAX_LONG_PAUSE_MS]
+		: [MIN_PAUSE_MS, MAX_PAUSE_MS];
+	return Math.round(min + random() * (max - min));
 }
 
 function messageOf(error) {
@@ -166,5 +212,3 @@ function checkPageAt(url) {
 globalThis.runAutomatedRun = runAutomatedRun;
 globalThis.checkPageAt = checkPageAt;
 globalThis.visitOutcome = visitOutcome;
-globalThis.MIN_PAUSE_MS = MIN_PAUSE_MS;
-globalThis.MAX_PAUSE_MS = MAX_PAUSE_MS;

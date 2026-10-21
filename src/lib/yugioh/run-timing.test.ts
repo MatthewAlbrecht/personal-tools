@@ -3,6 +3,7 @@ import {
 	type RunTiming,
 	fullRunDue,
 	hourOfWeek,
+	inOvernightPause,
 	learnRunTiming,
 } from "./run-timing";
 
@@ -85,26 +86,76 @@ describe("when a full run is due", () => {
 	};
 	const learning: RunTiming = { ...learned, status: "learning", busyHours: [] };
 
-	test("every 3 hours while learning", () => {
-		const due = (since: number) =>
-			fullRunDue({ lastFullRunAt: NOW - since, timing: learning, now: NOW });
-		expect(due(2 * HOUR + 50 * MINUTE)).toBe(false);
-		expect(due(2 * HOUR + 55 * MINUTE)).toBe(true);
+	test("while learning, 2½ to 3¾ hours after the last, by its gap draw (half an ask's slack)", () => {
+		const due = (since: number, gapDraw: number) =>
+			fullRunDue({
+				lastFullRunAt: NOW - since,
+				gapDraw,
+				timing: learning,
+				now: NOW,
+			});
+		expect(due(2 * HOUR + 20 * MINUTE, 0)).toBe(false);
+		expect(due(2 * HOUR + 25 * MINUTE, 0)).toBe(true);
+		expect(due(3 * HOUR + 30 * MINUTE, 1)).toBe(false);
+		expect(due(3 * HOUR + 40 * MINUTE, 1)).toBe(true);
+		// The middle draw: 3 hours 7½ minutes.
+		expect(due(3 * HOUR, 0.5)).toBe(false);
+		expect(due(3 * HOUR + 5 * MINUTE, 0.5)).toBe(true);
 	});
 
-	test("outside busy hours, two asks short of 6 hours, so an open run can't push it past 6", () => {
-		const due = (since: number) =>
-			fullRunDue({ lastFullRunAt: NOW - since, timing: learned, now: NOW });
-		expect(due(5 * HOUR + 30 * MINUTE)).toBe(false);
-		expect(due(5 * HOUR + 40 * MINUTE)).toBe(true);
+	test("outside busy hours, 5 hours to 5 hours 40, so an open run can't push it past 6", () => {
+		const due = (since: number, gapDraw: number) =>
+			fullRunDue({
+				lastFullRunAt: NOW - since,
+				gapDraw,
+				timing: learned,
+				now: NOW,
+			});
+		expect(due(4 * HOUR + 50 * MINUTE, 0)).toBe(false);
+		expect(due(5 * HOUR, 0)).toBe(true);
+		expect(due(5 * HOUR + 30 * MINUTE, 1)).toBe(false);
+		expect(due(5 * HOUR + 40 * MINUTE, 1)).toBe(true);
 	});
 
-	test("hourly in a busy hour and the hour after, not the hour before", () => {
-		const due = (now: number) =>
-			fullRunDue({ lastFullRunAt: now - HOUR, timing: learned, now });
-		expect(due(SUNDAY_EVENING - HOUR)).toBe(false);
-		expect(due(SUNDAY_EVENING)).toBe(true);
-		expect(due(SUNDAY_EVENING + HOUR)).toBe(true);
-		expect(due(SUNDAY_EVENING + 2 * HOUR)).toBe(false);
+	test("in a busy hour and the hour after, 45 to 80 minutes apart; not the hour before", () => {
+		const due = (now: number, since: number, gapDraw: number) =>
+			fullRunDue({ lastFullRunAt: now - since, gapDraw, timing: learned, now });
+		expect(due(SUNDAY_EVENING - HOUR, 80 * MINUTE, 0)).toBe(false);
+		expect(due(SUNDAY_EVENING, 35 * MINUTE, 0)).toBe(false);
+		expect(due(SUNDAY_EVENING, 40 * MINUTE, 0)).toBe(true);
+		expect(due(SUNDAY_EVENING + HOUR, 70 * MINUTE, 1)).toBe(false);
+		expect(due(SUNDAY_EVENING + HOUR, 75 * MINUTE, 1)).toBe(true);
+		expect(due(SUNDAY_EVENING + 2 * HOUR, 80 * MINUTE, 0)).toBe(false);
+	});
+
+	test("none from 1 to 7 AM in my time zone, even past the cap or in a busy hour", () => {
+		/** Wednesday 21 October 2026 in New York, at a local hour. */
+		function wednesday(hour: number, minute = 0): number {
+			return Date.UTC(2026, 9, 21, hour + 4, minute);
+		}
+		const busyAt3am: RunTiming = { ...learned, busyHours: [3 * 24 + 3] };
+		const due = (now: number, timing: RunTiming) =>
+			fullRunDue({ lastFullRunAt: now - 7 * HOUR, gapDraw: 0, timing, now });
+		expect(due(wednesday(0, 50), learned)).toBe(true);
+		expect(due(wednesday(1), learned)).toBe(false);
+		expect(due(wednesday(3, 10), busyAt3am)).toBe(false);
+		expect(due(wednesday(6, 50), learning)).toBe(false);
+		// The first ask after 7 AM starts one.
+		expect(due(wednesday(7), learned)).toBe(true);
+		expect(
+			fullRunDue({
+				lastFullRunAt: null,
+				gapDraw: 0,
+				timing: learning,
+				now: wednesday(4),
+			}),
+		).toBe(false);
+	});
+
+	test("the overnight pause follows the time zone", () => {
+		// 3 AM in New York is midnight in Los Angeles.
+		const at3amNewYork = Date.UTC(2026, 9, 21, 7, 0);
+		expect(inOvernightPause(at3amNewYork, ZONE)).toBe(true);
+		expect(inOvernightPause(at3amNewYork, "America/Los_Angeles")).toBe(false);
 	});
 });

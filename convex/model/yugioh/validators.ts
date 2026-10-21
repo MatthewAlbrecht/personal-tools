@@ -413,6 +413,12 @@ export const yugiohAutomationRunValidator = v.object({
 	 * runs from before check pages stopped a run.
 	 */
 	checkPage: v.optional(v.union(yugiohCheckPageValidator, v.null())),
+	/**
+	 * A full run's draw (0–1), picked when it ended: where in each range the
+	 * gap to the next scheduled full run falls (`fullRunDue`). Missing on
+	 * refresh runs, open runs and runs from before ticket 19.
+	 */
+	gapDraw: v.optional(v.number()),
 });
 
 /**

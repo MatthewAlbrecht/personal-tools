@@ -10,7 +10,6 @@ import {
 import { millisecondsInHour } from "date-fns/constants";
 import {
 	CHECK_PAGE_COOL_DOWN_MS,
-	FULL_RUN_EVERY_MS,
 	type PlannedVisit,
 	type RunKind,
 	type RunStatus,
@@ -19,11 +18,15 @@ import {
 import type { Marketplace } from "./listing-filters";
 import { MARKETPLACE_LABELS } from "./listing-format";
 import {
+	FALLBACK_GAP,
 	HOURS_IN_WEEK,
 	LEARNING_DAYS,
 	MAX_FULL_RUN_GAP_MS,
+	OVERNIGHT_FROM_HOUR,
+	OVERNIGHT_UNTIL_HOUR,
 	type RunTiming,
 	WEEKDAYS,
+	gapWithin,
 } from "./run-timing";
 
 /** The Deck header's note shows once the last capture is older than this. */
@@ -193,7 +196,11 @@ function duration(from: number, to: number): string {
 
 export type RunTimingLines = { summary: string; busyTimes: string[] };
 
-const FIXED_HOURS = FULL_RUN_EVERY_MS / millisecondsInHour;
+/** The middle of the fallback gap, in whole hours. */
+const FIXED_HOURS = Math.round(
+	gapWithin(FALLBACK_GAP, 0.5) / millisecondsInHour,
+);
+const OVERNIGHT = `${OVERNIGHT_FROM_HOUR} to ${OVERNIGHT_UNTIL_HOUR} AM`;
 const MAX_GAP_HOURS = MAX_FULL_RUN_GAP_MS / millisecondsInHour;
 
 /**
@@ -207,7 +214,7 @@ export function describeRunTiming(
 	if (timing.status === "learning") {
 		if (timing.dataSince === null) {
 			return {
-				summary: `Every ${FIXED_HOURS} hours for now. Once it has about ${LEARNING_DAYS / 7} weeks of Listings, it learns when sellers post and runs around those times.`,
+				summary: `About every ${FIXED_HOURS} hours for now, and not from ${OVERNIGHT}. Once it has about ${LEARNING_DAYS / 7} weeks of Listings, it learns when sellers post and runs around those times.`,
 				busyTimes: [],
 			};
 		}
@@ -215,18 +222,18 @@ export function describeRunTiming(
 		const data =
 			days === 0 ? "Under a day" : `${days} ${days === 1 ? "day" : "days"}`;
 		return {
-			summary: `Every ${FIXED_HOURS} hours for now. Still learning when sellers post: ${data} of data so far, of about ${LEARNING_DAYS}.`,
+			summary: `About every ${FIXED_HOURS} hours for now, and not from ${OVERNIGHT}. Still learning when sellers post: ${data} of data so far, of about ${LEARNING_DAYS}.`,
 			busyTimes: [],
 		};
 	}
 	if (timing.busyHours.length === 0) {
 		return {
-			summary: `Every ${FIXED_HOURS} hours. No hours of the week stand out yet for when sellers post.`,
+			summary: `About every ${FIXED_HOURS} hours, and not from ${OVERNIGHT}. No hours of the week stand out yet for when sellers post.`,
 			busyTimes: [],
 		};
 	}
 	return {
-		summary: `Sellers post most at these times (${zoneName(timing.timeZone)} time). It runs every hour during them and the hour after, and at least every ${MAX_GAP_HOURS} hours otherwise.`,
+		summary: `Sellers post most at these times (${zoneName(timing.timeZone)} time). It runs about every hour during them and the hour after, and at least every ${MAX_GAP_HOURS} hours otherwise, but not from ${OVERNIGHT}.`,
 		busyTimes: busyStretches(timing.busyHours).map(stretchLabel),
 	};
 }

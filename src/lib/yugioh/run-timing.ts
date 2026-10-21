@@ -1,14 +1,19 @@
 // Adaptive timing (ticket 17): when scheduled full runs happen. Once about
 // 4 weeks of Listings exist, the hours of the week (in my time zone) when
-// sellers post new Listings for my Printings get a full run every hour;
-// otherwise full runs are at most 6 hours apart. Before that, every 3 hours.
-// Relative imports only (Convex imports this).
-
-import { FULL_RUN_EVERY_MS, SCHEDULE_TICK_MS } from "./automation";
+// sellers post new Listings for my Printings get a full run about every hour;
+// otherwise full runs are under 6 hours apart. Before that, about every 3
+// hours. Gaps vary within a range, and there are no full runs overnight
+// (ticket 19). Relative imports only (Convex imports this).
 
 const MINUTE_MS = 60 * 1000;
 const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;
+
+/**
+ * The LaunchAgent asks the app whether a run is due this often. Here, not in
+ * automation.ts, so the gaps below can use it without a circular import.
+ */
+export const SCHEDULE_TICK_MS = 10 * MINUTE_MS;
 
 export const HOURS_IN_WEEK = 7 * 24;
 
@@ -21,8 +26,46 @@ export const POSTING_WINDOW_MS = LEARNING_DAYS * DAY_MS;
 /** Never longer than this between scheduled full runs, once learned. */
 export const MAX_FULL_RUN_GAP_MS = 6 * HOUR_MS;
 
-/** A full run this often in a busy hour and the hour after it. */
-export const BUSY_RUN_EVERY_MS = HOUR_MS;
+/** A gap between full runs: somewhere from `min` to `max` (Unix ms). */
+export type GapRange = { min: number; max: number };
+
+/**
+ * The gap between full runs while learning, or when no hour stands out:
+ * about 3 hours.
+ */
+export const FALLBACK_GAP: GapRange = {
+	min: 2.5 * HOUR_MS,
+	max: 3.75 * HOUR_MS,
+};
+
+/** The gap in a busy hour and the hour after it: about an hour. */
+export const BUSY_GAP: GapRange = { min: 45 * MINUTE_MS, max: 80 * MINUTE_MS };
+
+/**
+ * The longest gap outside busy hours, once learned. Its top is two asks
+ * short of 6 hours, so neither the wait for the next ask nor an ask that
+ * finds a run (a refresh) still open passes 6 hours.
+ */
+export const CAP_GAP: GapRange = {
+	min: 5 * HOUR_MS,
+	max: MAX_FULL_RUN_GAP_MS - 2 * SCHEDULE_TICK_MS,
+};
+
+/** Where in a range a gap falls, from a draw in [0, 1]. */
+export function gapWithin(range: GapRange, gapDraw: number): number {
+	return range.min + gapDraw * (range.max - range.min);
+}
+
+/** No full runs from this hour (1 AM)… */
+export const OVERNIGHT_FROM_HOUR = 1;
+/** …until this hour (7 AM), in my time zone. */
+export const OVERNIGHT_UNTIL_HOUR = 7;
+
+/** Whether `time` is in the overnight pause (1–7 AM in `timeZone`). */
+export function inOvernightPause(time: number, timeZone: string): boolean {
+	const hour = hourOfWeek(time, timeZone) % 24;
+	return hour >= OVERNIGHT_FROM_HOUR && hour < OVERNIGHT_UNTIL_HOUR;
+}
 
 /**
  * An hour of the week is busy when at least this many Listings went up in
@@ -103,35 +146,37 @@ export function learnRunTiming({
 }
 
 /**
- * Whether a scheduled ask at `now` starts a full run. With busy hours
- * learned: every hour in a busy hour and the hour after (whose run catches
- * the busy hour's Listings), else once 6 hours have passed. Otherwise every
- * 3 hours. The 6 hours are asked for 20 minutes early (two asks), so
- * neither the wait for the next ask nor a run still open passes them.
- * None yet: due.
+ * Whether a scheduled ask at `now` starts a full run. Never from 1 to 7 AM
+ * in my time zone; the first ask after starts one if it's due by then.
+ * Otherwise, with busy hours learned: in a busy hour and the hour after
+ * (whose run catches the busy hour's Listings) 45–80 minutes after the last,
+ * else 5 hours to 5 hours 40 after it. Otherwise 2½–3¾ hours after it.
+ * `gapDraw` (0–1, picked when the last full run ended) says where in each
+ * range the gap falls. None yet: due (outside the night).
  */
 export function fullRunDue({
 	lastFullRunAt,
+	gapDraw,
 	timing,
 	now,
 }: {
 	lastFullRunAt: number | null;
+	gapDraw: number;
 	timing: RunTiming;
 	now: number;
 }): boolean {
+	if (inOvernightPause(now, timing.timeZone)) return false;
 	if (lastFullRunAt === null) return true;
 	const since = now - lastFullRunAt;
 	// Half a tick early, so a run asked for a few seconds late still counts.
 	const slack = SCHEDULE_TICK_MS / 2;
 	if (timing.status === "learning" || timing.busyHours.length === 0) {
-		return since >= FULL_RUN_EVERY_MS - slack;
+		return since >= gapWithin(FALLBACK_GAP, gapDraw) - slack;
 	}
-	// Two asks early: the next ask is a tick away, and one more covers an ask
-	// that finds a run (a refresh) still open.
-	if (since >= MAX_FULL_RUN_GAP_MS - 2 * SCHEDULE_TICK_MS) return true;
+	if (since >= gapWithin(CAP_GAP, gapDraw)) return true;
 	const hour = hourOfWeek(now, timing.timeZone);
 	const previous = (hour + HOURS_IN_WEEK - 1) % HOURS_IN_WEEK;
 	const busy =
 		timing.busyHours.includes(hour) || timing.busyHours.includes(previous);
-	return busy && since >= BUSY_RUN_EVERY_MS - slack;
+	return busy && since >= gapWithin(BUSY_GAP, gapDraw) - slack;
 }
