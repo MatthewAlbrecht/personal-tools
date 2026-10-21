@@ -32,7 +32,7 @@ export function cleanName(name: string, label: string): string {
 	return trimmed;
 }
 
-function nameKey(name: string): string {
+export function nameKey(name: string): string {
 	return name.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
@@ -163,7 +163,7 @@ export async function getDeckCardOrThrow(
 	return card;
 }
 
-async function listDeckCards(
+export async function listDeckCards(
 	ctx: QueryCtx,
 	deckId: Id<"yugiohDecks">,
 ): Promise<Array<Doc<"yugiohDeckCards">>> {
@@ -452,7 +452,7 @@ async function findCandidate(
 		.unique();
 }
 
-async function listCandidates(
+export async function listCandidates(
 	ctx: QueryCtx,
 	deckCardId: Id<"yugiohDeckCards">,
 ): Promise<Array<Doc<"yugiohCandidatePrintings">>> {

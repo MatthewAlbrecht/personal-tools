@@ -1804,7 +1804,7 @@ export default defineSchema({
 		name: v.string(),
 		// Missing reads as "byCost" (Decks saved before ticket 04).
 		cardOrder: v.optional(yugiohCardOrderValidator),
-	}),
+	}).index("by_name", ["name"]),
 
 	// Shared across Decks: one row per set code + rarity.
 	yugiohPrintings: defineTable({
