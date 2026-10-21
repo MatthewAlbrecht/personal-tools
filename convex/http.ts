@@ -6,10 +6,12 @@ import {
 	MIN_SERVER_SECRET_LENGTH,
 	bearerMatchesSecret,
 } from "./_utils/serverSecret";
+import { MAX_LISTINGS_PER_CAPTURE } from "./model/yugioh/listings";
 
-// Server-to-Convex channel for Spotify OAuth tokens. Next.js route handlers and
-// crons call these with `Authorization: Bearer $CONVEX_SERVER_SECRET`; the
-// token functions themselves are internal and have no public `api` entry.
+// Server-to-Convex channel. Next.js route handlers and crons call these with
+// `Authorization: Bearer $CONVEX_SERVER_SECRET`; the functions behind them are
+// internal and have no public `api` entry. Covers Spotify OAuth tokens and
+// Yu-Gi-Oh marketplace captures (forwarded by `/api/yugioh/*` routes).
 
 const http = httpRouter();
 
@@ -144,6 +146,31 @@ http.route({
 		if (!userId) return badRequest();
 		await ctx.runMutation(internal.spotify.deleteConnection, { userId });
 		return json({ ok: true });
+	}),
+});
+
+http.route({
+	path: "/server/yugioh/ebay-listings",
+	method: "POST",
+	handler: serverRoute(async (ctx, body) => {
+		const listings = body.listings;
+		if (
+			!Array.isArray(listings) ||
+			listings.length > MAX_LISTINGS_PER_CAPTURE
+		) {
+			return badRequest();
+		}
+		try {
+			// The mutation's argument validator checks each Listing's shape.
+			return json(
+				await ctx.runMutation(internal.yugioh.listings.ingestEbayListings, {
+					listings,
+				}),
+			);
+		} catch (error) {
+			console.error("[yugioh/ebay-listings] ingest failed", error);
+			return badRequest();
+		}
 	}),
 });
 

@@ -18,15 +18,15 @@ import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 
-// Listings joins these once its route exists (ticket 06).
 const TABS = [
 	{ value: "cards", label: "Cards", path: "" },
+	{ value: "listings", label: "Listings", path: "/listings" },
 	{ value: "searches", label: "Searches", path: "/searches" },
 ] as const;
 
 /**
  * The part of every Deck route that stays still between tabs: the back link,
- * the Deck name and the Cards · Searches tabs.
+ * the Deck name and the Cards · Listings · Searches tabs.
  */
 export function DeckShell({
 	deckId,

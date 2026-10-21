@@ -21,6 +21,7 @@ describe("isPublicPath", () => {
 		"/api/rate-your-music/scrape",
 		"/api/rate-your-music/covers",
 		"/api/bandcamp/capture",
+		"/api/yugioh/ebay-capture",
 		"/api/concerts/ical",
 		"/launch.html",
 		"/launch-dnd.mjs",

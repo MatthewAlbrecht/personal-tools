@@ -517,3 +517,102 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 	return true;
 });
+
+/**
+ * POST one eBay search-results page of Listings to Next.js → Convex
+ * (`/api/yugioh/ebay-capture`). Same origin/secret settings and
+ * host-permission flow as the RYM and Bandcamp captures.
+ */
+async function forwardEbayListingsToBackend(listings) {
+	const cfg = await chrome.storage.sync.get([
+		SETTINGS_BACKEND_ORIGIN,
+		SETTINGS_BACKEND_SECRET,
+	]);
+	const originRaw =
+		(typeof cfg[SETTINGS_BACKEND_ORIGIN] === "string" &&
+			cfg[SETTINGS_BACKEND_ORIGIN].trim()) ||
+		"https://www.moooose.dev";
+	const origin = originRaw.replace(/\/+$/, "");
+	const secret =
+		typeof cfg[SETTINGS_BACKEND_SECRET] === "string"
+			? cfg[SETTINGS_BACKEND_SECRET].trim()
+			: "";
+
+	if (!secret) {
+		return { synced: false, skipped: true };
+	}
+	const permitted = await ensureHostPermissionForBackend(origin);
+	if (!permitted) {
+		return {
+			synced: false,
+			skipped: false,
+			error: "Host permission denied — allow access when Chrome prompts",
+		};
+	}
+
+	try {
+		const res = await fetch(`${origin}/api/yugioh/ebay-capture`, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				Authorization: `Bearer ${secret}`,
+			},
+			body: JSON.stringify({ listings }),
+		});
+		const text = await res.text();
+		let json = {};
+		try {
+			json = JSON.parse(text);
+		} catch {
+			// keep raw response text for the error
+		}
+		if (!res.ok) {
+			const errorMessage =
+				typeof json?.error === "string" && json.error.trim()
+					? json.error.trim()
+					: text;
+			console.error(
+				"[rym-release-scraper] eBay capture failed",
+				res.status,
+				errorMessage,
+			);
+			return {
+				synced: false,
+				skipped: false,
+				status: res.status,
+				error: errorMessage,
+			};
+		}
+		return {
+			synced: true,
+			skipped: false,
+			captured: json?.captured,
+			created: json?.created,
+			updated: json?.updated,
+		};
+	} catch (error) {
+		console.error("[rym-release-scraper] eBay capture error", error);
+		return {
+			synced: false,
+			skipped: false,
+			error: error instanceof Error ? error.message : String(error),
+		};
+	}
+}
+
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+	if (!message || message.type !== "YUGIOH_EBAY_CAPTURE") {
+		return;
+	}
+	void (async function sendEbayCapture() {
+		try {
+			const listings = Array.isArray(message.listings) ? message.listings : [];
+			const backend = await forwardEbayListingsToBackend(listings);
+			sendResponse({ ok: true, backend });
+		} catch (error) {
+			console.error("[rym-release-scraper] failed to send eBay capture", error);
+			sendResponse({ ok: false });
+		}
+	})();
+	return true;
+});

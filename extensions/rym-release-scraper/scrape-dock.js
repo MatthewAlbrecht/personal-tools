@@ -1,5 +1,24 @@
 const SCRAPE_DOCK_MINIMIZE_KEY = "scrapeDockMinimized";
 
+// Kicker, opening headline and detail for each kind of page the dock sits on.
+const SCRAPE_DOCK_COPY = {
+	charts: {
+		label: "Chart",
+		headline: "This chart can be captured",
+		detail: "Every row on the page, then covers already on screen.",
+	},
+	ebay: {
+		label: "eBay",
+		headline: "These results can be captured",
+		detail: "Every Listing on the page goes to the Yu-Gi-Oh tracker.",
+	},
+	release: {
+		label: "Release",
+		headline: "This release can be captured",
+		detail: "Title, genres, Spotify id, and duration if the tracklist is here.",
+	},
+};
+
 const scrapeDockState = {
 	root: null,
 	minimized: false,
@@ -283,7 +302,8 @@ function renderScrapeDock() {
 		return;
 	}
 
-	const pageLabel = s.pageKind === "charts" ? "Chart" : "Release";
+	const pageLabel = (SCRAPE_DOCK_COPY[s.pageKind] || SCRAPE_DOCK_COPY.release)
+		.label;
 	shadow.innerHTML = `
 		<style>${dockStyles()}</style>
 		<div class="wrap">
@@ -328,14 +348,9 @@ function renderScrapeDock() {
 function mountScrapeDock(options) {
 	scrapeDockState.pageKind = options.pageKind || "release";
 	scrapeDockState.onRescrape = options.onRescrape || null;
-	scrapeDockState.headline =
-		options.pageKind === "charts"
-			? "This chart can be captured"
-			: "This release can be captured";
-	scrapeDockState.detail =
-		options.pageKind === "charts"
-			? "Every row on the page, then covers already on screen."
-			: "Title, genres, Spotify id, and duration if the tracklist is here.";
+	const copy = SCRAPE_DOCK_COPY[options.pageKind] || SCRAPE_DOCK_COPY.release;
+	scrapeDockState.headline = copy.headline;
+	scrapeDockState.detail = copy.detail;
 
 	let host = document.getElementById("rym-scrape-dock");
 	if (!host) {

@@ -1,0 +1,251 @@
+/// <reference types="vite/client" />
+// @vitest-environment edge-runtime
+
+import { convexTest } from "convex-test";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { api } from "../_generated/api";
+import schema from "../schema";
+
+// Root-relative so keys stay consistent from this subdirectory.
+const modules = import.meta.glob("/convex/**/*.ts");
+
+const SECRET = "test-server-secret-0123456789";
+const CAPTURE_PATH = "/server/yugioh/ebay-listings";
+
+function setup() {
+	return convexTest(schema, modules);
+}
+
+type T = ReturnType<typeof setup>;
+
+/** One eBay result as the extension's page reader sends it. */
+function ebayListing(overrides: Record<string, unknown> = {}) {
+	return {
+		itemId: "306512345678",
+		url: "https://www.ebay.com/itm/306512345678",
+		title:
+			"Ash Blossom & Joyous Spring RA01-EN008 Quarter Century Secret Rare NM",
+		imageUrl: "https://i.ebayimg.com/images/g/abc/s-l500.jpg",
+		price: 42.15,
+		currency: "USD",
+		shipping: 4.99,
+		listingType: "buyItNow",
+		bids: null,
+		endsAt: null,
+		listedAt: Date.UTC(2026, 9, 19, 21, 2),
+		sellerLocation: null,
+		sold: false,
+		soldDate: null,
+		...overrides,
+	};
+}
+
+function capture(
+	t: T,
+	listings: unknown[],
+	headers: Record<string, string> = { authorization: `Bearer ${SECRET}` },
+) {
+	return t.fetch(CAPTURE_PATH, {
+		method: "POST",
+		headers: { "content-type": "application/json", ...headers },
+		body: JSON.stringify({ listings }),
+	});
+}
+
+async function listings(t: T) {
+	return await t.query(api.yugioh.listings.listListings, {});
+}
+
+beforeEach(() => {
+	vi.stubEnv("CONVEX_SERVER_SECRET", SECRET);
+	vi.useFakeTimers();
+	vi.setSystemTime(Date.UTC(2026, 9, 20, 12, 0));
+});
+
+afterEach(() => {
+	vi.unstubAllEnvs();
+	vi.useRealTimers();
+});
+
+describe("eBay capture", () => {
+	test("a captured result becomes a Listing", async () => {
+		const t = setup();
+		const res = await capture(t, [ebayListing()]);
+		expect(res.status).toBe(200);
+		expect(await res.json()).toEqual({ captured: 1, created: 1, updated: 0 });
+
+		const [listing, ...rest] = await listings(t);
+		expect(rest).toEqual([]);
+		expect(listing).toMatchObject({
+			marketplace: "ebay",
+			itemId: "306512345678",
+			url: "https://www.ebay.com/itm/306512345678",
+			title:
+				"Ash Blossom & Joyous Spring RA01-EN008 Quarter Century Secret Rare NM",
+			price: 42.15,
+			currency: "USD",
+			shipping: 4.99,
+			listingType: "buyItNow",
+			bids: null,
+			endsAt: null,
+			listedAt: Date.UTC(2026, 9, 19, 21, 2),
+			sellerLocation: null,
+			sold: false,
+			soldDate: null,
+			firstSeenAt: Date.UTC(2026, 9, 20, 12, 0),
+			lastSeenAt: Date.UTC(2026, 9, 20, 12, 0),
+		});
+	});
+
+	test("seeing a Listing again updates it instead of adding another", async () => {
+		const t = setup();
+		await capture(t, [ebayListing()]);
+		vi.setSystemTime(Date.UTC(2026, 9, 20, 15, 0));
+		const res = await capture(t, [
+			ebayListing({ title: "Ash Blossom RA01-EN008 QCSR (price drop)" }),
+		]);
+		expect(await res.json()).toEqual({ captured: 1, created: 0, updated: 1 });
+
+		const all = await listings(t);
+		expect(all).toHaveLength(1);
+		expect(all[0]).toMatchObject({
+			title: "Ash Blossom RA01-EN008 QCSR (price drop)",
+			firstSeenAt: Date.UTC(2026, 9, 20, 12, 0),
+			lastSeenAt: Date.UTC(2026, 9, 20, 15, 0),
+		});
+	});
+
+	test("price changes are recorded as observations; repeat sightings are not", async () => {
+		const t = setup();
+		await capture(t, [ebayListing({ price: 42.15 })]);
+		vi.setSystemTime(Date.UTC(2026, 9, 20, 13, 0));
+		await capture(t, [ebayListing({ price: 42.15 })]);
+		vi.setSystemTime(Date.UTC(2026, 9, 20, 14, 0));
+		await capture(t, [ebayListing({ price: 38, shipping: 0 })]);
+
+		const [listing] = await listings(t);
+		if (!listing) throw new Error("Listing missing");
+		expect(listing.price).toBe(38);
+		const detail = await t.query(api.yugioh.listings.getListing, {
+			listingId: listing._id,
+		});
+		expect(
+			detail?.observations.map((o) => ({
+				observedAt: o.observedAt,
+				price: o.price,
+				shipping: o.shipping,
+			})),
+		).toEqual([
+			{ observedAt: Date.UTC(2026, 9, 20, 14, 0), price: 38, shipping: 0 },
+			{
+				observedAt: Date.UTC(2026, 9, 20, 12, 0),
+				price: 42.15,
+				shipping: 4.99,
+			},
+		]);
+	});
+
+	test("an auction's new bids are observations", async () => {
+		const t = setup();
+		const auction = {
+			listingType: "auction",
+			endsAt: Date.UTC(2026, 9, 22, 2, 0),
+		};
+		await capture(t, [ebayListing({ ...auction, price: 10, bids: 1 })]);
+		vi.setSystemTime(Date.UTC(2026, 9, 21, 12, 0));
+		await capture(t, [ebayListing({ ...auction, price: 18.5, bids: 4 })]);
+
+		const [listing] = await listings(t);
+		if (!listing) throw new Error("Listing missing");
+		const detail = await t.query(api.yugioh.listings.getListing, {
+			listingId: listing._id,
+		});
+		expect(detail?.observations.map((o) => [o.price, o.bids])).toEqual([
+			[18.5, 4],
+			[10, 1],
+		]);
+	});
+
+	test("a sold page marks a known Listing sold and keeps what only the active page showed", async () => {
+		const t = setup();
+		await capture(t, [ebayListing({ sellerLocation: "Japan" })]);
+		vi.setSystemTime(Date.UTC(2026, 9, 25, 12, 0));
+		await capture(t, [
+			ebayListing({
+				price: 40,
+				sold: true,
+				soldDate: "2026-10-24",
+				listedAt: null,
+				sellerLocation: null,
+				imageUrl: null,
+			}),
+		]);
+
+		const [listing] = await listings(t);
+		expect(listing).toMatchObject({
+			price: 40,
+			sold: true,
+			soldDate: "2026-10-24",
+			listedAt: Date.UTC(2026, 9, 19, 21, 2),
+			sellerLocation: "Japan",
+			imageUrl: "https://i.ebayimg.com/images/g/abc/s-l500.jpg",
+		});
+	});
+
+	test("the same result twice on one page is one Listing", async () => {
+		const t = setup();
+		const res = await capture(t, [ebayListing(), ebayListing()]);
+		expect(await res.json()).toEqual({ captured: 1, created: 1, updated: 0 });
+		expect(await listings(t)).toHaveLength(1);
+	});
+
+	test("Listings come newest first", async () => {
+		const t = setup();
+		await capture(t, [ebayListing({ itemId: "1", title: "first" })]);
+		vi.setSystemTime(Date.UTC(2026, 9, 20, 13, 0));
+		await capture(t, [ebayListing({ itemId: "2", title: "second" })]);
+
+		expect((await listings(t)).map((l) => l.title)).toEqual([
+			"second",
+			"first",
+		]);
+	});
+});
+
+describe("the capture endpoint", () => {
+	test("rejects a missing or wrong secret", async () => {
+		const t = setup();
+		expect((await capture(t, [ebayListing()], {})).status).toBe(401);
+		expect(
+			(
+				await capture(t, [ebayListing()], {
+					authorization: "Bearer not-the-secret-not-the-secret",
+				})
+			).status,
+		).toBe(401);
+		expect(await listings(t)).toEqual([]);
+	});
+
+	test("fails closed when the deployment secret is unset", async () => {
+		const t = setup();
+		vi.stubEnv("CONVEX_SERVER_SECRET", "");
+		expect((await capture(t, [ebayListing()])).status).toBe(503);
+	});
+
+	test("rejects a malformed Listing and stores nothing", async () => {
+		const t = setup();
+		const { title: _title, ...untitled } = ebayListing();
+		const res = await capture(t, [ebayListing({ itemId: "1" }), untitled]);
+		expect(res.status).toBe(400);
+		expect(await listings(t)).toEqual([]);
+	});
+
+	test("ingest is not callable from the public api", async () => {
+		const mod = (await import("./listings")) as Record<
+			string,
+			{ isPublic?: boolean; isInternal?: boolean }
+		>;
+		expect(mod.ingestEbayListings?.isInternal).toBe(true);
+		expect(mod.ingestEbayListings?.isPublic).not.toBe(true);
+	});
+});

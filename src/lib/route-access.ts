@@ -30,6 +30,7 @@ const PUBLIC_EXACT = new Set([
 	"/api/rate-your-music/scrape",
 	"/api/rate-your-music/covers",
 	"/api/bandcamp/capture",
+	"/api/yugioh/ebay-capture",
 	// Launch page (static public/launch.html): it loads these modules and /api/launch-config from the same origin
 	"/launch.html",
 	"/launch-dnd.mjs",

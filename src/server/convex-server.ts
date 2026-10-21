@@ -1,4 +1,5 @@
 import { env } from "~/env";
+import type { IngestReport } from "../../convex/model/yugioh/listings";
 
 // Server-only client for the secret-guarded Convex HTTP actions in
 // `convex/http.ts`. Spotify token functions are internal in Convex, so Next
@@ -75,4 +76,11 @@ export async function upsertSpotifyConnection(args: {
 
 export async function deleteSpotifyConnection(userId: string): Promise<void> {
 	await callConvexServer("/server/spotify/delete-connection", { userId });
+}
+
+/** Stores one captured eBay search-results page (`internal.yugioh.listings`). */
+export function captureEbayListings(
+	listings: unknown[],
+): Promise<IngestReport> {
+	return callConvexServer("/server/yugioh/ebay-listings", { listings });
 }

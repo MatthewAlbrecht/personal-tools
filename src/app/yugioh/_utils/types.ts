@@ -13,3 +13,6 @@ export type DeckSummary = FunctionReturnType<
 export type EbaySearch = NonNullable<
 	FunctionReturnType<typeof api.yugioh.searches.listSearches>
 >[number];
+export type ListingView = FunctionReturnType<
+	typeof api.yugioh.listings.listListings
+>[number];

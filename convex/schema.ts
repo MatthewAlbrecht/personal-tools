@@ -28,8 +28,10 @@ import {
 import { zineInsideBackSectionsValidator } from "./_utils/zineInsideBackSections";
 import { zinePageRecommendationsValidator } from "./_utils/zinePageRecommendations";
 import {
+	yugiohCapturedEbayListingValidator,
 	yugiohCardOrderValidator,
 	yugiohConditionValidator,
+	yugiohMarketplaceValidator,
 	yugiohSectionValidator,
 	yugiohTcgplayerStatusValidator,
 } from "./model/yugioh/validators";
@@ -1842,4 +1844,27 @@ export default defineSchema({
 		.index("by_deckCardId_and_printingId", ["deckCardId", "printingId"])
 		.index("by_deckId", ["deckId"])
 		.index("by_printingId", ["printingId"]),
+
+	// Shared across Decks: one row per marketplace + marketplace item ID,
+	// updated in place each time a capture sees it again. Newest first is
+	// `_creationTime` (first captured).
+	yugiohListings: defineTable({
+		marketplace: yugiohMarketplaceValidator,
+		...yugiohCapturedEbayListingValidator.fields,
+		firstSeenAt: v.number(),
+		lastSeenAt: v.number(),
+	}).index("by_marketplace_and_itemId", ["marketplace", "itemId"]),
+
+	// A Listing's price over time: one row when it's first captured, then one
+	// each time a capture sees a different price, shipping, bid count or sold
+	// status. Kept indefinitely.
+	yugiohListingObservations: defineTable({
+		listingId: v.id("yugiohListings"),
+		observedAt: v.number(),
+		price: v.union(v.number(), v.null()),
+		currency: v.union(v.string(), v.null()),
+		shipping: v.union(v.number(), v.null()),
+		bids: v.union(v.number(), v.null()),
+		sold: v.boolean(),
+	}).index("by_listingId", ["listingId"]),
 });

@@ -51,6 +51,7 @@
 		"cn": "^0.2.6",
 		"convex": "^1.46.0",
 		"convex-helpers": "^0.1.120",
+		"date-fns": "^4.4.0",
 		"linkedom": "^0.18.12",
 		"lucide-react": "^0.539.0",
 		"next": "15.2.8",
