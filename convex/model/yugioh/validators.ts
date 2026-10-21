@@ -18,6 +18,7 @@ import type {
 	Section,
 } from "../../../src/lib/yugioh/deck";
 import type { ListingFilters } from "../../../src/lib/yugioh/listing-filters";
+import type { ListingSort } from "../../../src/lib/yugioh/listing-sort";
 import type {
 	ExchangeRate,
 	PerCopyPrice,
@@ -293,12 +294,11 @@ export const yugiohDeckCostValidator = v.object({
 
 /** Filters on a Deck's Listings, as kept in the URL; unset lets everything through. */
 export const yugiohListingFiltersValidator = v.object({
+	/** Available (unset) or Sold; the two never share a Listing. */
+	view: v.optional(v.union(v.literal("available"), v.literal("sold"))),
 	new: v.optional(v.boolean()),
-	ending: v.optional(v.boolean()),
 	marketplace: v.optional(yugiohMarketplaceValidator),
-	type: v.optional(
-		v.union(v.literal("buyItNow"), v.literal("auction"), v.literal("sold")),
-	),
+	type: v.optional(v.union(v.literal("buyItNow"), v.literal("auction"))),
 	language: v.optional(yugiohLanguageValidator),
 	condition: v.optional(
 		v.union(yugiohReadConditionValidator, v.literal("unknown")),
@@ -542,6 +542,24 @@ const listingFiltersAgree: Same<
 	ListingFilters
 > = true;
 void listingFiltersAgree;
+
+/** How a Deck's Listings are ordered; unset, the view's default. */
+export const yugiohListingSortValidator = v.object({
+	key: v.union(
+		v.literal("price"),
+		v.literal("grade"),
+		v.literal("card"),
+		v.literal("date"),
+		v.literal("seller"),
+		v.literal("seen"),
+	),
+	direction: v.union(v.literal("asc"), v.literal("desc")),
+});
+const listingSortsAgree: Same<
+	Infer<typeof yugiohListingSortValidator>,
+	ListingSort
+> = true;
+void listingSortsAgree;
 
 const runTriggersAgree: Same<
 	Infer<typeof yugiohRunTriggerValidator>,

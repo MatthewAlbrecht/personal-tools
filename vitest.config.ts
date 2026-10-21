@@ -5,6 +5,8 @@ import { defineConfig } from "vitest/config";
 // this repo is a node:test file, and `.worktrees` holds sibling checkouts, so a
 // bare `vitest run` must not collect either.
 export default defineConfig({
+	// tsconfig keeps JSX for Next; component tests compile it themselves.
+	oxc: { jsx: { runtime: "automatic" } },
 	resolve: {
 		alias: { "~": fileURLToPath(new URL("./src", import.meta.url)) },
 	},
@@ -15,6 +17,7 @@ export default defineConfig({
 			"convex/public-surface-lockdown.test.ts",
 			"convex/yugioh/**/*.test.ts",
 			"src/lib/yugioh/**/*.test.ts",
+			"src/app/yugioh/**/*.test.tsx",
 			"extensions/rym-release-scraper/tests/*.test.ts",
 			"convex/_utils/serverSecret.test.ts",
 			"src/server/convex-server.test.ts",

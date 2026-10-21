@@ -71,11 +71,19 @@ async function listings(t: T) {
 		});
 		decks.set(t, deckId);
 	}
-	const page = await t.query(api.yugioh.listings.listListings, {
-		deckId,
-		now: Date.now(),
-	});
-	return page.listings;
+	// Available and Sold together, newest first: every Listing in the Deck.
+	const views = await Promise.all(
+		(["available", "sold"] as const).map((view) =>
+			t.query(api.yugioh.listings.listListings, {
+				deckId,
+				now: Date.now(),
+				filters: { view },
+			}),
+		),
+	);
+	return views
+		.flatMap((page) => page.listings)
+		.sort((a, b) => b._creationTime - a._creationTime);
 }
 
 beforeEach(() => {

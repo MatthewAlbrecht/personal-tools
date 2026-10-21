@@ -4,6 +4,7 @@
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { ListingFilters } from "../../src/lib/yugioh/listing-filters";
+import type { ListingSort } from "../../src/lib/yugioh/listing-sort";
 import type { TitleJudgments } from "../../src/lib/yugioh/title-reading";
 import { api } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
@@ -140,11 +141,13 @@ async function listings(
 	t: T,
 	deckId: Id<"yugiohDecks">,
 	filters: ListingFilters = {},
+	sort?: ListingSort,
 ) {
 	return await t.query(api.yugioh.listings.listListings, {
 		deckId,
 		now: Date.now(),
 		filters,
+		sort,
 	});
 }
 
@@ -260,6 +263,28 @@ describe("new since my last visit", () => {
 		expect(onlyNew.matching).toBe(2);
 		expect(onlyNew.newCount).toBe(2);
 	});
+
+	test("New counts within the view: Available and Sold each count their own", async () => {
+		const t = setup();
+		const { deckId } = await ashDeck(t);
+		await visit(t, deckId);
+		at(NOW + HOUR);
+		const [, soldNew] = await capture(
+			t,
+			{},
+			{ sold: true, soldDate: "2026-10-19" },
+			{},
+		);
+		at(NOW + 2 * HOUR);
+		await visit(t, deckId);
+
+		const available = await listings(t, deckId);
+		expect(available.newCount).toBe(2);
+		const sold = await listings(t, deckId, { view: "sold" });
+		expect(sold.newCount).toBe(1);
+		const soldOnlyNew = await listings(t, deckId, { view: "sold", new: true });
+		expect(soldOnlyNew.listings.map((l) => l.itemId)).toEqual([soldNew]);
+	});
 });
 
 describe("new Listings a week, per Card", () => {
@@ -354,11 +379,31 @@ describe("new Listings a week, per Card", () => {
 	});
 });
 
-describe("filters and auctions ending soon", () => {
-	test("ending soon lists running auctions, the soonest end first", async () => {
+describe("views, sorting and filters", () => {
+	test("Available never shows a sale; Sold shows only sales", async () => {
 		const t = setup();
 		const { deckId } = await ashDeck(t);
-		const [later, soon] = await capture(
+		const [bin, sold, ended, running] = await capture(
+			t,
+			{},
+			{ sold: true, soldDate: "2026-10-19" },
+			{ listingType: "auction", bids: 4, endsAt: NOW - HOUR },
+			{ listingType: "auction", bids: 1, endsAt: NOW + HOUR },
+		);
+		const available = await listings(t, deckId);
+		expect(available.listings.map((l) => l.itemId).sort()).toEqual(
+			[bin, running].sort(),
+		);
+		const sales = await listings(t, deckId, { view: "sold" });
+		expect(sales.listings.map((l) => l.itemId).sort()).toEqual(
+			[sold, ended].sort(),
+		);
+	});
+
+	test("ending soonest first: running auctions by end time, the rest after", async () => {
+		const t = setup();
+		const { deckId } = await ashDeck(t);
+		const [later, soon, , bin] = await capture(
 			t,
 			{ listingType: "auction", bids: 2, endsAt: NOW + 5 * HOUR },
 			{ listingType: "auction", bids: 0, endsAt: NOW + 20 * MINUTE },
@@ -366,9 +411,57 @@ describe("filters and auctions ending soon", () => {
 			{},
 		);
 
-		const page = await listings(t, deckId, { ending: true });
-		expect(page.listings.map((l) => l.itemId)).toEqual([soon, later]);
-		expect(page.matching).toBe(2);
+		const page = await listings(
+			t,
+			deckId,
+			{},
+			{ key: "date", direction: "asc" },
+		);
+		expect(page.listings.map((l) => l.itemId)).toEqual([soon, later, bin]);
+		expect(page.matching).toBe(3);
+	});
+
+	test("Sold defaults to the latest sale first", async () => {
+		const t = setup();
+		const { deckId } = await ashDeck(t);
+		const [june, september, july] = await capture(
+			t,
+			{ sold: true, soldDate: "2026-06-23" },
+			{ sold: true, soldDate: "2026-09-01" },
+			{ sold: true, soldDate: "2026-07-05" },
+		);
+		const page = await listings(t, deckId, { view: "sold" });
+		expect(page.listings.map((l) => l.itemId)).toEqual([september, july, june]);
+	});
+
+	test("sorts by Per-copy price over every match, not just the newest 200", async () => {
+		const t = setup();
+		const { deckId } = await ashDeck(t);
+		// The cheapest is captured first, so it's the oldest: the 201st newest.
+		// (It has no set code: the Deck reads its set code's newest 200, plus
+		// up to 50 that could be for any Deck.)
+		const [cheapest] = await capture(
+			t,
+			{ price: 1, title: "Yugioh Quarter Century Secret Rare binder lot" },
+			...Array.from({ length: 200 }, (_, i) => ({ price: 100 + i })),
+		);
+		const page = await listings(
+			t,
+			deckId,
+			{},
+			{ key: "price", direction: "asc" },
+		);
+		expect(page.matching).toBe(201);
+		expect(page.listings).toHaveLength(200);
+		expect(page.listings[0]?.itemId).toBe(cheapest);
+		expect(page.listings[1]?.perCopyPrice?.perCopy).toBe(100);
+		const priciest = await listings(
+			t,
+			deckId,
+			{},
+			{ key: "price", direction: "desc" },
+		);
+		expect(priciest.listings[0]?.perCopyPrice?.perCopy).toBe(299);
 	});
 
 	test("filters narrow; with none, nothing is hidden", async () => {

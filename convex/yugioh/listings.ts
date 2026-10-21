@@ -11,6 +11,7 @@ import {
 	yugiohCapturedTcgplayerProductValidator,
 	yugiohDealValidator,
 	yugiohListingFiltersValidator,
+	yugiohListingSortValidator,
 	yugiohMarketplaceValidator,
 	yugiohMatchStatusValidator,
 	yugiohPerCopyPriceValidator,
@@ -69,22 +70,26 @@ const observationValidator = v.object({
 });
 
 /**
- * A Deck's Listings through `filters` (as kept in the URL), newest first,
- * graded at `now` (Unix ms, from the client: a query can't read the clock).
- * With no filters, nothing is hidden.
+ * A Deck's Listings in one view (Available unless `filters.view` is "sold")
+ * through `filters` (as kept in the URL), ordered by `sort` (else the view's
+ * default) and graded at `now` (Unix ms, from the client: a query can't read
+ * the clock). The sort runs over every match before the first 200 are taken.
  */
 export const listListings = query({
 	args: {
 		deckId: v.id("yugiohDecks"),
 		now: v.number(),
 		filters: v.optional(yugiohListingFiltersValidator),
+		sort: v.optional(yugiohListingSortValidator),
 	},
 	returns: v.object({
 		listings: v.array(listingValidator),
 		/** How many Listings the filters let through; at most 200 are shown. */
 		matching: v.number(),
-		/** How many of the Deck's Listings are new since my last visit. */
+		/** How many Listings the filters would let through with New on. */
 		newCount: v.number(),
+		/** How many Listings the Deck has, Available and Sold, before filters. */
+		total: v.number(),
 		/** Every seller country among the Deck's Listings, A to Z. */
 		locations: v.array(v.string()),
 	}),
@@ -95,6 +100,7 @@ export const listListings = query({
 			args.deckId,
 			args.now,
 			args.filters ?? {},
+			args.sort ?? null,
 		);
 	},
 });

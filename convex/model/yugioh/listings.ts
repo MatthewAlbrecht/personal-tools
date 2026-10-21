@@ -1,9 +1,21 @@
 import type { Infer } from "convex/values";
-import { isSale, saleTime } from "../../../src/lib/yugioh/deals";
+import {
+	isRunningAuction,
+	isSale,
+	saleTime,
+} from "../../../src/lib/yugioh/deals";
 import {
 	type ListingFilters,
+	type ListingsView,
 	applyListingFilters,
 } from "../../../src/lib/yugioh/listing-filters";
+import { listingSeller } from "../../../src/lib/yugioh/listing-format";
+import {
+	type ListingSort,
+	type SortKey,
+	defaultListingSort,
+	sortListings,
+} from "../../../src/lib/yugioh/listing-sort";
 import {
 	type PerCopyPrice,
 	cleanCountry,
@@ -13,7 +25,10 @@ import {
 	ebaySearchSetCodes,
 	searchedPrintingsByCard,
 } from "../../../src/lib/yugioh/searches";
-import { setCodeKey } from "../../../src/lib/yugioh/title-reading";
+import {
+	setCodeKey,
+	shownMatchStatus,
+} from "../../../src/lib/yugioh/title-reading";
 import { isNewListing } from "../../../src/lib/yugioh/whats-new";
 import type { Doc, Id } from "../../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../../_generated/server";
@@ -291,44 +306,133 @@ export async function readDeckListings(
 
 /** The Listings a Deck's Listings view shows, with what's needed to explain them. */
 export type DeckListingsPage = {
-	/** Up to `MAX_LISTINGS_SHOWN` of the Listings the filters let through. */
+	/** Up to `MAX_LISTINGS_SHOWN` of the Listings the filters let through, in sort order. */
 	listings: ListingView[];
 	/** How many Listings the filters let through, shown or not. */
 	matching: number;
-	/** How many of the Deck's Listings are new since my last visit. */
+	/** How many Listings the filters would let through with New on: the view's new ones. */
 	newCount: number;
+	/** How many Listings the Deck has, Available and Sold, before filters. */
+	total: number;
 	/** Every seller country among the Deck's Listings, A to Z: the location filter's options. */
 	locations: string[];
 };
 
 /**
- * A Deck's Listings through `filters`, newest first, priced and graded at
- * `now`. Filters only narrow: with none, every Listing shows.
+ * A Deck's Listings in the filters' view, priced and graded at `now`, ordered
+ * by `sort` (null: the view's default). Every match is sorted before the first
+ * `MAX_LISTINGS_SHOWN` are taken, so the order holds past the cap.
  */
 export async function readDeckListingsPage(
 	ctx: QueryCtx,
 	deckId: Id<"yugiohDecks">,
 	now: number,
 	filters: ListingFilters,
+	sort: ListingSort | null = null,
 ): Promise<DeckListingsPage> {
 	const all = await readDeckListings(ctx, deckId);
 	const newSince = await readNewSince(ctx, deckId);
-	const matching = applyListingFilters(all, filters, {
+	const context = {
 		now,
 		newSince,
 		cardPrintings: await readCardPrintings(ctx, deckId),
-	});
+	};
+	const view = filters.view ?? "available";
+	const order = sort ?? defaultListingSort(view);
+	const matching = applyListingFilters(all, filters, context);
 	const deals = await loadDealContext(ctx, deckId, now);
+	const values = await sortValues(ctx, matching, order, view, now, deals);
+	const ordered = sortListings(
+		matching,
+		order,
+		(listing) => values.get(listing._id) ?? null,
+	);
 	return {
 		listings: await Promise.all(
-			matching
+			ordered
 				.slice(0, MAX_LISTINGS_SHOWN)
 				.map((listing) => listingView(ctx, listing, deals, newSince)),
 		),
 		matching: matching.length,
-		newCount: all.filter((listing) => isNewListing(listing, newSince)).length,
+		newCount: filters.new
+			? matching.length
+			: applyListingFilters(all, { ...filters, new: true }, context).length,
+		total: all.length,
 		locations: sellerCountries(all),
 	};
+}
+
+/**
+ * Each Listing's value in the sort's column, as the table shows it. Only the
+ * sorted column is worked out: a grade needs the Reference price, a Card its
+ * Printing (read once each).
+ */
+async function sortValues(
+	ctx: QueryCtx,
+	listings: Doc<"yugiohListings">[],
+	sort: ListingSort,
+	view: ListingsView,
+	now: number,
+	deals: DealContext,
+): Promise<Map<Id<"yugiohListings">, number | string | null>> {
+	const values = new Map<Id<"yugiohListings">, number | string | null>();
+	const printings = new Map<
+		Id<"yugiohPrintings">,
+		Promise<Doc<"yugiohPrintings"> | null>
+	>();
+	for (const listing of listings) {
+		values.set(
+			listing._id,
+			await sortValue(listing, sort.key, view, now, deals, (printingId) => {
+				let printing = printings.get(printingId);
+				if (!printing) {
+					printing = ctx.db.get("yugiohPrintings", printingId);
+					printings.set(printingId, printing);
+				}
+				return printing;
+			}),
+		);
+	}
+	return values;
+}
+
+async function sortValue(
+	listing: Doc<"yugiohListings">,
+	key: SortKey,
+	view: ListingsView,
+	now: number,
+	deals: DealContext,
+	printing: (
+		printingId: Id<"yugiohPrintings">,
+	) => Promise<Doc<"yugiohPrintings"> | null>,
+): Promise<number | string | null> {
+	switch (key) {
+		case "price":
+			return deals.perCopyPrice(listing)?.perCopy ?? null;
+		case "grade": {
+			const deal = await deals.deal(listing, deals.perCopyPrice(listing));
+			return deal.percentOfReference;
+		}
+		case "card": {
+			if (shownMatchStatus(listing) !== "match") return null;
+			const printingId = listing.matchedPrintingId ?? null;
+			const found = printingId === null ? null : await printing(printingId);
+			return found && `${found.cardName} ${found.setCode} ${found.rarity}`;
+		}
+		case "date":
+			// Sold: when it sold. Available: when a running auction ends.
+			if (view === "sold") {
+				return listing.saleAt ?? saleTime(listing, listing.lastSeenAt);
+			}
+			return isRunningAuction(listing, now) ? listing.endsAt : null;
+		case "seller":
+			return listingSeller({
+				...listing,
+				tcgplayer: listing.tcgplayer ?? null,
+			});
+		case "seen":
+			return listing.listedAt ?? listing.firstSeenAt;
+	}
 }
 
 function sellerCountries(listings: Doc<"yugiohListings">[]): string[] {

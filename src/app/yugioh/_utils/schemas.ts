@@ -8,10 +8,11 @@ import {
 import {
 	CONDITION_FILTERS,
 	LISTING_KINDS,
+	LISTING_VIEWS,
 	MARKETPLACES,
 	MATCH_FILTERS,
-	QUICK_VIEWS,
 } from "~/lib/yugioh/listing-filters";
+import { SORT_DIRECTIONS, SORT_KEYS } from "~/lib/yugioh/listing-sort";
 import {
 	HOME_COUNTRY,
 	MAX_COUNTRY_LENGTH,
@@ -55,6 +56,10 @@ export const copiesSchema = z.object({
 
 export const cardOrderSchema = z.object({
 	cardOrder: z.enum(CARD_ORDERS),
+});
+
+export const gridColumnsSchema = z.object({
+	columns: z.union([z.literal(2), z.literal(3), z.literal(4)]),
 });
 
 export const conditionSchema = z.object({
@@ -131,8 +136,17 @@ export const listingFiltersSchema = z.object({
 	card: z.string(),
 });
 
-/** The Listings quick views: All · New · Ending soon · Sold. */
-export const quickViewSchema = z.object({ view: z.enum(QUICK_VIEWS) });
+/** The Listings view (Available or Sold) and the New toggle within it. */
+export const listingsViewSchema = z.object({
+	view: z.enum(LISTING_VIEWS),
+	new: z.boolean(),
+});
+
+/** The Listings sort on small screens, where there are no column headers. */
+export const listingSortSchema = z.object({
+	key: z.enum(SORT_KEYS),
+	direction: z.enum(SORT_DIRECTIONS),
+});
 
 /** The alerts switch on Settings: on or off for this device. */
 export const pushAlertsSchema = z.object({ enabled: z.boolean() });

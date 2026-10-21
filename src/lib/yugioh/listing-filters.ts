@@ -1,7 +1,8 @@
-// Filters for a Deck's Listings, kept in the URL. Filters only narrow: with
-// none set, every Listing shows. Relative imports only (Convex imports this).
+// Filters for a Deck's Listings, kept in the URL. A Deck's Listings show in
+// two views, Available and Sold, that never share a Listing; the other filters
+// only narrow a view. Relative imports only (Convex imports this).
 
-import { isRunningAuction, isSale, listingLanguage } from "./deals";
+import { isSale, listingLanguage } from "./deals";
 import { countryKey } from "./pricing";
 import {
 	LANGUAGES,
@@ -17,8 +18,12 @@ import { isNewListing } from "./whats-new";
 export const MARKETPLACES = ["ebay", "tcgplayer"] as const;
 export type Marketplace = (typeof MARKETPLACES)[number];
 
+/** Available: still for sale (the default). Sold: sold, or ended with bids. */
+export const LISTING_VIEWS = ["available", "sold"] as const;
+export type ListingsView = (typeof LISTING_VIEWS)[number];
+
 /** How a Listing sells, as the type filter sees it: Best Offer is buy it now. */
-export const LISTING_KINDS = ["buyItNow", "auction", "sold"] as const;
+export const LISTING_KINDS = ["buyItNow", "auction"] as const;
 export type ListingKind = (typeof LISTING_KINDS)[number];
 
 export const CONDITION_FILTERS = [...READ_CONDITIONS, "unknown"] as const;
@@ -32,12 +37,12 @@ export const MATCH_FILTERS = [
 ] as const;
 export type MatchFilter = MatchStatus | "reading";
 
-/** Every filter is optional; an unset filter lets every Listing through. */
+/** Every filter is optional; an unset filter lets every Listing in the view through. */
 export type ListingFilters = {
-	/** Only Listings first seen since my last visit. */
+	/** Available (unset) or Sold. */
+	view?: ListingsView;
+	/** Only Listings first seen since my last visit, within the view. */
 	new?: boolean;
-	/** Only running auctions, the soonest end first. */
-	ending?: boolean;
 	marketplace?: Marketplace;
 	type?: ListingKind;
 	language?: Language;
@@ -78,33 +83,26 @@ export type FilterContext = {
 	cardPrintings: ReadonlyMap<string, ReadonlySet<string>>;
 };
 
-/** Sold (or an auction that ended with bids), auction, or buy it now. */
-export function listingKind(
+/** Which view a Listing shows in: Sold once it's a sale, else Available. */
+export function listingsViewOf(
 	listing: FilterableListing,
 	now: number,
-): ListingKind {
-	if (isSale(listing, now)) return "sold";
+): ListingsView {
+	return isSale(listing, now) ? "sold" : "available";
+}
+
+/** Auction, or buy it now (with Best Offer), whether sold or not. */
+export function listingKind(listing: FilterableListing): ListingKind {
 	return listing.listingType === "auction" ? "auction" : "buyItNow";
 }
 
-/**
- * The Listings the filters let through. They keep the order given, except
- * that "ending soon" puts the soonest end first (unknown end times last).
- */
+/** The Listings in the filters' view that the filters let through, in the order given. */
 export function applyListingFilters<L extends FilterableListing>(
 	listings: readonly L[],
 	filters: ListingFilters,
 	context: FilterContext,
 ): L[] {
-	const matching = listings.filter((listing) =>
-		passes(listing, filters, context),
-	);
-	if (!filters.ending) return matching;
-	return matching.sort(
-		(a, b) =>
-			(a.endsAt ?? Number.POSITIVE_INFINITY) -
-			(b.endsAt ?? Number.POSITIVE_INFINITY),
-	);
+	return listings.filter((listing) => passes(listing, filters, context));
 }
 
 function passes(
@@ -112,12 +110,14 @@ function passes(
 	filters: ListingFilters,
 	{ now, newSince, cardPrintings }: FilterContext,
 ): boolean {
+	if (listingsViewOf(listing, now) !== (filters.view ?? "available")) {
+		return false;
+	}
 	if (filters.new && !isNewListing(listing, newSince)) return false;
-	if (filters.ending && !isRunningAuction(listing, now)) return false;
 	if (filters.marketplace && listing.marketplace !== filters.marketplace) {
 		return false;
 	}
-	if (filters.type && listingKind(listing, now) !== filters.type) return false;
+	if (filters.type && listingKind(listing) !== filters.type) return false;
 	if (filters.language && listingLanguage(listing) !== filters.language) {
 		return false;
 	}
@@ -155,10 +155,10 @@ function passes(
 
 // --- The URL ---------------------------------------------------------------
 
-/** Search params the filters own; any other param (`listing`) is left alone. */
+/** Search params the filters own; any other param (`listing`, `sort`) is left alone. */
 const FILTER_PARAMS = [
+	"view",
 	"new",
-	"ending",
 	"marketplace",
 	"type",
 	"language",
@@ -190,13 +190,22 @@ function yesNo(value: string | null): boolean | undefined {
 }
 
 /**
+ * Params from before Available and Sold: `type=sold` was the Sold view, and
+ * `ending=1` the Ending soon view (now a sort, see `listingSortFromParams`).
+ */
+const LEGACY_PARAMS = ["ending"] as const;
+
+/**
  * The filters a URL's search params hold. A value the filters don't know is
- * ignored, so a stale or mistyped link shows more, never nothing.
+ * ignored, so a stale or mistyped link shows more, never nothing. Old links
+ * (`type=sold`) still open the view they meant.
  */
 export function listingFiltersFromParams(params: ParamReader): ListingFilters {
+	const legacySold = params.get("type") === "sold";
+	const view = legacySold ? "sold" : oneOf(LISTING_VIEWS, params.get("view"));
 	const filters: ListingFilters = {
+		view: view === "available" ? undefined : view,
 		new: params.get("new") === "1" || undefined,
-		ending: params.get("ending") === "1" || undefined,
 		marketplace: oneOf(MARKETPLACES, params.get("marketplace")),
 		type: oneOf(LISTING_KINDS, params.get("type")),
 		language: oneOf(LANGUAGES, params.get("language")),
@@ -215,7 +224,7 @@ export function withListingFilters(
 	filters: ListingFilters,
 ): URLSearchParams {
 	const next = new URLSearchParams(params);
-	for (const name of FILTER_PARAMS) next.delete(name);
+	for (const name of [...FILTER_PARAMS, ...LEGACY_PARAMS]) next.delete(name);
 	for (const name of FILTER_PARAMS) {
 		const value = paramValue(name, filters[name]);
 		if (value !== undefined) next.set(name, value);
@@ -223,12 +232,13 @@ export function withListingFilters(
 	return next;
 }
 
-/** How a filter reads in the URL: `new=1`, `graded=no`, `type=sold`. */
+/** How a filter reads in the URL: `view=sold`, `new=1`, `graded=no`. */
 function paramValue(
 	name: keyof ListingFilters,
 	value: ListingFilters[keyof ListingFilters],
 ): string | undefined {
 	if (value === undefined) return undefined;
+	if (name === "view" && value === "available") return undefined;
 	if (name === "graded") return value ? "yes" : "no";
 	if (typeof value === "boolean") return value ? "1" : undefined;
 	return value;
@@ -240,55 +250,21 @@ function withoutUnset(filters: ListingFilters): ListingFilters {
 	) as ListingFilters;
 }
 
-// --- Quick views -----------------------------------------------------------
-
-/** The always-visible row: All · New · Ending soon · Sold. */
-export const QUICK_VIEWS = ["all", "new", "ending", "sold"] as const;
-export type QuickView = (typeof QUICK_VIEWS)[number];
+// --- The Filters button ----------------------------------------------------
 
 /**
- * Which quick view the filters show, or null when they mix several (New
- * Listings that sold, say); the other filters don't affect it.
- */
-export function quickView(filters: ListingFilters): QuickView | null {
-	const shown: QuickView[] = [];
-	if (filters.new) shown.push("new");
-	if (filters.ending) shown.push("ending");
-	if (filters.type === "sold") shown.push("sold");
-	else if (filters.type !== undefined) return null;
-	if (shown.length > 1) return null;
-	return shown[0] ?? "all";
-}
-
-/** The filters with one quick view picked; the other filters are kept. */
-export function withQuickView(
-	filters: ListingFilters,
-	view: QuickView,
-): ListingFilters {
-	const { new: _new, ending: _ending, type: _type, ...rest } = filters;
-	if (view === "new") return { ...rest, new: true };
-	if (view === "ending") return { ...rest, ending: true };
-	if (view === "sold") return { ...rest, type: "sold" };
-	return rest;
-}
-
-/**
- * The filters set beyond what the quick view shows, in URL order: the ones
- * the Filters button counts and lists as removable badges.
+ * The filters set beyond the view and the New toggle, in URL order: the ones
+ * the Filters button counts and lists as removable chips.
  */
 export function extraFilters(
 	filters: ListingFilters,
 ): Array<keyof ListingFilters> {
-	const view = quickView(filters);
-	return FILTER_PARAMS.filter((name) => {
-		if (filters[name] === undefined) return false;
-		if (view === null) return true;
-		if (name === "new" || name === "ending") return false;
-		return !(name === "type" && view === "sold");
-	});
+	return FILTER_PARAMS.filter(
+		(name) => name !== "view" && name !== "new" && filters[name] !== undefined,
+	);
 }
 
-/** How many filters are set beyond the quick view. */
+/** How many filters are set beyond the view and the New toggle. */
 export function activeFilterCount(filters: ListingFilters): number {
 	return extraFilters(filters).length;
 }

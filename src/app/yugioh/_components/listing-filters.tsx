@@ -16,19 +16,19 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "~/components/ui/select";
+import { Toggle } from "~/components/ui/toggle";
 import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group";
 import { SECTION_LABELS } from "~/lib/yugioh/deck";
 import {
 	CONDITION_FILTERS,
 	type ConditionFilter,
+	LISTING_VIEWS,
 	type ListingFilters,
 	type ListingKind,
+	type ListingsView,
 	type Marketplace,
 	type MatchFilter,
-	type QuickView,
 	extraFilters,
-	quickView,
-	withQuickView,
 } from "~/lib/yugioh/listing-filters";
 import { MARKETPLACE_LABELS } from "~/lib/yugioh/listing-format";
 import {
@@ -39,21 +39,22 @@ import {
 } from "~/lib/yugioh/title-reading";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
-import { ANY, listingFiltersSchema, quickViewSchema } from "../_utils/schemas";
+import {
+	ANY,
+	listingFiltersSchema,
+	listingsViewSchema,
+} from "../_utils/schemas";
 import type { DeckView } from "../_utils/types";
 import { YugiohDrawer } from "./yugioh-drawer";
 
-const QUICK_VIEW_LABELS: Record<QuickView, string> = {
-	all: "All",
-	new: "New",
-	ending: "Ending soon",
+const VIEW_LABELS: Record<ListingsView, string> = {
+	available: "Available",
 	sold: "Sold",
 };
 
 const KIND_LABELS: Record<ListingKind, string> = {
 	buyItNow: "Buy it now",
 	auction: "Auction",
-	sold: "Sold",
 };
 
 const CONDITION_FILTER_LABELS: Record<ConditionFilter, string> = {
@@ -72,9 +73,9 @@ const MATCH_LABELS: Record<MatchFilter, string> = {
 type CardOption = { _id: string; label: string };
 
 /**
- * The Listings toolbar: the quick views (All · New · Ending soon · Sold), the
- * Filters button with how many more are set, and those filters as removable
- * badges. Every change is a URL change, through `onChange`.
+ * The Listings toolbar: the view (Available · Sold), the New toggle within
+ * it, the Filters button with how many more are set, and those filters as
+ * removable chips. Every change is a URL change, through `onChange`.
  */
 export function ListingsToolbar({
 	deckId,
@@ -100,8 +101,8 @@ export function ListingsToolbar({
 	return (
 		<div className="flex flex-col gap-2">
 			<div className="-mx-4 flex items-center gap-2 overflow-x-auto px-4 md:mx-0 md:px-0">
-				<QuickViewToggle
-					key={quickView(filters) ?? "mixed"}
+				<ViewToggles
+					key={`${filters.view ?? "available"}-${filters.new ?? false}`}
 					filters={filters}
 					newCount={newCount}
 					onChange={onChange}
@@ -145,7 +146,7 @@ export function ListingsToolbar({
 							variant="ghost"
 							size="sm"
 							className="h-11 md:h-8"
-							onClick={() => onChange({})}
+							onClick={() => onChange(keepView(filters))}
 						>
 							Clear
 						</Button>
@@ -165,8 +166,16 @@ export function ListingsToolbar({
 	);
 }
 
-/** All · New · Ending soon · Sold. None is pressed when the filters mix them. */
-function QuickViewToggle({
+/** Clearing filters keeps the view and the New toggle. */
+function keepView(filters: ListingFilters): ListingFilters {
+	return { view: filters.view, new: filters.new };
+}
+
+/**
+ * Available · Sold, then New: Listings first seen since my last visit, within
+ * the view, with how many there are.
+ */
+function ViewToggles({
 	filters,
 	newCount,
 	onChange,
@@ -175,45 +184,73 @@ function QuickViewToggle({
 	newCount: number | null;
 	onChange: (filters: ListingFilters) => void;
 }): React.ReactElement {
-	const current = quickView(filters);
 	const form = useForm({
-		defaultValues: { view: current ?? "all" },
-		validators: { onSubmit: quickViewSchema },
-		onSubmit: ({ value }) => onChange(withQuickView(filters, value.view)),
+		defaultValues: {
+			view: filters.view ?? "available",
+			new: filters.new ?? false,
+		},
+		validators: { onSubmit: listingsViewSchema },
+		onSubmit: ({ value }) =>
+			onChange({
+				...filters,
+				view: value.view === "available" ? undefined : value.view,
+				new: value.new || undefined,
+			}),
 	});
 	return (
-		<form.Field name="view">
-			{(field) => (
-				<ToggleGroup
-					aria-label="Show"
-					variant="outline"
-					spacing={0}
-					value={current === null ? [] : [current]}
-					onValueChange={(next) => {
-						const [picked] = next as QuickView[];
-						// Pressing the active view again would clear the group; keep it.
-						if (!picked || picked === current) return;
-						field.handleChange(picked);
-						void form.handleSubmit();
-					}}
-				>
-					{(Object.keys(QUICK_VIEW_LABELS) as QuickView[]).map((view) => (
-						<ToggleGroupItem
-							key={view}
-							value={view}
-							className="h-11 px-3 md:h-9"
-						>
-							{QUICK_VIEW_LABELS[view]}
-							{view === "new" && newCount !== null && newCount > 0 && (
-								<span className="text-muted-foreground tabular-nums">
-									{newCount}
-								</span>
-							)}
-						</ToggleGroupItem>
-					))}
-				</ToggleGroup>
-			)}
-		</form.Field>
+		<div className="flex items-center gap-2">
+			<form.Field name="view">
+				{(field) => (
+					<ToggleGroup
+						aria-label="Show"
+						variant="outline"
+						spacing={0}
+						value={[field.state.value]}
+						onValueChange={(next) => {
+							const [picked] = next as ListingsView[];
+							// Pressing the open view again would clear the group; keep it.
+							if (!picked || picked === field.state.value) return;
+							field.handleChange(picked);
+							void form.handleSubmit();
+						}}
+					>
+						{LISTING_VIEWS.map((view) => (
+							<ToggleGroupItem
+								key={view}
+								value={view}
+								className="h-11 px-3 md:h-9"
+							>
+								{VIEW_LABELS[view]}
+							</ToggleGroupItem>
+						))}
+					</ToggleGroup>
+				)}
+			</form.Field>
+			<form.Field name="new">
+				{(field) => (
+					<Toggle
+						variant="outline"
+						className="h-11 px-3 md:h-9"
+						pressed={field.state.value}
+						onPressedChange={(pressed) => {
+							field.handleChange(pressed);
+							void form.handleSubmit();
+						}}
+					>
+						<span
+							aria-hidden
+							className="size-2 shrink-0 rounded-full bg-primary"
+						/>
+						New
+						{newCount !== null && newCount > 0 && (
+							<span className="text-muted-foreground tabular-nums">
+								{newCount}
+							</span>
+						)}
+					</Toggle>
+				)}
+			</form.Field>
+		</div>
 	);
 }
 
@@ -241,7 +278,7 @@ function formValues(filters: ListingFilters): FilterFormValues {
 	};
 }
 
-/** The filters the drawer's fields set, keeping New and Ending soon. */
+/** The filters the drawer's fields set, keeping the view and New. */
 function filtersFrom(
 	values: FilterFormValues,
 	filters: ListingFilters,
@@ -250,8 +287,8 @@ function filtersFrom(
 		return value === ANY ? undefined : (value as T);
 	}
 	return {
+		view: filters.view,
 		new: filters.new,
-		ending: filters.ending,
 		marketplace: set(values.marketplace),
 		type: set(values.type),
 		language: set(values.language),
@@ -354,13 +391,13 @@ function ListingFiltersDrawer({
 			open={open}
 			onOpenChange={onOpenChange}
 			title="Filters"
-			description="Filters narrow the list. Nothing is hidden until you set one."
+			description="Filters narrow this view. Nothing is hidden until you set one."
 			footer={
 				<div className="flex gap-2">
 					<Button
 						variant="outline"
 						className="h-11 flex-1 md:h-9"
-						onClick={() => onChange({})}
+						onClick={() => onChange(keepView(filters))}
 					>
 						Clear filters
 					</Button>
@@ -447,10 +484,10 @@ function filterLabel(
 	cards: CardOption[],
 ): string {
 	switch (name) {
+		case "view":
+			return filters.view ? VIEW_LABELS[filters.view] : "";
 		case "new":
 			return "New";
-		case "ending":
-			return "Ending soon";
 		case "marketplace":
 			return filters.marketplace ? MARKETPLACE_LABELS[filters.marketplace] : "";
 		case "type":

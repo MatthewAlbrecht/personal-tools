@@ -2,7 +2,14 @@
 
 import { useQuery } from "convex/react";
 import { formatDistanceToNowStrict } from "date-fns";
-import { ExternalLink, ListFilter, Tag } from "lucide-react";
+import {
+	ArrowDown,
+	ArrowUp,
+	ArrowUpDown,
+	ExternalLink,
+	ListFilter,
+	Tag,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type * as React from "react";
@@ -29,6 +36,8 @@ import { useMinuteClock } from "~/lib/hooks/use-minute-clock";
 import { cn } from "~/lib/utils";
 import {
 	type ListingFilters,
+	type ListingsView,
+	activeFilterCount,
 	listingFiltersFromParams,
 	withListingFilters,
 } from "~/lib/yugioh/listing-filters";
@@ -38,6 +47,15 @@ import {
 	listingSeller,
 	listingTypeLabel,
 } from "~/lib/yugioh/listing-format";
+import {
+	type ListingSort,
+	type SortKey,
+	defaultListingSort,
+	listingSortFromParams,
+	sortPhrase,
+	toggledSort,
+	withListingSort,
+} from "~/lib/yugioh/listing-sort";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import type { ListingView } from "../_utils/types";
@@ -45,13 +63,15 @@ import { DealGradeSummary } from "./deal-grade";
 import { ListingDrawer } from "./listing-drawer";
 import { ListingsToolbar } from "./listing-filters";
 import { MatchSummary, TitleFlagBadges } from "./listing-match";
+import { ListingSortSelect } from "./listing-sort-select";
 
 const SKELETON_ROWS = [0, 1, 2, 3, 4, 5, 6, 7];
 
 /**
- * The Deck's Listings, newest first: matched, unsure and not-a-match alike.
- * Filters live in the URL and only narrow; with none set, nothing is hidden.
- * Tapping a Listing opens the Listing drawer (`?listing=`).
+ * The Deck's Listings in one view, Available (the default) or Sold: matched,
+ * unsure and not-a-match alike. The view, filters and sort live in the URL;
+ * filters only narrow the view. Column headers sort; tapping a Listing opens
+ * the Listing drawer (`?listing=`).
  */
 export function ListingsPage({
 	deckId,
@@ -63,8 +83,15 @@ export function ListingsPage({
 	const pathname = usePathname() ?? `/yugioh/decks/${deckId}/listings`;
 	const searchParams = useSearchParams() ?? new URLSearchParams();
 	const filters = listingFiltersFromParams(searchParams);
+	const view: ListingsView = filters.view ?? "available";
+	const sort = listingSortFromParams(searchParams, view);
 	const page = useHeldWhileLoading(
-		useQuery(api.yugioh.listings.listListings, { deckId, now, filters }),
+		useQuery(api.yugioh.listings.listListings, {
+			deckId,
+			now,
+			filters,
+			sort,
+		}),
 		deckId,
 	);
 
@@ -76,9 +103,30 @@ export function ListingsPage({
 	}
 
 	function setFilters(next: ListingFilters): void {
+		const nextView = next.view ?? "available";
+		// Switching views keeps a sort I picked, but the default follows the view.
+		const fallback = defaultListingSort(view);
+		const isDefault =
+			sort.key === fallback.key && sort.direction === fallback.direction;
+		const nextSort =
+			nextView !== view && isDefault ? defaultListingSort(nextView) : sort;
 		replaceParams(
-			withListingFilters(new URLSearchParams(searchParams.toString()), next),
+			withListingSort(
+				withListingFilters(new URLSearchParams(searchParams.toString()), next),
+				nextSort,
+				nextView,
+			),
 		);
+	}
+
+	function setSort(next: ListingSort): void {
+		replaceParams(
+			withListingSort(new URLSearchParams(searchParams.toString()), next, view),
+		);
+	}
+
+	function sortBy(key: SortKey): void {
+		setSort(toggledSort(sort, key, view));
 	}
 
 	const toolbar = (
@@ -101,8 +149,7 @@ export function ListingsPage({
 		);
 	}
 
-	const filtered = Object.keys(filters).length > 0;
-	if (page.matching === 0 && !filtered) {
+	if (page.total === 0) {
 		return (
 			<Empty className="border">
 				<EmptyHeader>
@@ -147,27 +194,28 @@ export function ListingsPage({
 		<section aria-label="Listings" className="flex flex-col gap-3">
 			{toolbar}
 			{page.matching === 0 ? (
-				<Empty className="border">
-					<EmptyHeader>
-						<EmptyMedia variant="icon">
-							<ListFilter />
-						</EmptyMedia>
-						<EmptyTitle>Nothing matches these filters.</EmptyTitle>
-					</EmptyHeader>
-					<EmptyContent>
-						<Button variant="outline" onClick={() => setFilters({})}>
-							Clear filters
-						</Button>
-					</EmptyContent>
-				</Empty>
+				<NothingShown
+					view={view}
+					filters={filters}
+					onClear={() => setFilters({ view: filters.view })}
+				/>
 			) : (
 				<>
-					<p
-						className="text-muted-foreground text-sm tabular-nums"
-						aria-live="polite"
-					>
-						{countLine(listings.length, page.matching, filters)}
-					</p>
+					<div className="flex items-center justify-between gap-3">
+						<p
+							className="text-muted-foreground text-sm tabular-nums"
+							aria-live="polite"
+						>
+							{countLine(listings.length, page.matching, sort, view)}
+						</p>
+						<ListingSortSelect
+							key={`${sort.key}-${sort.direction}-${view}`}
+							sort={sort}
+							view={view}
+							onChange={setSort}
+							className="md:hidden"
+						/>
+					</div>
 					<ul className="-mx-4 flex flex-col divide-y border-y md:hidden">
 						{listings.map((listing) => (
 							<li key={listing._id}>
@@ -180,7 +228,14 @@ export function ListingsPage({
 						))}
 					</ul>
 					<div className="hidden md:block">
-						<ListingsTable listings={listings} href={listingHref} now={now} />
+						<ListingsTable
+							listings={listings}
+							href={listingHref}
+							now={now}
+							view={view}
+							sort={sort}
+							onSort={sortBy}
+						/>
 					</div>
 				</>
 			)}
@@ -195,24 +250,59 @@ export function ListingsPage({
 }
 
 /**
- * "17 Listings, newest first"; "The newest 200 of 812 Listings" past the cap;
- * "3 running auctions, ending soonest first" for Ending soon.
+ * Nothing in the view: "Nothing matches these filters." with a way out, or,
+ * with no filters set, that the view itself is empty.
+ */
+function NothingShown({
+	view,
+	filters,
+	onClear,
+}: {
+	view: ListingsView;
+	filters: ListingFilters;
+	onClear: () => void;
+}): React.ReactElement {
+	const filtered = filters.new || activeFilterCount(filters) > 0;
+	return (
+		<Empty className="border">
+			<EmptyHeader>
+				<EmptyMedia variant="icon">
+					<ListFilter />
+				</EmptyMedia>
+				<EmptyTitle>
+					{filtered
+						? "Nothing matches these filters."
+						: view === "sold"
+							? "No sales yet."
+							: "Nothing for sale right now."}
+				</EmptyTitle>
+			</EmptyHeader>
+			{filtered && (
+				<EmptyContent>
+					<Button variant="outline" onClick={onClear}>
+						Clear filters
+					</Button>
+				</EmptyContent>
+			)}
+		</Empty>
+	);
+}
+
+/**
+ * "17 Listings, newest first"; past the cap, "The first 200 of 812 Listings,
+ * cheapest first".
  */
 function countLine(
 	shown: number,
 	matching: number,
-	filters: ListingFilters,
+	sort: ListingSort,
+	view: ListingsView,
 ): string {
-	if (filters.ending) {
-		const noun = matching === 1 ? "running auction" : "running auctions";
-		return shown < matching
-			? `The first ${shown} of ${matching} ${noun}, ending soonest first`
-			: `${matching} ${noun}, ending soonest first`;
-	}
 	const noun = matching === 1 ? "Listing" : "Listings";
+	const order = sortPhrase(sort, view);
 	return shown < matching
-		? `The newest ${shown} of ${matching} ${noun}`
-		: `${matching} ${noun}, newest first`;
+		? `The first ${shown} of ${matching} ${noun}, ${order}`
+		: `${matching} ${noun}, ${order}`;
 }
 
 function ListingRow({
@@ -265,26 +355,45 @@ function ListingRow({
 	);
 }
 
-function ListingsTable({
+export function ListingsTable({
 	listings,
 	href,
 	now,
+	view,
+	sort,
+	onSort,
 }: {
 	listings: ListingView[];
 	href: (listingId: string) => string;
 	now: number;
+	view: ListingsView;
+	sort: ListingSort;
+	onSort: (key: SortKey) => void;
 }): React.ReactElement {
+	const head = { sort, onSort };
 	return (
 		<Table>
 			<TableHeader>
 				<TableRow>
-					<TableHead className="text-right">Per-copy</TableHead>
-					<TableHead>Grade</TableHead>
-					<TableHead>Card / Printing</TableHead>
+					<SortableHead {...head} column="price" align="end">
+						Per-copy
+					</SortableHead>
+					<SortableHead {...head} column="grade">
+						Grade
+					</SortableHead>
+					<SortableHead {...head} column="card">
+						Card / Printing
+					</SortableHead>
 					<TableHead className="w-full">Title</TableHead>
-					<TableHead>Type</TableHead>
-					<TableHead>Seller</TableHead>
-					<TableHead>Seen</TableHead>
+					<SortableHead {...head} column="date">
+						{view === "sold" ? "Sold" : "Type / Ends"}
+					</SortableHead>
+					<SortableHead {...head} column="seller">
+						Seller
+					</SortableHead>
+					<SortableHead {...head} column="seen">
+						Seen
+					</SortableHead>
 					<TableHead>
 						<span className="sr-only">Open on the marketplace</span>
 					</TableHead>
@@ -308,15 +417,16 @@ function ListingsTable({
 						<TableCell className="align-top">
 							<DealGradeSummary deal={listing.deal} stacked />
 						</TableCell>
-						<TableCell className="max-w-72 align-top">
-							{/* The whole row opens the Listing drawer through this link. */}
+						<TableCell className="align-top">
+							{/* The whole row opens the Listing drawer through this link.
+							    A set width: a table cell grows to fit its text otherwise. */}
 							<Link
 								href={href(listing._id)}
 								replace
 								scroll={false}
-								className="flex min-w-0 outline-none after:absolute after:inset-0 focus-visible:underline"
+								className="flex w-52 outline-none after:absolute after:inset-0 focus-visible:underline lg:w-60"
 							>
-								<MatchSummary match={listing.match} />
+								<MatchSummary match={listing.match} stacked />
 							</Link>
 						</TableCell>
 						<TableCell className="max-w-0 align-top">
@@ -366,6 +476,60 @@ function ListingsTable({
 				))}
 			</TableBody>
 		</Table>
+	);
+}
+
+/**
+ * A column header that sorts: picking it sorts by that column, picking it
+ * again flips the order. The sorted column shows an arrow and `aria-sort`.
+ */
+function SortableHead({
+	column,
+	sort,
+	onSort,
+	align = "start",
+	children,
+}: {
+	column: SortKey;
+	sort: ListingSort;
+	onSort: (key: SortKey) => void;
+	align?: "start" | "end";
+	children: React.ReactNode;
+}): React.ReactElement {
+	const active = sort.key === column;
+	const Arrow = !active
+		? ArrowUpDown
+		: sort.direction === "asc"
+			? ArrowUp
+			: ArrowDown;
+	return (
+		<TableHead
+			aria-sort={
+				active
+					? sort.direction === "asc"
+						? "ascending"
+						: "descending"
+					: "none"
+			}
+			className={cn(align === "end" && "text-right")}
+		>
+			<Button
+				variant="ghost"
+				size="sm"
+				className={cn(
+					"-mx-2 h-8 gap-1 px-2 font-medium",
+					align === "end" && "flex-row-reverse",
+					!active && "text-foreground",
+				)}
+				onClick={() => onSort(column)}
+			>
+				{children}
+				<Arrow
+					aria-hidden
+					className={cn(!active && "text-muted-foreground/50")}
+				/>
+			</Button>
+		</TableHead>
 	);
 }
 

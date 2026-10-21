@@ -20,6 +20,18 @@ _Avoid_: Shared code, duplicate code
 One offer to sell a Card on a marketplace (eBay or TCGplayer), whether still active or already sold. It may not be for a Printing you want.
 _Avoid_: Post, item, auction (an auction is one kind of Listing)
 
+**Available Listing**:
+A Listing still for sale: buy it now, Best Offer, or an auction still taking bids or that ended without a bid. A Listing is either Available or a Sale, never both.
+_Avoid_: Active listing, all
+
+**Sale**:
+A Listing that sold, or an auction that ended with bids. Sales set Reference prices.
+_Avoid_: Sold listing, completed listing
+
+**New Listing**:
+A Listing first seen since your last visit to the Deck, whether it's Available or a Sale.
+_Avoid_: Fresh, recent
+
 **Search**:
 One marketplace query covering a group of Printings' set codes at once, viewed as Newly Listed or Sold, or as Ending soon (its running auctions, ending soonest first) shortly before one of them ends.
 _Avoid_: Query, feed

@@ -267,11 +267,19 @@ async function ashPrices(t: T, deckId: Id<"yugiohDecks">) {
 }
 
 async function deckListings(t: T, deckId: Id<"yugiohDecks">) {
-	const page = await t.query(api.yugioh.listings.listListings, {
-		deckId,
-		now: NOW,
-	});
-	return page.listings;
+	// Available and Sold together, newest first: every Listing in the Deck.
+	const views = await Promise.all(
+		(["available", "sold"] as const).map((view) =>
+			t.query(api.yugioh.listings.listListings, {
+				deckId,
+				now: NOW,
+				filters: { view },
+			}),
+		),
+	);
+	return views
+		.flatMap((page) => page.listings)
+		.sort((a, b) => b._creationTime - a._creationTime);
 }
 
 async function ashCost(t: T, deckId: Id<"yugiohDecks">) {

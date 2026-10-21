@@ -9,29 +9,48 @@ import type { ListingView } from "../_utils/types";
 /**
  * Which of my Printings a Listing is for: "Ash Blossom · RA01-EN008 QCSR",
  * "Not a match", an "Unsure" badge, or "Reading title…" while the AI reads it.
+ * `stacked` puts the Printing on a second line (the table's narrow column).
+ * Either way the Card name keeps its room: a long rarity is cut short first.
  */
 export function MatchSummary({
 	match,
+	stacked = false,
 	className,
 }: {
 	match: ListingView["match"];
+	stacked?: boolean;
 	className?: string;
 }): React.ReactElement {
 	if (match.status === "match" && match.printing) {
 		const { cardName, setCode, rarity } = match.printing;
+		const printing = (
+			<>
+				<span className="font-mono text-[0.8125rem] tracking-tight">
+					{setCode}
+				</span>{" "}
+				{rarityAbbreviation(rarity)}
+			</>
+		);
+		if (stacked) {
+			return (
+				<span
+					className={cn("flex min-w-0 flex-col", className)}
+					title={`${cardName} · ${setCode} ${rarity}`}
+				>
+					<span className="truncate">{cardName}</span>
+					<span className="truncate text-muted-foreground text-xs">
+						{printing}
+					</span>
+				</span>
+			);
+		}
 		return (
 			<span
 				className={cn("flex min-w-0 items-baseline gap-1", className)}
 				title={`${cardName} · ${setCode} ${rarity}`}
 			>
-				<span className="min-w-0 truncate">{cardName}</span>
-				<span className="shrink-0">
-					·{" "}
-					<span className="font-mono text-[0.8125rem] tracking-tight">
-						{setCode}
-					</span>{" "}
-					{rarityAbbreviation(rarity)}
-				</span>
+				<span className="max-w-full shrink-0 truncate">{cardName}</span>
+				<span className="min-w-0 truncate">· {printing}</span>
 			</span>
 		);
 	}

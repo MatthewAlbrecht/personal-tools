@@ -4,10 +4,9 @@ import {
 	type ListingFilters,
 	activeFilterCount,
 	applyListingFilters,
+	extraFilters,
 	listingFiltersFromParams,
-	quickView,
 	withListingFilters,
-	withQuickView,
 } from "./listing-filters";
 
 const NOW = Date.UTC(2026, 9, 20, 12, 0);
@@ -63,16 +62,16 @@ function ids(
 }
 
 describe("applyListingFilters", () => {
-	test("no filters: everything shows, in the order given", () => {
+	test("no filters: every Available Listing shows, in the order given", () => {
 		const all = [
 			listing({ id: "a", matchStatus: "notMatch", matchedPrintingId: null }),
 			listing({ id: "b", sold: true }),
 			listing({ id: "c", titleRead: { ...read, graded: true } }),
 		];
-		expect(ids(all, {})).toEqual(["a", "b", "c"]);
+		expect(ids(all, {})).toEqual(["a", "c"]);
 	});
 
-	test("type: buy it now (with Best Offer), auction, or sold", () => {
+	test("Available and Sold never share a Listing", () => {
 		const all = [
 			listing({ id: "bin" }),
 			listing({ id: "offer", listingType: "bestOffer" }),
@@ -86,9 +85,32 @@ describe("applyListingFilters", () => {
 				bids: 3,
 			}),
 		];
+		expect(ids(all, {})).toEqual(["bin", "offer", "auction"]);
+		expect(ids(all, { view: "available" })).toEqual([
+			"bin",
+			"offer",
+			"auction",
+		]);
+		expect(ids(all, { view: "sold" })).toEqual(["sold", "ended"]);
+	});
+
+	test("type: buy it now (with Best Offer) or auction, within either view", () => {
+		const all = [
+			listing({ id: "bin" }),
+			listing({ id: "offer", listingType: "bestOffer" }),
+			listing({ id: "auction", listingType: "auction", endsAt: NOW + HOUR }),
+			listing({ id: "soldBin", sold: true, soldDate: "2026-10-18" }),
+			listing({
+				id: "ended",
+				listingType: "auction",
+				endsAt: NOW - HOUR,
+				bids: 3,
+			}),
+		];
 		expect(ids(all, { type: "buyItNow" })).toEqual(["bin", "offer"]);
 		expect(ids(all, { type: "auction" })).toEqual(["auction"]);
-		expect(ids(all, { type: "sold" })).toEqual(["sold", "ended"]);
+		expect(ids(all, { view: "sold", type: "buyItNow" })).toEqual(["soldBin"]);
+		expect(ids(all, { view: "sold", type: "auction" })).toEqual(["ended"]);
 	});
 
 	test("language: from the title read, else the set code's region", () => {
@@ -154,23 +176,14 @@ describe("applyListingFilters", () => {
 		expect(ids(all, { card: "gone" })).toEqual([]);
 	});
 
-	test("new: first seen since my last visit", () => {
+	test("new: first seen since my last visit, within the view", () => {
 		const all = [
 			listing({ id: "old", firstSeenAt: NOW - 3 * HOUR }),
 			listing({ id: "fresh", firstSeenAt: NOW - HOUR }),
+			listing({ id: "freshSale", firstSeenAt: NOW - HOUR, sold: true }),
 		];
 		expect(ids(all, { new: true })).toEqual(["fresh"]);
-	});
-
-	test("ending soon: running auctions, soonest end first, unknown ends last", () => {
-		const all = [
-			listing({ id: "bin" }),
-			listing({ id: "later", listingType: "auction", endsAt: NOW + 5 * HOUR }),
-			listing({ id: "unknown", listingType: "auction", endsAt: null }),
-			listing({ id: "soon", listingType: "auction", endsAt: NOW + HOUR }),
-			listing({ id: "over", listingType: "auction", endsAt: NOW - HOUR }),
-		];
-		expect(ids(all, { ending: true })).toEqual(["soon", "later", "unknown"]);
+		expect(ids(all, { view: "sold", new: true })).toEqual(["freshSale"]);
 	});
 
 	test("filters combine", () => {
@@ -190,6 +203,7 @@ describe("applyListingFilters", () => {
 describe("filters in the URL", () => {
 	test("round-trip through search params", () => {
 		const filters: ListingFilters = {
+			view: "sold",
 			new: true,
 			marketplace: "ebay",
 			type: "auction",
@@ -204,55 +218,55 @@ describe("filters in the URL", () => {
 		expect(listingFiltersFromParams(params)).toEqual(filters);
 	});
 
+	test("Available is the default and leaves no param", () => {
+		const params = withListingFilters(new URLSearchParams(), {
+			view: "available",
+			new: true,
+		});
+		expect(params.toString()).toBe("new=1");
+		expect(listingFiltersFromParams(params)).toEqual({ new: true });
+	});
+
 	test("an unset filter leaves no param, and other params are kept", () => {
 		const params = withListingFilters(
-			new URLSearchParams("listing=abc&type=sold&new=1"),
+			new URLSearchParams("listing=abc&view=sold&new=1&sort=price"),
 			{ type: "auction" },
 		);
-		expect(params.toString()).toBe("listing=abc&type=auction");
+		expect(params.toString()).toBe("listing=abc&sort=price&type=auction");
+	});
+
+	test("old links: type=sold opens Sold, ending=1 opens Available", () => {
+		expect(listingFiltersFromParams(new URLSearchParams("type=sold"))).toEqual({
+			view: "sold",
+		});
+		expect(
+			listingFiltersFromParams(new URLSearchParams("ending=1&new=1")),
+		).toEqual({ new: true });
+		const rewritten = withListingFilters(
+			new URLSearchParams("type=sold&ending=1"),
+			{ view: "sold" },
+		);
+		expect(rewritten.toString()).toBe("view=sold");
 	});
 
 	test("unknown values are ignored rather than hiding everything", () => {
 		const params = new URLSearchParams(
-			"type=preorder&language=klingon&graded=maybe&new=yes&location=%20&ending=1",
+			"type=preorder&language=klingon&graded=maybe&new=yes&location=%20&view=all",
 		);
-		expect(listingFiltersFromParams(params)).toEqual({ ending: true });
+		expect(listingFiltersFromParams(params)).toEqual({});
 	});
 });
 
-describe("quick views", () => {
-	test("All, New, Ending soon and Sold each set one view and keep other filters", () => {
-		const base: ListingFilters = { language: "english", new: true };
-		expect(withQuickView(base, "all")).toEqual({ language: "english" });
-		expect(withQuickView(base, "ending")).toEqual({
-			language: "english",
-			ending: true,
-		});
-		expect(withQuickView(base, "sold")).toEqual({
-			language: "english",
-			type: "sold",
-		});
-		expect(withQuickView({ type: "sold" }, "new")).toEqual({ new: true });
-	});
-
-	test("the quick view reads back, or none when filters mix them", () => {
-		expect(quickView({})).toBe("all");
-		expect(quickView({ location: "Japan" })).toBe("all");
-		expect(quickView({ new: true })).toBe("new");
-		expect(quickView({ ending: true })).toBe("ending");
-		expect(quickView({ type: "sold" })).toBe("sold");
-		expect(quickView({ type: "auction" })).toBeNull();
-		expect(quickView({ new: true, type: "sold" })).toBeNull();
-		expect(quickView({ new: true, ending: true })).toBeNull();
-	});
-
-	test("the Filters button counts what the quick views don't show", () => {
+describe("the Filters button", () => {
+	test("counts what the view and New toggle don't show", () => {
 		expect(activeFilterCount({})).toBe(0);
 		expect(activeFilterCount({ new: true })).toBe(0);
-		expect(activeFilterCount({ ending: true })).toBe(0);
-		expect(activeFilterCount({ type: "sold" })).toBe(0);
+		expect(activeFilterCount({ view: "sold" })).toBe(0);
+		expect(activeFilterCount({ view: "sold", new: true, card: "x" })).toBe(1);
 		expect(activeFilterCount({ type: "auction", graded: false })).toBe(2);
-		// No quick view shows these together, so each one counts.
-		expect(activeFilterCount({ new: true, type: "sold", card: "x" })).toBe(3);
+		expect(extraFilters({ view: "sold", graded: false, card: "x" })).toEqual([
+			"graded",
+			"card",
+		]);
 	});
 });
