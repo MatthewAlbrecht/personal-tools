@@ -24,6 +24,7 @@ import {
 	type Pricing,
 	perCopyPrice,
 } from "../../../src/lib/yugioh/pricing";
+import { tcgplayerProductIdOf } from "../../../src/lib/yugioh/tcgplayer";
 import type { Doc, Id } from "../../_generated/dataModel";
 import type { QueryCtx } from "../../_generated/server";
 import { MAX_CANDIDATES_PER_DECK, MAX_CARDS_PER_DECK } from "./decks";
@@ -275,9 +276,16 @@ function referenceReader(
 			)
 			.order("desc")
 			.take(MAX_REFERENCE_SALES);
+		const fromLinkedPage =
+			marketplace === "tcgplayer"
+				? fromLinkedTcgplayerProduct(
+						await ctx.db.get("yugiohPrintings", printingId),
+					)
+				: () => true;
 		const perCopyPrices: number[] = [];
 		for (const listing of sales) {
 			if (matchedPrintingId(listing) !== printingId) continue;
+			if (!fromLinkedPage(listing)) continue;
 			if (!isSale(listing, now) || !isQualifying(listing, condition)) continue;
 			const price = listingPerCopyPrice(listing, pricing, now);
 			if (price !== null) perCopyPrices.push(price.perCopy);
@@ -308,13 +316,22 @@ function buyNowReader(
 			)
 			.order("desc")
 			.take(MAX_BUY_NOW_LISTINGS);
+		const printing =
+			marketplace === "tcgplayer"
+				? await ctx.db.get("yugiohPrintings", printingId)
+				: null;
 		const gone =
 			marketplace === "tcgplayer"
-				? goneFromTcgplayerPage(await ctx.db.get("yugiohPrintings", printingId))
+				? goneFromTcgplayerPage(printing)
 				: () => false;
+		const fromLinkedPage =
+			marketplace === "tcgplayer"
+				? fromLinkedTcgplayerProduct(printing)
+				: () => true;
 		let cheapest: number | null = null;
 		for (const listing of forSale) {
 			if (matchedPrintingId(listing) !== printingId) continue;
+			if (!fromLinkedPage(listing)) continue;
 			if (listing.sold || listing.listingType === "auction") continue;
 			if (listing.lastSeenAt < now - BUY_NOW_FRESH_MS) continue;
 			if (gone(listing)) continue;
@@ -326,6 +343,20 @@ function buyNowReader(
 		}
 		return cheapest;
 	});
+}
+
+/**
+ * Whether a TCGplayer Listing or sale was captured from the product page the
+ * Printing is linked to now. After the link changes, the old page's rows stay
+ * matched (and listed) but no longer count toward its prices. A Printing
+ * without a stored product id (linked before captures existed) keeps them all.
+ */
+export function fromLinkedTcgplayerProduct(
+	printing: Doc<"yugiohPrintings"> | null,
+): (listing: Doc<"yugiohListings">) => boolean {
+	const productId = printing?.tcgplayerProductId;
+	if (productId == null) return () => true;
+	return (listing) => tcgplayerProductIdOf(listing.url) === productId;
 }
 
 /**

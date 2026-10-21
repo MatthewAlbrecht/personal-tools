@@ -653,3 +653,44 @@ describe("cost to finish with TCGplayer", () => {
 		expect((await ashCost(t, deckId))?.buyNow).toBe(90);
 	});
 });
+
+describe("changing a Printing's TCGplayer link", () => {
+	const OTHER_PRODUCT_ID = 600001;
+	const OTHER_PRODUCT_URL = ASH.productUrl.replace(
+		String(ASH.productId),
+		String(OTHER_PRODUCT_ID),
+	);
+
+	test("the old product's sales and Listings stop counting toward the Reference price and floor", async () => {
+		const t = setup();
+		const { deckId, printingId } = await ashDeck(t);
+		await captureProduct(t, {
+			listings: [offer(30)],
+			sales: [sale(40), sale(42), sale(44)],
+		});
+		expect(await ashPrices(t, deckId)).toMatchObject({
+			tcgplayer: { price: 42, sales: 3 },
+			tcgplayerBuyNow: 30,
+		});
+
+		await t.action(api.yugioh.tcgplayer.setProductUrl, {
+			printingId,
+			url: OTHER_PRODUCT_URL,
+		});
+		expect(await ashPrices(t, deckId)).toMatchObject({
+			tcgplayer: { price: null, sales: 0 },
+			tcgplayerBuyNow: null,
+		});
+
+		vi.setSystemTime(NOW + 60_000);
+		await captureProduct(t, {
+			productId: OTHER_PRODUCT_ID,
+			listings: [offer(55)],
+			sales: [sale(60), sale(62), sale(64)],
+		});
+		expect(await ashPrices(t, deckId)).toMatchObject({
+			tcgplayer: { price: 62, sales: 3 },
+			tcgplayerBuyNow: 55,
+		});
+	});
+});
