@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
+	conditionCell,
 	formatMoney,
 	listingSeller,
 	listingTypeLabel,
@@ -99,7 +100,7 @@ describe("titleFlags", () => {
 		expect(titleFlags(raw)).toEqual([]);
 	});
 
-	test("flags grading, unknown condition, language and lots", () => {
+	test("flags grading, language and lots, never the condition (it has its own column)", () => {
 		expect(
 			titleFlags({
 				...raw,
@@ -115,28 +116,13 @@ describe("titleFlags", () => {
 			{ kind: "language", label: "KR" },
 			{ kind: "lot", label: "×3 copies" },
 		]);
-		expect(titleFlags({ ...raw, condition: null })).toEqual([
-			{ kind: "unknownCondition", label: "Condition?" },
-		]);
+		expect(titleFlags({ ...raw, condition: null })).toEqual([]);
 	});
 
 	test("a graded Listing without a stated company still says Graded", () => {
 		expect(titleFlags({ ...raw, graded: true })).toEqual([
 			{ kind: "graded", label: "Graded" },
 		]);
-	});
-
-	test("flags a condition below the Card's Lowest acceptable condition", () => {
-		expect(
-			titleFlags(
-				{ ...raw, condition: "lightlyPlayed" },
-				{ belowCondition: true },
-			),
-		).toEqual([{ kind: "belowCondition", label: "LP" }]);
-		expect(
-			titleFlags({ ...raw, condition: "damaged" }, { belowCondition: true }),
-		).toEqual([{ kind: "belowCondition", label: "DMG" }]);
-		expect(titleFlags({ ...raw, condition: "lightlyPlayed" })).toEqual([]);
 	});
 
 	test("an unread title has no flags", () => {
@@ -193,5 +179,38 @@ describe("listingSeller", () => {
 				tcgplayer: { seller: null, condition: "Near Mint", quantity: 2 },
 			}),
 		).toBeNull();
+	});
+});
+
+describe("conditionCell", () => {
+	test("each condition as its acronym, with its full name", () => {
+		expect(
+			(
+				[
+					"nearMint",
+					"lightlyPlayed",
+					"moderatelyPlayed",
+					"heavilyPlayed",
+					"damaged",
+				] as const
+			).map((condition) => conditionCell(condition, false)?.short),
+		).toEqual(["NM", "LP", "MP", "HP", "DMG"]);
+		expect(conditionCell("lightlyPlayed", false)).toEqual({
+			short: "LP",
+			name: "Lightly Played",
+			below: false,
+		});
+	});
+
+	test("says when it's below the Card's Lowest acceptable condition", () => {
+		expect(conditionCell("damaged", true)).toEqual({
+			short: "DMG",
+			name: "Damaged",
+			below: true,
+		});
+	});
+
+	test("an unread or unstated condition is null", () => {
+		expect(conditionCell(null, true)).toBeNull();
 	});
 });

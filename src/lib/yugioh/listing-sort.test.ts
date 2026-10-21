@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
 	type ListingSort,
+	conditionSortValue,
 	defaultListingSort,
 	listingSortFromParams,
 	sortListings,
@@ -114,6 +115,12 @@ describe("defaults and toggling", () => {
 		expect(sortPhrase({ key: "grade", direction: "asc" }, "available")).toBe(
 			"best deal first",
 		);
+		expect(
+			sortPhrase({ key: "condition", direction: "asc" }, "available"),
+		).toBe("best condition first");
+		expect(sortPhrase({ key: "condition", direction: "desc" }, "sold")).toBe(
+			"worst condition first",
+		);
 	});
 });
 
@@ -157,5 +164,34 @@ describe("the sort in the URL", () => {
 				"available",
 			).toString(),
 		).toBe("sort=price&order=asc");
+	});
+});
+
+describe("sorting by condition", () => {
+	test("goes best to worst ascending, with an unstated condition last", () => {
+		const rows = [
+			{ id: "dmg", condition: "damaged" as const },
+			{ id: "unknown", condition: null },
+			{ id: "nm", condition: "nearMint" as const },
+			{ id: "mp", condition: "moderatelyPlayed" as const },
+		];
+		const order = (direction: "asc" | "desc") =>
+			sortListings(rows, { key: "condition", direction }, (row) =>
+				conditionSortValue(row.condition),
+			).map((row) => row.id);
+		expect(order("asc")).toEqual(["nm", "mp", "dmg", "unknown"]);
+		expect(order("desc")).toEqual(["dmg", "mp", "nm", "unknown"]);
+	});
+
+	test("is kept in the URL", () => {
+		const params = withListingSort(
+			new URLSearchParams(),
+			{ key: "condition", direction: "asc" },
+			"available",
+		);
+		expect(listingSortFromParams(params, "available")).toEqual({
+			key: "condition",
+			direction: "asc",
+		});
 	});
 });

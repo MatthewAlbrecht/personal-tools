@@ -549,6 +549,7 @@ export const yugiohListingSortValidator = v.object({
 		v.literal("price"),
 		v.literal("grade"),
 		v.literal("card"),
+		v.literal("condition"),
 		v.literal("date"),
 		v.literal("seller"),
 		v.literal("seen"),

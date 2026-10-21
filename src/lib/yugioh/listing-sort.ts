@@ -2,16 +2,19 @@
 // Relative imports only (Convex imports this).
 
 import type { ListingsView } from "./listing-filters";
+import { READ_CONDITIONS, type ReadCondition } from "./title-reading";
 
 /**
  * The columns Listings sort by: Per-copy price, Grade (% of the Reference
- * price), Card / Printing, date (the end time on Available, the sale date on
- * Sold), Seller, and Seen (when listed, else first captured).
+ * price), Card / Printing, Condition (best first), date (the end time on
+ * Available, the sale date on Sold), Seller, and Seen (when listed, else first
+ * captured).
  */
 export const SORT_KEYS = [
 	"price",
 	"grade",
 	"card",
+	"condition",
 	"date",
 	"seller",
 	"seen",
@@ -50,6 +53,13 @@ export function toggledSort(
 	return { key, direction: firstDirection(key, view) };
 }
 
+/** A condition's place for sorting, Near Mint first; unstated sorts last. */
+export function conditionSortValue(
+	condition: ReadCondition | null,
+): number | null {
+	return condition === null ? null : READ_CONDITIONS.indexOf(condition);
+}
+
 /**
  * `items` ordered by `columnValue` in the sort's direction. Items without a value
  * go last either way; ties keep the order given (newest first).
@@ -85,6 +95,7 @@ const PHRASES: Record<
 	price: { asc: "cheapest first", desc: "priciest first" },
 	grade: { asc: "best deal first", desc: "worst deal first" },
 	card: { asc: "Card A to Z", desc: "Card Z to A" },
+	condition: { asc: "best condition first", desc: "worst condition first" },
 	date: {
 		asc: { available: "ending soonest first", sold: "earliest sale first" },
 		desc: { available: "ending latest first", sold: "latest sale first" },

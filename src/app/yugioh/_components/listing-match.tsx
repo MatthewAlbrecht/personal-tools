@@ -75,13 +75,10 @@ export function MatchSummary({
 /** Flags for what the title says: "PSA 10", "Condition?", "KR", "×3 copies". */
 export function TitleFlagBadges({
 	titleRead,
-	belowCondition,
 }: {
 	titleRead: ListingView["titleRead"];
-	/** Its condition is below the Card's Lowest acceptable condition. */
-	belowCondition: boolean;
 }): React.ReactElement | null {
-	const flags = titleFlags(titleRead, { belowCondition });
+	const flags = titleFlags(titleRead);
 	if (flags.length === 0) return null;
 	return (
 		<div className="flex shrink-0 flex-wrap gap-1">
@@ -89,15 +86,10 @@ export function TitleFlagBadges({
 				<Badge
 					key={flag.kind}
 					variant="outline"
-					className={cn(
-						"gap-1 font-medium tabular-nums [&>svg]:size-3",
-						flag.kind === "unknownCondition" && "border-dashed",
-						flag.kind === "belowCondition" && "text-muted-foreground",
-					)}
+					className="gap-1 font-medium tabular-nums [&>svg]:size-3"
 					title={FLAG_EXPLANATIONS[flag.kind]}
 				>
 					{flag.kind === "graded" ? <ShieldCheck aria-hidden /> : null}
-					{flag.kind === "unknownCondition" ? <CircleHelp aria-hidden /> : null}
 					{flag.label}
 				</Badge>
 			))}
@@ -110,9 +102,6 @@ const FLAG_EXPLANATIONS: Record<
 	string
 > = {
 	graded: "Graded copies don't count toward cost to finish",
-	unknownCondition: "Title didn't say. Check the photos.",
-	belowCondition:
-		"Below this Card's Lowest acceptable condition, so it doesn't count",
 	language: "Not English, so it doesn't count toward prices",
 	lot: "Several Copies in one Listing",
 };

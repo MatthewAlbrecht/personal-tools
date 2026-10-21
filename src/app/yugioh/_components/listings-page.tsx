@@ -13,6 +13,7 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type * as React from "react";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
 	Empty,
@@ -45,6 +46,7 @@ import {
 } from "~/lib/yugioh/listing-filters";
 import {
 	MARKETPLACE_LABELS,
+	conditionCell,
 	formatMoney,
 	listingSeller,
 	listingTypeLabel,
@@ -357,14 +359,9 @@ function ListingRow({
 					{whereAndWhen(listing)}
 				</span>
 			</div>
-			<div className="flex items-center gap-2">
-				<span className="min-w-0 flex-1 truncate text-muted-foreground text-xs">
-					{listing.title}
-				</span>
-				<TitleFlagBadges
-					titleRead={listing.titleRead}
-					belowCondition={listing.deal.belowCondition}
-				/>
+			<div className="flex items-center gap-2 text-xs">
+				<ConditionMark listing={listing} />
+				<TitleFlagBadges titleRead={listing.titleRead} />
 			</div>
 		</Link>
 	);
@@ -399,7 +396,9 @@ export function ListingsTable({
 					<SortableHead {...head} column="card">
 						Card / Printing
 					</SortableHead>
-					<TableHead className="w-full">Title</TableHead>
+					<SortableHead {...head} column="condition">
+						Condition
+					</SortableHead>
 					<SortableHead {...head} column="date">
 						{view === "sold" ? "Sold" : "Type / Ends"}
 					</SortableHead>
@@ -443,18 +442,12 @@ export function ListingsTable({
 							>
 								<MatchSummary match={listing.match} stacked />
 							</Link>
-						</TableCell>
-						<TableCell className="max-w-0 align-top">
-							{/* Flags sit under the title, so a narrow column can't push them into Type. */}
-							<div className="flex flex-col items-start gap-1">
-								<p className="w-full truncate" title={listing.title}>
-									{listing.title}
-								</p>
-								<TitleFlagBadges
-									titleRead={listing.titleRead}
-									belowCondition={listing.deal.belowCondition}
-								/>
+							<div className="mt-1 w-52 empty:hidden lg:w-60">
+								<TitleFlagBadges titleRead={listing.titleRead} />
 							</div>
+						</TableCell>
+						<TableCell className="align-top">
+							<ConditionMark listing={listing} />
 						</TableCell>
 						<TableCell className="align-top tabular-nums">
 							<div className="flex flex-col">
@@ -545,6 +538,52 @@ function SortableHead({
 				/>
 			</Button>
 		</TableHead>
+	);
+}
+
+/**
+ * The condition the title states, as an acronym ("LP") with its full name on
+ * hover and for screen readers; one below the Card's Lowest acceptable
+ * condition is set apart, since it doesn't count. A muted dash when the title
+ * doesn't say.
+ */
+function ConditionMark({
+	listing,
+}: {
+	listing: ListingView;
+}): React.ReactElement {
+	const cell = conditionCell(
+		listing.titleRead?.condition ?? null,
+		listing.deal.belowCondition,
+	);
+	if (cell === null) {
+		const why = listing.titleRead?.graded
+			? "Graded, so no condition"
+			: "Condition not stated. Check the photos.";
+		return (
+			<span className="text-muted-foreground" title={why}>
+				<span aria-hidden>—</span>
+				<span className="sr-only">{why}</span>
+			</span>
+		);
+	}
+	const description = cell.below
+		? `${cell.name}, below this Card's Lowest acceptable condition, so it doesn't count`
+		: cell.name;
+	return cell.below ? (
+		<Badge
+			variant="outline"
+			className="font-medium text-muted-foreground"
+			title={description}
+		>
+			<span aria-hidden>{cell.short}</span>
+			<span className="sr-only">{description}</span>
+		</Badge>
+	) : (
+		<span className="font-medium" title={description}>
+			<span aria-hidden>{cell.short}</span>
+			<span className="sr-only">{description}</span>
+		</span>
 	);
 }
 

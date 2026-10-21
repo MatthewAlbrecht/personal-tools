@@ -13,6 +13,7 @@ import { listingSeller } from "../../../src/lib/yugioh/listing-format";
 import {
 	type ListingSort,
 	type SortKey,
+	conditionSortValue,
 	defaultListingSort,
 	sortListings,
 } from "../../../src/lib/yugioh/listing-sort";
@@ -419,6 +420,8 @@ async function sortValue(
 			const found = printingId === null ? null : await printing(printingId);
 			return found && `${found.cardName} ${found.setCode} ${found.rarity}`;
 		}
+		case "condition":
+			return conditionSortValue(listing.titleRead?.condition ?? null);
 		case "date":
 			// Sold: when it sold. Available: when a running auction ends.
 			if (view === "sold") {

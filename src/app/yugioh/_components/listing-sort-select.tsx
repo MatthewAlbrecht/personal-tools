@@ -26,6 +26,7 @@ function sortOptions(view: ListingsView): ListingSort[] {
 		{ key: "price", direction: "desc" },
 		{ key: "grade", direction: "asc" },
 		{ key: "card", direction: "asc" },
+		{ key: "condition", direction: "asc" },
 	];
 	return view === "sold"
 		? [

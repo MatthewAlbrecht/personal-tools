@@ -157,7 +157,7 @@ describe("the Listings table's Card / Printing column", () => {
 		expect(nameWidth).toBeGreaterThan(20);
 	});
 
-	test("keeps a long Printing inside its column, not over the Title", async () => {
+	test("keeps a long Printing inside its column, not over the next one", async () => {
 		const { cellRight, textRight } = await measureCardCell(brionacSale(), 1000);
 		expect(textRight).toBeLessThanOrEqual(cellRight + 0.5);
 	});

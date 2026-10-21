@@ -3,6 +3,7 @@ import { format, intervalToDuration, parseISO } from "date-fns";
 import type { Marketplace } from "./listing-filters";
 import {
 	LANGUAGE_CODES,
+	READ_CONDITION_LABELS,
 	type ReadCondition,
 	type TitleRead,
 } from "./title-reading";
@@ -94,11 +95,11 @@ export function listingTypeLabel(
 }
 
 export type TitleFlag = {
-	kind: "graded" | "unknownCondition" | "belowCondition" | "language" | "lot";
+	kind: "graded" | "language" | "lot";
 	label: string;
 };
 
-/** Short condition labels for flags: "LP", "DMG". */
+/** Short condition labels: "LP", "DMG". */
 const READ_CONDITION_ABBREVIATIONS: Record<ReadCondition, string> = {
 	nearMint: "NM",
 	lightlyPlayed: "LP",
@@ -108,27 +109,32 @@ const READ_CONDITION_ABBREVIATIONS: Record<ReadCondition, string> = {
 };
 
 /**
- * What a Listing's title says that sets it apart from a raw, English, Near
- * Mint single: "PSA 10", "Condition?", "LP" (below the Card's Lowest
- * acceptable condition), "KR", "×3 copies". A Graded Listing never asks for
- * its condition.
+ * A Listing's condition for the Condition column: its acronym ("LP"), its
+ * full name, and whether it's below the Card's Lowest acceptable condition.
+ * Null when the title doesn't state one (or isn't read yet).
  */
-export function titleFlags(
-	read: TitleRead | null,
-	{ belowCondition = false }: { belowCondition?: boolean } = {},
-): TitleFlag[] {
+export function conditionCell(
+	condition: ReadCondition | null,
+	belowCondition: boolean,
+): { short: string; name: string; below: boolean } | null {
+	if (condition === null) return null;
+	return {
+		short: READ_CONDITION_ABBREVIATIONS[condition],
+		name: READ_CONDITION_LABELS[condition],
+		below: belowCondition,
+	};
+}
+
+/**
+ * What a Listing's title says that sets it apart from a raw, English single,
+ * besides its condition (which has its own column): "PSA 10", "KR",
+ * "×3 copies".
+ */
+export function titleFlags(read: TitleRead | null): TitleFlag[] {
 	if (read === null) return [];
 	const flags: TitleFlag[] = [];
 	if (read.graded) {
 		flags.push({ kind: "graded", label: gradingLabel(read) });
-	} else if (read.condition === null) {
-		flags.push({ kind: "unknownCondition", label: "Condition?" });
-	}
-	if (belowCondition && read.condition !== null) {
-		flags.push({
-			kind: "belowCondition",
-			label: READ_CONDITION_ABBREVIATIONS[read.condition],
-		});
 	}
 	if (read.language !== "english") {
 		flags.push({ kind: "language", label: LANGUAGE_CODES[read.language] });
