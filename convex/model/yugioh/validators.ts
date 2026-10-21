@@ -22,6 +22,7 @@ import type {
 	ExchangeRate,
 	PerCopyPrice,
 } from "../../../src/lib/yugioh/pricing";
+import type { RunTiming } from "../../../src/lib/yugioh/run-timing";
 import type {
 	Language,
 	MatchStatus,
@@ -387,6 +388,20 @@ export const yugiohAutomationRunValidator = v.object({
 	pageErrors: v.array(yugiohPageErrorValidator),
 });
 
+/**
+ * When scheduled full runs happen (ticket 17, `RunTiming` in run-timing.ts):
+ * still learning, or the busy hours of the week learned from listing times.
+ */
+export const yugiohRunTimingValidator = v.object({
+	status: v.union(v.literal("learning"), v.literal("learned")),
+	/** The first capture (Unix ms); null before any Listing. */
+	dataSince: v.union(v.number(), v.null()),
+	/** The IANA zone the hours of the week are in. */
+	timeZone: v.string(),
+	/** Hours of the week, 0 (Sunday 12–1am) to 167, ascending. */
+	busyHours: v.array(v.number()),
+});
+
 /** What the extension reports after visiting one page. */
 export const yugiohVisitReportValidator = v.object({
 	...yugiohPlannedVisitValidator.fields,
@@ -405,6 +420,11 @@ export const yugiohVisitReportValidator = v.object({
 
 // Compile-time check that the validators and the domain library agree.
 type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
+const runTimingsAgree: Same<
+	Infer<typeof yugiohRunTimingValidator>,
+	RunTiming
+> = true;
+void runTimingsAgree;
 const sectionsAgree: Same<Infer<typeof yugiohSectionValidator>, Section> = true;
 const conditionsAgree: Same<
 	Infer<typeof yugiohConditionValidator>,

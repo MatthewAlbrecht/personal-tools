@@ -7,7 +7,20 @@ import {
 	format,
 	isToday,
 } from "date-fns";
-import type { RunKind, RunStatus, RunTrigger } from "./automation";
+import { millisecondsInHour } from "date-fns/constants";
+import {
+	FULL_RUN_EVERY_MS,
+	type RunKind,
+	type RunStatus,
+	type RunTrigger,
+} from "./automation";
+import {
+	HOURS_IN_WEEK,
+	LEARNING_DAYS,
+	MAX_FULL_RUN_GAP_MS,
+	type RunTiming,
+	WEEKDAYS,
+} from "./run-timing";
 
 /** The Deck header's note shows once the last capture is older than this. */
 export const STALE_CAPTURE_HOURS = 6;
@@ -148,4 +161,87 @@ function duration(from: number, to: number): string {
 	);
 	if (minutes < 60) return `${minutes} min`;
 	return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+}
+
+export type RunTimingLines = { summary: string; busyTimes: string[] };
+
+const FIXED_HOURS = FULL_RUN_EVERY_MS / millisecondsInHour;
+const MAX_GAP_HOURS = MAX_FULL_RUN_GAP_MS / millisecondsInHour;
+
+/**
+ * When scheduled full runs happen, for Settings: a sentence, and the busy
+ * times of the week ("Sun 7–9 PM"), each run of busy hours as one.
+ */
+export function describeRunTiming(
+	timing: RunTiming,
+	now: number,
+): RunTimingLines {
+	if (timing.status === "learning") {
+		if (timing.dataSince === null) {
+			return {
+				summary: `Every ${FIXED_HOURS} hours for now. Once it has about ${LEARNING_DAYS / 7} weeks of Listings, it learns when sellers post and runs around those times.`,
+				busyTimes: [],
+			};
+		}
+		const days = differenceInDays(now, timing.dataSince);
+		const data =
+			days === 0 ? "Under a day" : `${days} ${days === 1 ? "day" : "days"}`;
+		return {
+			summary: `Every ${FIXED_HOURS} hours for now. Still learning when sellers post: ${data} of data so far, of about ${LEARNING_DAYS}.`,
+			busyTimes: [],
+		};
+	}
+	if (timing.busyHours.length === 0) {
+		return {
+			summary: `Every ${FIXED_HOURS} hours. No hours of the week stand out yet for when sellers post.`,
+			busyTimes: [],
+		};
+	}
+	return {
+		summary: `Sellers post most at these times (${zoneName(timing.timeZone)} time). It runs every hour during them and the hour after, and at least every ${MAX_GAP_HOURS} hours otherwise.`,
+		busyTimes: busyStretches(timing.busyHours).map(stretchLabel),
+	};
+}
+
+/** "America/New_York" reads "New York". */
+function zoneName(timeZone: string): string {
+	return (timeZone.split("/").pop() ?? timeZone).replaceAll("_", " ");
+}
+
+/**
+ * Busy hours as stretches of consecutive hours: each its first hour and how
+ * many. A stretch running past Saturday midnight joins the one from Sunday
+ * midnight.
+ */
+function busyStretches(
+	busyHours: readonly number[],
+): Array<{ start: number; hours: number }> {
+	const busy = new Set(busyHours);
+	if (busy.size === HOURS_IN_WEEK) return [{ start: 0, hours: HOURS_IN_WEEK }];
+	const stretches: Array<{ start: number; hours: number }> = [];
+	for (const hour of [...busy].sort((a, b) => a - b)) {
+		const previous = (hour + HOURS_IN_WEEK - 1) % HOURS_IN_WEEK;
+		if (busy.has(previous)) continue;
+		let hours = 1;
+		while (busy.has((hour + hours) % HOURS_IN_WEEK)) hours++;
+		stretches.push({ start: hour, hours });
+	}
+	return stretches;
+}
+
+/** "Sun 7–9 PM", "Mon 11 AM–1 PM", "Sat 11 PM–1 AM". */
+function stretchLabel({
+	start,
+	hours,
+}: { start: number; hours: number }): string {
+	const day = WEEKDAYS[Math.floor(start / 24)];
+	const from = start % 24;
+	const to = (from + hours) % 24;
+	const sameHalf = hours < 12 && from < 12 === to < 12 && to > from;
+	return `${day} ${clockHour(from, sameHalf ? "h" : "h a")}–${clockHour(to, "h a")}`;
+}
+
+/** An hour of the day on the clock: 19 reads "7 PM" ("h a") or "7" ("h"). */
+function clockHour(hour: number, pattern: "h" | "h a"): string {
+	return format(new Date(2000, 0, 1, hour), pattern);
 }

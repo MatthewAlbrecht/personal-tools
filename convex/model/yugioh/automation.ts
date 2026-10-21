@@ -21,6 +21,7 @@ import type { MutationCtx, QueryCtx } from "../../_generated/server";
 import { matchedPrintingId } from "./deals";
 import { MAX_DECKS, readDeck } from "./decks";
 import { awaitsAuctionPush } from "./pushes";
+import { readRunTiming, relearnRunTiming } from "./runTiming";
 
 /** How many failed pages a run keeps on itself for the runs list. */
 export const MAX_PAGE_ERRORS_SHOWN = 20;
@@ -67,7 +68,8 @@ const OPEN_STATUSES = ["requested", "running"] as const;
  * RUN_ABANDONED_AFTER_MS is closed as failed first.
  *
  * T3 Code and hand runs are always full runs. The LaunchAgent asks every 10
- * minutes and gets a full run every 3 hours, a refresh run when an auction
+ * minutes and gets a full run when the run timing says one is due (every 3
+ * hours until posting times are learned), a refresh run when an auction
  * awaiting its push ends in about 20 minutes, or nothing.
  */
 export async function requestRun(
@@ -133,6 +135,7 @@ async function scheduledRun(
 		lastFullRunAt: lastFull?.requestedAt ?? null,
 		lastRunAt: recent[0]?.requestedAt ?? null,
 		auctions: await readEndingAuctions(ctx, now),
+		timing: await readRunTiming(ctx),
 		now,
 	});
 }
@@ -289,7 +292,8 @@ export async function recordVisit(
 
 /**
  * Ends a run: finished, or failed with `error`. A run that was never claimed
- * can't finish, so it fails. Ending an ended run changes nothing.
+ * can't finish, so it fails. Ending an ended run changes nothing. A full run
+ * ending relearns the run timing from what it captured.
  */
 export async function finishRun(
 	ctx: MutationCtx,
@@ -306,6 +310,7 @@ export async function finishRun(
 		endedAt: now,
 		error: failure,
 	});
+	if (runKind(run) === "full") await relearnRunTiming(ctx, now);
 }
 
 /** Runs from before refresh runs have no kind: they were all full runs. */

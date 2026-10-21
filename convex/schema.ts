@@ -36,6 +36,7 @@ import {
 	yugiohMatchStatusValidator,
 	yugiohPushKindValidator,
 	yugiohPushStatusValidator,
+	yugiohRunTimingValidator,
 	yugiohSectionValidator,
 	yugiohTcgplayerDetailsValidator,
 	yugiohTcgplayerStatusValidator,
@@ -1957,6 +1958,13 @@ export default defineSchema({
 		"by_status",
 		["status"],
 	),
+
+	// When scheduled full runs happen (ticket 17): one row, relearned from
+	// listing times each time a full run ends. `learnedAt` is Unix ms.
+	yugiohRunTiming: defineTable({
+		...yugiohRunTimingValidator.fields,
+		learnedAt: v.number(),
+	}),
 
 	// One page an automated run visited, in the order visited.
 	yugiohAutomationVisits: defineTable({

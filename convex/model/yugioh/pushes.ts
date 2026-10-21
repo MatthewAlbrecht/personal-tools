@@ -206,7 +206,7 @@ export async function checkDeal(
 			url: `/yugioh/decks/${deal.card.deckId}/listings?listing=${listingId}`,
 			tag: `deal-${listingId}`,
 		},
-		pushDeliveryTime(now, await quietHoursTimeZone(ctx)),
+		pushDeliveryTime(now, await userTimeZone(ctx)),
 		now,
 	);
 }
@@ -609,10 +609,10 @@ async function lastViewedAt(
 }
 
 /**
- * Quiet hours follow the device I used most recently (the phone, once it
- * has push on): its time zone, else the default.
+ * My time zone, for quiet hours and run timing: the zone of the device I
+ * used most recently (the phone, once it has push on), else the default.
  */
-async function quietHoursTimeZone(ctx: QueryCtx): Promise<string> {
+export async function userTimeZone(ctx: QueryCtx): Promise<string> {
 	return (await newestSubscription(ctx))?.timeZone ?? DEFAULT_TIME_ZONE;
 }
 

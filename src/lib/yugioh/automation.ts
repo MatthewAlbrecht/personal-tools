@@ -2,6 +2,7 @@
 // by Convex (relative imports only) and the /yugioh UI.
 // How the runs are driven: docs/yugioh/automation.md.
 
+import { type RunTiming, fullRunDue } from "./run-timing";
 import { type Search, ebayEndingSoonUrl, searchKeywords } from "./searches";
 
 export type RunTrigger = "launchAgent" | "t3" | "manual";
@@ -39,7 +40,7 @@ const MINUTE_MS = 60 * 1000;
 /** The LaunchAgent asks the app whether a run is due this often. */
 export const SCHEDULE_TICK_MS = 10 * MINUTE_MS;
 
-/** A scheduled full run this often. */
+/** A scheduled full run this often, until posting times are learned (run-timing.ts). */
 export const FULL_RUN_EVERY_MS = 3 * 60 * MINUTE_MS;
 
 /**
@@ -72,8 +73,9 @@ export type EndingAuction = {
 };
 
 /**
- * Which run a scheduled ask starts: a full run 3 hours after the last one,
- * a refresh run when an auction's refresh window is open and it hasn't been
+ * Which run a scheduled ask starts: a full run when `timing` says one is due
+ * (every 3 hours until posting times are learned, see `fullRunDue`), a
+ * refresh run when an auction's refresh window is open and it hasn't been
  * seen since, or none. `auctions` are the matched, Qualifying auctions on
  * Cards still needed.
  */
@@ -81,20 +83,16 @@ export function scheduledRunDue({
 	lastFullRunAt,
 	lastRunAt,
 	auctions,
+	timing,
 	now,
 }: {
 	lastFullRunAt: number | null;
 	lastRunAt: number | null;
 	auctions: readonly EndingAuction[];
+	timing: RunTiming;
 	now: number;
 }): RunKind | null {
-	// Half a tick early, so a run asked for a few seconds late still counts.
-	if (
-		lastFullRunAt === null ||
-		now - lastFullRunAt >= FULL_RUN_EVERY_MS - SCHEDULE_TICK_MS / 2
-	) {
-		return "full";
-	}
+	if (fullRunDue({ lastFullRunAt, timing, now })) return "full";
 	if (lastRunAt !== null && now - lastRunAt < REFRESH_MIN_GAP_MS) return null;
 	const windowOpen = auctions.some(
 		(auction) =>

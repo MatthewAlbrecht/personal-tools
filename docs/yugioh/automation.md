@@ -1,6 +1,6 @@
 # Automated browser runs
 
-Every 3 hours a script on my Mac opens every eBay Search (Newly Listed and Sold) and every TCGplayer product page in a Chrome profile of its own. About 20 minutes before a matched auction ends, it also makes a short refresh run, so the auction push 15 minutes before the end shows a fresh price. The extension there captures each page, exactly as it does when I open one myself. Each run is recorded in the app (Settings → Automated runs), and the Deck page says "Last captured 9h ago" once captures are over 6 hours old.
+Every few hours (every 3 until it learns when sellers post, see "Run timing") a script on my Mac opens every eBay Search (Newly Listed and Sold) and every TCGplayer product page in a Chrome profile of its own. About 20 minutes before a matched auction ends, it also makes a short refresh run, so the auction push 15 minutes before the end shows a fresh price. The extension there captures each page, exactly as it does when I open one myself. Each run is recorded in the app (Settings → Automated runs), and the Deck page says "Last captured 9h ago" once captures are over 6 hours old.
 
 Platform facts and sources: `references/automated-browser.md` (§8 covers how extra runs get triggered). Tickets: `.scratch/yugioh-tracker/issues/15-automated-browser-runs.md`, `16-pre-auction-refresh-visits.md`.
 
@@ -20,7 +20,7 @@ Platform facts and sources: `references/automated-browser.md` (§8 covers how ex
 
 T3 Code and hand runs are always full runs. The LaunchAgent asks every 10 minutes, and the app (`scheduledRunDue` in `src/lib/yugioh/automation.ts`) answers:
 
-1. **A full run** when the last full run was asked for 3 hours ago or more (5 minutes' slack, half an ask). Any full run counts, failed ones too, so a broken run isn't retried every 10 minutes.
+1. **A full run** when the run timing says one is due (`fullRunDue` in `src/lib/yugioh/run-timing.ts`, see "Run timing" below): every 3 hours until posting times are learned (5 minutes' slack, half an ask). Any full run counts, failed ones too, so a broken run isn't retried every 10 minutes.
 2. **A refresh run** when an auction's refresh window is open and no capture has seen it since. See the next section.
 3. **Nothing** otherwise.
 
@@ -142,6 +142,16 @@ Create it from a T3 Code thread in the personal-tools project with the `schedule
 - **Schedule:** how often the LaunchAgent asks is the `StartCalendarInterval` entries in the plist template (run `install.sh` again afterwards). When a run is due is the app's call; see "When a run is due".
 - **Extension code:** an unpacked extension is re-read from disk each time Chrome starts, so a new extension takes effect at the next run.
 - **Adaptive timing** (ticket 17) changes only the full-run rule in `scheduledRunDue`. The LaunchAgent and the script stay as they are.
+
+## Run timing
+
+Once Listings go back about 4 weeks (28 days since the first capture), the app learns the hours of the week when sellers post new Listings for my Printings, and times full runs around them. Settings → Automated runs → "When it runs" shows the busy times, or "still learning" with the days of data so far.
+
+- **What it counts:** eBay's own listing time (`listedAt`) of each Listing matched to a Printing, listed in the last 28 days, by hour of the week in my time zone (the zone of the device I used most recently, as for quiet hours). The first-seen time doesn't count: it follows the run schedule, so it would only learn the schedule back. Up to the 2,000 newest Listings captured in that window are read; past that, the oldest weeks are undercounted. TCGplayer Listings have no listing time, so only eBay counts. A Newly Listed page shows a limited number of results, so a long quiet stretch can miss some Listings, which makes the busy hours look a little busier.
+- **Busy hours:** an hour of the week with at least 3 Listings in the 28 days and at least twice the average hour. At most the 24 busiest.
+- **The rule:** a full run every hour in a busy hour and in the hour after it (that run catches the busy hour's Listings). Otherwise no more than 6 hours apart: an ask 5 hours 40 minutes after the last full run starts one. That's two asks early, so neither the wait for the next ask nor an ask that finds a refresh run still open passes 6 hours. A sleeping Mac, or a full run that's still open, can still stretch it.
+- **Fallback:** every 3 hours while learning, and when no hour stands out.
+- **When it relearns:** each time a full run ends (`relearnRunTiming` in `convex/model/yugioh/runTiming.ts`), stored in the one-row `yugiohRunTiming` table. No new trigger.
 
 ## Troubleshooting
 

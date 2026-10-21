@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { captureStaleness, describeRun } from "./run-format";
+import { captureStaleness, describeRun, describeRunTiming } from "./run-format";
 
 const HOUR = 60 * 60 * 1000;
 const MINUTE = 60 * 1000;
@@ -173,6 +173,91 @@ describe("a run in the list", () => {
 			pages: null,
 			listings: null,
 			tone: "failed",
+		});
+	});
+});
+
+describe("run timing", () => {
+	const DAY = 24 * HOUR;
+	const zone = { timeZone: "America/New_York" };
+
+	test("before any Listing, it runs every 3 hours", () => {
+		expect(
+			describeRunTiming(
+				{ status: "learning", dataSince: null, busyHours: [], ...zone },
+				NOW,
+			),
+		).toEqual({
+			summary:
+				"Every 3 hours for now. Once it has about 4 weeks of Listings, it learns when sellers post and runs around those times.",
+			busyTimes: [],
+		});
+	});
+
+	test("while learning, it says how many days of data it has", () => {
+		expect(
+			describeRunTiming(
+				{
+					status: "learning",
+					dataSince: NOW - 12 * DAY - HOUR,
+					busyHours: [],
+					...zone,
+				},
+				NOW,
+			).summary,
+		).toBe(
+			"Every 3 hours for now. Still learning when sellers post: 12 days of data so far, of about 28.",
+		);
+		expect(
+			describeRunTiming(
+				{ status: "learning", dataSince: NOW - DAY, busyHours: [], ...zone },
+				NOW,
+			).summary,
+		).toContain("1 day of data so far");
+		expect(
+			describeRunTiming(
+				{ status: "learning", dataSince: NOW - HOUR, busyHours: [], ...zone },
+				NOW,
+			).summary,
+		).toContain("Under a day of data so far");
+	});
+
+	test("once learned, it names the busy times of the week, runs of hours together", () => {
+		const learned = describeRunTiming(
+			{
+				status: "learned",
+				dataSince: NOW - 30 * DAY,
+				// Sun 7–9 PM, Mon 11 AM–1 PM, Sat 11 PM through Sun 1 AM.
+				busyHours: [0, 19, 20, 24 + 11, 24 + 12, 6 * 24 + 23],
+				...zone,
+			},
+			NOW,
+		);
+		expect(learned.summary).toBe(
+			"Sellers post most at these times (New York time). It runs every hour during them and the hour after, and at least every 6 hours otherwise.",
+		);
+		expect(learned.busyTimes).toEqual([
+			"Sun 7–9 PM",
+			"Mon 11 AM–1 PM",
+			"Sat 11 PM–1 AM",
+		]);
+	});
+
+	test("learned with no busy hours, it stays on 3 hours", () => {
+		expect(
+			describeRunTiming(
+				{
+					status: "learned",
+					dataSince: NOW - 30 * DAY,
+					busyHours: [],
+					...zone,
+				},
+				NOW,
+			),
+		).toEqual({
+			summary:
+				"Every 3 hours. No hours of the week stand out yet for when sellers post.",
+			busyTimes: [],
 		});
 	});
 });

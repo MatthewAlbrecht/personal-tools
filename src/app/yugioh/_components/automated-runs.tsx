@@ -11,10 +11,16 @@ import {
 	CardHeader,
 	CardTitle,
 } from "~/components/ui/card";
+import { Separator } from "~/components/ui/separator";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Spinner } from "~/components/ui/spinner";
 import { useMinuteClock } from "~/lib/hooks/use-minute-clock";
-import { type RunLines, describeRun } from "~/lib/yugioh/run-format";
+import {
+	type RunLines,
+	type RunTimingLines,
+	describeRun,
+	describeRunTiming,
+} from "~/lib/yugioh/run-format";
 import { api } from "../../../../convex/_generated/api";
 
 const KIND_LABELS = {
@@ -38,12 +44,14 @@ export function AutomatedRuns(): React.ReactElement {
 			<CardHeader>
 				<CardTitle>Automated runs</CardTitle>
 				<CardDescription>
-					Every 3 hours, your Mac opens each Search and TCGplayer page in its
-					own Chrome profile. It looks again about 20 minutes before a matched
-					auction ends, so the alert shows a fresh price.
+					Your Mac opens each Search and TCGplayer page in its own Chrome
+					profile. It looks again about 20 minutes before a matched auction
+					ends, so the alert shows a fresh price.
 				</CardDescription>
 			</CardHeader>
-			<CardContent>
+			<CardContent className="flex flex-col gap-4">
+				<RunTimingSection now={now} />
+				<Separator />
 				{runs === undefined ? (
 					<AutomatedRunsSkeleton />
 				) : runs.length === 0 ? (
@@ -67,6 +75,50 @@ export function AutomatedRuns(): React.ReactElement {
 				)}
 			</CardContent>
 		</Card>
+	);
+}
+
+/** When full runs happen: learned busy times, or still learning. */
+function RunTimingSection({ now }: { now: number }): React.ReactElement {
+	const timing = useQuery(api.yugioh.automation.getRunTiming, {});
+
+	return (
+		<section
+			aria-labelledby="run-timing-heading"
+			className="flex flex-col gap-2"
+		>
+			<h3 id="run-timing-heading" className="font-medium text-[0.9375rem]">
+				When it runs
+			</h3>
+			{timing === undefined ? (
+				<Skeleton className="h-4 w-full max-w-sm" />
+			) : (
+				<RunTimingText lines={describeRunTiming(timing, now)} />
+			)}
+		</section>
+	);
+}
+
+function RunTimingText({
+	lines,
+}: {
+	lines: RunTimingLines;
+}): React.ReactElement {
+	return (
+		<>
+			<p className="text-muted-foreground text-sm">{lines.summary}</p>
+			{lines.busyTimes.length > 0 && (
+				<ul className="flex flex-wrap gap-1.5">
+					{lines.busyTimes.map((time) => (
+						<li key={time}>
+							<Badge variant="secondary" className="font-normal tabular-nums">
+								{time}
+							</Badge>
+						</li>
+					))}
+				</ul>
+			)}
+		</>
 	);
 }
 

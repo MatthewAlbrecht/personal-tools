@@ -4,6 +4,7 @@ import {
 	buildVisitPlan,
 	scheduledRunDue,
 } from "./automation";
+import type { RunTiming } from "./run-timing";
 
 const ash = {
 	setCodes: ["MP23-EN001", "RA01-EN008"],
@@ -73,7 +74,17 @@ describe("when a scheduled ask starts a run", () => {
 	const MINUTE = 60 * 1000;
 	const HOUR = 60 * MINUTE;
 	const NOW = Date.UTC(2026, 9, 20, 12, 0);
-	const recent = { lastFullRunAt: NOW - HOUR, lastRunAt: NOW - HOUR };
+	const learning = {
+		status: "learning",
+		dataSince: null,
+		timeZone: "America/New_York",
+		busyHours: [],
+	} as const satisfies RunTiming;
+	const recent = {
+		lastFullRunAt: NOW - HOUR,
+		lastRunAt: NOW - HOUR,
+		timing: learning,
+	};
 	/** An auction ending `minutesLeft` from now, last seen 2 hours ago. */
 	function endingIn(minutesLeft: number) {
 		return { endsAt: NOW + minutesLeft * MINUTE, lastSeenAt: NOW - 2 * HOUR };
@@ -86,6 +97,7 @@ describe("when a scheduled ask starts a run", () => {
 				lastFullRunAt: NOW - 3 * HOUR + 4 * MINUTE,
 				lastRunAt: null,
 				auctions: [],
+				timing: learning,
 				now: NOW,
 			}),
 		).toBe("full");
@@ -94,6 +106,7 @@ describe("when a scheduled ask starts a run", () => {
 				lastFullRunAt: null,
 				lastRunAt: null,
 				auctions: [],
+				timing: learning,
 				now: NOW,
 			}),
 		).toBe("full");
