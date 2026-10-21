@@ -31,6 +31,7 @@ type Product = {
 		shipping: number | null;
 		customTitle: string | null;
 	}>;
+	details?: { productName: string; setCode: string; rarity: string } | null;
 };
 
 type Reader = (doc: Document, options: { url: string }) => Product | null;
@@ -169,6 +170,32 @@ describe("other pages", () => {
 		expect(product.productId).toBe(80526);
 		expect(product.listings).toEqual([]);
 		expect(product.listingsFromCheapest).toBe(true);
+	});
+
+	test("reads what the product is: its name, set code and rarity", () => {
+		expect(read("tcgplayer-product.html").details).toEqual({
+			productName: "Ash Blossom & Joyous Spring (Quarter Century Secret Rare)",
+			setCode: "RA01-EN008",
+			rarity: "Quarter Century Secret Rare",
+		});
+		expect(read("tcgplayer-no-listings.html", FISH_URL).details).toEqual({
+			productName: "Fish Depth Charge (Blue)",
+			setCode: "DL14-EN018",
+			rarity: "Rare",
+		});
+	});
+
+	test("a page whose details haven't loaded reads them as unknown", () => {
+		const { document } = parseHTML(
+			readFileSync(
+				new URL("./fixtures/tcgplayer-page-3.html", import.meta.url),
+				"utf8",
+			),
+		);
+		const product = readTcgplayerProduct(document as unknown as Document, {
+			url: ASH_URL,
+		});
+		expect(product?.details).toBeNull();
 	});
 
 	test("a page that isn't a product page reads as nothing", () => {

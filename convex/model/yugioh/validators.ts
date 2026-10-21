@@ -135,12 +135,25 @@ export const yugiohCapturedTcgplayerSaleValidator = v.object({
  * cheapest (page 1, no condition or printing filter), so a Listing they
  * leave out is gone or pricier.
  */
+/** What a TCGplayer product page says it is, from its product details. */
+export const yugiohTcgplayerProductDetailsValidator = v.object({
+	/** The page's heading without its set, e.g. "Ash Blossom & Joyous Spring (Quarter Century Secret Rare)". */
+	productName: v.string(),
+	setCode: v.string(),
+	/** TCGplayer's rarity name. */
+	rarity: v.string(),
+});
+
 export const yugiohCapturedTcgplayerProductValidator = v.object({
 	productId: v.number(),
 	url: v.string(),
 	listingsFromCheapest: v.boolean(),
 	listings: v.array(yugiohCapturedTcgplayerListingValidator),
 	sales: v.array(yugiohCapturedTcgplayerSaleValidator),
+	/** Null when the details hadn't loaded; absent from older extensions. */
+	details: v.optional(
+		v.union(yugiohTcgplayerProductDetailsValidator, v.null()),
+	),
 });
 
 /** What a TCGplayer Listing or sale says beyond the eBay-shaped fields. */

@@ -83,12 +83,21 @@ function finishTcgplayerCapture(response, product) {
 	if (response?.ok && backend?.synced) {
 		const printing = backend.printing;
 		if (!printing) {
-			applyDockUpdate({
-				status: "warn",
-				headline: "Not one of your Printings",
-				detail:
-					"Paste this page's URL on its Printing in the tracker, then run again.",
-			});
+			// The tracker says why: no Printing in a Deck, or which ones it
+			// could be. Older apps don't, so fall back to the plain fact.
+			const reason =
+				typeof backend.reason === "string" && backend.reason.trim()
+					? backend.reason.trim()
+					: null;
+			applyDockUpdate(
+				reason
+					? { status: "warn", headline: "Not captured", detail: reason }
+					: {
+							status: "warn",
+							headline: "Not one of your Printings",
+							detail: "No Printing in the tracker is linked to this page.",
+						},
+			);
 			return;
 		}
 		const created = typeof backend.created === "number" ? backend.created : 0;
@@ -97,7 +106,7 @@ function finishTcgplayerCapture(response, product) {
 		applyDockUpdate({
 			status: "ok",
 			headline: `Captured ${tcgplayerPlural(product.listings.length, "Listing", "Listings")} and ${tcgplayerPlural(product.sales.length, "sale", "sales")}`,
-			detail: `${printing.cardName} ${printing.setCode} · ${created} new, ${updated} seen before.`,
+			detail: `${backend.linked ? "Linked this page to " : ""}${printing.cardName} ${printing.setCode} · ${created} new, ${updated} seen before.`,
 			current: total,
 			total,
 		});

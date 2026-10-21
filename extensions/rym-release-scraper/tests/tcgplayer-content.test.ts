@@ -102,6 +102,58 @@ test("a product that isn't one of my Printings says so", async () => {
 	});
 });
 
+test("a product the tracker couldn't place shows its reason, naming the card", async () => {
+	const reason =
+		"Ash Blossom & Joyous Spring RA01-EN008 Quarter Century Secret Rare isn't in a Deck yet. Add it in the tracker first.";
+	const { sent, dock } = await runOnSavedPage({
+		synced: true,
+		printing: null,
+		linked: false,
+		reason,
+		listings: 10,
+		sales: 5,
+		created: 0,
+		updated: 0,
+	});
+
+	expect(sent[0]?.product).toMatchObject({
+		details: {
+			productName: "Ash Blossom & Joyous Spring (Quarter Century Secret Rare)",
+			setCode: "RA01-EN008",
+			rarity: "Quarter Century Secret Rare",
+		},
+	});
+	expect(dock.at(-1)).toEqual({
+		status: "warn",
+		headline: "Not captured",
+		detail: reason,
+	});
+});
+
+test("a page the tracker linked to its Printing says so", async () => {
+	const { dock } = await runOnSavedPage({
+		synced: true,
+		printing: {
+			cardName: "Ash Blossom & Joyous Spring",
+			setCode: "RA01-EN008",
+			rarity: "Quarter Century Secret Rare",
+		},
+		linked: true,
+		reason: null,
+		listings: 10,
+		sales: 5,
+		created: 15,
+		updated: 0,
+	});
+
+	expect(dock.at(-1)).toMatchObject({
+		status: "ok",
+		headline: "Captured 10 Listings and 5 sales",
+		detail:
+			"Linked this page to Ash Blossom & Joyous Spring RA01-EN008 · 15 new, 0 seen before.",
+	});
+});
+
 test("a product page with nothing on it tells the service worker there was nothing to send", async () => {
 	vi.useFakeTimers();
 	const { document, window } = parseHTML("<html><body></body></html>");

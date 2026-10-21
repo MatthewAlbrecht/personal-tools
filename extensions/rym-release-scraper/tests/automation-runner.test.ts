@@ -210,6 +210,23 @@ describe("what a page's capture counts as", () => {
 		).toBe("Not one of your Printings.");
 	});
 
+	test("a TCGplayer product the tracker couldn't place gives the tracker's reason", () => {
+		const reason =
+			"Brionac, Dragon of the Ice Barrier DT01-EN014 Duel Terminal Ultra Parallel Rare isn't in a Deck yet. Add it in the tracker first.";
+		expect(
+			globalThis.visitOutcome({
+				ok: true,
+				backend: {
+					synced: true,
+					printing: null,
+					reason,
+					listings: 1,
+					sales: 0,
+				},
+			}).error,
+		).toBe(reason);
+	});
+
 	test("a page with nothing on it captures nothing, without an error", () => {
 		expect(globalThis.visitOutcome({ ok: true, empty: true })).toEqual({
 			listingsCaptured: 0,

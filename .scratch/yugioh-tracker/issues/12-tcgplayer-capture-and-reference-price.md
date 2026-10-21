@@ -107,3 +107,14 @@ Raw pages are in `.scratch/yugioh-tracker/tcgplayer-raw/` (uncommitted).
   - The Listing drawer's Match `Select` overflows at 390px with long Printing names.
   - `scrape-dock.js` has Biome formatting drift.
 - `requireAuth` is still a no-op (the repo pattern).
+
+**Bug fix (coordinator): capturing a page no Printing is linked to**
+- Before, every unlinked product page said "Paste this page's URL on its Printing in the tracker", even when no Printing existed for it.
+- The reader now sends `details: { productName, setCode, rarity }` from the page's heading and "Number:"/"Rarity:" details (null until loaded; optional in `yugiohCapturedTcgplayerProductValidator` for older builds). Fixtures gained the real details block.
+- `ingestTcgplayerProduct` (`linkPageToPrinting` in `convex/model/yugioh/tcgplayerCapture.ts`) matches Printings by the page's set code (`by_setCode_and_rarity` prefix) and `rarityNamesAgree`:
+  - none: nothing stored, reason "<Card> <set code> <rarity> isn't in a Deck yet. Add it in the tracker first." (`tcgplayerCardName` drops TCGplayer's rarity suffix);
+  - exactly one without a link: the URL must pass `checkTcgplayerProductUrl` for that Printing, then it's linked (`savePastedLink`) and the page captured; the report has `linked: true` and the dock says "Linked this page to …";
+  - otherwise (several, or the one is linked to another product): nothing stored, the reason names each candidate and keeps the paste instruction.
+- The report gains `linked` and `reason`; the dock ("Not captured") and automated runs (`visitOutcome`) show `reason`.
+- Tests: `convex/yugioh/tcgplayer-capture-linking.test.ts` (7), plus reader, content-script and runner tests. Manifest 0.7.1.
+- Open: a Printing already linked to another product can't be re-pasted in the UI (the paste form shows only for `needsPaste`), so that case's paste instruction isn't actionable yet.

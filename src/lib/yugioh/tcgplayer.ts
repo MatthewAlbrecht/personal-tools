@@ -87,6 +87,20 @@ function suffixAgrees(suffix: string, rarity: string): boolean {
 	);
 }
 
+/**
+ * The Card's name in a TCGplayer product name: without the rarity TCGplayer
+ * adds when a set code has more than one product.
+ * "Ash Blossom & Joyous Spring (Quarter Century Secret Rare)" → "Ash Blossom & Joyous Spring".
+ */
+export function tcgplayerCardName(productName: string, rarity: string): string {
+	const match = /^(.*\S)\s*\(([^()]+)\)$/.exec(productName.trim());
+	if (!match?.[1] || !match[2]) return productName.trim();
+	const suffix = tcgplayerSlugPart(match[2]);
+	return rarityNamesAgree(match[2], rarity) || suffixAgrees(suffix, rarity)
+		? match[1]
+		: productName.trim();
+}
+
 export type TcgplayerProductLink = { productId: number; productUrl: string };
 
 /** Shown when a pasted URL fails the check, on the client and the server. */

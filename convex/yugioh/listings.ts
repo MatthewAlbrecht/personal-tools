@@ -179,6 +179,8 @@ export const ingestTcgplayerProduct = internalMutation({
 		sales: v.number(),
 		created: v.number(),
 		updated: v.number(),
+		linked: v.boolean(),
+		reason: v.union(v.string(), v.null()),
 	}),
 	handler: async (ctx, args) => {
 		return await TcgplayerCapture.ingestTcgplayerProduct(

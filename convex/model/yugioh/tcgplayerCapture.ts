@@ -2,7 +2,13 @@
 // product, so its Listings and sales are matched by product id, without AI.
 import type { Infer } from "convex/values";
 import { saleTime } from "../../../src/lib/yugioh/deals";
-import { readTcgplayerCondition } from "../../../src/lib/yugioh/tcgplayer";
+import { normalizeSetCode } from "../../../src/lib/yugioh/deck";
+import {
+	checkTcgplayerProductUrl,
+	rarityNamesAgree,
+	readTcgplayerCondition,
+	tcgplayerCardName,
+} from "../../../src/lib/yugioh/tcgplayer";
 import {
 	type TitleRead,
 	setCodeKey,
@@ -16,6 +22,7 @@ import {
 	observe,
 } from "./listings";
 import { queuePushCheck } from "./pushes";
+import { savePastedLink } from "./tcgplayer";
 import type {
 	yugiohCapturedTcgplayerProductValidator,
 	yugiohTcgplayerDetailsValidator,
@@ -42,7 +49,14 @@ export type TcgplayerIngestReport = {
 	created: number;
 	/** Listings and sales already known, updated in place. */
 	updated: number;
+	/** Whether this capture linked the Printing to the page. */
+	linked: boolean;
+	/** Why nothing was stored, as a sentence to show; null when it was. */
+	reason: string | null;
 };
+
+/** More Printings than this sharing one set code aren't looked at. */
+const MAX_PRINTINGS_PER_SET_CODE = 50;
 
 /**
  * Stores one TCGplayer product page under the Printing with that product id.
@@ -65,20 +79,27 @@ export async function ingestTcgplayerProduct(
 			`A capture can carry at most ${MAX_LISTINGS_PER_CAPTURE} Listings and sales`,
 		);
 	}
-	const printing = await ctx.db
-		.query("yugiohPrintings")
-		.withIndex("by_tcgplayerProductId", (q) =>
-			q.eq("tcgplayerProductId", product.productId),
-		)
-		.first();
 	const report: TcgplayerIngestReport = {
 		printing: null,
 		listings: product.listings.length,
 		sales: product.sales.length,
 		created: 0,
 		updated: 0,
+		linked: false,
+		reason: null,
 	};
-	if (!printing) return report;
+	let printing = await ctx.db
+		.query("yugiohPrintings")
+		.withIndex("by_tcgplayerProductId", (q) =>
+			q.eq("tcgplayerProductId", product.productId),
+		)
+		.first();
+	if (!printing) {
+		const found = await linkPageToPrinting(ctx, product);
+		if (typeof found === "string") return { ...report, reason: found };
+		printing = found;
+		report.linked = true;
+	}
 	report.printing = {
 		cardName: printing.cardName,
 		setCode: printing.setCode,
@@ -200,6 +221,62 @@ export async function ingestTcgplayerProduct(
 		});
 	}
 	return report;
+}
+
+/**
+ * A product page no Printing is linked to: its own set code and rarity say
+ * which Printing it is. The one matching Printing without a link is linked,
+ * after the same checks as a pasted URL (the URL fits the Card and rarity;
+ * the page's details have the Printing's set code and rarity). Otherwise,
+ * says why not.
+ */
+async function linkPageToPrinting(
+	ctx: MutationCtx,
+	product: CapturedTcgplayerProduct,
+): Promise<Doc<"yugiohPrintings"> | string> {
+	const details = product.details ?? null;
+	if (!details) {
+		return "This page's set code and rarity hadn't loaded, so it can't be matched to a Printing. Run again once the page has loaded.";
+	}
+	const setCode = normalizeSetCode(details.setCode);
+	const matches = (
+		await ctx.db
+			.query("yugiohPrintings")
+			.withIndex("by_setCode_and_rarity", (q) => q.eq("setCode", setCode))
+			.take(MAX_PRINTINGS_PER_SET_CODE)
+	).filter((printing) => rarityNamesAgree(printing.rarity, details.rarity));
+	if (matches.length === 0) {
+		const cardName = tcgplayerCardName(details.productName, details.rarity);
+		return `${cardName} ${setCode} ${details.rarity} isn't in a Deck yet. Add it in the tracker first.`;
+	}
+	const [only] = matches;
+	if (matches.length === 1 && only && !isLinked(only)) {
+		const link = checkTcgplayerProductUrl(product.url, only);
+		if (!link || link.productId !== product.productId) {
+			return `This page is ${setCode} ${details.rarity}, but its URL doesn't match ${only.cardName}, so it wasn't linked.`;
+		}
+		await savePastedLink(ctx, only._id, link);
+		return (await ctx.db.get("yugiohPrintings", only._id)) ?? only;
+	}
+	const names = matches.map(
+		(printing) =>
+			`${printing.cardName} ${printing.setCode} ${printing.rarity}${
+				isLinked(printing) ? " (already linked to another TCGplayer page)" : ""
+			}`,
+	);
+	return `This page could be ${orList(names)}. Paste this page's URL on the right Printing in the tracker, then run again.`;
+}
+
+function isLinked(printing: Doc<"yugiohPrintings">): boolean {
+	return (
+		printing.tcgplayerProductId != null || printing.tcgplayerProductUrl != null
+	);
+}
+
+/** "A", "A or B", "A, B or C". */
+function orList(items: readonly string[]): string {
+	if (items.length <= 1) return items.join("");
+	return `${items.slice(0, -1).join(", ")} or ${items.at(-1)}`;
 }
 
 type Row = {

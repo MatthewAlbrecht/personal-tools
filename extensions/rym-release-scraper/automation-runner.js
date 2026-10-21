@@ -100,7 +100,11 @@ function visitOutcome(response) {
 	const newListings = typeof backend.created === "number" ? backend.created : 0;
 	if ("printing" in backend) {
 		if (!backend.printing) {
-			return { ...nothing, error: "Not one of your Printings." };
+			const reason =
+				typeof backend.reason === "string" && backend.reason.trim()
+					? backend.reason.trim()
+					: "Not one of your Printings.";
+			return { ...nothing, error: reason };
 		}
 		return {
 			listingsCaptured: (backend.listings ?? 0) + (backend.sales ?? 0),

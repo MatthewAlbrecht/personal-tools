@@ -208,6 +208,34 @@ function tcgplayerLoadMoreSales(doc) {
 		: null;
 }
 
+/** The value of a product detail ("Number:", "Rarity:"), or "" when absent. */
+function tcgplayerDetail(doc, label) {
+	for (const item of doc.querySelectorAll(
+		"ul.product__item-details__attributes > li",
+	)) {
+		if (tcgplayerText(item.querySelector("strong")) === `${label}:`) {
+			return tcgplayerText(item.querySelector("span"));
+		}
+	}
+	return "";
+}
+
+/**
+ * What the product is, from its details: the product name (the heading
+ * without " - <set name>"), the set code and the rarity. Null until they've
+ * loaded.
+ */
+function readTcgplayerDetails(doc) {
+	const heading = tcgplayerText(
+		doc.querySelector("[data-testid=lblProductDetailsProductName]"),
+	);
+	const productName = heading.split(" - ")[0].trim();
+	const setCode = tcgplayerDetail(doc, "Number");
+	const rarity = tcgplayerDetail(doc, "Rarity");
+	if (productName === "" || setCode === "" || rarity === "") return null;
+	return { productName, setCode, rarity };
+}
+
 /**
  * The product page's current Listings and the latest sales shown, or null
  * when `url` isn't a product page.
@@ -226,6 +254,7 @@ function readTcgplayerProduct(doc, { url }) {
 		sales: tcgplayerSaleRows(doc)
 			.map(readTcgplayerSale)
 			.filter((sale) => sale !== null),
+		details: readTcgplayerDetails(doc),
 	};
 }
 
