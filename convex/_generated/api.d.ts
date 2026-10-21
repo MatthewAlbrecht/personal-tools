@@ -98,6 +98,7 @@ import type * as migrations_importMusicFunnelFromProd from "../migrations/import
 import type * as migrations_initializeRatingHistory from "../migrations/initializeRatingHistory.js";
 import type * as migrations_migrateRatingsToThreeTier from "../migrations/migrateRatingsToThreeTier.js";
 import type * as model_yugioh_decks from "../model/yugioh/decks.js";
+import type * as model_yugioh_searches from "../model/yugioh/searches.js";
 import type * as model_yugioh_validators from "../model/yugioh/validators.js";
 import type * as musicFunnel from "../musicFunnel.js";
 import type * as playlistLyrics from "../playlistLyrics.js";
@@ -112,6 +113,7 @@ import type * as spotify from "../spotify.js";
 import type * as spotifyListenRepair from "../spotifyListenRepair.js";
 import type * as spotifyPlayEvents from "../spotifyPlayEvents.js";
 import type * as yugioh_decks from "../yugioh/decks.js";
+import type * as yugioh_searches from "../yugioh/searches.js";
 
 import type {
   ApiFromModules,
@@ -210,6 +212,7 @@ declare const fullApi: ApiFromModules<{
   "migrations/initializeRatingHistory": typeof migrations_initializeRatingHistory;
   "migrations/migrateRatingsToThreeTier": typeof migrations_migrateRatingsToThreeTier;
   "model/yugioh/decks": typeof model_yugioh_decks;
+  "model/yugioh/searches": typeof model_yugioh_searches;
   "model/yugioh/validators": typeof model_yugioh_validators;
   musicFunnel: typeof musicFunnel;
   playlistLyrics: typeof playlistLyrics;
@@ -224,6 +227,7 @@ declare const fullApi: ApiFromModules<{
   spotifyListenRepair: typeof spotifyListenRepair;
   spotifyPlayEvents: typeof spotifyPlayEvents;
   "yugioh/decks": typeof yugioh_decks;
+  "yugioh/searches": typeof yugioh_searches;
 }>;
 
 /**

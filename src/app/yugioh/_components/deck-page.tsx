@@ -1,8 +1,7 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import { ChevronLeft, Layers, Plus } from "lucide-react";
-import Link from "next/link";
+import { Layers, Plus } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import type * as React from "react";
@@ -30,7 +29,7 @@ export function DeckPage({
 	deckId,
 }: {
 	deckId: Id<"yugiohDecks">;
-}): React.ReactElement {
+}): React.ReactElement | null {
 	const deck = useQuery(api.yugioh.decks.getDeck, { deckId });
 	const router = useRouter();
 	const pathname = usePathname() ?? `/yugioh/decks/${deckId}`;
@@ -38,7 +37,8 @@ export function DeckPage({
 	const [adding, setAdding] = useState(false);
 
 	if (deck === undefined) return <DeckPageSkeleton />;
-	if (deck === null) return <MissingDeck />;
+	// DeckShell (the layout) shows the missing-Deck state.
+	if (deck === null) return null;
 
 	const openCardId = searchParams.get("card");
 	const openCard = deck.sections
@@ -61,27 +61,13 @@ export function DeckPage({
 	}
 
 	return (
-		<div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
-			<header className="flex flex-col gap-4">
-				<div className="flex flex-col gap-1">
-					<Link
-						href="/yugioh"
-						className="-ml-1 flex w-fit items-center gap-0.5 rounded-sm text-muted-foreground text-sm outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
-					>
-						<ChevronLeft className="size-4" aria-hidden />
-						Decks
-					</Link>
-					<h1 className="font-display font-semibold text-2xl md:text-3xl">
-						{deck.name}
-					</h1>
-				</div>
-				<div className="max-w-sm">
-					<DeckProgress
-						copiesOwned={deck.copiesOwned}
-						copiesNeeded={deck.copiesNeeded}
-					/>
-				</div>
-			</header>
+		<div className="flex flex-col gap-6">
+			<div className="max-w-sm">
+				<DeckProgress
+					copiesOwned={deck.copiesOwned}
+					copiesNeeded={deck.copiesNeeded}
+				/>
+			</div>
 
 			{deck.cardCount === 0 ? (
 				<Empty className="border">
@@ -161,32 +147,10 @@ function SectionList({
 	);
 }
 
-function MissingDeck(): React.ReactElement {
-	return (
-		<Empty className="mx-auto w-full max-w-5xl border">
-			<EmptyHeader>
-				<EmptyTitle>This Deck doesn't exist.</EmptyTitle>
-				<EmptyDescription>It may have been removed.</EmptyDescription>
-			</EmptyHeader>
-			<EmptyContent>
-				<Button variant="outline" asChild>
-					<Link href="/yugioh">Decks</Link>
-				</Button>
-			</EmptyContent>
-		</Empty>
-	);
-}
-
 export function DeckPageSkeleton(): React.ReactElement {
 	return (
-		<div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
-			<div className="flex flex-col gap-4">
-				<div className="flex flex-col gap-2">
-					<Skeleton className="h-5 w-16" />
-					<Skeleton className="h-9 w-56" />
-				</div>
-				<Skeleton className="h-8 w-full max-w-sm" />
-			</div>
+		<div className="flex flex-col gap-6">
+			<Skeleton className="h-8 w-full max-w-sm" />
 			<Skeleton className="h-9 w-28" />
 			<div className="flex flex-col gap-2">
 				<Skeleton className="h-5 w-32" />

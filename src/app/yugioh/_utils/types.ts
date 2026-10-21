@@ -10,3 +10,6 @@ export type CandidatePrinting = DeckCard["candidates"][number];
 export type DeckSummary = FunctionReturnType<
 	typeof api.yugioh.decks.listDecks
 >[number];
+export type EbaySearch = NonNullable<
+	FunctionReturnType<typeof api.yugioh.searches.listSearches>
+>[number];
