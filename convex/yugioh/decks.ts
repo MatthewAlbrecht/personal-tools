@@ -1,5 +1,7 @@
+import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
-import { mutation, query } from "../_generated/server";
+import type { Id } from "../_generated/dataModel";
+import { internalMutation, mutation, query } from "../_generated/server";
 import { requireAuth } from "../auth";
 import * as Decks from "../model/yugioh/decks";
 import {
@@ -223,5 +225,41 @@ export const removeCard = mutation({
 		requireAuth(ctx);
 		await Decks.removeCard(ctx, args.deckCardId);
 		return null;
+	},
+});
+
+/**
+ * Backfill: re-normalizes Printing rarities and Overloaded rarities saved
+ * before `normalizeRarity` title-cased bracketed words ("(pharaoh's Rare)" →
+ * "(Pharaoh's Rare)"), a page at a time. Run until `isDone`, passing back
+ * `cursor`; a non-empty `conflicts` lists Printings left alone because the
+ * corrected set code + rarity already has a row:
+ * `npx convex run yugioh/decks:renormalizePrintingRarities '{"paginationOpts":{"numItems":200,"cursor":null}}'`.
+ */
+export const renormalizePrintingRarities = internalMutation({
+	args: { paginationOpts: paginationOptsValidator },
+	returns: v.object({
+		updated: v.number(),
+		conflicts: v.array(v.id("yugiohPrintings")),
+		isDone: v.boolean(),
+		cursor: v.string(),
+	}),
+	handler: async (ctx, args) => {
+		const page = await ctx.db
+			.query("yugiohPrintings")
+			.paginate(args.paginationOpts);
+		let updated = 0;
+		const conflicts: Array<Id<"yugiohPrintings">> = [];
+		for (const printing of page.page) {
+			const result = await Decks.renormalizePrintingRarities(ctx, printing);
+			if (result === "updated") updated++;
+			if (result === "conflict") conflicts.push(printing._id);
+		}
+		return {
+			updated,
+			conflicts,
+			isDone: page.isDone,
+			cursor: page.continueCursor,
+		};
 	},
 });

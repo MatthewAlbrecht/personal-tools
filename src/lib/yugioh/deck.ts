@@ -76,7 +76,12 @@ export function normalizeRarity(rarity: string): string {
 	if (known) return known.name;
 	return cleaned
 		.split(" ")
-		.map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+		.map((word) =>
+			// Capitalise the first letter, past any leading bracket: "(pharaoh's" → "(Pharaoh's".
+			word
+				.toLowerCase()
+				.replace(/[a-z0-9]/, (letter) => letter.toUpperCase()),
+		)
 		.join(" ");
 }
 

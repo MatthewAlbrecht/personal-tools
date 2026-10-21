@@ -182,6 +182,45 @@ export async function findOrCreatePrinting(
 	return printingId;
 }
 
+/**
+ * Re-runs `normalizeRarity` over one Printing's rarity and Overloaded
+ * rarities, for rows saved before a normalizer fix. Skips (returns
+ * "conflict") rather than break `by_setCode_and_rarity` uniqueness when the
+ * corrected rarity already has its own row.
+ */
+export async function renormalizePrintingRarities(
+	ctx: MutationCtx,
+	printing: Doc<"yugiohPrintings">,
+): Promise<"unchanged" | "updated" | "conflict"> {
+	const rarity = normalizeRarity(printing.rarity);
+	const overloadedRarities = normalizeOverloadedRarities(
+		printing.overloadedRarities,
+		rarity,
+	);
+	const sameRarity = rarity === printing.rarity;
+	if (
+		sameRarity &&
+		overloadedRarities.join("\n") === printing.overloadedRarities.join("\n")
+	) {
+		return "unchanged";
+	}
+	if (!sameRarity) {
+		const clash = await ctx.db
+			.query("yugiohPrintings")
+			.withIndex("by_setCode_and_rarity", (q) =>
+				q.eq("setCode", printing.setCode).eq("rarity", rarity),
+			)
+			.first();
+		if (clash && clash._id !== printing._id) return "conflict";
+	}
+	await ctx.db.patch("yugiohPrintings", printing._id, {
+		rarity,
+		overloadedRarities,
+	});
+	await rematchSetCode(ctx, printing.setCode);
+	return "updated";
+}
+
 function checkCopiesNeeded(copiesNeeded: number): void {
 	if (
 		!Number.isInteger(copiesNeeded) ||

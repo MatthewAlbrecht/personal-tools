@@ -3,7 +3,7 @@
 
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
-import { api } from "../_generated/api";
+import { api, internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import schema from "../schema";
 
@@ -649,3 +649,53 @@ async function names(t: ReturnType<typeof setup>, deckId: Id<"yugiohDecks">) {
 	const deck = await t.query(api.yugioh.decks.getDeck, { deckId });
 	return deck?.sections.map((s) => [s.section, s.cards.map((c) => c.cardName)]);
 }
+
+describe("renormalizing Printing rarities", () => {
+	test("fixes bracketed rarity casing and leaves clashing rows alone", async () => {
+		const t = setup();
+		const base = {
+			cardName: "Chaos Lightsworn",
+			tcgplayerStatus: "searching" as const,
+			tcgplayerProductUrl: null,
+			tcgplayerImageUrl: null,
+		};
+		const [wrongId, clashId] = await t.run(async (ctx) => {
+			const wrong = await ctx.db.insert("yugiohPrintings", {
+				...base,
+				setCode: "MAMA-EN110",
+				rarity: "Ultra Rare (pharaoh's Rare)",
+				overloadedRarities: ["Secret Rare (pharaoh's Rare)"],
+			});
+			// Both spellings saved for one set code: the fix would collide.
+			await ctx.db.insert("yugiohPrintings", {
+				...base,
+				setCode: "MAMA-EN108",
+				rarity: "Secret Rare (Pharaoh's Rare)",
+				overloadedRarities: [],
+			});
+			const clash = await ctx.db.insert("yugiohPrintings", {
+				...base,
+				setCode: "MAMA-EN108",
+				rarity: "Secret Rare (pharaoh's Rare)",
+				overloadedRarities: [],
+			});
+			return [wrong, clash];
+		});
+
+		const result = await t.mutation(
+			internal.yugioh.decks.renormalizePrintingRarities,
+			{ paginationOpts: { numItems: 10, cursor: null } },
+		);
+
+		expect(result).toMatchObject({
+			updated: 1,
+			conflicts: [clashId],
+			isDone: true,
+		});
+		const fixed = await t.run((ctx) => ctx.db.get(wrongId));
+		expect(fixed).toMatchObject({
+			rarity: "Ultra Rare (Pharaoh's Rare)",
+			overloadedRarities: ["Secret Rare (Pharaoh's Rare)"],
+		});
+	});
+});

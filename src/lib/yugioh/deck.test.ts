@@ -10,6 +10,15 @@ import {
 } from "./deck";
 
 describe("Printing normalization", () => {
+	test("title-cases a word that starts with a bracket", () => {
+		expect(normalizeRarity("ultra rare (pharaoh's rare)")).toBe(
+			"Ultra Rare (Pharaoh's Rare)",
+		);
+		expect(normalizeRarity("Ultra Rare (Pharaoh's Rare)")).toBe(
+			"Ultra Rare (Pharaoh's Rare)",
+		);
+	});
+
 	test("set codes are trimmed and uppercased", () => {
 		expect(normalizeSetCode("  ra01-en008 ")).toBe("RA01-EN008");
 	});
