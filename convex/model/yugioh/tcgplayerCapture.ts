@@ -11,6 +11,7 @@ import {
 } from "../../../src/lib/yugioh/tcgplayer";
 import {
 	type TitleRead,
+	languageStatedIn,
 	setCodeKey,
 } from "../../../src/lib/yugioh/title-reading";
 import type { Doc, Id } from "../../_generated/dataModel";
@@ -186,7 +187,7 @@ export async function ingestTcgplayerProduct(
 			...captured,
 			itemId,
 			tcgplayer: details,
-			titleRead: pageRead(printing, details.condition),
+			titleRead: pageRead(printing, details.condition, customTitle),
 		};
 		if (!existing) {
 			const listingId = await ctx.db.insert("yugiohListings", {
@@ -344,19 +345,25 @@ function pageMatch(
 /**
  * What a TCGplayer page states, in the shape of a title read, so the
  * Qualifying rule judges it like any Listing: the Printing's set code and
- * rarity, TCGplayer's condition and language, one raw Copy.
+ * rarity, TCGplayer's condition and language, one raw Copy. A language the
+ * seller's own title states beats TCGplayer's (sellers list Japanese cards on
+ * the English product).
  */
 function pageRead(
 	printing: Doc<"yugiohPrintings">,
 	condition: string,
+	customTitle: string | null,
 ): TitleRead {
 	const read = readTcgplayerCondition(condition);
+	const language =
+		(customTitle === null ? null : languageStatedIn(customTitle)) ??
+		read.language;
 	return {
 		setCode: printing.setCode,
 		rarity: printing.rarity,
 		condition: read.condition,
 		copies: 1,
-		language: read.language,
+		language,
 		graded: false,
 		gradingCompany: null,
 		grade: null,

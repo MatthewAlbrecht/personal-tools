@@ -3,6 +3,7 @@ import {
 	dealGrade,
 	isRunningAuction,
 	isSale,
+	listingLanguage,
 	mostLenientCondition,
 	percentOfReference,
 	referencePrice,
@@ -93,5 +94,21 @@ describe("mostLenientCondition", () => {
 			"moderatelyPlayed",
 		);
 		expect(mostLenientCondition([])).toBeNull();
+	});
+});
+
+describe("listingLanguage", () => {
+	test("an unread title that states Japanese is Japanese, whatever its set code", () => {
+		expect(
+			listingLanguage({
+				title:
+					"Bottomless Trap Hole CP04-EN003 Champion Pack 4 Unlimited Japanese",
+			}),
+		).toBe("japanese");
+	});
+
+	test("an unread title that states nothing goes by its set code, else English", () => {
+		expect(listingLanguage({ title: "Ash Blossom RA01-KR008" })).toBe("korean");
+		expect(listingLanguage({ title: "Ash Blossom QCSR" })).toBe("english");
 	});
 });

@@ -150,6 +150,34 @@ export function setCodeVariants(setCode: string): string[] {
 	);
 }
 
+/**
+ * Words and standalone codes a seller writes to say a card's language.
+ * Countries ("Japan", "Korea") are left out: they usually say where it ships
+ * from, not what it's printed in.
+ */
+const STATED_LANGUAGES: ReadonlyArray<[RegExp, Language]> = [
+	[/\b(?:asian\s+)?english\b/i, "english"],
+	[/\b(?:japanese|jpn?)\b/i, "japanese"],
+	[/\b(?:korean|kor|kr)\b/i, "korean"],
+	[/\bchinese\b/i, "chinese"],
+	[/\b(?:german|deutsch)\b/i, "german"],
+	[/\b(?:french|fran[cç]ais)\b/i, "french"],
+	[/\b(?:italian|italiano)\b/i, "italian"],
+	[/\b(?:spanish|espa[nñ]ol)\b/i, "spanish"],
+	[/\b(?:portuguese|portugu[eê]s)\b/i, "portuguese"],
+];
+
+/**
+ * The language a title states in words ("Japanese", "JP", "Korean"), or null
+ * when it names none or several. Set codes don't count: their region is read
+ * by `languageOfSetCode`. Asian English is English.
+ */
+export function languageStatedIn(title: string): Language | null {
+	const words = title.replace(SET_CODE_PATTERN, " ");
+	const stated = STATED_LANGUAGES.filter(([pattern]) => pattern.test(words));
+	return stated.length === 1 ? (stated[0]?.[1] ?? null) : null;
+}
+
 /** What the AI judged from a title. Code fills in and checks the rest. */
 export type TitleJudgments = {
 	/** Which of the title's set codes is the card sold, when it has several. */
@@ -201,7 +229,9 @@ export function titleSetCode(title: string): string | null {
 /**
  * Combines the AI's judgments with what code reads exactly. A lone set code
  * comes from the title; with several, the AI's pick must be one of them. The
- * code's language suffix beats the AI's language, and a Graded Listing's
+ * language the title states in words beats the set code's language suffix
+ * (sellers reuse the English code for Japanese cards), which beats the AI's
+ * language. A Graded Listing's
  * company and grade come from the title when it states them.
  */
 export function readTitle(title: string, judgments: TitleJudgments): TitleRead {
@@ -213,6 +243,7 @@ export function readTitle(title: string, judgments: TitleJudgments): TitleRead {
 				? judgments.setCode
 				: null;
 	const language =
+		languageStatedIn(title) ??
 		(setCode === null ? null : languageOfSetCode(setCode)) ??
 		judgments.language;
 	const stated = judgments.graded ? findGrade(title) : null;

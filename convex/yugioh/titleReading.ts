@@ -1,3 +1,4 @@
+import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import type { TitleJudgments } from "../../src/lib/yugioh/title-reading";
 import { internal } from "../_generated/api";
@@ -78,5 +79,30 @@ export const queueUnreadTitles = internalMutation({
 	handler: async (ctx, { batchSize }) => {
 		const size = Math.min(Math.max(Math.floor(batchSize ?? 100), 1), 250);
 		return { queued: await Matching.queueUnreadTitles(ctx, size) };
+	},
+});
+
+/**
+ * One-off backfill: re-derives the language of Listings read before a language
+ * the title states beat the set code ("CP04-EN003 … Japanese" was English), a
+ * page at a time, without the AI. Run until `isDone`, passing back `cursor`:
+ * `npx convex run yugioh/titleReading:rederiveListingLanguages '{"paginationOpts":{"numItems":200,"cursor":null}}'`.
+ */
+export const rederiveListingLanguages = internalMutation({
+	args: { paginationOpts: paginationOptsValidator },
+	returns: v.object({
+		updated: v.number(),
+		isDone: v.boolean(),
+		cursor: v.string(),
+	}),
+	handler: async (ctx, args) => {
+		const page = await ctx.db
+			.query("yugiohListings")
+			.paginate(args.paginationOpts);
+		let updated = 0;
+		for (const listing of page.page) {
+			if (await Matching.rederiveListingLanguage(ctx, listing)) updated++;
+		}
+		return { updated, isDone: page.isDone, cursor: page.continueCursor };
 	},
 });

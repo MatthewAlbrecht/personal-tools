@@ -3,6 +3,7 @@ import {
 	type TitleJudgments,
 	findSetCodes,
 	languageOfSetCode,
+	languageStatedIn,
 	matchListing,
 	readTitle,
 	setCodeKey,
@@ -222,5 +223,83 @@ describe("matchListing", () => {
 				plain,
 			]),
 		).toEqual({ status: "match", printingId: "plain" });
+	});
+});
+
+describe("a language the title states", () => {
+	test("'Japanese' in the title beats an EN set code (sellers reuse the English code for Japanese cards)", () => {
+		const title =
+			"Bottomless Trap Hole CP04-EN003 Champion Pack 4 Unlimited Japanese";
+		expect(readTitle(title, judgments).language).toBe("japanese");
+		expect(
+			readTitle(title, { ...judgments, language: "japanese" }).language,
+		).toBe("japanese");
+	});
+});
+
+describe("languageStatedIn", () => {
+	test("reads a language named as a word or a standalone code", () => {
+		expect(languageStatedIn("Ash Blossom RA01-EN008 Japanese QCSR")).toBe(
+			"japanese",
+		);
+		expect(languageStatedIn("Ash Blossom JP RA01-EN008")).toBe("japanese");
+		expect(languageStatedIn("Ash Blossom [JPN] QCSR")).toBe("japanese");
+		expect(languageStatedIn("Ash Blossom RA01-EN008 korean")).toBe("korean");
+		expect(languageStatedIn("Ash Blossom KR ver.")).toBe("korean");
+		expect(languageStatedIn("Ash Blossom Simplified Chinese")).toBe("chinese");
+		expect(languageStatedIn("Ash Blossom RA01-DE008 German")).toBe("german");
+		expect(languageStatedIn("Ash Blossom RA01-EN008 English NM")).toBe(
+			"english",
+		);
+	});
+
+	test("Asian English is English", () => {
+		expect(languageStatedIn("Ash Blossom RC04-AE001 Asian English")).toBe(
+			"english",
+		);
+	});
+
+	test("says nothing when the title names no language, or several", () => {
+		expect(languageStatedIn("Ash Blossom RA01-EN008 QCSR")).toBeNull();
+		expect(languageStatedIn("Ash Blossom Japanese / English lot")).toBeNull();
+	});
+
+	test("a country, a set code's region or a word that only contains a code says nothing", () => {
+		expect(languageStatedIn("Ash Blossom RA01-EN008 Ships from Japan")).toBe(
+			null,
+		);
+		expect(languageStatedIn("Ash Blossom RC04-JP001 Korea seller")).toBeNull();
+		expect(languageStatedIn("Dark Magician JUMP promo KRAKEN")).toBeNull();
+		expect(languageStatedIn("Ash Blossom KO in one turn")).toBeNull();
+	});
+});
+
+describe("readTitle's language", () => {
+	test("a language the title states beats the set code and the AI", () => {
+		expect(
+			readTitle("Ash Blossom RA01-EN008 Korean QCSR", judgments).language,
+		).toBe("korean");
+		expect(
+			readTitle("Ash Blossom RA01-JP008 English", {
+				...judgments,
+				language: "japanese",
+			}).language,
+		).toBe("english");
+	});
+
+	test("an English Listing shipped from Japan stays English", () => {
+		expect(
+			readTitle("Ash Blossom RA01-EN008 QCSR Ships from Japan", {
+				...judgments,
+				language: "japanese",
+			}).language,
+		).toBe("english");
+	});
+
+	test("with no set code and no stated language, the AI decides", () => {
+		expect(
+			readTitle("Ash Blossom QCSR", { ...judgments, language: "chinese" })
+				.language,
+		).toBe("chinese");
 	});
 });

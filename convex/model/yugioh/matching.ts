@@ -7,6 +7,7 @@ import {
 	type TitleJudgments,
 	type TitleRead,
 	findSetCodes,
+	languageStatedIn,
 	matchListing,
 	readTitle,
 	setCodeKey,
@@ -67,6 +68,28 @@ export async function queueUnreadTitles(
 		await queueTitleRead(ctx, listing._id, listing.title);
 	}
 	return unread.length;
+}
+
+/**
+ * Re-derives a read Listing's language from its stored title and read, without
+ * the AI: a language the title states now beats the set code. A stored read
+ * already has the set code's language over the AI's, so only a stated
+ * language can change it (on TCGplayer, the seller's title over the product
+ * page's). Returns whether the language changed.
+ */
+export async function rederiveListingLanguage(
+	ctx: MutationCtx,
+	listing: Doc<"yugiohListings">,
+): Promise<boolean> {
+	if (!listing.titleRead) return false;
+	const language = languageStatedIn(listing.title);
+	if (language === null || language === listing.titleRead.language) {
+		return false;
+	}
+	await ctx.db.patch("yugiohListings", listing._id, {
+		titleRead: { ...listing.titleRead, language },
+	});
+	return true;
 }
 
 /**

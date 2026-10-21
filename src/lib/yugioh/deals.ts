@@ -7,6 +7,7 @@ import {
 	type ReadCondition,
 	type TitleRead,
 	languageOfSetCode,
+	languageStatedIn,
 	titleSetCode,
 } from "./title-reading";
 
@@ -53,13 +54,18 @@ const CONDITION_RANK: Record<ReadCondition, number> = {
 type JudgedListing = { title: string; titleRead?: TitleRead | null };
 
 /**
- * The Listing's language: as read from the title, else the region of its set
- * code. A title that says neither is taken as English (it's on eBay US).
+ * The Listing's language: as read from the title; before a read, the language
+ * the title states in words, else the region of its set code. A title that
+ * says neither is taken as English (it's on eBay US).
  */
 export function listingLanguage(listing: JudgedListing): Language {
 	if (listing.titleRead) return listing.titleRead.language;
 	const setCode = titleSetCode(listing.title);
-	return (setCode === null ? null : languageOfSetCode(setCode)) ?? "english";
+	return (
+		languageStatedIn(listing.title) ??
+		(setCode === null ? null : languageOfSetCode(setCode)) ??
+		"english"
+	);
 }
 
 /**

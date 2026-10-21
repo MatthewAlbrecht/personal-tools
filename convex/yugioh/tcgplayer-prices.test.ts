@@ -380,6 +380,26 @@ describe("capture", () => {
 		expect(prices.tcgplayerBuyNow).toBeNull();
 	});
 
+	test("a language the seller's title states beats the English product page", async () => {
+		const t = setup();
+		const { deckId } = await ashDeck(t);
+		await captureProduct(t, {
+			listings: [
+				offer(20, { customTitle: "**JAPANESE** RA01-JP008 QCSR" }),
+				offer(21, { customTitle: "Ash Blossom QCSR NM" }),
+			],
+		});
+
+		const shown = await deckListings(t, deckId);
+		const languages = Object.fromEntries(
+			shown.map((l) => [l.title, l.titleRead?.language]),
+		);
+		expect(languages).toEqual({
+			"**JAPANESE** RA01-JP008 QCSR": "japanese",
+			"Ash Blossom QCSR NM": "english",
+		});
+	});
+
 	test("a Listing that gains photos becomes unsure", async () => {
 		const t = setup();
 		const { deckId } = await ashDeck(t);

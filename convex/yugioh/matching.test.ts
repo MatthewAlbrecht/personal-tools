@@ -466,3 +466,80 @@ describe("Listings captured before title reading", () => {
 		expect(fakes.reads).toHaveLength(2);
 	});
 });
+
+describe("Listings read before a stated language beat the set code", () => {
+	test("a backfill re-derives their language from the stored read, without the AI", async () => {
+		const t = setup();
+		const deckId = await ashDeck(t);
+		await capture(t, "1", "Ash Blossom RA01-EN008 QCSR Japanese");
+		await capture(t, "2", "Ash Blossom RA01-EN008 QCSR");
+		await settle(t);
+		// As the old rule stored them: the EN code made both English.
+		await t.run(async (ctx) => {
+			for (const listing of await ctx.db.query("yugiohListings").take(10)) {
+				if (!listing.titleRead) throw new Error("Listing unread");
+				await ctx.db.patch("yugiohListings", listing._id, {
+					titleRead: { ...listing.titleRead, language: "english" },
+				});
+			}
+		});
+		// A TCGplayer Listing the seller titled "French" on the English page.
+		await t.run(async (ctx) => {
+			await ctx.db.insert("yugiohListings", {
+				marketplace: "tcgplayer",
+				itemId: "tcg-1",
+				url: "https://www.tcgplayer.com/product/1",
+				title: "French LP",
+				imageUrl: null,
+				price: 40,
+				currency: "USD",
+				shipping: 0,
+				listingType: "buyItNow",
+				bids: null,
+				endsAt: null,
+				listedAt: null,
+				sellerLocation: null,
+				sold: false,
+				soldDate: null,
+				firstSeenAt: 0,
+				lastSeenAt: 0,
+				titleReadStatus: "read",
+				titleRead: {
+					...plainRead,
+					setCode: "RA01-EN008",
+					grade: null,
+				},
+			});
+		});
+		const readsBefore = fakes.reads.length;
+
+		const first = await t.mutation(
+			internal.yugioh.titleReading.rederiveListingLanguages,
+			{ paginationOpts: { numItems: 1, cursor: null } },
+		);
+		const second = await t.mutation(
+			internal.yugioh.titleReading.rederiveListingLanguages,
+			{ paginationOpts: { numItems: 10, cursor: first.cursor } },
+		);
+		expect(first.updated + second.updated).toBe(2);
+		expect(second.isDone).toBe(true);
+
+		const byTitle = new Map(
+			(await listings(t, deckId)).map((l) => [l.title, l.titleRead?.language]),
+		);
+		expect(byTitle.get("Ash Blossom RA01-EN008 QCSR Japanese")).toBe(
+			"japanese",
+		);
+		expect(byTitle.get("Ash Blossom RA01-EN008 QCSR")).toBe("english");
+		const tcgplayer = await t.run(async (ctx) =>
+			ctx.db
+				.query("yugiohListings")
+				.withIndex("by_marketplace_and_itemId", (q) =>
+					q.eq("marketplace", "tcgplayer").eq("itemId", "tcg-1"),
+				)
+				.unique(),
+		);
+		expect(tcgplayer?.titleRead?.language).toBe("french");
+		expect(fakes.reads).toHaveLength(readsBefore);
+	});
+});
