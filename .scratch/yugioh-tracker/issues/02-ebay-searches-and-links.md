@@ -22,8 +22,8 @@ Spec: docs/superpowers/specs/2026-10-19-yugioh-max-rarity-tracker-design.md
 - `searchKeywords`, `ebayNewlyListedUrl`, `ebaySoldUrl`, `exclusionWord` and `MAX_SET_CODES_PER_SEARCH` (8) are exported. Ticket 15's automated browser can visit `newlyListedUrl` and `soldUrl` directly.
 - Packing:
   - A Card with a Chosen Printing searches only that Printing; an undecided Card searches every Candidate.
-  - Set codes are grouped by identical Exclusion sets, so a Search never mixes them, then split into as few even chunks of ≤ 8 as possible.
-  - Searches come fewest Exclusions first, then by Exclusion words; set codes inside a Search are sorted.
+  - ~~Set codes are grouped by identical Exclusion sets, then split into even chunks of ≤ 8; fewest Exclusions first.~~ Superseded: set codes share a Search when the union of their Exclusions drops none of its Printings (no word of a wanted rarity or Card name), packed first-fit with the most Exclusions first, ≤ 8 per Search. The Chaos Lightsworn seed went from 7 Searches to 5.
+  - Set codes inside a Search are sorted.
   - The same Printing on two Cards is searched once.
 - Exclusions:
   - For an Overloaded set code, each other rarity contributes its first word ("Super Rare" → `super`, "Collector's Rare" → `collector`).

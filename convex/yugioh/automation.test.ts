@@ -36,8 +36,9 @@ const ASH = {
 const CALLED = {
 	cardName: "Called by the Grave",
 	setCode: "RA01-EN060",
-	rarity: "Quarter Century Secret Rare",
-	overloadedRarities: ["Super Rare", "Ultra Rare"],
+	rarity: "Ultra Rare",
+	// Leaves out -quarter, which would drop Ash's Printing: a Search of its own.
+	overloadedRarities: ["Quarter Century Secret Rare", "Super Rare"],
 };
 
 function setup() {

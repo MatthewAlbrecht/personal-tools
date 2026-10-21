@@ -90,8 +90,11 @@ export function searchedPrintingsByCard<
  * - A Card with a Chosen Printing searches only that one; an undecided Card
  *   searches all its Candidates.
  * - An Overloaded set code gets one Exclusion per other rarity printed under
- *   it, and a Search only holds set codes needing exactly the same Exclusions.
- * - Searches come fewest Exclusions first, then by set code.
+ *   it. Set codes share a Search when the union of their Exclusions drops none
+ *   of the Search's Printings (no word of a wanted rarity or Card name), and
+ *   a Search leaves out that union.
+ * - Packed to few Searches, deterministically (`packSearches`); set codes
+ *   inside a Search are sorted.
  */
 export function buildDeckSearches(cards: readonly SearchableCard[]): Search[] {
 	const byCode = new Map<string, SearchPrinting[]>();
@@ -114,29 +117,68 @@ export function buildDeckSearches(cards: readonly SearchableCard[]): Search[] {
 		}
 	}
 
-	// Keyed by the joined words so identical Exclusion sets share a group.
-	const groups = new Map<string, { exclusions: string[]; codes: string[] }>();
-	for (const [setCode, printings] of byCode) {
-		const exclusions = exclusionsFor(
-			[...(otherRaritiesByCode.get(setCode) ?? [])],
-			printings,
-		);
-		const key = exclusions.join(" ");
-		const group = groups.get(key) ?? { exclusions, codes: [] };
-		group.codes.push(setCode);
-		groups.set(key, group);
-	}
-
-	return [...groups.entries()]
-		.sort(
-			([keyA, a], [keyB, b]) =>
-				a.exclusions.length - b.exclusions.length || keyA.localeCompare(keyB),
-		)
-		.flatMap(([, { exclusions, codes }]) =>
-			chunk(codes.sort(), MAX_SET_CODES_PER_SEARCH).map((group) =>
-				toSearch(group, exclusions, byCode),
+	return packSearches(
+		[...byCode].map(([setCode, printings]) => ({
+			setCode,
+			exclusions: exclusionsFor(
+				[...(otherRaritiesByCode.get(setCode) ?? [])],
+				printings,
 			),
-		);
+			protectedWords: protectedWordsOf(printings),
+		})),
+	).map((bin) =>
+		toSearch(bin.setCodes.sort(), [...bin.exclusions].sort(), byCode),
+	);
+}
+
+type PackedSetCode = {
+	setCode: string;
+	exclusions: string[];
+	protectedWords: Set<string>;
+};
+
+type Bin = {
+	setCodes: string[];
+	exclusions: Set<string>;
+	protectedWords: Set<string>;
+};
+
+/**
+ * First-fit decreasing: set codes with the most Exclusions first (then by
+ * Exclusion words, then set code), each into the first Search with room whose
+ * Exclusions and its own spare each other's Printings, else a new Search.
+ * Depends only on the set codes and their Printings, never on Card order, so
+ * an unchanged Deck gets the same Searches in the same order every run. A
+ * Deck change can shift set codes between later Searches; anything keyed to
+ * a Search reads its set codes back from the URL, not its number.
+ */
+function packSearches(setCodes: readonly PackedSetCode[]): Bin[] {
+	const ordered = [...setCodes].sort(
+		(a, b) =>
+			b.exclusions.length - a.exclusions.length ||
+			a.exclusions.join(" ").localeCompare(b.exclusions.join(" ")) ||
+			a.setCode.localeCompare(b.setCode),
+	);
+	const bins: Bin[] = [];
+	for (const code of ordered) {
+		const fits = (bin: Bin): boolean =>
+			bin.setCodes.length < MAX_SET_CODES_PER_SEARCH &&
+			!code.exclusions.some((word) => bin.protectedWords.has(word)) &&
+			![...bin.exclusions].some((word) => code.protectedWords.has(word));
+		const bin = bins.find(fits);
+		if (bin) {
+			bin.setCodes.push(code.setCode);
+			for (const word of code.exclusions) bin.exclusions.add(word);
+			for (const word of code.protectedWords) bin.protectedWords.add(word);
+		} else {
+			bins.push({
+				setCodes: [code.setCode],
+				exclusions: new Set(code.exclusions),
+				protectedWords: new Set(code.protectedWords),
+			});
+		}
+	}
+	return bins;
 }
 
 /**
@@ -159,12 +201,7 @@ function exclusionsFor(
 	wanted: readonly SearchPrinting[],
 ): string[] {
 	const wantedRarities = new Set(wanted.map((printing) => printing.rarity));
-	const protectedWords = new Set(
-		wanted.flatMap((printing) => [
-			...words(printing.rarity),
-			...words(printing.cardName),
-		]),
-	);
+	const protectedWords = protectedWordsOf(wanted);
 	const exclusions = new Set<string>();
 	for (const rarity of otherRarities) {
 		if (wantedRarities.has(rarity)) continue;
@@ -172,6 +209,16 @@ function exclusionsFor(
 		if (word !== "" && !protectedWords.has(word)) exclusions.add(word);
 	}
 	return [...exclusions].sort();
+}
+
+/** Words no Exclusion may be: the wanted rarities' and Card names'. */
+function protectedWordsOf(wanted: readonly SearchPrinting[]): Set<string> {
+	return new Set(
+		wanted.flatMap((printing) => [
+			...words(printing.rarity),
+			...words(printing.cardName),
+		]),
+	);
 }
 
 /** Lowercase words, without possessive "'s": "Collector's Rare" → ["collector", "rare"]. */
@@ -197,18 +244,6 @@ function toSearch(
 		newlyListedUrl: ebayNewlyListedUrl(keywords),
 		soldUrl: ebaySoldUrl(keywords),
 	};
-}
-
-/** Splits into as few chunks of at most `size` as possible, sized evenly. */
-function chunk<T>(items: readonly T[], size: number): T[][] {
-	const count = Math.ceil(items.length / size);
-	const chunks: T[][] = [];
-	for (let i = 0; i < count; i++) {
-		const start = Math.round((i * items.length) / count);
-		const end = Math.round(((i + 1) * items.length) / count);
-		chunks.push(items.slice(start, end));
-	}
-	return chunks;
 }
 
 /** eBay's OR form, then Exclusions: "(RA01-EN008,RA01-EN024) -super -ultra". */

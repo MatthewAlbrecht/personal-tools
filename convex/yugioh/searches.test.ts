@@ -108,13 +108,13 @@ describe("eBay Searches", () => {
 
 		const result = await searches(t, deckId);
 
-		expect(result).toHaveLength(3);
-		for (const search of result) {
-			expect(search.setCodes.length).toBeLessThanOrEqual(8);
+		expect(result.map((search) => search.setCodes.length)).toEqual([8, 8, 1]);
+		for (const search of result.slice(0, 2)) {
 			expect(keywords(search.newlyListedUrl)).toBe(
 				`(${search.setCodes.join(",")})`,
 			);
 		}
+		expect(keywords(result[2]?.newlyListedUrl ?? "")).toBe("RA01-EN017");
 		expect(result.flatMap((search) => search.setCodes).sort()).toEqual(codes);
 	});
 	test("a Printing on two Cards (Main and Side) is searched once", async () => {
@@ -158,25 +158,27 @@ describe("Exclusions", () => {
 			setCode: "RA01-EN008",
 			overloadedRarities: ["Super Rare", "Ultra Rare"],
 		});
+		// A wanted Super Rare: "-super" would drop it, so it can't share.
 		await addCard(t, deckId, {
 			cardName: 'Maxx "C"',
 			setCode: "RA01-EN024",
+			rarity: "Super Rare",
 		});
 
 		const result = await searches(t, deckId);
 
 		expect(result).toMatchObject([
-			{ setCodes: ["RA01-EN024"], exclusions: [] },
 			{ setCodes: ["RA01-EN008"], exclusions: ["super", "ultra"] },
+			{ setCodes: ["RA01-EN024"], exclusions: [] },
 		]);
-		expect(keywords(result[0]?.newlyListedUrl ?? "")).toBe("RA01-EN024");
-		expect(keywords(result[1]?.newlyListedUrl ?? "")).toBe(
+		expect(keywords(result[0]?.newlyListedUrl ?? "")).toBe(
 			"RA01-EN008 -super -ultra",
 		);
-		expect(keywords(result[1]?.soldUrl ?? "")).toBe("RA01-EN008 -super -ultra");
+		expect(keywords(result[0]?.soldUrl ?? "")).toBe("RA01-EN008 -super -ultra");
+		expect(keywords(result[1]?.newlyListedUrl ?? "")).toBe("RA01-EN024");
 	});
 
-	test("Printings needing the same Exclusions share a Search", async () => {
+	test("set codes share a Search when its Exclusions drop none of their Printings", async () => {
 		const t = setup();
 		const deckId = await createDeck(t);
 		await addCard(t, deckId, {
@@ -198,9 +200,8 @@ describe("Exclusions", () => {
 		const result = await searches(t, deckId);
 
 		expect(result).toMatchObject([
-			{ setCodes: ["RA01-EN074"], exclusions: ["super"] },
 			{
-				setCodes: ["RA01-EN008", "RA01-EN060"],
+				setCodes: ["RA01-EN008", "RA01-EN060", "RA01-EN074"],
 				exclusions: ["super", "ultra"],
 			},
 		]);
@@ -225,9 +226,9 @@ describe("Exclusions", () => {
 
 		const result = await searches(t, deckId);
 
+		// Neither "-secret" nor "-super", so the two can share a Search.
 		expect(result).toMatchObject([
-			{ setCodes: ["RA01-EN055"], exclusions: [] },
-			{ setCodes: ["RA01-EN008"], exclusions: ["collector"] },
+			{ setCodes: ["RA01-EN008", "RA01-EN055"], exclusions: ["collector"] },
 		]);
 	});
 });

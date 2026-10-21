@@ -50,7 +50,7 @@ const NOW = Date.UTC(2026, 9, 20, 12, 0);
 const ASH_ENDING_SOON =
 	"https://www.ebay.com/sch/i.html?_nkw=RA01-EN008&LH_Auction=1&_sop=1";
 const CALLED_ENDING_SOON =
-	"https://www.ebay.com/sch/i.html?_nkw=RA01-EN060+-super+-ultra&LH_Auction=1&_sop=1";
+	"https://www.ebay.com/sch/i.html?_nkw=RA01-EN060+-quarter+-super&LH_Auction=1&_sop=1";
 
 function setup() {
 	return convexTest(schema, modules);
@@ -83,7 +83,8 @@ async function settleNow(t: T): Promise<void> {
 
 /**
  * A Deck needing Ash Blossom (RA01-EN008) and Called by the Grave
- * (RA01-EN060, Overloaded, so a Search of its own), with push on.
+ * (RA01-EN060 Ultra Rare, Overloaded: leaving out -quarter would drop Ash's
+ * Printing, so a Search of its own), with push on.
  */
 async function deck(t: T): Promise<{ ash: Id<"yugiohDeckCards"> }> {
 	const deckId = await t.mutation(api.yugioh.decks.createDeck, {
@@ -104,8 +105,8 @@ async function deck(t: T): Promise<{ ash: Id<"yugiohDeckCards"> }> {
 		section: "main",
 		copiesNeeded: 2,
 		setCode: "RA01-EN060",
-		rarity: "Quarter Century Secret Rare",
-		overloadedRarities: ["Super Rare", "Ultra Rare"],
+		rarity: "Ultra Rare",
+		overloadedRarities: ["Quarter Century Secret Rare", "Super Rare"],
 	});
 	await settleNow(t);
 	await t.mutation(api.yugioh.pushes.savePushSubscription, {
@@ -168,7 +169,8 @@ async function capture(t: T, ...auctions: Auction[]): Promise<string[]> {
 function calledAuction(endsAt: number): Auction {
 	return {
 		endsAt,
-		title: `Called by the Grave RA01-EN060 Quarter Century Secret Rare #${nextItemId}`,
+		title: `Called by the Grave RA01-EN060 Ultra Rare #${nextItemId}`,
+		read: { rarity: "Ultra Rare" },
 	};
 }
 

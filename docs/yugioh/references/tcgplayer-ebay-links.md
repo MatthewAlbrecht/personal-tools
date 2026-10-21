@@ -5,7 +5,7 @@ What the spec fixes about the links the app builds, plus the URL details it leav
 ## eBay Searches
 
 - **Keywords (spec):** set codes in eBay's OR form, `(RA01-EN008,RA02-EN015,…)`, at most **8 codes** per Search.
-- **Packing (spec):** Printings that need the same Exclusions share a Search; a Search never mixes Exclusion sets. Un-chosen Candidates drop out once a Chosen Printing is set.
+- **Packing:** set codes share a Search (at most 8) when the union of their Exclusions drops none of the Search's Printings: no Exclusion is a word of a wanted rarity or Card name in it. The Search leaves out that union. Packed first-fit, most Exclusions first, so the result depends only on the set codes (`buildDeckSearches` in `src/lib/yugioh/searches.ts`). Un-chosen Candidates drop out once a Chosen Printing is set.
 - **Exclusions (spec):** for an Overloaded set code, one `-term` per other rarity printed under that code (e.g. `-super`, `-ultra`), appended to the keywords. Only Searches containing that code get them.
   - **Assumption:** use one distinctive word per rarity (`-super`, `-ultra`, `-secret`, `-starlight`, `-collector`…), never a word the wanted rarity's own name contains: excluding `-secret` would also drop "Quarter Century Secret Rare". The domain library owns this word map and its test cases.
 - **Newly Listed link (spec):** the Search's keywords, sorted by newest. **Assumption:** `_sop=10` ("Time: newly listed").

@@ -37,7 +37,7 @@ One marketplace query covering a group of Printings' set codes at once, viewed a
 _Avoid_: Query, feed
 
 **Exclusion**:
-A term a Search leaves out (e.g. "-super") so an Overloaded set code doesn't pull in rarities you don't want.
+A term a Search leaves out (e.g. "-super") so an Overloaded set code doesn't pull in rarities you don't want. Never a word of a rarity or Card name that Search looks for, so set codes share a Search only when their Exclusions spare each other's Printings.
 _Avoid_: Filter, negative keyword
 
 **Per-copy price**:

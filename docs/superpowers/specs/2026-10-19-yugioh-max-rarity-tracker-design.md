@@ -129,7 +129,7 @@ A `/yugioh` section of personal-tools that tracks my Decks and watches the marke
 
 **Domain logic**
 - The pure domain logic lives in one shared library module that Convex imports using relative imports. That module owns:
-  - **Search packing:** at most ~8 set codes per Search, grouped by identical Exclusions.
+  - **Search packing:** at most ~8 set codes per Search, grouped by identical Exclusions. (Since loosened: set codes share a Search whenever the union of their Exclusions drops none of its Printings; see `docs/yugioh/references/tcgplayer-ebay-links.md`.)
   - **Exclusion terms:** derived from an Overloaded set code's other rarities.
   - **Link building:** eBay Newly Listed and Sold URLs (sold uses `LH_Sold=1&LH_Complete=1`, newly listed is sorted by newest) and TCGplayer product and search URLs.
   - **Language:** inferred from set-code region (`-EN`, `-KR`, `-DE`, …).
