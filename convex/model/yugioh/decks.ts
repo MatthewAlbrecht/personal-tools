@@ -10,8 +10,10 @@ import {
 	normalizeRarity,
 	normalizeSetCode,
 } from "../../../src/lib/yugioh/deck";
+import { internal } from "../../_generated/api";
 import type { Doc, Id } from "../../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../../_generated/server";
+import { type TcgplayerView, tcgplayerView } from "./tcgplayer";
 
 /** Bounds every Yu-Gi-Oh read. A Deck is at most 60 Main + 15 Extra + 15 Side Cards. */
 export const MAX_DECKS = 50;
@@ -112,12 +114,20 @@ export async function findOrCreatePrinting(
 		}
 		return existing._id;
 	}
-	return await ctx.db.insert("yugiohPrintings", {
+	const printingId = await ctx.db.insert("yugiohPrintings", {
 		cardName,
 		setCode,
 		rarity,
 		overloadedRarities,
+		tcgplayerStatus: "searching",
+		tcgplayerProductUrl: null,
+		tcgplayerImageUrl: null,
 	});
+	// A new Printing gets its TCGplayer product page looked up once, now.
+	await ctx.scheduler.runAfter(0, internal.yugioh.tcgplayer.lookUpProduct, {
+		printingId,
+	});
+	return printingId;
 }
 
 function checkCopiesNeeded(copiesNeeded: number): void {
@@ -213,6 +223,7 @@ export type CandidateView = {
 	setCode: string;
 	rarity: string;
 	overloadedRarities: string[];
+	tcgplayer: TcgplayerView;
 };
 
 export type DeckCardView = {
@@ -275,6 +286,7 @@ export async function readDeck(
 						setCode: printing.setCode,
 						rarity: printing.rarity,
 						overloadedRarities: printing.overloadedRarities,
+						tcgplayer: tcgplayerView(printing),
 					},
 				];
 			});

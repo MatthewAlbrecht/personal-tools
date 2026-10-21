@@ -1,5 +1,9 @@
 import { z } from "zod";
 import { CONDITIONS, MAX_COPIES_NEEDED, SECTIONS } from "~/lib/yugioh/deck";
+import {
+	REJECTED_PRODUCT_URL,
+	checkTcgplayerProductUrl,
+} from "~/lib/yugioh/tcgplayer";
 
 // Field schemas mirror the checks in convex/model/yugioh/decks.ts.
 
@@ -38,3 +42,23 @@ export const conditionSchema = z.object({
 export const chosenPrintingSchema = z.object({
 	printingId: z.string(),
 });
+
+/**
+ * A pasted TCGplayer product URL. Runs the same pattern check as the server
+ * (`setProductUrl`), so a wrong URL is caught before it's sent.
+ */
+export function productUrlSchema(printing: {
+	cardName: string;
+	rarity: string;
+}): z.ZodType<{ url: string }, z.ZodTypeDef, { url: string }> {
+	return z.object({
+		url: z
+			.string()
+			.trim()
+			.min(1, "Paste the product URL.")
+			.refine(
+				(url) => checkTcgplayerProductUrl(url, printing) !== null,
+				REJECTED_PRODUCT_URL,
+			),
+	});
+}

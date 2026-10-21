@@ -32,6 +32,22 @@ export type Search = {
 };
 
 /**
+ * The Candidates a Card is searched for: its Chosen Printing, or every
+ * Candidate while it's undecided.
+ */
+export function searchedCandidates<
+	Candidate extends { printingId: string },
+>(card: {
+	chosenPrintingId: string | null;
+	candidates: readonly Candidate[];
+}): Candidate[] {
+	if (card.chosenPrintingId === null) return [...card.candidates];
+	return card.candidates.filter(
+		(candidate) => candidate.printingId === card.chosenPrintingId,
+	);
+}
+
+/**
  * Packs a Deck's Printings into eBay Searches of at most 8 set codes.
  *
  * - A Card with a Chosen Printing searches only that one; an undecided Card
@@ -44,13 +60,7 @@ export function buildDeckSearches(cards: readonly SearchableCard[]): Search[] {
 	const byCode = new Map<string, SearchPrinting[]>();
 	const otherRaritiesByCode = new Map<string, Set<string>>();
 	for (const card of cards) {
-		const searched =
-			card.chosenPrintingId === null
-				? card.candidates
-				: card.candidates.filter(
-						(candidate) => candidate.printingId === card.chosenPrintingId,
-					);
-		for (const candidate of searched) {
+		for (const candidate of searchedCandidates(card)) {
 			const printings = byCode.get(candidate.setCode) ?? [];
 			// The same Printing on two Cards (Main and Side) is searched once.
 			if (!printings.some((p) => p.rarity === candidate.rarity)) {

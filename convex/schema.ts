@@ -30,6 +30,7 @@ import { zinePageRecommendationsValidator } from "./_utils/zinePageRecommendatio
 import {
 	yugiohConditionValidator,
 	yugiohSectionValidator,
+	yugiohTcgplayerStatusValidator,
 } from "./model/yugioh/validators";
 
 const geniusCreditValidator = v.object({
@@ -1808,6 +1809,11 @@ export default defineSchema({
 		setCode: v.string(),
 		rarity: v.string(),
 		overloadedRarities: v.array(v.string()),
+		// TCGplayer product page (ticket 03). Optional because Printings saved
+		// before the lookup existed have none; missing reads as "needsPaste".
+		tcgplayerStatus: v.optional(yugiohTcgplayerStatusValidator),
+		tcgplayerProductUrl: v.optional(v.union(v.string(), v.null())),
+		tcgplayerImageUrl: v.optional(v.union(v.string(), v.null())),
 	}).index("by_setCode_and_rarity", ["setCode", "rarity"]),
 
 	// A Card in one Deck. Ownership and condition are per Deck.

@@ -26,6 +26,11 @@ import { MAX_SET_CODES_PER_SEARCH } from "~/lib/yugioh/searches";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import type { EbaySearch } from "../_utils/types";
+import {
+	TcgplayerCallout,
+	TcgplayerLinks,
+	TcgplayerLinksSkeleton,
+} from "./tcgplayer-links";
 
 export function SearchesPage({
 	deckId,
@@ -33,10 +38,13 @@ export function SearchesPage({
 	deckId: Id<"yugiohDecks">;
 }): React.ReactElement | null {
 	const searches = useQuery(api.yugioh.searches.listSearches, { deckId });
+	const deck = useQuery(api.yugioh.decks.getDeck, { deckId });
 
-	if (searches === undefined) return <SearchesPageSkeleton />;
+	if (searches === undefined || deck === undefined) {
+		return <SearchesPageSkeleton />;
+	}
 	// DeckShell (the layout) shows the missing-Deck state.
-	if (searches === null) return null;
+	if (searches === null || deck === null) return null;
 
 	if (searches.length === 0) {
 		return (
@@ -58,27 +66,31 @@ export function SearchesPage({
 	}
 
 	return (
-		<section aria-labelledby="ebay-searches" className="flex flex-col gap-3">
-			<div className="flex flex-col gap-1">
-				<h2
-					id="ebay-searches"
-					className="font-semibold text-muted-foreground text-sm uppercase tracking-wide"
-				>
-					eBay Searches
-				</h2>
-				<p className="text-muted-foreground text-sm">
-					Up to {MAX_SET_CODES_PER_SEARCH} set codes each. Open Newly listed for
-					new supply, Sold for what Copies really go for.
-				</p>
-			</div>
-			<ul className="grid gap-3 md:grid-cols-2">
-				{searches.map((search, index) => (
-					<li key={search.setCodes.join(",")} className="flex">
-						<SearchCard search={search} number={index + 1} />
-					</li>
-				))}
-			</ul>
-		</section>
+		<div className="flex flex-col gap-8">
+			<TcgplayerCallout deck={deck} />
+			<section aria-labelledby="ebay-searches" className="flex flex-col gap-3">
+				<div className="flex flex-col gap-1">
+					<h2
+						id="ebay-searches"
+						className="font-semibold text-muted-foreground text-sm uppercase tracking-wide"
+					>
+						eBay Searches
+					</h2>
+					<p className="text-muted-foreground text-sm">
+						Up to {MAX_SET_CODES_PER_SEARCH} set codes each. Open Newly listed
+						for new supply, Sold for what Copies really go for.
+					</p>
+				</div>
+				<ul className="grid gap-3 md:grid-cols-2">
+					{searches.map((search, index) => (
+						<li key={search.setCodes.join(",")} className="flex">
+							<SearchCard search={search} number={index + 1} />
+						</li>
+					))}
+				</ul>
+			</section>
+			<TcgplayerLinks deck={deck} />
+		</div>
 	);
 }
 
@@ -172,29 +184,32 @@ function describeSetCode(search: EbaySearch, setCode: string): string {
 
 export function SearchesPageSkeleton(): React.ReactElement {
 	return (
-		<div className="flex flex-col gap-3">
-			<div className="flex flex-col gap-2">
-				<Skeleton className="h-4 w-32" />
-				<Skeleton className="h-4 w-full max-w-md" />
+		<div className="flex flex-col gap-8">
+			<div className="flex flex-col gap-3">
+				<div className="flex flex-col gap-2">
+					<Skeleton className="h-4 w-32" />
+					<Skeleton className="h-4 w-full max-w-md" />
+				</div>
+				<div className="grid gap-3 md:grid-cols-2">
+					{[0, 1, 2].map((key) => (
+						<Card key={key} className="gap-4">
+							<CardHeader>
+								<Skeleton className="h-5 w-36" />
+							</CardHeader>
+							<CardContent className="flex flex-wrap gap-1.5">
+								{[0, 1, 2, 3, 4].map((badge) => (
+									<Skeleton key={badge} className="h-6 w-24 rounded-full" />
+								))}
+							</CardContent>
+							<CardFooter className="flex-col gap-2 sm:flex-row">
+								<Skeleton className="h-11 w-full sm:h-9 sm:flex-1" />
+								<Skeleton className="h-11 w-full sm:h-9 sm:flex-1" />
+							</CardFooter>
+						</Card>
+					))}
+				</div>
 			</div>
-			<div className="grid gap-3 md:grid-cols-2">
-				{[0, 1, 2].map((key) => (
-					<Card key={key} className="gap-4">
-						<CardHeader>
-							<Skeleton className="h-5 w-36" />
-						</CardHeader>
-						<CardContent className="flex flex-wrap gap-1.5">
-							{[0, 1, 2, 3, 4].map((badge) => (
-								<Skeleton key={badge} className="h-6 w-24 rounded-full" />
-							))}
-						</CardContent>
-						<CardFooter className="flex-col gap-2 sm:flex-row">
-							<Skeleton className="h-11 w-full sm:h-9 sm:flex-1" />
-							<Skeleton className="h-11 w-full sm:h-9 sm:flex-1" />
-						</CardFooter>
-					</Card>
-				))}
-			</div>
+			<TcgplayerLinksSkeleton />
 		</div>
 	);
 }

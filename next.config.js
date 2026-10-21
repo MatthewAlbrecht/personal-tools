@@ -23,6 +23,12 @@ const config = {
 				hostname: "image-cdn-fa.spotifycdn.com",
 				pathname: "/image/**",
 			},
+			// Yu-Gi-Oh Card images (TCGplayer product images).
+			{
+				protocol: "https",
+				hostname: "tcgplayer-cdn.tcgplayer.com",
+				pathname: "/product/**",
+			},
 		],
 	},
 };

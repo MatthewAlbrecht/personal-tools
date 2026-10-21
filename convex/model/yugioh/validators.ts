@@ -14,6 +14,16 @@ export const yugiohConditionValidator = v.union(
 	v.literal("heavilyPlayed"),
 );
 
+/**
+ * Where a Printing's TCGplayer product lookup stands: AI is "searching" right
+ * after the Printing is added, then it's "found" or "needsPaste".
+ */
+export const yugiohTcgplayerStatusValidator = v.union(
+	v.literal("searching"),
+	v.literal("found"),
+	v.literal("needsPaste"),
+);
+
 // Compile-time check that the validators and the domain library agree.
 type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
 const sectionsAgree: Same<Infer<typeof yugiohSectionValidator>, Section> = true;

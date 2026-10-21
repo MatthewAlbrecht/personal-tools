@@ -72,6 +72,7 @@ import {
 import type { CandidatePrinting, DeckCard } from "../_utils/types";
 import { CardArt } from "./card-art";
 import { OverloadedRaritiesCombobox, RarityCombobox } from "./printing-fields";
+import { TcgplayerLink } from "./tcgplayer-link";
 import { YugiohDrawer } from "./yugioh-drawer";
 
 const SAVE_FAILED = "Couldn't save. Try again.";
@@ -114,6 +115,7 @@ export function CardDrawer({
 	const chosen = shown?.candidates.find(
 		(candidate) => candidate.printingId === shown.chosenPrintingId,
 	);
+	const pictured = chosen ?? shown?.candidates[0];
 
 	return (
 		<YugiohDrawer
@@ -126,7 +128,13 @@ export function CardDrawer({
 				shown ? (
 					<DrawerHeader className="flex-row items-start gap-4 text-left group-data-[vaul-drawer-direction=bottom]/drawer-content:text-left">
 						<CardArt
-							setCode={(chosen ?? shown.candidates[0])?.setCode ?? null}
+							setCode={pictured?.setCode ?? null}
+							imageUrl={pictured?.tcgplayer.imageUrl ?? null}
+							alt={
+								pictured
+									? `${shown.cardName}, ${pictured.rarity}`
+									: shown.cardName
+							}
 							size="drawer"
 						/>
 						<div className="flex min-w-0 flex-col gap-1">
@@ -358,6 +366,7 @@ function Printings({ card }: { card: DeckCard }): React.ReactElement {
 					>
 						{first ? (
 							<CandidateOption
+								cardName={card.cardName}
 								candidate={first}
 								chosen={first.printingId === card.chosenPrintingId}
 								canRemove={canRemove}
@@ -392,6 +401,7 @@ function Printings({ card }: { card: DeckCard }): React.ReactElement {
 										{rest.map((candidate) => (
 											<CandidateOption
 												key={candidate._id}
+												cardName={card.cardName}
 												candidate={candidate}
 												chosen={false}
 												canRemove={canRemove}
@@ -436,10 +446,12 @@ function Printings({ card }: { card: DeckCard }): React.ReactElement {
 }
 
 function CandidateOption({
+	cardName,
 	candidate,
 	chosen,
 	canRemove,
 }: {
+	cardName: string;
 	candidate: CandidatePrinting;
 	chosen: boolean;
 	canRemove: boolean;
@@ -447,26 +459,31 @@ function CandidateOption({
 	const id = `printing-${candidate.printingId}`;
 	return (
 		<div className="flex items-start gap-1">
-			<FieldLabel htmlFor={id} className="flex-1">
-				<Field orientation="horizontal">
-					<FieldContent>
-						<FieldTitle className="flex-wrap">
-							<span className="font-mono text-[0.8125rem] tracking-tight">
-								{candidate.setCode}
-							</span>
-							<span>{candidate.rarity}</span>
-							{chosen ? <span className="sr-only">(Chosen)</span> : null}
-						</FieldTitle>
-						{candidate.overloadedRarities.length > 0 ? (
-							<FieldDescription className="text-xs">
-								Set code also printed as{" "}
-								{candidate.overloadedRarities.join(", ")}
-							</FieldDescription>
-						) : null}
-					</FieldContent>
-					<RadioGroupItem value={candidate.printingId} id={id} />
-				</Field>
-			</FieldLabel>
+			<div className="flex min-w-0 flex-1 flex-col gap-2">
+				<FieldLabel htmlFor={id}>
+					<Field orientation="horizontal">
+						<FieldContent>
+							<FieldTitle className="flex-wrap">
+								<span className="font-mono text-[0.8125rem] tracking-tight">
+									{candidate.setCode}
+								</span>
+								<span>{candidate.rarity}</span>
+								{chosen ? <span className="sr-only">(Chosen)</span> : null}
+							</FieldTitle>
+							{candidate.overloadedRarities.length > 0 ? (
+								<FieldDescription className="text-xs">
+									Set code also printed as{" "}
+									{candidate.overloadedRarities.join(", ")}
+								</FieldDescription>
+							) : null}
+						</FieldContent>
+						<RadioGroupItem value={candidate.printingId} id={id} />
+					</Field>
+				</FieldLabel>
+				<div className="px-3 pb-1">
+					<TcgplayerLink cardName={cardName} candidate={candidate} />
+				</div>
+			</div>
 			{canRemove ? <RemoveCandidate candidate={candidate} /> : null}
 		</div>
 	);

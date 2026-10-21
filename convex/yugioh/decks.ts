@@ -5,6 +5,7 @@ import * as Decks from "../model/yugioh/decks";
 import {
 	yugiohConditionValidator,
 	yugiohSectionValidator,
+	yugiohTcgplayerStatusValidator,
 } from "../model/yugioh/validators";
 
 const deckSummaryValidator = v.object({
@@ -21,6 +22,12 @@ const candidateValidator = v.object({
 	setCode: v.string(),
 	rarity: v.string(),
 	overloadedRarities: v.array(v.string()),
+	tcgplayer: v.object({
+		status: yugiohTcgplayerStatusValidator,
+		productUrl: v.union(v.string(), v.null()),
+		imageUrl: v.union(v.string(), v.null()),
+		searchUrl: v.string(),
+	}),
 });
 
 const deckCardValidator = v.object({

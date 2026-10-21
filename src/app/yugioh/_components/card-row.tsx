@@ -19,6 +19,7 @@ export function CardRow({
 	);
 	const shown =
 		chosen ?? (card.candidates.length === 1 ? card.candidates[0] : undefined);
+	const pictured = shown ?? card.candidates[0];
 	const finished = isCardFinished(card);
 	const left = card.copiesNeeded - card.copiesOwned;
 
@@ -33,7 +34,9 @@ export function CardRow({
 			)}
 		>
 			<CardArt
-				setCode={shown?.setCode ?? card.candidates[0]?.setCode ?? null}
+				setCode={pictured?.setCode ?? null}
+				imageUrl={pictured?.tcgplayer.imageUrl ?? null}
+				alt={pictured ? `${card.cardName}, ${pictured.rarity}` : card.cardName}
 			/>
 			<div className="flex min-w-0 flex-1 flex-col gap-0.5">
 				<span className="truncate font-medium text-[0.9375rem]">
