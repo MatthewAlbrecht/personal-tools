@@ -163,11 +163,13 @@ http.route({
 		) {
 			return badRequest();
 		}
+		const searchUrl = str(body, "searchUrl") ?? undefined;
 		try {
 			// The mutation's argument validator checks each Listing's shape.
 			return json(
 				await ctx.runMutation(internal.yugioh.listings.ingestEbayListings, {
 					listings,
+					searchUrl,
 				}),
 			);
 		} catch (error) {

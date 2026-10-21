@@ -348,6 +348,49 @@ function isEbayCheckPage(doc) {
 	);
 }
 
+// The Sold and Newly Listed views of one Search, with the same parameters as
+// `ebaySoldUrl` and `ebayNewlyListedUrl` in src/lib/yugioh/searches.ts (the
+// app's builders; tests/dock-links.test.ts holds the two to each other).
+const EBAY_SEARCH_PAGE = "https://www.ebay.com/sch/i.html";
+
+function ebaySoldView(keywords) {
+	const params = new URLSearchParams({
+		_nkw: keywords,
+		LH_Sold: "1",
+		LH_Complete: "1",
+		_sop: "13",
+	});
+	return `${EBAY_SEARCH_PAGE}?${params.toString()}`;
+}
+
+function ebayNewlyListedView(keywords) {
+	const params = new URLSearchParams({ _nkw: keywords, _sop: "10" });
+	return `${EBAY_SEARCH_PAGE}?${params.toString()}`;
+}
+
+/**
+ * On a Search's Sold or Newly Listed page, the same Search's other view and
+ * the link's label; null on any other page.
+ */
+function otherEbayView(url) {
+	let params;
+	try {
+		params = new URL(url).searchParams;
+	} catch {
+		return null;
+	}
+	const keywords = params.get("_nkw");
+	if (!keywords) return null;
+	if (params.get("LH_Sold") === "1") {
+		return { href: ebayNewlyListedView(keywords), label: "Go to newly listed" };
+	}
+	if (params.get("_sop") === "10" && params.get("LH_Auction") !== "1") {
+		return { href: ebaySoldView(keywords), label: "Go to sold listings" };
+	}
+	return null;
+}
+
 globalThis.readEbayResults = readEbayResults;
+globalThis.otherEbayView = otherEbayView;
 globalThis.countEbayResults = countEbayResults;
 globalThis.isEbayCheckPage = isEbayCheckPage;

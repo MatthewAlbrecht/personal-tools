@@ -35,6 +35,7 @@ async function runOnSavedPage(backend: unknown): Promise<{
 	vi.stubGlobal("MutationObserver", window.MutationObserver);
 	vi.stubGlobal("location", { href: ASH_URL });
 	vi.stubGlobal("mountScrapeDock", () => {});
+	vi.stubGlobal("setDockLinks", () => {});
 	vi.stubGlobal("isAutomatedVisit", async () => false);
 	vi.stubGlobal("applyDockUpdate", (patch: DockUpdate) => {
 		dock.push(patch);
@@ -166,6 +167,7 @@ test("a product page with nothing on it tells the service worker there was nothi
 	vi.stubGlobal("MutationObserver", window.MutationObserver);
 	vi.stubGlobal("location", { href: ASH_URL });
 	vi.stubGlobal("mountScrapeDock", () => {});
+	vi.stubGlobal("setDockLinks", () => {});
 	vi.stubGlobal("isAutomatedVisit", async () => false);
 	vi.stubGlobal("applyDockUpdate", () => {});
 	vi.stubGlobal("chrome", {
@@ -218,6 +220,7 @@ test("a check page instead of the product is reported as challenged, so the run 
 	vi.stubGlobal("MutationObserver", window.MutationObserver);
 	vi.stubGlobal("location", { href: ASH_URL });
 	vi.stubGlobal("mountScrapeDock", () => {});
+	vi.stubGlobal("setDockLinks", () => {});
 	vi.stubGlobal("isAutomatedVisit", async () => false);
 	vi.stubGlobal("applyDockUpdate", (patch: DockUpdate) => {
 		dock.push(patch);
@@ -278,6 +281,7 @@ test("on a run's visit, the product page is scrolled through to about its end be
 		vi.stubGlobal("MutationObserver", window.MutationObserver);
 		vi.stubGlobal("location", { href: ASH_URL });
 		vi.stubGlobal("mountScrapeDock", () => {});
+		vi.stubGlobal("setDockLinks", () => {});
 		vi.stubGlobal("applyDockUpdate", () => {});
 		vi.stubGlobal("chrome", {
 			runtime: {
@@ -337,6 +341,7 @@ test("on a run, the next product is opened from this page, so TCGplayer sees its
 		},
 	});
 	vi.stubGlobal("mountScrapeDock", () => {});
+	vi.stubGlobal("setDockLinks", () => {});
 	vi.stubGlobal("applyDockUpdate", () => {});
 	vi.stubGlobal("chrome", {
 		runtime: {

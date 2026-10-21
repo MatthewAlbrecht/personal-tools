@@ -521,11 +521,25 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 });
 
 /**
+ * The app's Listings for a capture's `listingsPage` (`{ deckId, cardId }`),
+ * filtered to `marketplace` and the Card; null when the app named no Deck.
+ */
+function listingsUrlFor(origin, listingsPage, marketplace) {
+	if (!listingsPage || typeof listingsPage.deckId !== "string") return null;
+	const params = new URLSearchParams({ marketplace });
+	if (typeof listingsPage.cardId === "string") {
+		params.set("card", listingsPage.cardId);
+	}
+	return `${origin}/yugioh/decks/${encodeURIComponent(listingsPage.deckId)}/listings?${params.toString()}`;
+}
+
+/**
  * POST one Yu-Gi-Oh capture to Next.js → Convex (`/api/yugioh/<kind>-capture`).
  * Same origin/secret settings and host-permission flow as the RYM and
- * Bandcamp captures. `label` names the page in logs.
+ * Bandcamp captures. `label` names the page in logs; `marketplace` is the
+ * Listings filter for the reply's `listingsUrl`.
  */
-async function postYugiohCapture(path, body, label) {
+async function postYugiohCapture(path, body, label, marketplace) {
 	const cfg = await chrome.storage.sync.get([
 		SETTINGS_BACKEND_ORIGIN,
 		SETTINGS_BACKEND_SECRET,
@@ -581,7 +595,13 @@ async function postYugiohCapture(path, body, label) {
 				error: failure.message,
 			};
 		}
-		return { synced: true, skipped: false, ...json };
+		const listingsUrl = listingsUrlFor(origin, json?.listingsPage, marketplace);
+		return {
+			synced: true,
+			skipped: false,
+			...json,
+			...(listingsUrl ? { listingsUrl } : {}),
+		};
 	} catch (error) {
 		console.error(`[rym-release-scraper] ${label} capture error`, error);
 		return {
@@ -600,10 +620,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 	void (async function sendEbayCapture() {
 		try {
 			const listings = Array.isArray(message.listings) ? message.listings : [];
+			const searchUrl =
+				typeof message.searchUrl === "string" ? message.searchUrl : undefined;
 			const backend = await postYugiohCapture(
 				"/api/yugioh/ebay-capture",
-				{ listings },
+				{ listings, searchUrl },
 				"eBay",
+				"ebay",
 			);
 			sendResponse({ ok: true, backend });
 			settleAutomatedVisit(sender.tab?.id, { ok: true, backend });
@@ -627,6 +650,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 				"/api/yugioh/tcgplayer-capture",
 				{ product: message.product },
 				"TCGplayer",
+				"tcgplayer",
 			);
 			sendResponse({ ok: true, backend });
 			settleAutomatedVisit(sender.tab?.id, { ok: true, backend });

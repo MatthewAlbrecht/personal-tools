@@ -16,19 +16,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 	} catch {
 		return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
 	}
-	const listings =
-		typeof body === "object" && body !== null && "listings" in body
-			? body.listings
-			: undefined;
+	const fields: Record<string, unknown> =
+		typeof body === "object" && body !== null ? { ...body } : {};
+	const listings = fields.listings;
 	if (!Array.isArray(listings)) {
 		return NextResponse.json(
 			{ error: "Expected { listings: [...] }" },
 			{ status: 400 },
 		);
 	}
+	// The Search page's URL, so the reply can say which Deck's Listings it fed.
+	const searchUrl =
+		typeof fields.searchUrl === "string" ? fields.searchUrl : null;
 
 	try {
-		return NextResponse.json(await captureEbayListings(listings));
+		return NextResponse.json(await captureEbayListings(listings, searchUrl));
 	} catch (error) {
 		console.error("[yugioh/ebay-capture] forward to Convex failed", error);
 		return NextResponse.json(

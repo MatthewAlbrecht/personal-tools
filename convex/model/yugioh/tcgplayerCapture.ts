@@ -15,6 +15,7 @@ import {
 } from "../../../src/lib/yugioh/title-reading";
 import type { Doc, Id } from "../../_generated/dataModel";
 import type { MutationCtx } from "../../_generated/server";
+import { type ListingsPage, listingsPageFor } from "./captureListingsPage";
 import {
 	type CapturedEbayListing,
 	MAX_LISTINGS_PER_CAPTURE,
@@ -58,6 +59,8 @@ export type TcgplayerIngestReport = {
 	linked: boolean;
 	/** Why nothing was stored, as a sentence to show; null when it was. */
 	reason: string | null;
+	/** Where the Printing's Listings show in the tracker; null: no Deck has it. */
+	listingsPage: ListingsPage;
 };
 
 /** More Printings than this sharing one set code aren't looked at. */
@@ -93,6 +96,7 @@ export async function ingestTcgplayerProduct(
 		updated: 0,
 		linked: false,
 		reason: null,
+		listingsPage: null,
 	};
 	let printing = await ctx.db
 		.query("yugiohPrintings")
@@ -111,6 +115,7 @@ export async function ingestTcgplayerProduct(
 		setCode: printing.setCode,
 		rarity: printing.rarity,
 	};
+	report.listingsPage = await listingsPageFor(ctx, [printing._id]);
 
 	// The first capture of a product page finds Listings that were already
 	// there: they aren't new deals, so only later captures ask for pushes.

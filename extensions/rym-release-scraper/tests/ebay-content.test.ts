@@ -26,6 +26,7 @@ test("a sold page is read and sent, and the dock shows the count", async () => {
 		href: "https://www.ebay.com/sch/i.html?_nkw=RA01-EN008&LH_Sold=1&LH_Complete=1&_sop=13",
 	});
 	vi.stubGlobal("mountScrapeDock", () => {});
+	vi.stubGlobal("setDockLinks", () => {});
 	vi.stubGlobal("isAutomatedVisit", async () => false);
 	vi.stubGlobal("applyDockUpdate", (patch: (typeof dock)[number]) => {
 		dock.push(patch);
@@ -72,6 +73,7 @@ test("a Search with no results tells the service worker there was nothing to sen
 		href: "https://www.ebay.com/sch/i.html?_nkw=RA01-EN999&_sop=10",
 	});
 	vi.stubGlobal("mountScrapeDock", () => {});
+	vi.stubGlobal("setDockLinks", () => {});
 	vi.stubGlobal("isAutomatedVisit", async () => false);
 	vi.stubGlobal("applyDockUpdate", () => {});
 	vi.stubGlobal("chrome", {
@@ -108,6 +110,7 @@ test("an eBay error page instead of results is reported as an error, not as an e
 		href: "https://www.ebay.com/sch/i.html?_nkw=RA01-EN008&_sop=10",
 	});
 	vi.stubGlobal("mountScrapeDock", () => {});
+	vi.stubGlobal("setDockLinks", () => {});
 	vi.stubGlobal("isAutomatedVisit", async () => false);
 	vi.stubGlobal("applyDockUpdate", (patch: (typeof dock)[number]) => {
 		dock.push(patch);
@@ -157,6 +160,7 @@ test("a check page instead of results is reported as challenged, so the run stop
 		href: "https://www.ebay.com/sch/i.html?_nkw=RA01-EN008&_sop=10",
 	});
 	vi.stubGlobal("mountScrapeDock", () => {});
+	vi.stubGlobal("setDockLinks", () => {});
 	vi.stubGlobal("isAutomatedVisit", async () => false);
 	vi.stubGlobal("applyDockUpdate", (patch: (typeof dock)[number]) => {
 		dock.push(patch);
@@ -236,6 +240,7 @@ async function loadSoldPage({ automated }: { automated: boolean }) {
 		},
 	});
 	vi.stubGlobal("mountScrapeDock", () => {});
+	vi.stubGlobal("setDockLinks", () => {});
 	vi.stubGlobal("applyDockUpdate", () => {});
 	vi.stubGlobal("chrome", {
 		runtime: {

@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { internalMutation, mutation, query } from "../_generated/server";
 import { requireAuth } from "../auth";
+import { yugiohListingsPageValidator } from "../model/yugioh/captureListingsPage";
 import { loadDealContext } from "../model/yugioh/deals";
 import * as Listings from "../model/yugioh/listings";
 import * as Matching from "../model/yugioh/matching";
@@ -148,15 +149,25 @@ export const setListingMatch = mutation({
  * the secret-guarded `/server/yugioh/ebay-listings` HTTP action.
  */
 export const ingestEbayListings = internalMutation({
-	args: { listings: v.array(yugiohCapturedEbayListingValidator) },
+	args: {
+		listings: v.array(yugiohCapturedEbayListingValidator),
+		// The Search page's URL; older extensions don't send it.
+		searchUrl: v.optional(v.string()),
+	},
 	returns: v.object({
 		captured: v.number(),
 		created: v.number(),
 		updated: v.number(),
 		auctionsWithoutEndTime: v.number(),
+		listingsPage: yugiohListingsPageValidator,
 	}),
 	handler: async (ctx, args) => {
-		return await Listings.ingestEbayListings(ctx, args.listings, Date.now());
+		return await Listings.ingestEbayListings(
+			ctx,
+			args.listings,
+			Date.now(),
+			args.searchUrl ?? null,
+		);
 	},
 });
 
@@ -183,6 +194,7 @@ export const ingestTcgplayerProduct = internalMutation({
 		updated: v.number(),
 		linked: v.boolean(),
 		reason: v.union(v.string(), v.null()),
+		listingsPage: yugiohListingsPageValidator,
 	}),
 	handler: async (ctx, args) => {
 		return await TcgplayerCapture.ingestTcgplayerProduct(

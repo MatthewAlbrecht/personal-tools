@@ -1,6 +1,8 @@
 // eBay Search packing and links. Pure logic shared by Convex (relative imports
 // only) and the /yugioh UI. Formats: docs/yugioh/references/tcgplayer-ebay-links.md.
 
+import { findSetCodes } from "./title-reading";
+
 /** eBay takes about 8 set codes in one `(A,B,…)` Search. */
 export const MAX_SET_CODES_PER_SEARCH = 8;
 
@@ -219,6 +221,20 @@ export function searchKeywords(
 }
 
 const EBAY_SEARCH_URL = "https://www.ebay.com/sch/i.html";
+
+/**
+ * The set codes an eBay Search URL looks for, uppercased, from its keywords
+ * (`_nkw`); none when it isn't a URL or names no set code.
+ */
+export function ebaySearchSetCodes(url: string): string[] {
+	let keywords: string | null;
+	try {
+		keywords = new URL(url).searchParams.get("_nkw");
+	} catch {
+		return [];
+	}
+	return keywords ? findSetCodes(keywords) : [];
+}
 
 /** Newest Listings first (`_sop=10`, "Time: newly listed"). */
 export function ebayNewlyListedUrl(keywords: string): string {

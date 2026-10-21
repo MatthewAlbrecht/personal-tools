@@ -180,6 +180,7 @@ describe("eBay capture", () => {
 			created: 1,
 			updated: 0,
 			auctionsWithoutEndTime: 0,
+			listingsPage: null,
 		});
 
 		const [listing, ...rest] = await listings(t);
@@ -217,6 +218,7 @@ describe("eBay capture", () => {
 			created: 0,
 			updated: 1,
 			auctionsWithoutEndTime: 0,
+			listingsPage: null,
 		});
 
 		const all = await listings(t);
@@ -317,6 +319,7 @@ describe("eBay capture", () => {
 			created: 1,
 			updated: 0,
 			auctionsWithoutEndTime: 0,
+			listingsPage: null,
 		});
 		expect(await listings(t)).toHaveLength(1);
 	});

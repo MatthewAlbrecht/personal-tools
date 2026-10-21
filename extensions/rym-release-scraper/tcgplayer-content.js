@@ -109,6 +109,11 @@ function finishTcgplayerCapture(response, product) {
 			);
 			return;
 		}
+		if (typeof backend.listingsUrl === "string") {
+			setDockLinks([
+				{ label: "Go to Listings", href: backend.listingsUrl, newTab: true },
+			]);
+		}
 		const created = typeof backend.created === "number" ? backend.created : 0;
 		const updated = typeof backend.updated === "number" ? backend.updated : 0;
 		const total = product.listings.length + product.sales.length;

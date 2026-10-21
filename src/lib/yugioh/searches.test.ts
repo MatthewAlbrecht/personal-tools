@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { buildDeckSearches, exclusionWord } from "./searches";
+import {
+	buildDeckSearches,
+	ebaySearchSetCodes,
+	exclusionWord,
+} from "./searches";
 
 describe("exclusionWord", () => {
 	test.each([
@@ -53,6 +57,60 @@ describe("only Cards still missing copies are searched", () => {
 		const setCodes = searches.flatMap((search) => search.setCodes);
 		expect(setCodes).toContain("STON-EN024");
 		expect(setCodes).not.toContain("LODT-EN026");
+	});
+});
+
+describe("ebaySearchSetCodes", () => {
+	test("reads back the set codes of a Search's Newly Listed and Sold pages", () => {
+		const [search] = buildDeckSearches([
+			{
+				cardName: "Ash Blossom & Joyous Spring",
+				copiesNeeded: 3,
+				copiesOwned: 0,
+				chosenPrintingId: null,
+				candidates: [
+					{
+						printingId: "p1",
+						setCode: "RA01-EN008",
+						rarity: "Quarter Century Secret Rare",
+						overloadedRarities: ["Super Rare", "Ultra Rare"],
+					},
+					{
+						printingId: "p2",
+						setCode: "MP21-EN021",
+						rarity: "Quarter Century Secret Rare",
+						overloadedRarities: ["Super Rare", "Ultra Rare"],
+					},
+				],
+			},
+		]);
+		if (!search) throw new Error("no Search");
+
+		expect(ebaySearchSetCodes(search.newlyListedUrl)).toEqual([
+			"MP21-EN021",
+			"RA01-EN008",
+		]);
+		expect(ebaySearchSetCodes(search.soldUrl)).toEqual([
+			"MP21-EN021",
+			"RA01-EN008",
+		]);
+	});
+
+	test("one set code, typed in lower case", () => {
+		expect(
+			ebaySearchSetCodes(
+				"https://www.ebay.com/sch/i.html?_nkw=ra01-en008+-super&_sop=10",
+			),
+		).toEqual(["RA01-EN008"]);
+	});
+
+	test("a Search with no set code, or not a URL, has none", () => {
+		expect(
+			ebaySearchSetCodes(
+				"https://www.ebay.com/sch/i.html?_nkw=ash+blossom&_sop=10",
+			),
+		).toEqual([]);
+		expect(ebaySearchSetCodes("not a url")).toEqual([]);
 	});
 });
 

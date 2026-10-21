@@ -9,11 +9,19 @@ import {
 	cleanCountry,
 	countryKey,
 } from "../../../src/lib/yugioh/pricing";
-import { searchedPrintingsByCard } from "../../../src/lib/yugioh/searches";
+import {
+	ebaySearchSetCodes,
+	searchedPrintingsByCard,
+} from "../../../src/lib/yugioh/searches";
 import { setCodeKey } from "../../../src/lib/yugioh/title-reading";
 import { isNewListing } from "../../../src/lib/yugioh/whats-new";
 import type { Doc, Id } from "../../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../../_generated/server";
+import {
+	type ListingsPage,
+	listingsPageFor,
+	printingIdsWithSetCodes,
+} from "./captureListingsPage";
 import {
 	type DealContext,
 	type DealView,
@@ -52,6 +60,11 @@ export type IngestReport = {
 	 * yet (its title is still to be read), so it counts from its next capture.
 	 */
 	auctionsWithoutEndTime: number;
+	/**
+	 * Where the Search's Listings show in the tracker, from its page's URL;
+	 * null without one, or when no Deck has its set codes.
+	 */
+	listingsPage: ListingsPage;
 };
 
 /** Most Listings one capture may carry (an eBay page shows up to 240). */
@@ -71,6 +84,7 @@ export async function ingestEbayListings(
 	ctx: MutationCtx,
 	listings: CapturedEbayListing[],
 	now: number,
+	searchUrl: string | null = null,
 ): Promise<IngestReport> {
 	if (listings.length > MAX_LISTINGS_PER_CAPTURE) {
 		throw new Error(
@@ -83,6 +97,13 @@ export async function ingestEbayListings(
 		created: 0,
 		updated: 0,
 		auctionsWithoutEndTime: 0,
+		listingsPage:
+			searchUrl === null
+				? null
+				: await listingsPageFor(
+						ctx,
+						await printingIdsWithSetCodes(ctx, ebaySearchSetCodes(searchUrl)),
+					),
 	};
 
 	for (const captured of byItemId.values()) {

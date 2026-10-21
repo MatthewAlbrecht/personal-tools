@@ -82,8 +82,12 @@ export async function deleteSpotifyConnection(userId: string): Promise<void> {
 /** Stores one captured eBay search-results page (`internal.yugioh.listings`). */
 export function captureEbayListings(
 	listings: unknown[],
+	searchUrl: string | null,
 ): Promise<IngestReport> {
-	return callConvexServer("/server/yugioh/ebay-listings", { listings });
+	return callConvexServer("/server/yugioh/ebay-listings", {
+		listings,
+		...(searchUrl ? { searchUrl } : {}),
+	});
 }
 
 /** Stores one captured TCGplayer product page (`internal.yugioh.listings`). */

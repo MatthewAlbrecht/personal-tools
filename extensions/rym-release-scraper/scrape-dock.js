@@ -39,6 +39,8 @@ const scrapeDockState = {
 	onRescrape: null,
 	pageKind: "release",
 	running: false,
+	// Links beside the Capture button: `{ label, href, newTab }`.
+	links: [],
 };
 
 function escapeHtml(value) {
@@ -130,6 +132,20 @@ function applyDockUpdate(patch) {
 	renderScrapeDock();
 }
 
+/**
+ * Sets the dock's links (to the tracker, or another view of this page). A
+ * `newTab` link opens in a new tab; the rest replace this page.
+ */
+function setDockLinks(links) {
+	scrapeDockState.links = links.filter(Boolean);
+	renderScrapeDock();
+}
+
+function dockLinkHtml(link) {
+	const target = link.newTab ? ' target="_blank" rel="noopener"' : "";
+	return `<a class="link" href="${escapeHtml(link.href)}"${target}>${escapeHtml(link.label)}</a>`;
+}
+
 function dockStyles() {
 	return `
 		:host {
@@ -212,10 +228,12 @@ function dockStyles() {
 		}
 		.row {
 			display: flex;
+			flex-wrap: wrap;
 			align-items: center;
 			gap: 8px;
 		}
-		button {
+		button,
+		a.link {
 			appearance: none;
 			border: 1px solid rgba(243, 234, 216, 0.22);
 			background: transparent;
@@ -224,6 +242,17 @@ function dockStyles() {
 			font-size: 12px;
 			padding: 5px 9px;
 			cursor: pointer;
+		}
+		a.link {
+			text-decoration: none;
+			line-height: normal;
+		}
+		a.link:hover {
+			border-color: rgba(243, 234, 216, 0.5);
+		}
+		a.link:focus-visible {
+			outline: 2px solid #e8b04a;
+			outline-offset: 2px;
 		}
 		button.primary {
 			background: #e8b04a;
@@ -291,19 +320,19 @@ function renderScrapeDock() {
 					<button class="pill" type="button" data-expand>
 						<span class="dot ${s.status}"></span>
 						<span class="pill-copy">${statusWord(s.status)}${
-							s.total
-								? ` · ${s.current}/${s.total}`
-								: ""
+							s.total ? ` · ${s.current}/${s.total}` : ""
 						} · ${formatElapsed(s.elapsedMs)}</span>
 					</button>
 				</div>
 			</div>
 		`;
-		shadow.querySelector("[data-expand]").addEventListener("click", function expand() {
-			s.minimized = false;
-			persistMinimized(false);
-			renderScrapeDock();
-		});
+		shadow
+			.querySelector("[data-expand]")
+			.addEventListener("click", function expand() {
+				s.minimized = false;
+				persistMinimized(false);
+				renderScrapeDock();
+			});
 		return;
 	}
 
@@ -332,17 +361,20 @@ function renderScrapeDock() {
 					<button class="primary" type="button" data-rescrape ${
 						s.running ? "disabled" : ""
 					}>${s.status === "idle" ? "Capture" : "Run again"}</button>
+					${s.links.map(dockLinkHtml).join("")}
 					<button class="ghost" type="button" data-min>Hide</button>
 				</div>
 			</div>
 		</div>
 	`;
-	shadow.querySelector("[data-rescrape]").addEventListener("click", function run() {
-		if (s.running || typeof s.onRescrape !== "function") {
-			return;
-		}
-		s.onRescrape();
-	});
+	shadow
+		.querySelector("[data-rescrape]")
+		.addEventListener("click", function run() {
+			if (s.running || typeof s.onRescrape !== "function") {
+				return;
+			}
+			s.onRescrape();
+		});
 	shadow.querySelector("[data-min]").addEventListener("click", function hide() {
 		s.minimized = true;
 		persistMinimized(true);
@@ -394,3 +426,7 @@ function mountScrapeDock(options) {
 
 	renderScrapeDock();
 }
+
+globalThis.mountScrapeDock = mountScrapeDock;
+globalThis.applyDockUpdate = applyDockUpdate;
+globalThis.setDockLinks = setDockLinks;

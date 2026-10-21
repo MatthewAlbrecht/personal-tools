@@ -41,9 +41,16 @@ function plural(count, one, many) {
 	return `${count} ${count === 1 ? one : many}`;
 }
 
+// On a Sold or Newly Listed Search, the same Search's other view.
+const ebayViewLink = (function viewLink() {
+	const other = otherEbayView(location.href);
+	return other ? { label: other.label, href: other.href, newTab: false } : null;
+})();
+
 function finishEbayCapture(response, count) {
 	const backend = response?.backend;
 	if (response?.ok && backend?.synced) {
+		setDockLinks([listingsLink(backend), ebayViewLink]);
 		const created = typeof backend.created === "number" ? backend.created : 0;
 		const updated = typeof backend.updated === "number" ? backend.updated : 0;
 		applyDockUpdate({
@@ -105,6 +112,13 @@ async function scrollThroughEbayResults() {
 	});
 }
 
+/** The tracker's Listings for this capture, when the app named a Deck. */
+function listingsLink(backend) {
+	return typeof backend.listingsUrl === "string"
+		? { label: "Go to Listings", href: backend.listingsUrl, newTab: true }
+		: null;
+}
+
 async function runEbayCapture({ scroll = false } = {}) {
 	applyDockUpdate({
 		status: "running",
@@ -160,7 +174,7 @@ async function runEbayCapture({ scroll = false } = {}) {
 		phase: "save",
 	});
 	chrome.runtime.sendMessage(
-		{ type: "YUGIOH_EBAY_CAPTURE", listings },
+		{ type: "YUGIOH_EBAY_CAPTURE", listings, searchUrl: location.href },
 		function handleResponse(response) {
 			void chrome.runtime.lastError;
 			finishEbayCapture(response, listings.length);
@@ -174,5 +188,6 @@ mountScrapeDock({
 		void runEbayCapture();
 	},
 });
+setDockLinks([ebayViewLink]);
 
 void runEbayCapture({ scroll: true });
