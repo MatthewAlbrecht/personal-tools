@@ -6,6 +6,11 @@ import {
 	SECTIONS,
 } from "~/lib/yugioh/deck";
 import {
+	HOME_COUNTRY,
+	MAX_COUNTRY_LENGTH,
+	isHomeCountry,
+} from "~/lib/yugioh/pricing";
+import {
 	REJECTED_PRODUCT_URL,
 	checkTcgplayerProductUrl,
 } from "~/lib/yugioh/tcgplayer";
@@ -78,4 +83,31 @@ export const NOT_A_MATCH = "notMatch";
 /** A Listing's match, set by hand: a Printing ID or `NOT_A_MATCH`. */
 export const listingMatchSchema = z.object({
 	match: z.string().min(1, "Choose a Printing, or Not a match."),
+});
+
+/** An import fee rate as typed: a percent from 0 to 100. */
+const importFeePercentSchema = z
+	.string()
+	.trim()
+	.min(1, "Enter a rate.")
+	.refine((value) => {
+		const percent = Number(value);
+		return Number.isFinite(percent) && percent >= 0 && percent <= 100;
+	}, "Enter a rate from 0 to 100%.");
+
+export const importFeeRateSchema = z.object({
+	percent: importFeePercentSchema,
+});
+
+export const newImportFeeRateSchema = z.object({
+	country: z
+		.string()
+		.trim()
+		.min(1, "Enter the country as eBay writes it.")
+		.max(MAX_COUNTRY_LENGTH, "That country name is too long.")
+		.refine(
+			(country) => !isHomeCountry(country),
+			`${HOME_COUNTRY} Listings pay no import fees.`,
+		),
+	percent: importFeePercentSchema,
 });

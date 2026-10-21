@@ -98,8 +98,10 @@ import type * as migrations_importMusicFunnelFromProd from "../migrations/import
 import type * as migrations_initializeRatingHistory from "../migrations/initializeRatingHistory.js";
 import type * as migrations_migrateRatingsToThreeTier from "../migrations/migrateRatingsToThreeTier.js";
 import type * as model_yugioh_decks from "../model/yugioh/decks.js";
+import type * as model_yugioh_exchangeRateSource from "../model/yugioh/exchangeRateSource.js";
 import type * as model_yugioh_listings from "../model/yugioh/listings.js";
 import type * as model_yugioh_matching from "../model/yugioh/matching.js";
+import type * as model_yugioh_pricing from "../model/yugioh/pricing.js";
 import type * as model_yugioh_searches from "../model/yugioh/searches.js";
 import type * as model_yugioh_seed from "../model/yugioh/seed.js";
 import type * as model_yugioh_tcgplayer from "../model/yugioh/tcgplayer.js";
@@ -122,6 +124,7 @@ import type * as spotifyListenRepair from "../spotifyListenRepair.js";
 import type * as spotifyPlayEvents from "../spotifyPlayEvents.js";
 import type * as yugioh_decks from "../yugioh/decks.js";
 import type * as yugioh_listings from "../yugioh/listings.js";
+import type * as yugioh_pricing from "../yugioh/pricing.js";
 import type * as yugioh_searches from "../yugioh/searches.js";
 import type * as yugioh_seed from "../yugioh/seed.js";
 import type * as yugioh_tcgplayer from "../yugioh/tcgplayer.js";
@@ -224,8 +227,10 @@ declare const fullApi: ApiFromModules<{
   "migrations/initializeRatingHistory": typeof migrations_initializeRatingHistory;
   "migrations/migrateRatingsToThreeTier": typeof migrations_migrateRatingsToThreeTier;
   "model/yugioh/decks": typeof model_yugioh_decks;
+  "model/yugioh/exchangeRateSource": typeof model_yugioh_exchangeRateSource;
   "model/yugioh/listings": typeof model_yugioh_listings;
   "model/yugioh/matching": typeof model_yugioh_matching;
+  "model/yugioh/pricing": typeof model_yugioh_pricing;
   "model/yugioh/searches": typeof model_yugioh_searches;
   "model/yugioh/seed": typeof model_yugioh_seed;
   "model/yugioh/tcgplayer": typeof model_yugioh_tcgplayer;
@@ -248,6 +253,7 @@ declare const fullApi: ApiFromModules<{
   spotifyPlayEvents: typeof spotifyPlayEvents;
   "yugioh/decks": typeof yugioh_decks;
   "yugioh/listings": typeof yugioh_listings;
+  "yugioh/pricing": typeof yugioh_pricing;
   "yugioh/searches": typeof yugioh_searches;
   "yugioh/seed": typeof yugioh_seed;
   "yugioh/tcgplayer": typeof yugioh_tcgplayer;

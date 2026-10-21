@@ -151,10 +151,7 @@ function ListingRow({
 			)}
 		>
 			<span className="flex items-baseline justify-between gap-3">
-				<span className="flex items-baseline gap-1.5">
-					<Price listing={listing} />
-					<Shipping listing={listing} className="text-xs" />
-				</span>
+				<PerCopy listing={listing} />
 				<span className="shrink-0 text-muted-foreground text-xs tabular-nums">
 					eBay · {listingTypeLabel(listing, now)}
 				</span>
@@ -188,7 +185,7 @@ function ListingsTable({
 		<Table>
 			<TableHeader>
 				<TableRow>
-					<TableHead className="text-right">Price</TableHead>
+					<TableHead className="text-right">Per-copy</TableHead>
 					<TableHead>Card / Printing</TableHead>
 					<TableHead className="w-full">Title</TableHead>
 					<TableHead>Type</TableHead>
@@ -209,10 +206,7 @@ function ListingsTable({
 						)}
 					>
 						<TableCell className="text-right align-top">
-							<div className="flex flex-col items-end">
-								<Price listing={listing} />
-								<Shipping listing={listing} className="text-xs" />
-							</div>
+							<PerCopy listing={listing} />
 						</TableCell>
 						<TableCell className="max-w-72 align-top">
 							{/* The whole row opens the Listing drawer through this link. */}
@@ -261,29 +255,35 @@ function ListingsTable({
 	);
 }
 
-function Price({ listing }: { listing: ListingView }): React.ReactElement {
+/**
+ * The Per-copy price: "$42.15 /copy". Without one, why not: "No price", or
+ * "No rate yet" for a currency without an exchange rate (the drawer shows
+ * the original amount).
+ */
+function PerCopy({ listing }: { listing: ListingView }): React.ReactElement {
+	if (listing.perCopyPrice !== null) {
+		return (
+			<span className="whitespace-nowrap tabular-nums">
+				<span className="font-medium text-[0.9375rem]">
+					{formatMoney(listing.perCopyPrice.perCopy, "USD")}
+				</span>
+				<span className="text-muted-foreground text-xs"> /copy</span>
+			</span>
+		);
+	}
+	if (listing.price === null) {
+		return (
+			<span className="font-medium text-[0.9375rem] text-muted-foreground">
+				No price
+			</span>
+		);
+	}
 	return (
-		<span className="font-medium text-[0.9375rem] tabular-nums">
-			{listing.price === null
-				? "No price"
-				: formatMoney(listing.price, listing.currency ?? "USD")}
-		</span>
-	);
-}
-
-function Shipping({
-	listing,
-	className,
-}: {
-	listing: ListingView;
-	className?: string;
-}): React.ReactElement | null {
-	if (listing.shipping === null) return null;
-	return (
-		<span className={cn("text-muted-foreground tabular-nums", className)}>
-			{listing.shipping === 0
-				? "Free shipping"
-				: `+${formatMoney(listing.shipping, listing.currency ?? "USD")} shipping`}
+		<span className="whitespace-nowrap">
+			<span className="font-medium text-[0.9375rem] text-muted-foreground">
+				No rate yet
+			</span>
+			<span className="text-muted-foreground text-xs"> {listing.currency}</span>
 		</span>
 	);
 }

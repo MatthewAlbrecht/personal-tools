@@ -8,10 +8,12 @@ import {
 import { requireAuth } from "../auth";
 import * as Listings from "../model/yugioh/listings";
 import * as Matching from "../model/yugioh/matching";
+import { loadPricing } from "../model/yugioh/pricing";
 import {
 	yugiohCapturedEbayListingValidator,
 	yugiohMarketplaceValidator,
 	yugiohMatchStatusValidator,
+	yugiohPerCopyPriceValidator,
 	yugiohTitleReadValidator,
 } from "../model/yugioh/validators";
 
@@ -22,6 +24,11 @@ const listingValidator = v.object({
 	...yugiohCapturedEbayListingValidator.fields,
 	firstSeenAt: v.number(),
 	lastSeenAt: v.number(),
+	/**
+	 * Price plus shipping plus import fees in dollars, divided by the Copies in
+	 * the Listing. Null without a price or an exchange rate for its currency.
+	 */
+	perCopyPrice: v.union(yugiohPerCopyPriceValidator, v.null()),
 	/** What the AI read from the title; null until read, or when reading failed. */
 	titleRead: v.union(yugiohTitleReadValidator, v.null()),
 	match: v.object({
@@ -60,8 +67,9 @@ export const listListings = query({
 	handler: async (ctx, args) => {
 		requireAuth(ctx);
 		const listings = await Listings.readDeckListings(ctx, args.deckId);
+		const pricing = await loadPricing(ctx);
 		return await Promise.all(
-			listings.map((listing) => Listings.listingView(ctx, listing)),
+			listings.map((listing) => Listings.listingView(ctx, listing, pricing)),
 		);
 	},
 });
@@ -78,7 +86,11 @@ export const getListing = query({
 		const listing = await Listings.readListing(ctx, args.listingId);
 		if (!listing) return null;
 		const { observations, ...doc } = listing;
-		return { ...(await Listings.listingView(ctx, doc)), observations };
+		const pricing = await loadPricing(ctx);
+		return {
+			...(await Listings.listingView(ctx, doc, pricing)),
+			observations,
+		};
 	},
 });
 

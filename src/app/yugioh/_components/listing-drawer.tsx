@@ -3,6 +3,7 @@
 import { useForm } from "@tanstack/react-form";
 import { useMutation, useQuery } from "convex/react";
 import { ExternalLink } from "lucide-react";
+import Link from "next/link";
 import type * as React from "react";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
@@ -68,17 +69,10 @@ export function ListingDrawer({
 				listing ? (
 					<DrawerHeader className="gap-1 text-left group-data-[vaul-drawer-direction=bottom]/drawer-content:text-left">
 						<DrawerTitle className="font-display text-2xl tabular-nums">
-							{listing.price === null
-								? "No price"
-								: formatMoney(listing.price, listing.currency ?? "USD")}
+							{headline(listing)}
 						</DrawerTitle>
 						<p className="text-muted-foreground text-sm tabular-nums">
 							eBay · {listingTypeLabel(listing, now)}
-							{listing.shipping === null
-								? null
-								: listing.shipping === 0
-									? " · Free shipping"
-									: ` · +${formatMoney(listing.shipping, listing.currency ?? "USD")} shipping`}
 						</p>
 					</DrawerHeader>
 				) : undefined
@@ -97,6 +91,7 @@ export function ListingDrawer({
 			{listing ? (
 				<div className="flex flex-col gap-6">
 					<p className="text-sm">{listing.title}</p>
+					<PriceBreakdown listing={listing} />
 					<TitleSays listing={listing} />
 					<MatchForm
 						key={`${listing._id}-${listing.match.status}-${listing.match.printing?._id ?? ""}`}
@@ -107,6 +102,107 @@ export function ListingDrawer({
 			) : null}
 		</YugiohDrawer>
 	);
+}
+
+/** "$47.71 a copy", or the Listing's own price when it can't be landed yet. */
+function headline(listing: ListingView): string {
+	if (listing.perCopyPrice !== null) {
+		return `${formatMoney(listing.perCopyPrice.perCopy, "USD")} a copy`;
+	}
+	if (listing.price === null) return "No price";
+	return formatMoney(listing.price, listing.currency ?? "USD");
+}
+
+/**
+ * How the Per-copy price adds up: price (converted when it isn't in dollars),
+ * shipping, import fees and the Copies it's divided by.
+ */
+function PriceBreakdown({
+	listing,
+}: {
+	listing: ListingView;
+}): React.ReactElement | null {
+	const breakdown = listing.perCopyPrice;
+	if (listing.price === null) return null;
+	const currency = listing.currency ?? "USD";
+	if (breakdown === null) {
+		return (
+			<p className="text-muted-foreground text-sm">
+				No exchange rate for {currency} yet, so there's no Per-copy price. Rates
+				update daily.
+			</p>
+		);
+	}
+	const converted = currency !== "USD";
+	return (
+		<section aria-labelledby="price-breakdown" className="flex flex-col gap-2">
+			<h3 id="price-breakdown" className="font-medium text-sm">
+				Per-copy price
+			</h3>
+			<dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1.5 text-sm tabular-nums">
+				<ReadRow term="Price">
+					{converted
+						? `${formatMoney(listing.price, currency)} → ${formatMoney(breakdown.price, "USD")}`
+						: formatMoney(breakdown.price, "USD")}
+				</ReadRow>
+				<ReadRow term="Shipping">
+					{breakdown.shipping === null ? (
+						<NotStated />
+					) : breakdown.shipping === 0 ? (
+						"Free"
+					) : (
+						formatMoney(breakdown.shipping, "USD")
+					)}
+				</ReadRow>
+				<ReadRow term="Import fees">
+					{formatMoney(breakdown.importFees, "USD")}
+					<span className="text-muted-foreground">
+						{" "}
+						({importFeeNote(listing.sellerLocation, breakdown)})
+					</span>
+					{breakdown.importFeePercent > 0 ? (
+						<>
+							{" "}
+							<Link
+								href="/yugioh/settings"
+								className="text-muted-foreground underline underline-offset-2 hover:text-foreground"
+							>
+								Change rate
+							</Link>
+						</>
+					) : null}
+				</ReadRow>
+				<ReadRow term="Copies in lot">
+					÷ {breakdown.copies}
+					{listing.titleRead === null ? (
+						<span className="text-muted-foreground"> (title not read)</span>
+					) : null}
+				</ReadRow>
+				<div className="col-span-2 grid grid-cols-subgrid border-t pt-1.5 font-medium">
+					<dt>Per copy</dt>
+					<dd>{formatMoney(breakdown.perCopy, "USD")}</dd>
+				</div>
+			</dl>
+		</section>
+	);
+}
+
+/**
+ * "United Kingdom 13%", "Chile, default 10%", "none from United States" or
+ * "location unknown, default 10%".
+ */
+function importFeeNote(
+	location: string | null,
+	fee: { importFeePercent: number; importFeeDefaulted: boolean },
+): string {
+	const rate = `${fee.importFeeDefaulted ? "default " : ""}${fee.importFeePercent}%`;
+	if (location === null) return `location unknown, ${rate}`;
+	if (fee.importFeePercent === 0 && !fee.importFeeDefaulted) {
+		return `none from ${location}`;
+	}
+	return fee.importFeeDefaulted
+		? `${location}, ${rate}`
+		: `${location} ${rate}`;
 }
 
 /** "What the title says": everything the AI read, as a definition list. */

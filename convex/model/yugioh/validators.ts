@@ -5,6 +5,10 @@ import type {
 	Section,
 } from "../../../src/lib/yugioh/deck";
 import type {
+	ExchangeRate,
+	PerCopyPrice,
+} from "../../../src/lib/yugioh/pricing";
+import type {
 	Language,
 	MatchStatus,
 	ReadCondition,
@@ -127,6 +131,26 @@ export const yugiohTitleReadStatusValidator = v.union(
 	v.literal("failed"),
 );
 
+/**
+ * How a Listing's Per-copy price adds up, every amount in dollars. `shipping`
+ * is null when the Listing doesn't say (counted as 0).
+ */
+export const yugiohPerCopyPriceValidator = v.object({
+	price: v.number(),
+	shipping: v.union(v.number(), v.null()),
+	importFees: v.number(),
+	importFeePercent: v.number(),
+	importFeeDefaulted: v.boolean(),
+	copies: v.number(),
+	perCopy: v.number(),
+});
+
+/** One currency's daily rate: what 1 unit is worth in dollars. */
+export const yugiohExchangeRateValidator = v.object({
+	currency: v.string(),
+	usdPerUnit: v.number(),
+});
+
 /** Whether a Listing is for one of my Printings. */
 export const yugiohMatchStatusValidator = v.union(
 	v.literal("match"),
@@ -170,6 +194,16 @@ const titleJudgmentsAgree: Same<
 void titleReadsAgree;
 void titleJudgmentsAgree;
 void matchStatusesAgree;
+const perCopyPricesAgree: Same<
+	Infer<typeof yugiohPerCopyPriceValidator>,
+	PerCopyPrice
+> = true;
+const exchangeRatesAgree: Same<
+	Infer<typeof yugiohExchangeRateValidator>,
+	ExchangeRate
+> = true;
+void perCopyPricesAgree;
+void exchangeRatesAgree;
 void sectionsAgree;
 void cardOrdersAgree;
 void conditionsAgree;

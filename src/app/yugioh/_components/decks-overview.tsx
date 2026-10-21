@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import { Layers, Plus } from "lucide-react";
+import { Layers, Plus, Settings } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import type * as React from "react";
@@ -31,10 +31,22 @@ export function DecksOverview(): React.ReactElement {
 				<h1 className="font-display font-semibold text-2xl md:text-3xl">
 					Decks
 				</h1>
-				<Button onClick={() => setCreating(true)}>
-					<Plus data-icon="inline-start" />
-					New Deck
-				</Button>
+				<div className="flex items-center gap-2">
+					<Button
+						variant="ghost"
+						size="icon"
+						className="size-11 md:size-9"
+						asChild
+					>
+						<Link href="/yugioh/settings" aria-label="Settings">
+							<Settings />
+						</Link>
+					</Button>
+					<Button onClick={() => setCreating(true)}>
+						<Plus data-icon="inline-start" />
+						New Deck
+					</Button>
+				</div>
 			</header>
 
 			{decks === undefined ? (

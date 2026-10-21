@@ -1,4 +1,9 @@
 import type { Infer } from "convex/values";
+import {
+	type PerCopyPrice,
+	type Pricing,
+	perCopyPrice,
+} from "../../../src/lib/yugioh/pricing";
 import { setCodeKey } from "../../../src/lib/yugioh/title-reading";
 import type { Doc, Id } from "../../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../../_generated/server";
@@ -236,12 +241,19 @@ export type ListingView = CapturedEbayListing & {
 	marketplace: Doc<"yugiohListings">["marketplace"];
 	firstSeenAt: number;
 	lastSeenAt: number;
+	/** Null when there's no price, or no exchange rate for its currency yet. */
+	perCopyPrice: PerCopyPrice | null;
 } & ListingMatchView;
 
-/** The stored Listing as the Listings views show it, with its read and match. */
+/**
+ * The stored Listing as the Listings views show it, with its read, match and
+ * Per-copy price. `pricing` comes from `loadPricing`, once per query. Copies
+ * come from the title read, 1 when it's unknown.
+ */
 export async function listingView(
 	ctx: QueryCtx,
 	listing: Doc<"yugiohListings">,
+	pricing: Pricing,
 ): Promise<ListingView> {
 	return {
 		_id: listing._id,
@@ -263,6 +275,11 @@ export async function listingView(
 		soldDate: listing.soldDate,
 		firstSeenAt: listing.firstSeenAt,
 		lastSeenAt: listing.lastSeenAt,
+		perCopyPrice: perCopyPrice(
+			listing,
+			listing.titleRead?.copies ?? 1,
+			pricing,
+		),
 		...(await listingMatchView(ctx, listing)),
 	};
 }

@@ -1884,4 +1884,22 @@ export default defineSchema({
 		bids: v.union(v.number(), v.null()),
 		sold: v.boolean(),
 	}).index("by_listingId", ["listingId"]),
+
+	// The latest daily exchange rate per currency (one row each, overwritten by
+	// the daily refresh): what 1 unit is worth in dollars.
+	yugiohExchangeRates: defineTable({
+		currency: v.string(),
+		usdPerUnit: v.number(),
+		fetchedAt: v.number(),
+		source: v.string(),
+	}).index("by_currency", ["currency"]),
+
+	// My import fee table: one rate per seller country, as eBay names it
+	// ("United Kingdom"). Countries not in it pay the default (10%).
+	yugiohImportFeeRates: defineTable({
+		country: v.string(),
+		// `countryKey(country)`: lower case, single spaces.
+		countryKey: v.string(),
+		percent: v.number(),
+	}).index("by_countryKey", ["countryKey"]),
 });

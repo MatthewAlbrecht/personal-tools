@@ -11,4 +11,12 @@ crons.weekly(
 	{},
 );
 
+// Yu-Gi-Oh Per-copy prices: Frankfurter publishes new rates once a day.
+crons.daily(
+	"yugioh exchange rates",
+	{ hourUTC: 6, minuteUTC: 0 },
+	internal.yugioh.pricing.refreshExchangeRates,
+	{},
+);
+
 export default crons;
