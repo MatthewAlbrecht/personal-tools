@@ -17,6 +17,7 @@ import type {
 	Condition,
 	Section,
 } from "../../../src/lib/yugioh/deck";
+import type { ConditionChoice } from "../../../src/lib/yugioh/listing-edits";
 import type { ListingFilters } from "../../../src/lib/yugioh/listing-filters";
 import type { Rejection } from "../../../src/lib/yugioh/listing-rejection";
 import type { ListingSort } from "../../../src/lib/yugioh/listing-sort";
@@ -245,6 +246,15 @@ export const yugiohMatchStatusValidator = v.union(
 	v.literal("match"),
 	v.literal("notMatch"),
 	v.literal("unsure"),
+);
+
+/**
+ * A condition I set on a Listing: a read condition, or "not stated"
+ * (unknown). It wins over the title's read everywhere.
+ */
+export const yugiohConditionChoiceValidator = v.union(
+	yugiohReadConditionValidator,
+	v.literal("notStated"),
 );
 
 /** Why I marked a Listing wrong. */
@@ -522,6 +532,11 @@ const rejectionsAgree: Same<
 	Rejection
 > = true;
 void rejectionsAgree;
+const conditionChoicesAgree: Same<
+	Infer<typeof yugiohConditionChoiceValidator>,
+	ConditionChoice
+> = true;
+void conditionChoicesAgree;
 const perCopyPricesAgree: Same<
 	Infer<typeof yugiohPerCopyPriceValidator>,
 	PerCopyPrice

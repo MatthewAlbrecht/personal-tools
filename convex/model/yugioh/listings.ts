@@ -5,6 +5,13 @@ import {
 	saleTime,
 } from "../../../src/lib/yugioh/deals";
 import {
+	type ConditionChoice,
+	type RarityChoice,
+	isConditionSetByYou,
+	listingCondition,
+	rarityChoices,
+} from "../../../src/lib/yugioh/listing-edits";
+import {
 	type ListingFilters,
 	type ListingsView,
 	applyListingFilters,
@@ -58,6 +65,7 @@ import {
 import {
 	type ListingMatchView,
 	listingMatchView,
+	printingsForSetCode,
 	queueTitleRead,
 } from "./matching";
 import { currentUsdPerUnit } from "./pricing";
@@ -358,6 +366,7 @@ export async function readDeckListingsPage(
 	const order = sort ?? defaultListingSort(view);
 	const matching = applyListingFilters(shown, filters, context);
 	const deals = await loadDealContext(ctx, deckId, now);
+	const rarities = loadRarityChoices(ctx, context.neededPrintings);
 	const values = await sortValues(ctx, matching, order, view, now, deals);
 	const ordered = sortListings(
 		matching,
@@ -368,7 +377,7 @@ export async function readDeckListingsPage(
 		listings: await Promise.all(
 			ordered
 				.slice(0, MAX_LISTINGS_SHOWN)
-				.map((listing) => listingView(ctx, listing, deals, newSince)),
+				.map((listing) => listingView(ctx, listing, deals, newSince, rarities)),
 		),
 		matching: matching.length,
 		newCount: filters.new
@@ -442,7 +451,7 @@ async function sortValue(
 			return found && `${found.cardName} ${found.setCode} ${found.rarity}`;
 		}
 		case "condition":
-			return conditionSortValue(listing.titleRead?.condition ?? null);
+			return conditionSortValue(listingCondition(listing));
 		case "date":
 			// Sold: when it sold. Available: when a running auction ends.
 			if (view === "sold") {
@@ -520,6 +529,14 @@ export type ListingView = CapturedEbayListing & {
 	tcgplayer: NonNullable<Doc<"yugiohListings">["tcgplayer"]> | null;
 	/** Why and when I marked it wrong; null when I haven't. */
 	rejection: Rejection | null;
+	/** The condition I set; null when the title's read stands. */
+	conditionOverride: ConditionChoice | null;
+	/**
+	 * The rarities a matched Listing could be instead (its own included): my
+	 * Printings under its set code, then Overloaded rarities I have none of.
+	 * Empty when it isn't matched.
+	 */
+	rarityChoices: RarityChoice<Id<"yugiohPrintings">>[];
 } & ListingMatchView;
 
 /**
@@ -533,6 +550,7 @@ export async function listingView(
 	listing: Doc<"yugiohListings">,
 	deals: DealContext,
 	newSince: number | null,
+	rarities: RarityChoicesLoader,
 ): Promise<ListingView> {
 	const perCopyPrice = deals.perCopyPrice(listing);
 	return {
@@ -560,8 +578,82 @@ export async function listingView(
 		isNew: isNewListing(listing, newSince),
 		tcgplayer: listing.tcgplayer ?? null,
 		rejection: listing.rejection ?? null,
+		conditionOverride: listing.conditionOverride ?? null,
+		rarityChoices: await rarities(listing),
 		...(await listingMatchView(ctx, listing)),
 	};
+}
+
+/** A matched Listing's rarity choices (`rarityChoices`), read once per Printing. */
+export type RarityChoicesLoader = (
+	listing: Doc<"yugiohListings">,
+) => Promise<RarityChoice<Id<"yugiohPrintings">>[]>;
+
+/**
+ * Reads rarity choices for one query: each matched Printing's set code once.
+ * `needed` is the Printings the Deck still needs (`neededPrintingIds`).
+ */
+export function loadRarityChoices(
+	ctx: QueryCtx,
+	needed: ReadonlySet<string>,
+): RarityChoicesLoader {
+	const byPrinting = new Map<
+		Id<"yugiohPrintings">,
+		Promise<RarityChoice<Id<"yugiohPrintings">>[]>
+	>();
+	async function read(
+		printingId: Id<"yugiohPrintings">,
+	): Promise<RarityChoice<Id<"yugiohPrintings">>[]> {
+		const matched = await ctx.db.get("yugiohPrintings", printingId);
+		if (!matched) return [];
+		const printings = await printingsForSetCode(ctx, matched.setCode);
+		return rarityChoices(printings, matched, needed);
+	}
+	return async (listing) => {
+		const printingId = listing.matchedPrintingId ?? null;
+		if (printingId === null || shownMatchStatus(listing) !== "match") {
+			return [];
+		}
+		let choices = byPrinting.get(printingId);
+		if (!choices) {
+			choices = read(printingId);
+			byPrinting.set(printingId, choices);
+		}
+		return await choices;
+	};
+}
+
+/** The Printings a Deck still needs: those its Listings view shows. */
+export async function deckNeededPrintings(
+	ctx: QueryCtx,
+	deckId: Id<"yugiohDecks">,
+): Promise<Set<Id<"yugiohPrintings">>> {
+	const [cards, candidates] = await Promise.all([
+		listDeckCards(ctx, deckId),
+		listDeckCandidates(ctx, deckId),
+	]);
+	return neededPrintingIds(cards, candidates);
+}
+
+/**
+ * Sets a Listing's condition myself (a condition, or "not stated"), or
+ * (null) goes back to what the title says. It wins over the title's read in
+ * prices, grades, filters and pushes, and stays through re-reads and
+ * recaptures.
+ */
+export async function setListingCondition(
+	ctx: MutationCtx,
+	listingId: Id<"yugiohListings">,
+	condition: ConditionChoice | null,
+): Promise<void> {
+	const listing = await ctx.db.get("yugiohListings", listingId);
+	if (!listing) throw new ConvexError("That Listing doesn't exist.");
+	await ctx.db.patch("yugiohListings", listingId, {
+		conditionOverride: condition,
+	});
+	if (shownMatchStatus(listing) === "match") {
+		await queuePushCheck(ctx, listingId);
+	}
 }
 
 /**

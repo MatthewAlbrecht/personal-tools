@@ -9,6 +9,7 @@ import * as TcgplayerCapture from "../model/yugioh/tcgplayerCapture";
 import {
 	yugiohCapturedEbayListingValidator,
 	yugiohCapturedTcgplayerProductValidator,
+	yugiohConditionChoiceValidator,
 	yugiohDealValidator,
 	yugiohListingFiltersValidator,
 	yugiohListingSortValidator,
@@ -42,6 +43,21 @@ const listingValidator = v.object({
 	tcgplayer: v.union(yugiohTcgplayerDetailsValidator, v.null()),
 	/** Why and when I marked it wrong; null when I haven't. */
 	rejection: v.union(yugiohRejectionValidator, v.null()),
+	/** The condition I set; null when the title's read stands. */
+	conditionOverride: v.union(yugiohConditionChoiceValidator, v.null()),
+	/**
+	 * The rarities a matched Listing could be (its own included): my
+	 * Printings under its set code, then Overloaded rarities with no
+	 * Printing (choosing one marks it wrong). Empty when not matched.
+	 */
+	rarityChoices: v.array(
+		v.object({
+			rarity: v.string(),
+			printingId: v.union(v.id("yugiohPrintings"), v.null()),
+			/** The Deck still needs this Printing: its Listings show. */
+			needed: v.boolean(),
+		}),
+	),
 	/** What the AI read from the title; null until read, or when reading failed. */
 	titleRead: v.union(yugiohTitleReadValidator, v.null()),
 	match: v.object({
@@ -133,8 +149,12 @@ export const getListing = query({
 		const { observations, ...doc } = listing;
 		const deals = await loadDealContext(ctx, args.deckId, args.now);
 		const newSince = await readNewSince(ctx, args.deckId);
+		const rarities = Listings.loadRarityChoices(
+			ctx,
+			await Listings.deckNeededPrintings(ctx, args.deckId),
+		);
 		return {
-			...(await Listings.listingView(ctx, doc, deals, newSince)),
+			...(await Listings.listingView(ctx, doc, deals, newSince, rarities)),
 			observations,
 		};
 	},
@@ -142,17 +162,43 @@ export const getListing = query({
 
 /**
  * Sets a Listing's match myself: one of my Printings, or null for "Not a
- * match". It wins over the AI on every later capture.
+ * match". It wins over the AI on every later capture. `overridden: false`
+ * (undo) puts back a Printing the AI had matched, so later reads may change
+ * it again.
  */
 export const setListingMatch = mutation({
 	args: {
 		listingId: v.id("yugiohListings"),
 		printingId: v.union(v.id("yugiohPrintings"), v.null()),
+		overridden: v.optional(v.boolean()),
 	},
 	returns: v.null(),
 	handler: async (ctx, args) => {
 		requireAuth(ctx);
-		await Matching.setMatchOverride(ctx, args.listingId, args.printingId);
+		await Matching.setMatchOverride(
+			ctx,
+			args.listingId,
+			args.printingId,
+			args.overridden ?? true,
+		);
+		return null;
+	},
+});
+
+/**
+ * Sets a Listing's condition myself ("notStated": unknown), or (null) goes
+ * back to what the title says. It wins over the title's read in prices,
+ * grades, filters and pushes, and stays through re-reads and recaptures.
+ */
+export const setListingCondition = mutation({
+	args: {
+		listingId: v.id("yugiohListings"),
+		condition: v.union(yugiohConditionChoiceValidator, v.null()),
+	},
+	returns: v.null(),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+		await Listings.setListingCondition(ctx, args.listingId, args.condition);
 		return null;
 	},
 });

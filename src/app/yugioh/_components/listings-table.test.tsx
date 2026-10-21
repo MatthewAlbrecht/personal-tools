@@ -53,6 +53,14 @@ function brionacSale(overrides: Partial<ListingView> = {}): ListingView {
 		isNew: false,
 		tcgplayer: { seller: null, condition: "Heavily Played", quantity: 1 },
 		rejection: null,
+		conditionOverride: null,
+		rarityChoices: [
+			{
+				rarity: "Duel Terminal Ultra Parallel Rare",
+				printingId: "printing1" as never,
+				needed: true,
+			},
+		],
 		titleRead: null,
 		match: {
 			status: "match",

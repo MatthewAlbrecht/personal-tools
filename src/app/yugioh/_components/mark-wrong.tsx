@@ -29,7 +29,7 @@ export const ROW_EXIT_MS = 200;
 const SAVE_FAILED = "Couldn't save. Try again.";
 
 /** What a Listing is called in a toast: its Card, else its title. */
-function listingName(listing: ListingView): string {
+export function listingName(listing: ListingView): string {
 	return listing.match.printing?.cardName ?? listing.title;
 }
 
@@ -42,6 +42,12 @@ export function useListingRejection(): {
 	leaving: ReadonlySet<string>;
 	markWrong: (listing: ListingView, reason: RejectionReason) => void;
 	unmark: (listing: ListingView) => void;
+	/** Folds the row away, then runs `save`; `onSaved` after it worked. */
+	leaveThen: (
+		listing: ListingView,
+		save: () => Promise<boolean>,
+		onSaved: () => void,
+	) => void;
 } {
 	const setRejection = useMutation(api.yugioh.listings.setListingRejection);
 	const [leaving, setLeaving] = useState<ReadonlySet<string>>(new Set());
@@ -69,22 +75,31 @@ export function useListingRejection(): {
 	}
 
 	/** Folds the row away, then saves; the saved query result removes it. */
-	function leaveThenSave(
+	function leaveThen(
 		listing: ListingView,
-		reason: RejectionReason | null,
+		run: () => Promise<boolean>,
 		onSaved: () => void,
 	): void {
 		setLeavingFor(listing._id, true);
 		const reduced = window.matchMedia(
 			"(prefers-reduced-motion: reduce)",
 		).matches;
+		// Waits out the fold before saving (a timer, outside React).
 		window.setTimeout(
 			async () => {
-				if (await save(listing, reason)) onSaved();
+				if (await run()) onSaved();
 				setLeavingFor(listing._id, false);
 			},
 			reduced ? 0 : ROW_EXIT_MS,
 		);
+	}
+
+	function leaveThenSave(
+		listing: ListingView,
+		reason: RejectionReason | null,
+		onSaved: () => void,
+	): void {
+		leaveThen(listing, () => save(listing, reason), onSaved);
 	}
 
 	function markWrong(listing: ListingView, reason: RejectionReason): void {
@@ -113,7 +128,7 @@ export function useListingRejection(): {
 		});
 	}
 
-	return { leaving, markWrong, unmark };
+	return { leaving, markWrong, unmark, leaveThen };
 }
 
 /**

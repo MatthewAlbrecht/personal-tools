@@ -742,3 +742,227 @@ test("marking a Listing wrong is public; captures stay internal", async () => {
 	expect(listings.ingestEbayListings?.isInternal).toBe(true);
 	expect(listings.ingestTcgplayerProduct?.isInternal).toBe(true);
 });
+
+describe("Condition set by me", () => {
+	async function idOf(t: T, itemId: string) {
+		return await t.run(async (ctx) => {
+			const listing = await ctx.db
+				.query("yugiohListings")
+				.withIndex("by_marketplace_and_itemId", (q) =>
+					q.eq("marketplace", "ebay").eq("itemId", itemId),
+				)
+				.unique();
+			if (!listing) throw new Error(`missing Listing ${itemId}`);
+			return listing._id;
+		});
+	}
+
+	async function viewOf(t: T, deckId: Id<"yugiohDecks">, itemId: string) {
+		const listing = (await listings(t, deckId)).find(
+			(l) => l.itemId === itemId,
+		);
+		if (!listing) throw new Error(`missing view ${itemId}`);
+		return listing;
+	}
+
+	test("wins over the title's read in the Reference price, through recaptures and re-reads", async () => {
+		const t = setup();
+		const deckId = await ashDeck(t);
+		const [, , , misread] = await capture(
+			t,
+			sold(40),
+			sold(50),
+			sold(60),
+			sold(30, { read: { condition: "damaged" } }),
+		);
+		expect(await ashReference(t, deckId)).toEqual({ price: 50, sales: 3 });
+
+		const id = await idOf(t, misread as string);
+		await t.mutation(api.yugioh.listings.setListingCondition, {
+			listingId: id,
+			condition: "nearMint",
+		});
+		expect(await ashReference(t, deckId)).toEqual({ price: 45, sales: 4 });
+
+		// Captured again as is, then with a changed title the AI reads again.
+		await capture(
+			t,
+			sold(30, { itemId: misread, read: { condition: "damaged" } }),
+		);
+		await capture(
+			t,
+			sold(30, {
+				itemId: misread,
+				title: "Ash Blossom RA01-EN008 QCSR DMG",
+				read: { condition: "damaged" },
+			}),
+		);
+		const view = await viewOf(t, deckId, misread as string);
+		expect(view.titleRead?.condition).toBe("damaged");
+		expect(view.conditionOverride).toBe("nearMint");
+		expect(await ashReference(t, deckId)).toEqual({ price: 45, sales: 4 });
+
+		// Back to the title's read.
+		await t.mutation(api.yugioh.listings.setListingCondition, {
+			listingId: id,
+			condition: null,
+		});
+		expect(await ashReference(t, deckId)).toEqual({ price: 50, sales: 3 });
+	});
+
+	test("wins over the title's read in the Deal grade and Below minimum", async () => {
+		const t = setup();
+		const deckId = await ashDeck(t);
+		await capture(t, sold(40), sold(50), sold(60));
+		const [listing] = await capture(t, { price: 30 });
+		const id = await idOf(t, listing as string);
+		expect(await dealFor(t, deckId, listing as string)).toMatchObject({
+			qualifying: true,
+			belowCondition: false,
+			grade: "great",
+		});
+
+		await t.mutation(api.yugioh.listings.setListingCondition, {
+			listingId: id,
+			condition: "heavilyPlayed",
+		});
+		expect(await dealFor(t, deckId, listing as string)).toMatchObject({
+			qualifying: false,
+			belowCondition: true,
+			grade: null,
+		});
+
+		// "Not stated" counts, like a title that doesn't say.
+		await t.mutation(api.yugioh.listings.setListingCondition, {
+			listingId: id,
+			condition: "notStated",
+		});
+		expect(await dealFor(t, deckId, listing as string)).toMatchObject({
+			qualifying: true,
+			belowCondition: false,
+			grade: "great",
+		});
+	});
+
+	test("filters and sorts by the condition I set", async () => {
+		const t = setup();
+		const deckId = await ashDeck(t, "heavilyPlayed");
+		const [nm, set] = await capture(t, { price: 30 }, { price: 31 });
+		await t.mutation(api.yugioh.listings.setListingCondition, {
+			listingId: await idOf(t, set as string),
+			condition: "moderatelyPlayed",
+		});
+		const page = await t.query(api.yugioh.listings.listListings, {
+			deckId,
+			now: NOW,
+			filters: { condition: "moderatelyPlayed" },
+		});
+		expect(page.listings.map((l) => l.itemId)).toEqual([set]);
+		const sorted = await t.query(api.yugioh.listings.listListings, {
+			deckId,
+			now: NOW,
+			sort: { key: "condition", direction: "desc" },
+		});
+		expect(sorted.listings.map((l) => l.itemId)).toEqual([set, nm]);
+	});
+});
+
+describe("Rarity from the row", () => {
+	async function idOf(t: T, itemId: string) {
+		return await t.run(async (ctx) => {
+			const listing = await ctx.db
+				.query("yugiohListings")
+				.withIndex("by_marketplace_and_itemId", (q) =>
+					q.eq("marketplace", "ebay").eq("itemId", itemId),
+				)
+				.unique();
+			if (!listing) throw new Error(`missing Listing ${itemId}`);
+			return listing._id;
+		});
+	}
+
+	/** My Secret Rare Printing of RA01-EN008, wanted by no Deck. */
+	async function secretRare(t: T) {
+		return await t.run(async (ctx) => {
+			const qcsr = await ctx.db
+				.query("yugiohPrintings")
+				.withIndex("by_setCode_and_rarity", (q) =>
+					q.eq("setCode", "RA01-EN008"),
+				)
+				.unique();
+			if (!qcsr) throw new Error("missing QCSR Printing");
+			await ctx.db.patch("yugiohPrintings", qcsr._id, {
+				overloadedRarities: ["Platinum Secret Rare"],
+			});
+			const secret = await ctx.db.insert("yugiohPrintings", {
+				cardName: "Ash Blossom & Joyous Spring",
+				setCode: "RA01-EN008",
+				rarity: "Secret Rare",
+				overloadedRarities: [],
+			});
+			return { qcsr: qcsr._id, secret };
+		});
+	}
+
+	test("offers my Printings under the set code, then Overloaded rarities I have none of", async () => {
+		const t = setup();
+		const deckId = await ashDeck(t);
+		const [listing] = await capture(t, { price: 30 });
+		const { qcsr, secret } = await secretRare(t);
+		const view = (await listings(t, deckId)).find((l) => l.itemId === listing);
+		expect(view?.rarityChoices).toEqual([
+			{ rarity: "Quarter Century Secret Rare", printingId: qcsr, needed: true },
+			{ rarity: "Secret Rare", printingId: secret, needed: false },
+			{ rarity: "Platinum Secret Rare", printingId: null, needed: false },
+		]);
+	});
+
+	test("choosing another Printing re-matches it, prices follow, a recapture keeps it, and undo puts the AI's match back", async () => {
+		const t = setup();
+		const deckId = await ashDeck(t);
+		await capture(t, sold(40), sold(50), sold(60));
+		const [wrong] = await capture(t, sold(5));
+		expect(await ashReference(t, deckId)).toEqual({ price: 45, sales: 4 });
+		const { qcsr, secret } = await secretRare(t);
+		const id = await idOf(t, wrong as string);
+
+		await t.mutation(api.yugioh.listings.setListingMatch, {
+			listingId: id,
+			printingId: secret,
+		});
+		expect(await ashReference(t, deckId)).toEqual({ price: 50, sales: 3 });
+		await capture(t, sold(5, { itemId: wrong }));
+		const table = await t.query(api.yugioh.listings.listListings, {
+			deckId,
+			now: NOW,
+			filters: { view: "sold" },
+		});
+		// Not a Printing the Deck needs, so it leaves the table.
+		expect(table.listings.map((l) => l.itemId)).not.toContain(wrong);
+		expect(await ashReference(t, deckId)).toEqual({ price: 50, sales: 3 });
+
+		await t.mutation(api.yugioh.listings.setListingMatch, {
+			listingId: id,
+			printingId: qcsr,
+			overridden: false,
+		});
+		const restored = await t.run(async (ctx) =>
+			ctx.db.get("yugiohListings", id),
+		);
+		expect(restored).toMatchObject({
+			matchStatus: "match",
+			matchedPrintingId: qcsr,
+			matchOverridden: false,
+		});
+		expect(await ashReference(t, deckId)).toEqual({ price: 45, sales: 4 });
+	});
+});
+
+test("setting a condition and a match is public", async () => {
+	const listings = (await import("./listings")) as Record<
+		string,
+		{ isInternal?: boolean; isPublic?: boolean }
+	>;
+	expect(listings.setListingCondition?.isPublic).toBe(true);
+	expect(listings.setListingMatch?.isPublic).toBe(true);
+});

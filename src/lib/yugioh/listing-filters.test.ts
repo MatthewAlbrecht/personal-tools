@@ -165,6 +165,25 @@ describe("applyListingFilters", () => {
 		expect(ids(all, { condition: "unknown" })).toEqual(["unsaid", "unread"]);
 	});
 
+	test("condition: one I set wins over the read", () => {
+		const all = [
+			listing({
+				id: "set-lp",
+				titleRead: read,
+				conditionOverride: "lightlyPlayed",
+			}),
+			listing({
+				id: "set-unsaid",
+				titleRead: read,
+				conditionOverride: "notStated",
+			}),
+			listing({ id: "nm", titleRead: read }),
+		];
+		expect(ids(all, { condition: "lightlyPlayed" })).toEqual(["set-lp"]);
+		expect(ids(all, { condition: "unknown" })).toEqual(["set-unsaid"]);
+		expect(ids(all, { condition: "nearMint" })).toEqual(["nm"]);
+	});
+
 	test("graded or raw", () => {
 		const all = [
 			listing({ id: "raw", titleRead: read }),

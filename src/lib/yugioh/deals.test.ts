@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vitest";
 import {
 	dealGrade,
+	isBelowCondition,
+	isQualifying,
 	isRunningAuction,
 	isSale,
 	listingLanguage,
@@ -110,5 +112,42 @@ describe("listingLanguage", () => {
 	test("an unread title that states nothing goes by its set code, else English", () => {
 		expect(listingLanguage({ title: "Ash Blossom RA01-KR008" })).toBe("korean");
 		expect(listingLanguage({ title: "Ash Blossom QCSR" })).toBe("english");
+	});
+});
+
+describe("a condition I set", () => {
+	const read = {
+		setCode: "RA01-EN008",
+		rarity: "Quarter Century Secret Rare",
+		condition: "nearMint" as const,
+		copies: 1,
+		language: "english" as const,
+		graded: false,
+		gradingCompany: null,
+		grade: null,
+	};
+	const title = "Ash Blossom RA01-EN008 QCSR";
+
+	test("wins over the title's read for Below minimum and Qualifying", () => {
+		const played = {
+			title,
+			titleRead: read,
+			conditionOverride: "heavilyPlayed" as const,
+		};
+		expect(isBelowCondition(played, "lightlyPlayed")).toBe(true);
+		expect(isQualifying(played, "lightlyPlayed")).toBe(false);
+		expect(isQualifying({ title, titleRead: read }, "lightlyPlayed")).toBe(
+			true,
+		);
+	});
+
+	test("'not stated' counts, like a title that doesn't say", () => {
+		const unknown = {
+			title,
+			titleRead: { ...read, condition: "damaged" as const },
+			conditionOverride: "notStated" as const,
+		};
+		expect(isBelowCondition(unknown, "nearMint")).toBe(false);
+		expect(isQualifying(unknown, "nearMint")).toBe(true);
 	});
 });

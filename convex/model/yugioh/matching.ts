@@ -231,15 +231,20 @@ export async function rematchSetCode(
 
 /**
  * My own match for a Listing: one of my Printings, or null for "not a match".
- * It wins over the AI on every later capture.
+ * It wins over the AI on every later capture. `overridden: false` puts back a
+ * match the AI had made (undo), so later reads may change it again.
  */
 export async function setMatchOverride(
 	ctx: MutationCtx,
 	listingId: Id<"yugiohListings">,
 	printingId: Id<"yugiohPrintings"> | null,
+	overridden = true,
 ): Promise<void> {
 	const listing = await ctx.db.get("yugiohListings", listingId);
 	if (!listing) throw new ConvexError("That Listing doesn't exist.");
+	if (printingId === null && !overridden) {
+		throw new ConvexError("Only a Printing can be put back as the AI's match.");
+	}
 	if (
 		printingId !== null &&
 		!(await ctx.db.get("yugiohPrintings", printingId))
@@ -249,7 +254,7 @@ export async function setMatchOverride(
 	await ctx.db.patch("yugiohListings", listingId, {
 		matchStatus: printingId === null ? "notMatch" : "match",
 		matchedPrintingId: printingId,
-		matchOverridden: true,
+		matchOverridden: overridden,
 	});
 	if (printingId !== null) await queuePushCheck(ctx, listingId);
 }
@@ -282,7 +287,7 @@ async function automaticMatch(
 }
 
 /** Printings of the card a set code names, saved under any region's code. */
-async function printingsForSetCode(
+export async function printingsForSetCode(
 	ctx: QueryCtx,
 	setCode: string,
 ): Promise<Doc<"yugiohPrintings">[]> {

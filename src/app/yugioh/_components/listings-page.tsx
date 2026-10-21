@@ -6,8 +6,10 @@ import {
 	ArrowDown,
 	ArrowUp,
 	ArrowUpDown,
+	ChevronDown,
 	ExternalLink,
 	ListFilter,
+	PencilLine,
 	Tag,
 	Undo2,
 } from "lucide-react";
@@ -38,6 +40,11 @@ import { useMinuteClock } from "~/lib/hooks/use-minute-clock";
 import { cn } from "~/lib/utils";
 import { largeTcgplayerImage } from "~/lib/yugioh/card-grid";
 import { rarityAbbreviation } from "~/lib/yugioh/deck";
+import {
+	type ConditionChoice,
+	isConditionSetByYou,
+	listingCondition,
+} from "~/lib/yugioh/listing-edits";
 import {
 	type ListingFilters,
 	type ListingsView,
@@ -73,6 +80,7 @@ import type { Id } from "../../../../convex/_generated/dataModel";
 import type { ListingView } from "../_utils/types";
 import { DealGradeBadge, DealGradeSummary } from "./deal-grade";
 import { ListingDrawer } from "./listing-drawer";
+import { ConditionMenu, RarityMenu, useListingEdits } from "./listing-edits";
 import { ListingsToolbar } from "./listing-filters";
 import { ListingSortSelect } from "./listing-sort-select";
 import { MarkWrongButton, useListingRejection } from "./mark-wrong";
@@ -99,6 +107,7 @@ export function ListingsPage({
 	const view: ListingsView = filters.view ?? "available";
 	const sort = listingSortFromParams(searchParams, view);
 	const rejection = useListingRejection();
+	const edits = useListingEdits(rejection);
 	const page = useHeldWhileLoading(
 		useQuery(api.yugioh.listings.listListings, {
 			deckId,
@@ -257,6 +266,8 @@ export function ListingsPage({
 							leaving={rejection.leaving}
 							onMarkWrong={rejection.markWrong}
 							onUnmark={rejection.unmark}
+							onSetCondition={edits.setCondition}
+							onSetRarity={edits.setRarity}
 						/>
 					</div>
 				</>
@@ -273,6 +284,12 @@ export function ListingsPage({
 				onUnmark={(listing) => {
 					closeListing();
 					rejection.unmark(listing);
+				}}
+				onSetCondition={edits.setCondition}
+				onSetRarity={(listing, choice) => {
+					// A rarity that takes it out of Listings closes the drawer first.
+					if (choice.printingId === null || !choice.needed) closeListing();
+					edits.setRarity(listing, choice);
 				}}
 			/>
 		</section>
@@ -445,6 +462,8 @@ export function ListingsTable({
 	leaving = new Set(),
 	onMarkWrong = () => {},
 	onUnmark = () => {},
+	onSetCondition,
+	onSetRarity,
 }: {
 	listings: ListingView[];
 	href: (listingId: string) => string;
@@ -458,8 +477,20 @@ export function ListingsTable({
 	leaving?: ReadonlySet<string>;
 	onMarkWrong?: (listing: ListingView, reason: RejectionReason) => void;
 	onUnmark?: (listing: ListingView) => void;
+	/** Sets the condition from the Condition cell; without it, the cell is plain. */
+	onSetCondition?: (
+		listing: ListingView,
+		condition: ConditionChoice | null,
+	) => void;
+	/** Sets the rarity from the Card cell; without it, the rarity is plain. */
+	onSetRarity?: (
+		listing: ListingView,
+		choice: ListingView["rarityChoices"][number],
+	) => void;
 }): React.ReactElement {
 	const head = { sort, onSort };
+	// Marked wrong: restore a Listing before changing it.
+	const editable = !rejectedView;
 	return (
 		<Table className="table-fixed">
 			<colgroup>
@@ -523,21 +554,28 @@ export function ListingsTable({
 							className="group/row relative data-[leaving]:border-transparent"
 						>
 							<RowCell dim={dim}>
-								{/* The whole row opens the Listing drawer through this link. */}
-								<Link
-									href={href(listing._id)}
-									replace
-									scroll={false}
-									className="flex min-w-0 items-start gap-3 outline-none after:absolute after:inset-0 focus-visible:after:ring-2 focus-visible:after:ring-ring focus-visible:after:ring-inset"
-								>
+								<div className="flex min-w-0 items-start gap-3">
 									<CardThumb printing={listing.match.printing} />
-									<span className="flex min-w-0 flex-col">
-										<CardName listing={listing} />
-										<Secondary title={printingTitle(listing)}>
-											{printingLine(listing.match.printing) ?? listing.title}
-										</Secondary>
-									</span>
-								</Link>
+									<div className="flex min-w-0 flex-col">
+										{/* The whole row opens the Listing drawer through this link. */}
+										<Link
+											href={href(listing._id)}
+											replace
+											scroll={false}
+											className="flex min-w-0 outline-none after:absolute after:inset-0 focus-visible:after:ring-2 focus-visible:after:ring-ring focus-visible:after:ring-inset"
+										>
+											<CardName listing={listing} />
+										</Link>
+										<PrintingCell
+											listing={listing}
+											onPick={
+												editable && onSetRarity
+													? (choice) => onSetRarity(listing, choice)
+													: undefined
+											}
+										/>
+									</div>
+								</div>
 							</RowCell>
 							<RowCell dim={dim}>
 								<PerCopy listing={listing} />
@@ -550,7 +588,14 @@ export function ListingsTable({
 								)}
 							</RowCell>
 							<RowCell dim={dim}>
-								<ConditionCell listing={listing} />
+								<ConditionCell
+									listing={listing}
+									onPick={
+										editable && onSetCondition
+											? (condition) => onSetCondition(listing, condition)
+											: undefined
+									}
+								/>
 							</RowCell>
 							<RowCell dim={dim}>
 								<Primary title={type}>{type}</Primary>
@@ -822,55 +867,149 @@ function RejectionCell({
 }
 
 /**
- * The condition the title states, as an acronym ("LP") with its full name on
- * hover, over what else sets the Listing apart: "Below minimum",
- * "PSA 10", "KR", "×3 copies". A muted dash when the title doesn't say.
+ * The Listing's condition (mine, else the title's) as an acronym ("LP")
+ * with its full name on hover, over what else sets the Listing apart:
+ * "Below minimum", "PSA 10", "KR", "×3 copies". A muted dash when unknown.
+ * With `onPick`, the acronym opens the condition picker; a condition I set
+ * carries a quiet pencil ("Set by you").
  */
 function ConditionCell({
 	listing,
+	onPick,
 }: {
 	listing: ListingView;
+	onPick?: (condition: ConditionChoice | null) => void;
 }): React.ReactElement {
+	const setByYou = isConditionSetByYou(listing);
 	const cell = conditionCell(
-		listing.titleRead?.condition ?? null,
+		listingCondition(listing),
 		listing.deal.belowCondition,
 	);
 	const notes = [
 		...(cell?.below ? ["Below minimum"] : []),
 		...titleFlags(listing.titleRead).map((flag) => flag.label),
 	].join(" · ");
-	const why = listing.titleRead?.graded
-		? "Graded, so no condition"
-		: "Condition not stated. Check the photos.";
+	const why = setByYou
+		? "Not stated"
+		: listing.titleRead?.graded
+			? "Graded, so no condition"
+			: "Condition not stated. Check the photos.";
+	const name = cell?.name ?? why;
+	const value = (
+		<>
+			<span aria-hidden>{cell?.short ?? "—"}</span>
+			<span className="sr-only">{name}</span>
+		</>
+	);
+	const tone =
+		cell === null || cell.below ? "text-muted-foreground" : "font-medium";
 	return (
 		<>
-			{cell === null ? (
-				<p className="text-muted-foreground text-sm leading-5" title={why}>
-					<span aria-hidden>—</span>
-					<span className="sr-only">{why}</span>
-				</p>
+			{onPick ? (
+				<div className="flex h-5 items-center">
+					<ConditionMenu listing={listing} onPick={onPick}>
+						<CellTrigger
+							className={cn("text-sm", tone)}
+							title={name}
+							aria-label={`Condition: ${name}${setByYou ? ", set by you" : ""}. Change`}
+						>
+							{value}
+							{setByYou ? <SetByYou /> : null}
+						</CellTrigger>
+					</ConditionMenu>
+				</div>
 			) : (
-				<p
-					className={cn(
-						"text-sm leading-5",
-						cell.below ? "text-muted-foreground" : "font-medium",
-					)}
-					title={cell.name}
-				>
-					<span aria-hidden>{cell.short}</span>
-					<span className="sr-only">{cell.name}</span>
+				<p className={cn("text-sm leading-5", tone)} title={name}>
+					{value}
 				</p>
 			)}
-			<Secondary title={notes || undefined}>{notes || " "}</Secondary>
+			<Secondary title={notes || undefined}>{notes || " "}</Secondary>
 		</>
+	);
+}
+
+/**
+ * The Card cell's second line, "PTDN-EN084 · UtR". With `onPick`, the
+ * rarity opens the rarity picker; a match I set carries the pencil.
+ */
+function PrintingCell({
+	listing,
+	onPick,
+}: {
+	listing: ListingView;
+	onPick?: (choice: ListingView["rarityChoices"][number]) => void;
+}): React.ReactElement {
+	const printing = listing.match.printing;
+	if (!printing || !onPick) {
+		return (
+			<Secondary title={printingTitle(listing)}>
+				{printingLine(printing) ?? listing.title}
+			</Secondary>
+		);
+	}
+	const setByYou = listing.match.overridden;
+	return (
+		<div className="flex h-5 min-w-0 items-center text-muted-foreground text-xs">
+			<span className="truncate" title={printingTitle(listing)}>
+				{printing.setCode}
+			</span>
+			<span aria-hidden className="shrink-0 whitespace-pre">
+				{" · "}
+			</span>
+			<RarityMenu listing={listing} onPick={onPick}>
+				<CellTrigger
+					className="shrink-0"
+					title={printing.rarity}
+					aria-label={`Rarity: ${printing.rarity}${setByYou ? ", set by you" : ""}. Change`}
+				>
+					{rarityAbbreviation(printing.rarity)}
+					{setByYou ? <SetByYou /> : null}
+				</CellTrigger>
+			</RarityMenu>
+		</div>
+	);
+}
+
+/**
+ * A cell value that opens a picker: reads as the plain text it replaces,
+ * lifted above the row's link so it doesn't open the drawer. A chevron
+ * shows on row hover and focus; hover, focus and open get a quiet fill.
+ */
+function CellTrigger({
+	className,
+	children,
+	...props
+}: React.ComponentProps<"button">): React.ReactElement {
+	return (
+		<button
+			type="button"
+			className={cn(
+				"group/trigger -mx-1 relative z-10 inline-flex h-5 max-w-[calc(100%+0.5rem)] items-center gap-0.5 rounded-sm px-1 outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 data-[state=open]:bg-accent data-[state=open]:text-accent-foreground motion-reduce:transition-none",
+				className,
+			)}
+			{...props}
+		>
+			{children}
+			<ChevronDown
+				aria-hidden
+				className="size-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-visible/trigger:opacity-100 group-data-[state=open]/trigger:opacity-100 motion-reduce:transition-none"
+			/>
+		</button>
+	);
+}
+
+/** The quiet pencil after a value I set myself. */
+function SetByYou(): React.ReactElement {
+	return (
+		<span title="Set by you" className="inline-flex text-muted-foreground">
+			<PencilLine aria-hidden className="size-3" />
+		</span>
 	);
 }
 
 /** "NM", or null when the title doesn't say: for the phone row's meta line. */
 function conditionShort(listing: ListingView): string | null {
-	return (
-		conditionCell(listing.titleRead?.condition ?? null, false)?.short ?? null
-	);
+	return conditionCell(listingCondition(listing), false)?.short ?? null;
 }
 
 /**

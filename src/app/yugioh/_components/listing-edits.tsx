@@ -1,0 +1,296 @@
+"use client";
+
+import { useMutation } from "convex/react";
+import { Undo2 } from "lucide-react";
+import type * as React from "react";
+import { toast } from "sonner";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuLabel,
+	DropdownMenuRadioGroup,
+	DropdownMenuRadioItem,
+	DropdownMenuSeparator,
+	DropdownMenuShortcut,
+	DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
+import { rarityAbbreviation } from "~/lib/yugioh/deck";
+import {
+	type ConditionChoice,
+	NOT_STATED,
+	conditionChoice,
+	isConditionSetByYou,
+} from "~/lib/yugioh/listing-edits";
+import { READ_CONDITION_ABBREVIATIONS } from "~/lib/yugioh/listing-format";
+import {
+	READ_CONDITIONS,
+	READ_CONDITION_LABELS,
+	type ReadCondition,
+} from "~/lib/yugioh/title-reading";
+import { api } from "../../../../convex/_generated/api";
+import { errorMessage } from "../_utils/errors";
+import type { ListingView } from "../_utils/types";
+import { listingName, type useListingRejection } from "./mark-wrong";
+
+const SAVE_FAILED = "Couldn't save. Try again.";
+
+type RarityChoice = ListingView["rarityChoices"][number];
+
+/**
+ * Changing a Listing's condition and rarity from its row or drawer. Each
+ * change saves at once and a toast offers Undo. A rarity whose Printing the
+ * Deck doesn't need folds the row away first; a rarity with no Printing
+ * marks the Listing wrong ("Wrong rarity").
+ */
+export function useListingEdits(
+	rejection: ReturnType<typeof useListingRejection>,
+): {
+	setCondition: (
+		listing: ListingView,
+		condition: ConditionChoice | null,
+	) => void;
+	setRarity: (listing: ListingView, choice: RarityChoice) => void;
+} {
+	const saveCondition = useMutation(api.yugioh.listings.setListingCondition);
+	const saveMatch = useMutation(api.yugioh.listings.setListingMatch);
+
+	async function attempt(save: () => Promise<unknown>): Promise<boolean> {
+		try {
+			await save();
+			return true;
+		} catch (error) {
+			toast.error(errorMessage(error, SAVE_FAILED));
+			return false;
+		}
+	}
+
+	async function setCondition(
+		listing: ListingView,
+		condition: ConditionChoice | null,
+	): Promise<void> {
+		const previous = listing.conditionOverride;
+		if (condition === previous) return;
+		const listingId = listing._id;
+		if (!(await attempt(() => saveCondition({ listingId, condition })))) {
+			return;
+		}
+		toast(
+			condition === null
+				? "Condition back to what the title says"
+				: `Condition set to ${conditionName(condition)}`,
+			{
+				description:
+					condition === null
+						? listingName(listing)
+						: `${listingName(listing)}. Kept on future captures.`,
+				action: {
+					label: "Undo",
+					onClick: () =>
+						void attempt(() =>
+							saveCondition({ listingId, condition: previous }),
+						),
+				},
+			},
+		);
+	}
+
+	function setRarity(listing: ListingView, choice: RarityChoice): void {
+		const matched = listing.match.printing;
+		if (choice.printingId === null) {
+			rejection.markWrong(listing, "wrongRarity");
+			return;
+		}
+		if (matched === null || choice.printingId === matched._id) return;
+		const listingId = listing._id;
+		const printingId = choice.printingId;
+		const previous = {
+			printingId: matched._id,
+			overridden: listing.match.overridden,
+		};
+		const save = () => attempt(() => saveMatch({ listingId, printingId }));
+		function announce(): void {
+			toast(`Rarity set to ${choice.rarity}`, {
+				description: choice.needed
+					? `${listingName(listing)}. Kept on future captures.`
+					: `${listingName(listing)} in ${rarityAbbreviation(choice.rarity)} isn't a Printing this Deck needs, so it left Listings.`,
+				action: {
+					label: "Undo",
+					onClick: () =>
+						void attempt(() => saveMatch({ listingId, ...previous })),
+				},
+			});
+		}
+		if (choice.needed) {
+			void save().then((saved) => {
+				if (saved) announce();
+			});
+		} else {
+			rejection.leaveThen(listing, save, announce);
+		}
+	}
+
+	return {
+		setCondition: (listing, condition) => void setCondition(listing, condition),
+		setRarity,
+	};
+}
+
+/** "Lightly Played", or "Not stated". */
+function conditionName(condition: ConditionChoice): string {
+	return condition === NOT_STATED
+		? "Not stated"
+		: READ_CONDITION_LABELS[condition];
+}
+
+/**
+ * Picks the Listing's condition: the five conditions (name and acronym) and
+ * "Not stated". Once I've set one, it can go back to what the title says.
+ * `children` is the trigger.
+ */
+export function ConditionMenu({
+	listing,
+	onPick,
+	align = "start",
+	children,
+}: {
+	listing: ListingView;
+	onPick: (condition: ConditionChoice | null) => void;
+	align?: "start" | "end";
+	children: React.ReactElement;
+}): React.ReactElement {
+	const read = listing.titleRead?.condition ?? null;
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
+			<DropdownMenuContent align={align} className="w-56">
+				<DropdownMenuLabel className="font-normal text-muted-foreground text-xs">
+					Condition: yours wins over the title
+				</DropdownMenuLabel>
+				<DropdownMenuSeparator />
+				<DropdownMenuRadioGroup
+					value={conditionChoice(listing)}
+					onValueChange={(value) => onPick(value as ConditionChoice)}
+				>
+					{READ_CONDITIONS.map((condition) => (
+						<DropdownMenuRadioItem key={condition} value={condition}>
+							{READ_CONDITION_LABELS[condition]}
+							<DropdownMenuShortcut className="tracking-normal">
+								{READ_CONDITION_ABBREVIATIONS[condition]}
+							</DropdownMenuShortcut>
+						</DropdownMenuRadioItem>
+					))}
+					<DropdownMenuSeparator />
+					<DropdownMenuRadioItem value={NOT_STATED}>
+						Not stated
+					</DropdownMenuRadioItem>
+				</DropdownMenuRadioGroup>
+				{isConditionSetByYou(listing) ? (
+					<>
+						<DropdownMenuSeparator />
+						<DropdownMenuItem onSelect={() => onPick(null)}>
+							<Undo2 aria-hidden />
+							Use the title's
+							<DropdownMenuShortcut className="tracking-normal">
+								{titleConditionShort(read)}
+							</DropdownMenuShortcut>
+						</DropdownMenuItem>
+					</>
+				) : null}
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+
+function titleConditionShort(condition: ReadCondition | null): string {
+	return condition === null ? "None" : READ_CONDITION_ABBREVIATIONS[condition];
+}
+
+/**
+ * Picks the Listing's rarity among the Printings under its set code; picking
+ * one re-matches the Listing to it. Overloaded rarities I have no Printing of
+ * come after, under "Not one you need": picking one marks it wrong.
+ * `children` is the trigger.
+ */
+export function RarityMenu({
+	listing,
+	onPick,
+	align = "start",
+	children,
+}: {
+	listing: ListingView;
+	onPick: (choice: RarityChoice) => void;
+	align?: "start" | "end";
+	children: React.ReactElement;
+}): React.ReactElement {
+	const printing = listing.match.printing;
+	const mine = listing.rarityChoices.filter(
+		(choice) => choice.printingId !== null,
+	);
+	const others = listing.rarityChoices.filter(
+		(choice) => choice.printingId === null,
+	);
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
+			<DropdownMenuContent align={align} className="w-64">
+				<DropdownMenuLabel className="font-normal text-muted-foreground text-xs">
+					Rarity
+					{printing ? (
+						<>
+							{" "}
+							under{" "}
+							<span className="font-mono tracking-tight">
+								{printing.setCode}
+							</span>
+						</>
+					) : null}
+				</DropdownMenuLabel>
+				<DropdownMenuSeparator />
+				<DropdownMenuRadioGroup
+					value={printing?._id ?? ""}
+					onValueChange={(value) => {
+						const choice = mine.find((c) => c.printingId === value);
+						if (choice) onPick(choice);
+					}}
+				>
+					{mine.map((choice) => (
+						<DropdownMenuRadioItem
+							key={choice.rarity}
+							value={choice.printingId ?? ""}
+						>
+							<span className="truncate">{choice.rarity}</span>
+							<DropdownMenuShortcut className="tracking-normal">
+								{rarityAbbreviation(choice.rarity)}
+							</DropdownMenuShortcut>
+						</DropdownMenuRadioItem>
+					))}
+				</DropdownMenuRadioGroup>
+				{others.length > 0 ? (
+					<>
+						<DropdownMenuSeparator />
+						<DropdownMenuLabel className="font-normal text-muted-foreground text-xs">
+							Not one you need: marks it wrong
+						</DropdownMenuLabel>
+						{others.map((choice) => (
+							<DropdownMenuItem
+								key={choice.rarity}
+								inset
+								onSelect={() => onPick(choice)}
+							>
+								<span className="truncate">{choice.rarity}</span>
+								<DropdownMenuShortcut className="tracking-normal">
+									{rarityAbbreviation(choice.rarity)}
+								</DropdownMenuShortcut>
+							</DropdownMenuItem>
+						))}
+					</>
+				) : mine.length <= 1 ? (
+					<p className="px-2 pt-1 pb-1.5 text-muted-foreground text-xs">
+						No other rarity is known under this set code.
+					</p>
+				) : null}
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}

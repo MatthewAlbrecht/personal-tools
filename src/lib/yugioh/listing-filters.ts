@@ -3,6 +3,7 @@
 // only narrow a view. Relative imports only (Convex imports this).
 
 import { isSale, listingLanguage } from "./deals";
+import { type ConditionChoice, listingCondition } from "./listing-edits";
 import { type Rejection, isRejected } from "./listing-rejection";
 import { countryKey } from "./pricing";
 import {
@@ -66,6 +67,7 @@ export type FilterableListing = {
 	firstSeenAt: number;
 	sellerLocation: string | null;
 	titleRead?: TitleRead | null;
+	conditionOverride?: ConditionChoice | null;
 	titleReadStatus?: "reading" | "read" | "failed";
 	matchStatus?: MatchStatus;
 	matchOverridden?: boolean;
@@ -145,7 +147,7 @@ function passes(
 	}
 	if (
 		filters.condition &&
-		(listing.titleRead?.condition ?? "unknown") !== filters.condition
+		(listingCondition(listing) ?? "unknown") !== filters.condition
 	) {
 		return false;
 	}

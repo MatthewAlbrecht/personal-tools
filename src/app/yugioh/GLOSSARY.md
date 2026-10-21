@@ -76,6 +76,10 @@ _Avoid_: Score, rating
 A Listing you marked wrong, with a reason (wrong language, wrong card, wrong rarity, wrong set or Printing, graded, lot, fake, other). It counts toward nothing (prices, deals, cost to finish, pushes), stays rejected when captured again, and shows only under Marked wrong, where you can restore it.
 _Avoid_: Hidden, blocked, bad listing
 
+**Condition set by you**:
+A Listing's condition as you set it (or "Not stated"), over what its title says. It wins everywhere a condition counts (Qualifying, Deal grades, Reference prices, Cost to finish, filters, pushes) and stays through re-reads and recaptures. Shown with a pencil.
+_Avoid_: Corrected condition, manual grade
+
 **Graded Listing**:
 A Listing for a Copy sealed and graded by a grading company (e.g. PSA 10).
 _Avoid_: Slab

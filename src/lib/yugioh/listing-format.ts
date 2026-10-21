@@ -100,7 +100,7 @@ export type TitleFlag = {
 };
 
 /** Short condition labels: "LP", "DMG". */
-const READ_CONDITION_ABBREVIATIONS: Record<ReadCondition, string> = {
+export const READ_CONDITION_ABBREVIATIONS: Record<ReadCondition, string> = {
 	nearMint: "NM",
 	lightlyPlayed: "LP",
 	moderatelyPlayed: "MP",

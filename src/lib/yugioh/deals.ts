@@ -2,6 +2,7 @@
 // Relative imports only (Convex imports this).
 
 import type { Condition } from "./deck";
+import { type ConditionChoice, listingCondition } from "./listing-edits";
 import {
 	type Language,
 	type ReadCondition,
@@ -51,7 +52,11 @@ const CONDITION_RANK: Record<ReadCondition, number> = {
 };
 
 /** What Qualifying needs to know about a Listing. */
-type JudgedListing = { title: string; titleRead?: TitleRead | null };
+type JudgedListing = {
+	title: string;
+	titleRead?: TitleRead | null;
+	conditionOverride?: ConditionChoice | null;
+};
 
 /**
  * The Listing's language: as read from the title; before a read, the language
@@ -69,14 +74,15 @@ export function listingLanguage(listing: JudgedListing): Language {
 }
 
 /**
- * Whether the Listing's condition is below the Lowest acceptable condition.
- * A title that doesn't state a condition isn't below it: it counts, flagged.
+ * Whether the Listing's condition (the one I set, else the title's) is below
+ * the Lowest acceptable condition. An unknown condition isn't below it: it
+ * counts, flagged.
  */
 export function isBelowCondition(
 	listing: JudgedListing,
 	lowestAcceptable: Condition,
 ): boolean {
-	const condition = listing.titleRead?.condition ?? null;
+	const condition = listingCondition(listing);
 	return (
 		condition !== null &&
 		CONDITION_RANK[condition] < CONDITION_RANK[lowestAcceptable]

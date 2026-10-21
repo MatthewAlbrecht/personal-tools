@@ -3,7 +3,13 @@
 import { useForm } from "@tanstack/react-form";
 import { useMutation, useQuery } from "convex/react";
 import { formatDistanceToNowStrict } from "date-fns";
-import { Ban, ExternalLink, Undo2 } from "lucide-react";
+import {
+	Ban,
+	ChevronDown,
+	ExternalLink,
+	PencilLine,
+	Undo2,
+} from "lucide-react";
 import Link from "next/link";
 import type * as React from "react";
 import { toast } from "sonner";
@@ -28,8 +34,15 @@ import {
 } from "~/components/ui/select";
 import { Spinner } from "~/components/ui/spinner";
 import { REFERENCE_WINDOW_DAYS } from "~/lib/yugioh/deals";
+import { rarityAbbreviation } from "~/lib/yugioh/deck";
+import {
+	type ConditionChoice,
+	isConditionSetByYou,
+	listingCondition,
+} from "~/lib/yugioh/listing-edits";
 import {
 	MARKETPLACE_LABELS,
+	READ_CONDITION_ABBREVIATIONS,
 	formatMoney,
 	gradingLabel,
 	listingTypeLabel,
@@ -49,6 +62,7 @@ import { errorMessage } from "../_utils/errors";
 import { NOT_A_MATCH, listingMatchSchema } from "../_utils/schemas";
 import type { ListingView } from "../_utils/types";
 import { DealGradeBadge, ReferenceLine } from "./deal-grade";
+import { ConditionMenu, RarityMenu } from "./listing-edits";
 import { MatchSummary } from "./listing-match";
 import { MarkWrongMenu } from "./mark-wrong";
 import { YugiohDrawer } from "./yugioh-drawer";
@@ -66,6 +80,8 @@ export function ListingDrawer({
 	onClose,
 	onMarkWrong,
 	onUnmark,
+	onSetCondition,
+	onSetRarity,
 }: {
 	deckId: Id<"yugiohDecks">;
 	listing: ListingView | null;
@@ -73,6 +89,14 @@ export function ListingDrawer({
 	onClose: () => void;
 	onMarkWrong: (listing: ListingView, reason: RejectionReason) => void;
 	onUnmark: (listing: ListingView) => void;
+	onSetCondition: (
+		listing: ListingView,
+		condition: ConditionChoice | null,
+	) => void;
+	onSetRarity: (
+		listing: ListingView,
+		choice: ListingView["rarityChoices"][number],
+	) => void;
 }): React.ReactElement {
 	return (
 		<YugiohDrawer
@@ -146,6 +170,13 @@ export function ListingDrawer({
 				<div className="flex flex-col gap-6">
 					<p className="text-sm">{listing.title}</p>
 					<PriceBreakdown listing={listing} />
+					{listing.rejection ? null : (
+						<ConditionAndRarity
+							listing={listing}
+							onSetCondition={(condition) => onSetCondition(listing, condition)}
+							onSetRarity={(choice) => onSetRarity(listing, choice)}
+						/>
+					)}
 					{listing.tcgplayer ? (
 						<TcgplayerPageSays listing={listing} details={listing.tcgplayer} />
 					) : (
@@ -305,6 +336,102 @@ function importFeeNote(
 	return fee.importFeeDefaulted
 		? `${location}, ${rate}`
 		: `${location} ${rate}`;
+}
+
+/**
+ * The Listing's condition and rarity, each a picker: the condition I set
+ * wins over the title's, and a rarity re-matches it to that Printing. What
+ * I set says so.
+ */
+function ConditionAndRarity({
+	listing,
+	onSetCondition,
+	onSetRarity,
+}: {
+	listing: ListingView;
+	onSetCondition: (condition: ConditionChoice | null) => void;
+	onSetRarity: (choice: ListingView["rarityChoices"][number]) => void;
+}): React.ReactElement {
+	const condition = listingCondition(listing);
+	const printing =
+		listing.match.status === "match" ? listing.match.printing : null;
+	return (
+		<section aria-labelledby="listing-edits" className="flex flex-col gap-2">
+			<h3 id="listing-edits" className="font-medium text-sm">
+				Condition and rarity
+			</h3>
+			<dl className="grid grid-cols-[auto_1fr] items-center gap-x-6 gap-y-2 text-sm">
+				<dt className="text-muted-foreground">Condition</dt>
+				<dd className="flex min-w-0 items-center gap-3">
+					<ConditionMenu listing={listing} onPick={onSetCondition}>
+						<PickerButton
+							label={
+								condition === null
+									? "Not stated"
+									: READ_CONDITION_LABELS[condition]
+							}
+							short={
+								condition === null
+									? null
+									: READ_CONDITION_ABBREVIATIONS[condition]
+							}
+							aria-label="Change condition"
+						/>
+					</ConditionMenu>
+					{isConditionSetByYou(listing) ? <SetByYouNote /> : null}
+				</dd>
+				{printing ? (
+					<>
+						<dt className="text-muted-foreground">Rarity</dt>
+						<dd className="flex min-w-0 items-center gap-3">
+							<RarityMenu listing={listing} onPick={onSetRarity}>
+								<PickerButton
+									label={printing.rarity}
+									short={rarityAbbreviation(printing.rarity)}
+									aria-label="Change rarity"
+								/>
+							</RarityMenu>
+							{listing.match.overridden ? <SetByYouNote /> : null}
+						</dd>
+					</>
+				) : null}
+			</dl>
+		</section>
+	);
+}
+
+/** A picker's trigger: "Lightly Played  LP ⌄". */
+function PickerButton({
+	label,
+	short,
+	...props
+}: {
+	label: string;
+	short: string | null;
+} & React.ComponentProps<typeof Button>): React.ReactElement {
+	return (
+		<Button
+			variant="outline"
+			size="sm"
+			className="h-11 min-w-0 max-w-full justify-between gap-2 font-normal md:h-8"
+			{...props}
+		>
+			<span className="truncate">{label}</span>
+			{short !== null && short !== label ? (
+				<span className="text-muted-foreground text-xs">{short}</span>
+			) : null}
+			<ChevronDown data-icon="inline-end" className="text-muted-foreground" />
+		</Button>
+	);
+}
+
+function SetByYouNote(): React.ReactElement {
+	return (
+		<span className="flex shrink-0 items-center gap-1 text-muted-foreground text-xs">
+			<PencilLine aria-hidden className="size-3" />
+			Set by you
+		</span>
+	);
 }
 
 /** "What the title says": everything the AI read, as a definition list. */

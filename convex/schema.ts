@@ -31,6 +31,7 @@ import {
 	yugiohAutomationRunValidator,
 	yugiohCapturedEbayListingValidator,
 	yugiohCardOrderValidator,
+	yugiohConditionChoiceValidator,
 	yugiohConditionValidator,
 	yugiohMarketplaceValidator,
 	yugiohMatchStatusValidator,
@@ -1899,6 +1900,12 @@ export default defineSchema({
 		// toward nothing (prices, deals, cost to finish, pushes) and keeps the
 		// rejection across recaptures. Missing or null: not rejected.
 		rejection: v.optional(v.union(yugiohRejectionValidator, v.null())),
+		// The condition I set myself: it wins over the title's read everywhere
+		// (prices, grades, filters, pushes) and through re-reads and recaptures.
+		// Missing or null: the title's read stands.
+		conditionOverride: v.optional(
+			v.union(yugiohConditionChoiceValidator, v.null()),
+		),
 		// Reference prices (ticket 09). Optional because Listings captured
 		// before it have neither until `backfillSaleTimes` runs.
 		// When it sold (Unix ms; the sold date at midnight UTC) or, for an
