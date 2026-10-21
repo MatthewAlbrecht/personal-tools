@@ -570,3 +570,46 @@ describe("Listings read before a stated language beat the set code", () => {
 		expect(fakes.reads).toHaveLength(readsBefore);
 	});
 });
+
+describe("Listings read before a stated condition beat the AI's", () => {
+	test("a backfill re-derives their condition from the title, without the AI", async () => {
+		const t = setup();
+		await ashDeck(t);
+		await capture(t, "1", "Ash Blossom RA01-EN008 QCSR mp-");
+		await capture(t, "2", "Ash Blossom RA01-EN008 QCSR");
+		await capture(t, "3", "Ash Blossom RA01-EN008 QCSR LP/MP");
+		await settle(t);
+		// As the old rule stored them: the AI's condition, null on 1 and 3.
+		await t.run(async (ctx) => {
+			for (const listing of await ctx.db.query("yugiohListings").take(10)) {
+				if (!listing.titleRead) throw new Error("Listing unread");
+				const condition = listing.itemId === "2" ? "nearMint" : null;
+				await ctx.db.patch("yugiohListings", listing._id, {
+					titleRead: { ...listing.titleRead, condition },
+				});
+			}
+		});
+		const readsBefore = fakes.reads.length;
+
+		const first = await t.mutation(
+			internal.yugioh.titleReading.rederiveListingConditions,
+			{ paginationOpts: { numItems: 1, cursor: null } },
+		);
+		const second = await t.mutation(
+			internal.yugioh.titleReading.rederiveListingConditions,
+			{ paginationOpts: { numItems: 10, cursor: first.cursor } },
+		);
+		expect(first.updated + second.updated).toBe(2);
+		expect(second.isDone).toBe(true);
+
+		const byItem = new Map(
+			(await t.run(async (ctx) => ctx.db.query("yugiohListings").take(10))).map(
+				(l) => [l.itemId, l.titleRead?.condition],
+			),
+		);
+		expect(byItem.get("1")).toBe("moderatelyPlayed");
+		expect(byItem.get("2")).toBe("nearMint");
+		expect(byItem.get("3")).toBe("moderatelyPlayed");
+		expect(fakes.reads).toHaveLength(readsBefore);
+	});
+});

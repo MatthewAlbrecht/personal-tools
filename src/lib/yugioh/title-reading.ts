@@ -178,6 +178,56 @@ export function languageStatedIn(title: string): Language | null {
 	return stated.length === 1 ? (stated[0]?.[1] ?? null) : null;
 }
 
+// A condition word stands alone: no letter or digit either side ("LP" isn't
+// read in "HELP", "MP" isn't read in "MP23").
+const ALONE_BEFORE = "(?<![A-Za-z0-9])";
+// A trailing + or - nudges a grade within its band; it's read as the base
+// grade ("MP-" is Moderately Played). A hyphen followed by more letters is a
+// separator instead ("NM-LP", "NM-MT").
+const ALONE_AFTER = "(?:[+-](?![A-Za-z0-9]))?(?![A-Za-z0-9])";
+
+function conditionPattern(words: string): RegExp {
+	return new RegExp(`${ALONE_BEFORE}(?:${words})${ALONE_AFTER}`, "i");
+}
+
+/**
+ * Abbreviations and phrases sellers write for a condition. Left out as too
+ * ambiguous: "M" and "Mint" (grades, "Mint condition" hype), bare "EX" (EX
+ * Deck, product names), "PL" (Cardmarket's "Played" spans MP to HP; also
+ * Polish), "Played" alone. "SP" (Slightly Played) and "EXC"/"Excellent"
+ * (Cardmarket's grade just under Near Mint) both read as Lightly Played.
+ */
+const STATED_CONDITIONS: ReadonlyArray<[RegExp, ReadCondition]> = [
+	[conditionPattern("nm|nmmt|near[\\s-]*mint"), "nearMint"],
+	[
+		conditionPattern(
+			"lp|vlp|sp|exc|excellent|(?:lightly|light|slightly)[\\s-]*play(?:ed)?",
+		),
+		"lightlyPlayed",
+	],
+	[
+		conditionPattern("mp|(?:moderately|moderate)[\\s-]*play(?:ed)?"),
+		"moderatelyPlayed",
+	],
+	[conditionPattern("hp|(?:heavily|heavy)[\\s-]*play(?:ed)?"), "heavilyPlayed"],
+	[conditionPattern("dmg|damaged"), "damaged"],
+];
+
+/**
+ * The condition a title states ("NM", "mp-", "Lightly Played"), or null when
+ * it states none. Set codes are skipped ("MP23-EN001" isn't Moderately
+ * Played). A range or several conditions ("NM-LP", "LP/MP") read as the worst.
+ */
+export function conditionStatedIn(title: string): ReadCondition | null {
+	const words = title.replace(SET_CODE_PATTERN, " ");
+	let worst: ReadCondition | null = null;
+	// Best to worst, so the last condition found is the worst.
+	for (const [pattern, condition] of STATED_CONDITIONS) {
+		if (pattern.test(words)) worst = condition;
+	}
+	return worst;
+}
+
 /** What the AI judged from a title. Code fills in and checks the rest. */
 export type TitleJudgments = {
 	/** Which of the title's set codes is the card sold, when it has several. */
@@ -231,8 +281,9 @@ export function titleSetCode(title: string): string | null {
  * comes from the title; with several, the AI's pick must be one of them. The
  * language the title states in words beats the set code's language suffix
  * (sellers reuse the English code for Japanese cards), which beats the AI's
- * language. A Graded Listing's
- * company and grade come from the title when it states them.
+ * language. A condition the title states beats the AI's, except on a Graded
+ * Listing, whose condition is left to the AI. A Graded Listing's company and
+ * grade come from the title when it states them.
  */
 export function readTitle(title: string, judgments: TitleJudgments): TitleRead {
 	const codes = findSetCodes(title);
@@ -251,7 +302,9 @@ export function readTitle(title: string, judgments: TitleJudgments): TitleRead {
 		setCode,
 		rarity:
 			judgments.rarity === null ? null : normalizeRarity(judgments.rarity),
-		condition: judgments.condition,
+		condition: judgments.graded
+			? judgments.condition
+			: (conditionStatedIn(title) ?? judgments.condition),
 		copies: judgments.copies,
 		language,
 		graded: judgments.graded,

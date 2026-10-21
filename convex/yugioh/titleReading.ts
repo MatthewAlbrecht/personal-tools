@@ -112,3 +112,28 @@ export const rederiveListingLanguages = internalMutation({
 		return { updated, isDone: page.isDone, cursor: page.continueCursor };
 	},
 });
+
+/**
+ * One-off backfill: re-derives the condition of eBay Listings read before a
+ * condition the title states ("mp-", "NM", "LP/MP") beat the AI's, a page at a
+ * time, without the AI. Run until `isDone`, passing back `cursor`:
+ * `npx convex run yugioh/titleReading:rederiveListingConditions '{"paginationOpts":{"numItems":200,"cursor":null}}'`.
+ */
+export const rederiveListingConditions = internalMutation({
+	args: { paginationOpts: paginationOptsValidator },
+	returns: v.object({
+		updated: v.number(),
+		isDone: v.boolean(),
+		cursor: v.string(),
+	}),
+	handler: async (ctx, args) => {
+		const page = await ctx.db
+			.query("yugiohListings")
+			.paginate(args.paginationOpts);
+		let updated = 0;
+		for (const listing of page.page) {
+			if (await Matching.rederiveListingCondition(ctx, listing)) updated++;
+		}
+		return { updated, isDone: page.isDone, cursor: page.continueCursor };
+	},
+});

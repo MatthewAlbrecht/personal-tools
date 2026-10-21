@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
 	type TitleJudgments,
+	conditionStatedIn,
 	findSetCodes,
 	languageOfSetCode,
 	languageStatedIn,
@@ -301,5 +302,98 @@ describe("readTitle's language", () => {
 			readTitle("Ash Blossom QCSR", { ...judgments, language: "chinese" })
 				.language,
 		).toBe("chinese");
+	});
+});
+
+describe("a condition the title abbreviates", () => {
+	test("'mp-' in the title reads as Moderately Played when the AI found none (eBay 366727903620)", () => {
+		const title =
+			"Chimeratech Fortress Dragon JUMP-EN031 Jump Magazine Promos Limited Edition mp-";
+		expect(readTitle(title, { ...judgments, condition: null }).condition).toBe(
+			"moderatelyPlayed",
+		);
+	});
+});
+
+describe("conditionStatedIn", () => {
+	test.each([
+		["Ash Blossom RA01-EN008 QCSR NM", "nearMint"],
+		["Ash Blossom RA01-EN008 QCSR nm+", "nearMint"],
+		["Ash Blossom RA01-EN008 NM-MT", "nearMint"],
+		["Ash Blossom RA01-EN008 NM/M", "nearMint"],
+		["Ash Blossom RA01-EN008 NMMT", "nearMint"],
+		["Ash Blossom RA01-EN008 Near Mint", "nearMint"],
+		["Ash Blossom RA01-EN008 Near-Mint 1st", "nearMint"],
+		["Ash Blossom RA01-EN008 (LP)", "lightlyPlayed"],
+		["Ash Blossom RA01-EN008 VLP", "lightlyPlayed"],
+		["Ash Blossom RA01-EN008 SP", "lightlyPlayed"],
+		["Ash Blossom RA01-EN008 Slightly Played", "lightlyPlayed"],
+		["Ash Blossom RA01-EN008 EXC", "lightlyPlayed"],
+		["Ash Blossom RA01-EN008 Excellent", "lightlyPlayed"],
+		["Ash Blossom RA01-EN008 Lightly Played", "lightlyPlayed"],
+		["Ash Blossom RA01-EN008 Light Play", "lightlyPlayed"],
+		["Ash Blossom RA01-EN008 mp-", "moderatelyPlayed"],
+		["Ash Blossom RA01-EN008 MP+", "moderatelyPlayed"],
+		["Ash Blossom RA01-EN008 Moderately Played", "moderatelyPlayed"],
+		["Ash Blossom RA01-EN008 HP", "heavilyPlayed"],
+		["Ash Blossom RA01-EN008 Heavily Played", "heavilyPlayed"],
+		["Ash Blossom RA01-EN008 DMG", "damaged"],
+		["Ash Blossom RA01-EN008 Damaged", "damaged"],
+	] as const)("%s reads as %s", (title, condition) => {
+		expect(conditionStatedIn(title)).toBe(condition);
+	});
+
+	test.each([
+		["Ash Blossom RA01-EN008 NM-LP", "lightlyPlayed"],
+		["Ash Blossom RA01-EN008 LP/MP", "moderatelyPlayed"],
+		["Ash Blossom RA01-EN008 Near Mint to HP", "heavilyPlayed"],
+	] as const)("a range %s reads as its worse end, %s", (title, condition) => {
+		expect(conditionStatedIn(title)).toBe(condition);
+	});
+
+	test.each([
+		["no condition at all", "Ash Blossom RA01-EN008 QCSR"],
+		["MP inside a set code", "Ash Blossom MP23-EN001 Prismatic Secret"],
+		["a lowercase set code", "Ash Blossom mp23-en001 Prismatic Secret"],
+		["a set prefix written alone", "Ash Blossom MP23 Prismatic Secret"],
+		["LP inside a word", "Ash Blossom HELP ALPHA Lp1"],
+		["Speed Duel", "Speed Duel SGX1-ENA01 Blue-Eyes"],
+		["a bare M", "Ash Blossom RA01-EN008 M"],
+		["Mint alone", "Ash Blossom RA01-EN008 Mint"],
+		["a card named for damage", "Damage Eater RA01-EN008"],
+		["bare EX (EX Deck, product names)", "Starter Deck EX Ash Blossom"],
+	])("ignores %s", (_, title) => {
+		expect(conditionStatedIn(title)).toBeNull();
+	});
+});
+
+describe("readTitle's condition", () => {
+	test("a condition the title states beats the AI's", () => {
+		expect(
+			readTitle("Ash Blossom RA01-EN008 HP", {
+				...judgments,
+				condition: "nearMint",
+			}).condition,
+		).toBe("heavilyPlayed");
+	});
+
+	test("the AI's condition stands when the title abbreviates none", () => {
+		expect(
+			readTitle("Ash Blossom RA01-EN008 lightly used", {
+				...judgments,
+				condition: "lightlyPlayed",
+			}).condition,
+		).toBe("lightlyPlayed");
+	});
+
+	test("a Graded Listing's condition is left to the AI", () => {
+		expect(
+			readTitle("PSA 10 GEM MINT Ash Blossom RA01-EN008 NM", {
+				...judgments,
+				condition: null,
+				graded: true,
+				gradingCompany: "PSA",
+			}).condition,
+		).toBeNull();
 	});
 });

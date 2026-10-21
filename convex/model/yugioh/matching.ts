@@ -7,6 +7,7 @@ import {
 	type MatchStatus,
 	type TitleJudgments,
 	type TitleRead,
+	conditionStatedIn,
 	findSetCodes,
 	languageStatedIn,
 	matchListing,
@@ -92,6 +93,36 @@ export async function rederiveListingLanguage(
 	}
 	await ctx.db.patch("yugiohListings", listing._id, {
 		titleRead: { ...listing.titleRead, language },
+	});
+	return true;
+}
+
+/**
+ * Re-derives a read eBay Listing's condition after a condition the title
+ * states began to beat the AI's ("… mp-" was read with none). No AI: the
+ * stored condition is the AI's, which still stands when the title states none.
+ * Graded Listings keep the AI's, as `readTitle` does. A condition I set myself
+ * is left alone (it wins at read time anyway). TCGplayer Listings take their
+ * condition from the product page. True when it changed.
+ */
+export async function rederiveListingCondition(
+	ctx: MutationCtx,
+	listing: Doc<"yugiohListings">,
+): Promise<boolean> {
+	if (
+		!listing.titleRead ||
+		listing.titleRead.graded ||
+		listing.marketplace === "tcgplayer" ||
+		("conditionOverride" in listing && listing.conditionOverride != null)
+	) {
+		return false;
+	}
+	const condition = conditionStatedIn(listing.title);
+	if (condition === null || condition === listing.titleRead.condition) {
+		return false;
+	}
+	await ctx.db.patch("yugiohListings", listing._id, {
+		titleRead: { ...listing.titleRead, condition },
 	});
 	return true;
 }
