@@ -14,7 +14,12 @@ import { setCodeKey } from "../../../src/lib/yugioh/title-reading";
 import { isNewListing } from "../../../src/lib/yugioh/whats-new";
 import type { Doc, Id } from "../../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../../_generated/server";
-import { type DealContext, type DealView, loadDealContext } from "./deals";
+import {
+	type DealContext,
+	type DealView,
+	loadDealContext,
+	matchedPrintingId,
+} from "./deals";
 import {
 	MAX_CANDIDATES_PER_DECK,
 	listDeckCandidates,
@@ -26,6 +31,7 @@ import {
 	queueTitleRead,
 } from "./matching";
 import { currentUsdPerUnit } from "./pricing";
+import { queuePushCheck } from "./pushes";
 import type { yugiohCapturedEbayListingValidator } from "./validators";
 import { readNewSince } from "./whatsNew";
 
@@ -115,6 +121,14 @@ export async function ingestEbayListings(
 		});
 		if (observationChanged(existing, merged)) {
 			await observe(ctx, existing._id, merged, now);
+		}
+		// Its auction push goes 15 minutes before the end time just read.
+		if (
+			merged.listingType === "auction" &&
+			merged.endsAt !== existing.endsAt &&
+			matchedPrintingId(existing) !== null
+		) {
+			await queuePushCheck(ctx, existing._id);
 		}
 		// The AI reads a title once, and again only when it changes.
 		if (merged.title !== existing.title) {

@@ -15,7 +15,7 @@ import {
 	observationChanged,
 	observe,
 } from "./listings";
-import { queueDealCheck } from "./pushes";
+import { queuePushCheck } from "./pushes";
 import type {
 	yugiohCapturedTcgplayerProductValidator,
 	yugiohTcgplayerDetailsValidator,
@@ -171,7 +171,7 @@ export async function ingestTcgplayerProduct(
 			});
 			await observe(ctx, listingId, fields, now);
 			if (capturedBefore && !fields.sold) {
-				await queueDealCheck(ctx, listingId);
+				await queuePushCheck(ctx, listingId);
 			}
 			report.created++;
 			continue;

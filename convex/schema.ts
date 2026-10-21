@@ -1984,8 +1984,8 @@ export default defineSchema({
 
 	// Every push decided on, sent to every device at `deliverAt` (later than
 	// `createdAt` when held through quiet hours). The text is fixed when it's
-	// decided and delivered unchanged. Kept indefinitely: one deal push per
-	// Listing ever.
+	// decided and delivered unchanged. Kept indefinitely: one deal push and
+	// one auction push per Listing ever.
 	yugiohPushes: defineTable({
 		kind: yugiohPushKindValidator,
 		listingId: v.union(v.id("yugiohListings"), v.null()),

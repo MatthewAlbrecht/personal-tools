@@ -473,9 +473,11 @@ void runStatusesAgree;
 void visitKindsAgree;
 void plannedVisitsAgree;
 
-// Pushes (ticket 13). Ticket 14 adds an auction kind.
+// Pushes (ticket 13): a deal, a matched auction about to end (ticket 14), or
+// a test.
 export const yugiohPushKindValidator = v.union(
 	v.literal("deal"),
+	v.literal("auction"),
 	v.literal("test"),
 );
 

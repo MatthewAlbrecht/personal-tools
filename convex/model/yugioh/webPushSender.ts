@@ -6,6 +6,9 @@
 import webpush, { WebPushError } from "web-push";
 import type { PushOptions, PushOutcome, PushSubscriptionInput } from "./pushes";
 
+/** One device's send gives up after this long. */
+const SEND_TIMEOUT_MS = 30_000;
+
 export async function sendWebPush(
 	subscription: PushSubscriptionInput,
 	payload: string,
@@ -26,6 +29,8 @@ export async function sendWebPush(
 			vapidDetails: { subject, publicKey, privateKey },
 			TTL: options.ttlSeconds,
 			urgency: options.urgency,
+			// A hung push service must not hold the send past its deadline.
+			timeout: SEND_TIMEOUT_MS,
 			...(options.topic === null ? {} : { topic: options.topic }),
 		});
 		return { status: "sent" };

@@ -175,11 +175,11 @@ function AlertsSwitch({
 								<Field orientation="horizontal" className="min-h-11">
 									<FieldContent>
 										<FieldLabel htmlFor="push-alerts">
-											Deal alerts on this device
+											Deal and auction alerts on this device
 										</FieldLabel>
 										<FieldDescription>
-											Great and Good deals, 8am-11pm. Deals found overnight
-											arrive at 8am.
+											Great and Good deals, 8am-11pm. Auctions 15 minutes before
+											they end, any time.
 										</FieldDescription>
 										{!on && Notification.permission === "denied" ? (
 											<FieldDescription className="text-destructive">

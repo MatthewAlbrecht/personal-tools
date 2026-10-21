@@ -8,8 +8,9 @@ import {
 	yugiohPushSubscriptionValidator,
 } from "../model/yugioh/validators";
 
-// Push notifications. The app turns push on and off per device; deal checks
-// and deliveries are internal, scheduled from matching and from each other.
+// Push notifications. The app turns push on and off per device; deal and
+// auction checks and deliveries are internal, scheduled from matching,
+// captures and each other.
 
 /** Turns push on for this device, or refreshes it on launch. */
 export const savePushSubscription = mutation({
@@ -63,6 +64,15 @@ export const checkDeal = internalMutation({
 	},
 });
 
+export const checkAuction = internalMutation({
+	args: { listingId: v.id("yugiohListings") },
+	returns: v.null(),
+	handler: async (ctx, { listingId }) => {
+		await Pushes.checkAuction(ctx, listingId, Date.now());
+		return null;
+	},
+});
+
 const deliveryValidator = v.object({
 	payload: v.string(),
 	options: yugiohPushOptionsValidator,
@@ -78,6 +88,15 @@ export const claimDelivery = internalMutation({
 	returns: v.union(deliveryValidator, v.null()),
 	handler: async (ctx, { pushId }) =>
 		await Pushes.claimDelivery(ctx, pushId, Date.now()),
+});
+
+export const expireDelivery = internalMutation({
+	args: { pushId: v.id("yugiohPushes") },
+	returns: v.null(),
+	handler: async (ctx, { pushId }) => {
+		await Pushes.expireDelivery(ctx, pushId, Date.now());
+		return null;
+	},
 });
 
 export const recordDelivery = internalMutation({

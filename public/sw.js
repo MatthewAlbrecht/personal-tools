@@ -37,8 +37,8 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
 	event.notification.close();
-	const url = appPath(event.notification.data?.url);
-	event.waitUntil(openApp(url).catch(() => undefined));
+	const url = pushTarget(event.notification.data?.url);
+	event.waitUntil(openTarget(url).catch(() => undefined));
 });
 
 /** The push's JSON ({ title, body, url, tag }), or a generic one. */
@@ -49,7 +49,7 @@ function readPush(event) {
 			return {
 				title: data.title,
 				body: typeof data.body === "string" ? data.body : "",
-				url: appPath(data.url),
+				url: pushTarget(data.url),
 				tag: typeof data.tag === "string" ? data.tag : undefined,
 			};
 		}
@@ -59,12 +59,25 @@ function readPush(event) {
 	return { ...FALLBACK, tag: undefined };
 }
 
-/** A same-origin path to open; anything else opens the tracker. */
-function appPath(url) {
+/** An eBay Listing: an auction push opens it directly, as time matters most. */
+const EBAY_ITEM = /^https:\/\/www\.ebay\.com\/itm\/\d+$/;
+
+/** A same-origin path or an eBay Listing to open; anything else opens the tracker. */
+function pushTarget(url) {
+	if (typeof url === "string" && EBAY_ITEM.test(url)) return url;
 	if (typeof url !== "string" || !url.startsWith("/") || url.startsWith("//")) {
 		return FALLBACK.url;
 	}
 	return url;
+}
+
+/** Opens an eBay Listing in a new window, or a page of the app. */
+async function openTarget(url) {
+	if (EBAY_ITEM.test(url)) {
+		await self.clients.openWindow(url);
+		return;
+	}
+	await openApp(url);
 }
 
 /**

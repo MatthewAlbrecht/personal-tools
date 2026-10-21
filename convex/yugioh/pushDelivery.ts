@@ -19,7 +19,7 @@ export const deliver = internalAction({
 		const results = await Promise.all(
 			delivery.subscriptions.map(async ({ _id, ...subscription }) => ({
 				subscriptionId: _id,
-				outcome: await sendWebPush(
+				outcome: await sendSafely(
 					subscription,
 					delivery.payload,
 					delivery.options,
@@ -33,3 +33,17 @@ export const deliver = internalAction({
 		return null;
 	},
 });
+
+/** One device's send; a throw is that device's failure, not the whole push's. */
+async function sendSafely(
+	...args: Parameters<typeof sendWebPush>
+): ReturnType<typeof sendWebPush> {
+	try {
+		return await sendWebPush(...args);
+	} catch (error) {
+		return {
+			status: "failed",
+			reason: `The send failed: ${error instanceof Error ? error.message : String(error)}`,
+		};
+	}
+}

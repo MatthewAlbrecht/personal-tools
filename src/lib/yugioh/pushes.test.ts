@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { dealPushText, pushDeliveryTime } from "./pushes";
+import { auctionPushText, dealPushText, pushDeliveryTime } from "./pushes";
 
 const DENVER = "America/Denver";
 
@@ -85,5 +85,61 @@ describe("dealPushText", () => {
 			title: "Good deal: Called by the Grave UR",
 			body: "$3.00 a copy, 91% of $3.30 ref · TCGplayer, best offer",
 		});
+	});
+});
+
+describe("auctionPushText", () => {
+	const now = Date.UTC(2026, 9, 20, 12);
+	const minute = 60 * 1000;
+	const auction = {
+		cardName: "Ash Blossom & Joyous Spring",
+		rarity: "Quarter Century Secret Rare",
+		perCopy: 40,
+		reference: 54,
+		bids: 4,
+		endsAt: now + 15 * minute,
+		lastSeenAt: now - 22 * minute,
+	};
+
+	test("says how long is left, then the last seen price, how old it is, the Reference and bids", () => {
+		expect(auctionPushText(auction, now)).toEqual({
+			title: "Ending in 15 min: Ash Blossom & Joyous Spring QCSR",
+			body: "Last seen $40.00 a copy (22m ago) · ref $54 · 4 bids",
+		});
+	});
+
+	test("found late, it says the time actually left", () => {
+		expect(
+			auctionPushText({ ...auction, endsAt: now + 8 * minute + 20_000 }, now)
+				.title,
+		).toBe("Ending in 8 min: Ash Blossom & Joyous Spring QCSR");
+		// A check may run a little before 15 minutes are left.
+		expect(
+			auctionPushText({ ...auction, endsAt: now + 15 * minute + 40_000 }, now)
+				.title,
+		).toBe("Ending in 15 min: Ash Blossom & Joyous Spring QCSR");
+	});
+
+	test("ages the price in minutes, hours or days", () => {
+		const body = (lastSeenAt: number) =>
+			auctionPushText({ ...auction, lastSeenAt }, now).body;
+		expect(body(now - 20_000)).toMatch(/\(just now\)/);
+		expect(body(now - 3 * 60 * minute - 10 * minute)).toMatch(/\(3h ago\)/);
+		expect(body(now - 2 * 24 * 60 * minute)).toMatch(/\(2d ago\)/);
+	});
+
+	test("without a Reference price, bids or a price, says so", () => {
+		expect(
+			auctionPushText(
+				{ ...auction, reference: null, bids: 0, perCopy: 12.5 },
+				now,
+			).body,
+		).toBe("Last seen $12.50 a copy (22m ago) · no ref yet · no bids yet");
+		expect(
+			auctionPushText({ ...auction, bids: 1, reference: 54.3 }, now).body,
+		).toBe("Last seen $40.00 a copy (22m ago) · ref $54.30 · 1 bid");
+		expect(
+			auctionPushText({ ...auction, perCopy: null, bids: null }, now).body,
+		).toBe("No price seen yet · ref $54");
 	});
 });

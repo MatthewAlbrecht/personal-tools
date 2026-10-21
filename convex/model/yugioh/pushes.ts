@@ -1,20 +1,31 @@
 import { ConvexError, type Infer } from "convex/values";
-// Push notifications: devices with push on, the deal push rule, and the
-// outbox every push goes through. Sending itself is a Node action
+// Push notifications: devices with push on, the deal and auction push rules,
+// and the outbox every push goes through. Sending itself is a Node action
 // (`convex/yugioh/pushDelivery.ts`); this decides what to send and when, and
 // records what the push service said.
-import { millisecondsInDay } from "date-fns/constants";
-import { isSale } from "../../../src/lib/yugioh/deals";
+import {
+	millisecondsInDay,
+	millisecondsInMinute,
+	millisecondsInSecond,
+} from "date-fns/constants";
+import { isRunningAuction, isSale } from "../../../src/lib/yugioh/deals";
 import { isCardFinished } from "../../../src/lib/yugioh/deck";
 import {
 	DEFAULT_TIME_ZONE,
+	auctionPushText,
 	dealPushText,
 	pushDeliveryTime,
 } from "../../../src/lib/yugioh/pushes";
 import { internal } from "../../_generated/api";
 import type { Doc, Id } from "../../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../../_generated/server";
-import { type CardDeal, loadCardDealGrader, matchedPrintingId } from "./deals";
+import {
+	type CardDeal,
+	MAX_BUY_NOW_LISTINGS,
+	goneFromTcgplayerPage,
+	loadCardDealGrader,
+	matchedPrintingId,
+} from "./deals";
 import type {
 	yugiohPushKindValidator,
 	yugiohPushOptionsValidator,
@@ -31,12 +42,33 @@ export const MAX_PUSH_DEVICES = 20;
  */
 export const NEW_DEAL_WINDOW_MS = millisecondsInDay;
 
+/** An auction is pushed this long before it ends, at any hour. */
+export const AUCTION_PUSH_LEAD_MS = 15 * millisecondsInMinute;
+
+/**
+ * An auction check this close before its push time still pushes. A capture
+ * reads "time left" to the minute, so each one moves the end time a little,
+ * and each move schedules another check.
+ */
+const AUCTION_CHECK_SLACK_MS = millisecondsInMinute;
+
+/**
+ * A send still unrecorded this long after it started has died: a Node
+ * action can't run longer (10 minutes).
+ */
+export const SEND_DEADLINE_MS = 10 * millisecondsInMinute;
+
 /** Most Cards across Decks checked for one Listing's Printing. */
 const MAX_CARDS_WANTING = 50;
 
-/** How long the push service keeps trying an offline device, per kind. */
+/**
+ * How long the push service keeps trying an offline device, per kind. An
+ * auction push gets no longer than the auction has left.
+ */
 const TTL_SECONDS: Record<PushKind, number> = {
 	deal: 12 * 60 * 60,
+	// Useless once the auction has ended.
+	auction: AUCTION_PUSH_LEAD_MS / millisecondsInSecond,
 	test: 60 * 60,
 };
 
@@ -105,17 +137,31 @@ export async function hasPushSubscription(
 }
 
 /**
- * Asks for a deal check on a Listing that was just matched to a Printing.
- * Nothing is scheduled while no device has push on.
+ * Asks for push checks on a Listing that was just matched to a Printing, or
+ * an auction whose end time a capture moved: a deal check now for a
+ * fixed-price Listing, an auction check 15 minutes before a running auction
+ * ends (now, if that's passed). Nothing is scheduled while no device has push
+ * on.
  */
-export async function queueDealCheck(
+export async function queuePushCheck(
 	ctx: MutationCtx,
 	listingId: Id<"yugiohListings">,
 ): Promise<void> {
-	if ((await newestSubscription(ctx)) === null) return;
-	await ctx.scheduler.runAfter(0, internal.yugioh.pushes.checkDeal, {
-		listingId,
-	});
+	const listing = await ctx.db.get("yugiohListings", listingId);
+	if (!listing || (await newestSubscription(ctx)) === null) return;
+	if (listing.listingType !== "auction") {
+		await ctx.scheduler.runAfter(0, internal.yugioh.pushes.checkDeal, {
+			listingId,
+		});
+		return;
+	}
+	if (listing.endsAt === null || listing.sold) return;
+	// A time already passed runs at once.
+	await ctx.scheduler.runAt(
+		listing.endsAt - AUCTION_PUSH_LEAD_MS,
+		internal.yugioh.pushes.checkAuction,
+		{ listingId },
+	);
 }
 
 /**
@@ -138,15 +184,16 @@ export async function checkDeal(
 	if (printingId === null) return;
 	if (await pushFor(ctx, listingId, "deal")) return;
 
-	const deal = await bestDeal(ctx, listing, printingId, now);
+	// Ties between Decks go to the one I viewed most recently.
+	const deal = await wantingCard(ctx, listing, printingId, now, isPushable);
 	if (deal === null) return;
 	const text = dealPushText({
-		grade: deal.grade,
+		grade: deal.deal.grade,
 		cardName: deal.card.cardName,
 		rarity: deal.rarity,
-		perCopy: deal.perCopy,
-		percentOfReference: deal.percentOfReference,
-		reference: deal.reference,
+		perCopy: deal.deal.perCopy,
+		percentOfReference: deal.deal.percentOfReference,
+		reference: deal.deal.reference,
 		marketplace: listing.marketplace,
 		listingType: listing.listingType,
 	});
@@ -160,6 +207,62 @@ export async function checkDeal(
 			tag: `deal-${listingId}`,
 		},
 		pushDeliveryTime(now, await quietHoursTimeZone(ctx)),
+		now,
+	);
+}
+
+/**
+ * Pushes a running auction once, 15 minutes before it ends, at any hour, when
+ * it's Qualifying for a Card that still needs Copies and searches its
+ * Printing. The push carries the last captured Per-copy price and how old it
+ * is, and opens the eBay Listing. A check well before the push time is
+ * dropped: the end time has moved, and the move scheduled a later check.
+ */
+export async function checkAuction(
+	ctx: MutationCtx,
+	listingId: Id<"yugiohListings">,
+	now: number,
+): Promise<void> {
+	const listing = await ctx.db.get("yugiohListings", listingId);
+	if (!listing || listing.listingType !== "auction") return;
+	if (listing.endsAt === null || !isRunningAuction(listing, now)) return;
+	if (now < listing.endsAt - AUCTION_PUSH_LEAD_MS - AUCTION_CHECK_SLACK_MS) {
+		return;
+	}
+	const printingId = matchedPrintingId(listing);
+	if (printingId === null) return;
+	if (await pushFor(ctx, listingId, "auction")) return;
+
+	const want = await wantingCard(
+		ctx,
+		listing,
+		printingId,
+		now,
+		isQualifyingDeal,
+	);
+	if (want === null) return;
+	const text = auctionPushText(
+		{
+			cardName: want.card.cardName,
+			rarity: want.rarity,
+			perCopy: want.deal.perCopy,
+			reference: want.deal.reference,
+			bids: listing.bids,
+			endsAt: listing.endsAt,
+			lastSeenAt: listing.lastSeenAt,
+		},
+		now,
+	);
+	await queuePush(
+		ctx,
+		{
+			kind: "auction",
+			listingId,
+			...text,
+			url: listing.url,
+			tag: `auction-${listingId}`,
+		},
+		now,
 		now,
 	);
 }
@@ -178,7 +281,7 @@ export async function queueTestPush(
 			kind: "test",
 			listingId: null,
 			title: "Alerts are on",
-			body: "Deals will show up here like this.",
+			body: "Deals and auctions will show up here like this.",
 			url: "/yugioh/settings",
 			tag: "test",
 		},
@@ -210,11 +313,18 @@ export async function claimDelivery(
 ): Promise<Delivery | null> {
 	const push = await ctx.db.get("yugiohPushes", pushId);
 	if (!push || push.status !== "pending") return null;
+	let ttlSeconds = TTL_SECONDS[push.kind];
 	if (push.listingId !== null) {
 		const listing = await ctx.db.get("yugiohListings", push.listingId);
-		if (!listing || listing.sold || isSale(listing, now)) {
+		if (!listing || (await hasEnded(ctx, listing, now))) {
 			await skip(ctx, pushId, "The Listing has ended.");
 			return null;
+		}
+		if (push.kind === "auction" && listing.endsAt !== null) {
+			const secondsLeft = Math.ceil(
+				(listing.endsAt - now) / millisecondsInSecond,
+			);
+			ttlSeconds = Math.min(ttlSeconds, secondsLeft);
 		}
 	}
 	const devices = await ctx.db
@@ -227,6 +337,11 @@ export async function claimDelivery(
 		return null;
 	}
 	await ctx.db.patch("yugiohPushes", pushId, { status: "sending" });
+	await ctx.scheduler.runAfter(
+		SEND_DEADLINE_MS,
+		internal.yugioh.pushes.expireDelivery,
+		{ pushId },
+	);
 	return {
 		payload: JSON.stringify({
 			title: push.title,
@@ -235,8 +350,9 @@ export async function claimDelivery(
 			tag: push.tag,
 		}),
 		options: {
-			ttlSeconds: TTL_SECONDS[push.kind],
-			urgency: "normal",
+			ttlSeconds,
+			// An auction can't wait for a phone in low-power mode.
+			urgency: push.kind === "auction" ? "high" : "normal",
 			topic: push.listingId === null ? null : pushTopic(push.listingId),
 		},
 		subscriptions: devices.map((device) => ({
@@ -282,6 +398,24 @@ export async function recordDelivery(
 	});
 }
 
+/**
+ * Fails a push whose send started but never recorded an outcome (its action
+ * died). It isn't retried: some devices may already have it.
+ */
+export async function expireDelivery(
+	ctx: MutationCtx,
+	pushId: Id<"yugiohPushes">,
+	now: number,
+): Promise<void> {
+	const push = await ctx.db.get("yugiohPushes", pushId);
+	if (!push || push.status !== "sending") return;
+	await ctx.db.patch("yugiohPushes", pushId, {
+		status: "failed",
+		sentAt: now,
+		note: "The send didn't finish, so some devices may not have it.",
+	});
+}
+
 type PushContent = {
 	kind: PushKind;
 	listingId: Id<"yugiohListings"> | null;
@@ -312,27 +446,26 @@ async function queuePush(
 	});
 }
 
-type BestDeal = {
+/** A Card that wants a Listing, and how the Listing grades for it. */
+type WantingCard<D extends CardDeal = CardDeal> = {
 	card: Doc<"yugiohDeckCards">;
 	rarity: string;
-	grade: "great" | "good";
-	perCopy: number;
-	reference: number;
-	percentOfReference: number;
+	deal: D;
 };
 
 /**
- * The Card a Listing is a Great or Good deal for, among Cards still needing
- * Copies that search its Printing (the Chosen one, or any Candidate while
- * undecided). Each is judged at its own Lowest acceptable condition. Ties
- * between Decks go to the one I viewed most recently.
+ * A Card that still needs Copies, searches the Listing's Printing (the
+ * Chosen one, or any Candidate while undecided), and accepts the Listing as
+ * graded at the Card's own Lowest acceptable condition. Of several (in
+ * several Decks), the one in the Deck I viewed most recently.
  */
-async function bestDeal(
+async function wantingCard<D extends CardDeal>(
 	ctx: MutationCtx,
 	listing: Doc<"yugiohListings">,
 	printingId: Id<"yugiohPrintings">,
 	now: number,
-): Promise<BestDeal | null> {
+	accepts: (deal: CardDeal) => deal is D,
+): Promise<WantingCard<D> | null> {
 	const printing = await ctx.db.get("yugiohPrintings", printingId);
 	if (!printing) return null;
 	const candidates = await ctx.db
@@ -340,35 +473,34 @@ async function bestDeal(
 		.withIndex("by_printingId", (q) => q.eq("printingId", printingId))
 		.take(MAX_CARDS_WANTING);
 	const grade = await loadCardDealGrader(ctx, now);
-	let best: (BestDeal & { viewedAt: number }) | null = null;
+	let best: (WantingCard<D> & { viewedAt: number }) | null = null;
 	for (const candidate of candidates) {
 		const card = await ctx.db.get("yugiohDeckCards", candidate.deckCardId);
 		if (!card || isCardFinished(card)) continue;
 		if (card.chosenPrintingId !== null && card.chosenPrintingId !== printingId)
 			continue;
 		const deal = await grade(listing, card.lowestAcceptableCondition);
-		if (!isPushable(deal)) continue;
+		if (!accepts(deal)) continue;
 		const viewedAt = await lastViewedAt(ctx, card.deckId);
 		if (best !== null && best.viewedAt >= viewedAt) continue;
-		best = {
-			card,
-			rarity: printing.rarity,
-			grade: deal.grade,
-			perCopy: deal.perCopy,
-			reference: deal.reference,
-			percentOfReference: deal.percentOfReference,
-			viewedAt,
-		};
+		best = { card, rarity: printing.rarity, deal, viewedAt };
 	}
 	return best;
 }
 
-function isPushable(deal: CardDeal): deal is CardDeal & {
+type PushableDeal = CardDeal & {
 	grade: "great" | "good";
 	perCopy: number;
 	reference: number;
 	percentOfReference: number;
-} {
+};
+
+/** Counts for the Card: matched, English, not graded, at its condition. */
+function isQualifyingDeal(deal: CardDeal): deal is CardDeal {
+	return deal.qualifying;
+}
+
+function isPushable(deal: CardDeal): deal is PushableDeal {
 	return (
 		deal.qualifying &&
 		(deal.grade === "great" || deal.grade === "good") &&
@@ -376,6 +508,66 @@ function isPushable(deal: CardDeal): deal is CardDeal & {
 		deal.reference !== null &&
 		deal.percentOfReference !== null
 	);
+}
+
+/**
+ * Whether a Listing is over: sold, past the end time eBay showed (an
+ * auction, or a fixed-price Listing that ends unsold), or a fixed-price
+ * Listing that has dropped out of its page (captures never see "ended
+ * unsold").
+ */
+async function hasEnded(
+	ctx: QueryCtx,
+	listing: Doc<"yugiohListings">,
+	now: number,
+): Promise<boolean> {
+	if (listing.sold || isSale(listing, now)) return true;
+	if (listing.endsAt !== null && listing.endsAt <= now) return true;
+	if (listing.listingType === "auction") return false;
+	return await droppedOut(ctx, listing);
+}
+
+/**
+ * A fixed-price Listing no longer on the page that showed it:
+ * - TCGplayer: the latest capture of its product page left it out.
+ * - eBay: a later capture saw an older fixed-price Listing of the same
+ *   Printing. Newly Listed sorts newest first, so that page would have shown
+ *   this one too if it were still for sale.
+ */
+async function droppedOut(
+	ctx: QueryCtx,
+	listing: Doc<"yugiohListings">,
+): Promise<boolean> {
+	const printingId = matchedPrintingId(listing);
+	if (printingId === null) return false;
+	if (listing.marketplace === "tcgplayer") {
+		const printing = await ctx.db.get("yugiohPrintings", printingId);
+		return goneFromTcgplayerPage(printing)(listing);
+	}
+	const forSale = await ctx.db
+		.query("yugiohListings")
+		.withIndex("by_matchedPrintingId_and_marketplace_and_saleAt", (q) =>
+			q
+				.eq("matchedPrintingId", printingId)
+				.eq("marketplace", "ebay")
+				.eq("saleAt", null),
+		)
+		.order("desc")
+		.take(MAX_BUY_NOW_LISTINGS);
+	const listed = listedTime(listing);
+	return forSale.some(
+		(other) =>
+			other._id !== listing._id &&
+			!other.sold &&
+			other.listingType !== "auction" &&
+			other.lastSeenAt > listing.lastSeenAt &&
+			listedTime(other) <= listed,
+	);
+}
+
+/** When a Listing went up: eBay's listing date, else its first capture. */
+function listedTime(listing: Doc<"yugiohListings">): number {
+	return listing.listedAt ?? listing.firstSeenAt;
 }
 
 async function lastViewedAt(

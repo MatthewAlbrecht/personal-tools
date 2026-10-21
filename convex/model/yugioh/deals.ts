@@ -334,7 +334,7 @@ function buyNowReader(
  * pricey or pricier (or showed none at all). TCGplayer sorts by price +
  * shipping, so a pricier unseen Listing may just be on a later page.
  */
-function goneFromTcgplayerPage(
+export function goneFromTcgplayerPage(
 	printing: Doc<"yugiohPrintings"> | null,
 ): (listing: Doc<"yugiohListings">) => boolean {
 	const seenAt = printing?.tcgplayerListingsSeenAt;

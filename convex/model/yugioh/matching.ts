@@ -17,7 +17,7 @@ import {
 import { internal } from "../../_generated/api";
 import type { Doc, Id } from "../../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../../_generated/server";
-import { queueDealCheck } from "./pushes";
+import { queuePushCheck } from "./pushes";
 
 /** Most Printings one set code holds (one per rarity). */
 const MAX_PRINTINGS_PER_SET_CODE = 20;
@@ -121,7 +121,7 @@ export async function saveTitleRead(
 		...match,
 	});
 	if ((match?.matchStatus ?? listing.matchStatus) === "match") {
-		await queueDealCheck(ctx, listingId);
+		await queuePushCheck(ctx, listingId);
 	}
 }
 
@@ -185,7 +185,7 @@ export async function setMatchOverride(
 		matchedPrintingId: printingId,
 		matchOverridden: true,
 	});
-	if (printingId !== null) await queueDealCheck(ctx, listingId);
+	if (printingId !== null) await queuePushCheck(ctx, listingId);
 }
 
 /** The set code and rarity a stored Listing is matched on. */

@@ -245,7 +245,7 @@ Per copy        $47.71
 
 - **Notifications** `Card`:
   - Inside the installed app with push available: a `Switch` "Deal and auction alerts on this device", with the description "Great and Good deals, 8am-11pm. Auctions 15 minutes before they end, any time."
-    - **Built in 13 (deals only):** "Deal alerts on this device", "Great and Good deals, 8am-11pm. Deals found overnight arrive at 8am." Ticket 14 restores the auction wording above once auction pushes exist. A "Send a test alert" button sits under the switch while it's on.
+    - A "Send a test alert" button sits under the switch while it's on (13). Ticket 14 restored the auction wording above.
   - In a Safari tab on iPhone: numbered add-to-home-screen steps instead.
   - On desktop browsers that support push: the same `Switch`.
   - See `references/ios-web-push.md`.

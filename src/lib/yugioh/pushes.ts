@@ -1,3 +1,8 @@
+import {
+	differenceInDays,
+	differenceInHours,
+	differenceInMinutes,
+} from "date-fns";
 import { millisecondsInHour } from "date-fns/constants";
 import type { DealGrade } from "./deals";
 import { DEAL_GRADE_LABELS } from "./deals";
@@ -5,7 +10,7 @@ import { rarityAbbreviation } from "./deck";
 import type { Marketplace } from "./listing-filters";
 import { MARKETPLACE_LABELS, formatMoney } from "./listing-format";
 
-// Push notifications: when a deal push may go out, and what it says.
+// Push notifications: when a deal push may go out, and what pushes say.
 // Relative imports only (Convex imports this).
 
 /** Deal pushes are held from this hour (11pm)… */
@@ -62,6 +67,63 @@ export function dealPushText(deal: DealPushFacts): {
 		title: `${DEAL_GRADE_LABELS[deal.grade]} deal: ${deal.cardName} ${rarityAbbreviation(deal.rarity)}`,
 		body: `${formatMoney(deal.perCopy, "USD")} a copy, ${deal.percentOfReference}% of ${referenceMoney(deal.reference)} ref · ${MARKETPLACE_LABELS[deal.marketplace]}, ${type}`,
 	};
+}
+
+export type AuctionPushFacts = {
+	cardName: string;
+	rarity: string;
+	/** The Per-copy price at the last capture; null when it showed no price. */
+	perCopy: number | null;
+	/** The eBay Reference price; null while there are too few sales. */
+	reference: number | null;
+	bids: number | null;
+	endsAt: number;
+	/** When a capture last saw the Listing (and its price). */
+	lastSeenAt: number;
+};
+
+/**
+ * An auction push, sent as it's about to end: "Ending in 15 min: Ash Blossom
+ * & Joyous Spring QCSR" over "Last seen $40.00 a copy (22m ago) · ref $54 ·
+ * 4 bids". The price is the last one a capture saw, so it says how old it is.
+ */
+export function auctionPushText(
+	auction: AuctionPushFacts,
+	now: number,
+): { title: string; body: string } {
+	// Whole minutes left, never rounded up: a check may run a little early.
+	const minutesLeft = Math.max(1, differenceInMinutes(auction.endsAt, now));
+	const price =
+		auction.perCopy === null
+			? "No price seen yet"
+			: `Last seen ${formatMoney(auction.perCopy, "USD")} a copy (${age(auction.lastSeenAt, now)})`;
+	const parts = [
+		price,
+		auction.reference === null
+			? "no ref yet"
+			: `ref ${referenceMoney(auction.reference)}`,
+	];
+	if (auction.bids !== null) {
+		parts.push(
+			auction.bids === 0
+				? "no bids yet"
+				: `${auction.bids} ${auction.bids === 1 ? "bid" : "bids"}`,
+		);
+	}
+	return {
+		title: `Ending in ${minutesLeft} min: ${auction.cardName} ${rarityAbbreviation(auction.rarity)}`,
+		body: parts.join(" · "),
+	};
+}
+
+/** How long ago `then` was: "just now", "22m ago", "3h ago", "2d ago". */
+function age(then: number, now: number): string {
+	const minutes = differenceInMinutes(now, then);
+	if (minutes < 1) return "just now";
+	if (minutes < 60) return `${minutes}m ago`;
+	const hours = differenceInHours(now, then);
+	if (hours < 24) return `${hours}h ago`;
+	return `${differenceInDays(now, then)}d ago`;
 }
 
 /** "$54" for a whole-dollar Reference price, "$12.18" otherwise. */
