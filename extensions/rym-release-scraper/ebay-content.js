@@ -1,6 +1,8 @@
 // Reads an eBay search-results page (active or sold) with `readEbayResults`
 // (ebay-reader.js) and sends every Listing to the Yu-Gi-Oh tracker through
 // the service worker. Runs once on load; the dock's button runs it again.
+// On an automated run's visit it scrolls through the results first, and it
+// opens the run's next Search from this page (ticket 20).
 
 const EBAY_OBSERVE_MS = 8000;
 
@@ -92,7 +94,45 @@ function tellNothingToSend(error, challenged = false) {
 	);
 }
 
-async function runEbayCapture() {
+/** On a run's visit, skims down to about the end of the results list. */
+async function scrollThroughEbayResults() {
+	const results = document.querySelector("ul.srp-results");
+	if (!results || !(await isAutomatedVisit())) return;
+	await scrollThroughPage({
+		endOf: function endOfResults() {
+			return scrollEndOf(window, results);
+		},
+	});
+}
+
+/** Whether `url` is an eBay Search a run may open from this page. */
+function isEbaySearchUrl(url) {
+	try {
+		const parsed = new URL(url);
+		return (
+			parsed.protocol === "https:" &&
+			parsed.hostname === "www.ebay.com" &&
+			parsed.pathname.startsWith("/sch/")
+		);
+	} catch {
+		return false;
+	}
+}
+
+// A run's next Search, opened by this page itself, so the request carries an
+// eBay referrer like a click inside the site, not a fresh load from the
+// extension. docs/yugioh/references/navigation-and-scrolling.md
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+	if (!message || message.type !== "YUGIOH_NAVIGATE") return;
+	if (!isEbaySearchUrl(message.url)) {
+		sendResponse({ ok: false });
+		return;
+	}
+	sendResponse({ ok: true });
+	location.assign(message.url);
+});
+
+async function runEbayCapture({ scroll = false } = {}) {
 	applyDockUpdate({
 		status: "running",
 		headline: "Reading results",
@@ -102,6 +142,7 @@ async function runEbayCapture() {
 		phase: "read",
 	});
 	await waitForEbayResults(EBAY_OBSERVE_MS);
+	if (scroll) await scrollThroughEbayResults();
 
 	const { listings } = readEbayResults(document, {
 		now: Date.now(),
@@ -161,4 +202,4 @@ mountScrapeDock({
 	},
 });
 
-void runEbayCapture();
+void runEbayCapture({ scroll: true });

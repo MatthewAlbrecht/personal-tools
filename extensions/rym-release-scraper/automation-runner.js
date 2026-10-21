@@ -209,6 +209,54 @@ function checkPageAt(url) {
 	return null;
 }
 
+/**
+ * How a run opens its pages (ticket 20): one tab per marketplace, reused for
+ * the whole run, and exactly one page load per visit.
+ *
+ * - A marketplace's first page opens a new tab (`createTab(url)` → tab ID).
+ * - Each next eBay Search is opened from the eBay page already in the tab
+ *   (`navigateFromPage(tabId, url)`: the content script sets `location`), so
+ *   the request carries an eBay referrer, like a click inside the site.
+ *   docs/yugioh/references/navigation-and-scrolling.md
+ * - When the page can't (no content script answered), and for TCGplayer
+ *   product pages, the tab loads the URL directly (`updateTab(tabId, url)`).
+ * - Both resolve false when the tab is gone; a new tab is opened instead.
+ *
+ * `ready(tabId)` is called before the page is asked for in a known tab (and
+ * right after a new tab opens), so the caller can wait on that tab first.
+ * Resolves with the visit's tab ID.
+ */
+function makeVisitTabs({ createTab, updateTab, navigateFromPage }) {
+	const tabs = new Map();
+	return async function openVisit(visit, ready) {
+		const site = siteOf(visit.url);
+		const known = tabs.get(site);
+		if (known !== undefined) {
+			ready(known);
+			if (
+				site === "www.ebay.com" &&
+				(await navigateFromPage(known, visit.url))
+			) {
+				return known;
+			}
+			if (await updateTab(known, visit.url)) return known;
+		}
+		const tabId = await createTab(visit.url);
+		tabs.set(site, tabId);
+		ready(tabId);
+		return tabId;
+	};
+}
+
+function siteOf(url) {
+	try {
+		return new URL(url).hostname;
+	} catch {
+		return "";
+	}
+}
+
+globalThis.makeVisitTabs = makeVisitTabs;
 globalThis.runAutomatedRun = runAutomatedRun;
 globalThis.checkPageAt = checkPageAt;
 globalThis.visitOutcome = visitOutcome;

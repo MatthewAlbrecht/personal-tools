@@ -2,7 +2,7 @@
 
 Every few hours (about every 3 until it learns when sellers post, never from 1 to 7 AM, see "Run timing") a script on my Mac opens every eBay Search (Newly Listed and Sold) and every TCGplayer product page in a Chrome profile of its own. About 20 minutes before a matched auction ends, it also makes a short refresh run, so the auction push 15 minutes before the end shows a fresh price. The extension there captures each page, exactly as it does when I open one myself. Each run is recorded in the app (Settings → Automated runs), and the Deck page says "Last captured 9h ago" once captures are over 6 hours old.
 
-Platform facts and sources: `references/automated-browser.md` (§8 covers how extra runs get triggered). Tickets: `.scratch/yugioh-tracker/issues/15-automated-browser-runs.md`, `16-pre-auction-refresh-visits.md`, `17-adaptive-timing.md`, `18-stop-on-challenge.md`, `19-varied-run-timing.md`.
+Platform facts and sources: `references/automated-browser.md` (§8 covers how extra runs get triggered). Tickets: `.scratch/yugioh-tracker/issues/15-automated-browser-runs.md`, `16-pre-auction-refresh-visits.md`, `17-adaptive-timing.md`, `18-stop-on-challenge.md`, `19-varied-run-timing.md`, `20-searches-like-a-person.md`.
 
 ## How a run works
 
@@ -14,9 +14,28 @@ Platform facts and sources: `references/automated-browser.md` (§8 covers how ex
    - first, the refresh pages of auctions ending in the next 45 minutes (see below), in every kind of run;
    - for a full run, each Search's Newly Listed page, then its Sold page, with the Searches packed across all Decks;
    - then the TCGplayer product page of every searched Printing that has one.
-6. **Visit.** The extension visits the refresh pages first, as planned, then the Search pages in a random order, then the TCGplayer pages in a random order (`shuffleVisits` in `automation-runner.js`). It opens each page in a window of its own and waits up to 2 minutes for the page to capture. It closes the tab, reports the page (Listings captured, new ones, any error), and pauses before the next one: 20–60 s, or about 1 time in 6 a longer 1½–3 minutes (`pauseLength`).
+
+6. **Visit.** The extension visits the refresh pages first, as planned, then the Search pages in a random order, then the TCGplayer pages in a random order (`shuffleVisits` in `automation-runner.js`). It opens the pages in one window of its own, with one tab per marketplace kept for the whole run (see "Visits like a person" below), and waits up to 2 minutes for each page to capture. Each page is scrolled through before it's read. It reports the page (Listings captured, new ones, any error), and pauses before the next one, with the page still showing: 20–60 s, or about 1 time in 6 a longer 1½–3 minutes (`pauseLength`). Closing the window at the end closes the tabs.
 7. **Check page.** If a page is a check page (a captcha or bot challenge), the run stops there. See "Check pages" below.
 8. **Finish.** After the last page, the extension ends the run. The script, which checks every 20 s, then quits that Chrome (only if the script opened it) and logs a summary.
+
+## Visits like a person
+
+A run's visits should read like one person browsing, without adding page loads: one page load per page in the plan, as before (ticket 20). Platform facts and sources: `references/navigation-and-scrolling.md`.
+
+- **One tab per marketplace.** The first eBay page opens a new tab in the run's window; so does the first TCGplayer page. Every later page of that marketplace loads in that same tab (`makeVisitTabs` in `automation-runner.js`). A tab that was closed mid-run is opened again.
+- **eBay Searches open from the eBay page.** Each next eBay Search (Newly Listed, Sold or Ending soon) is opened by the eBay page already in the tab: the service worker asks the content script (`YUGIOH_NAVIGATE`), and the page sets its own `location`. The request then carries the previous eBay Search as its `Referer` and `Sec-Fetch-Site: same-origin`, the headers of a move inside eBay, not of a fresh load from the extension. Only the run's first eBay page opens without a referrer (`chrome.tabs.create`: `Sec-Fetch-Site: none`, like a bookmark). If the page doesn't answer (no content script there), the tab loads the URL directly instead (`chrome.tabs.update`).
+- **TCGplayer product pages load directly**: the first in a new tab, each next one in that same tab (`chrome.tabs.update`), with no referrer. Chromium's source suggests `chrome.tabs.update` marks the load as started by the extension (`Sec-Fetch-Site: cross-site`, not `none`); that hasn't been seen on the wire.
+- **A page that sent nothing within 2 minutes has its tab closed**, so a late capture from it can't count for the next page; the next page of that marketplace opens a new tab.
+- **Scrolling before reading.** On a run's visit (the content script asks the service worker, `YUGIOH_AUTOMATED_VISIT`), the content script scrolls down in uneven steps (45–105% of a screen), with a 0.35–1.5 s pause after each, to about the end of the results: the results list on eBay, the page on TCGplayer (`scrollThroughPage` in `page-scroll.js`). It measures the end again after each step, so rows that load late are reached, and stops after 30 steps. Pages I open myself aren't scrolled.
+- **No typing and no filter clicks.** Decision (Matt, 2026-10-21): typing a Search into eBay's search bar and then clicking Sold or Newly Listed would add a page load per Search. Each Search URL already carries its filters, so it's one page load per Search.
+
+**The limits, honestly.**
+- Events a content script dispatches (a `click()`, a key press) have `isTrusted: false`, and pages can check that. The run dispatches none.
+- Scrolling is the only genuine browser behaviour here: the content script asks the browser to scroll, and the `scroll` events the page sees come from the browser itself (`isTrusted: true`). No `wheel` or pointer events go with them, which a page could notice.
+- No navigation from the extension carries `Sec-Fetch-User: ?1`, which a real click sends, because nobody clicked. So the next eBay Search has an eBay referrer but still isn't a click.
+- No `chrome.debugger`, and no fake mouse movement. To a bot check that looks for real input, a run is still not a person: the pacing, the shuffled order, the referrers and the scrolling only make the visits less mechanical.
+- eBay's result rows are all in the page's HTML; only thumbnails load late. On TCGplayer the lazy images are in the related-product carousels. So scrolling is mostly for looks, and a safety net for rows that render late.
 
 ## When a run is due
 
@@ -74,7 +93,7 @@ When eBay or TCGplayer shows a check page (a captcha, "Pardon Our Interruption",
 | Convex functions | `convex/yugioh/automation.ts`, `convex/model/yugioh/automation.ts` |
 | Visit plan | `buildVisitPlan` and `buildRefreshVisits` in `src/lib/yugioh/automation.ts` |
 | When a run is due | `scheduledRunDue` and `auctionsToRefresh` in `src/lib/yugioh/automation.ts`; `requestRun` and `readVisitPlan` in `convex/model/yugioh/automation.ts` |
-| Extension | `automation-runner.js`, plus the end of `service-worker.js`, in `extensions/rym-release-scraper/` |
+| Extension | `automation-runner.js` (run, order, pauses, tabs), `page-scroll.js` (scrolling), the content scripts' `YUGIOH_NAVIGATE` listener in `ebay-content.js`, plus the end of `service-worker.js`, in `extensions/rym-release-scraper/` |
 
 ## One-time setup
 

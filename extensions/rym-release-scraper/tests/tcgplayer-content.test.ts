@@ -35,6 +35,7 @@ async function runOnSavedPage(backend: unknown): Promise<{
 	vi.stubGlobal("MutationObserver", window.MutationObserver);
 	vi.stubGlobal("location", { href: ASH_URL });
 	vi.stubGlobal("mountScrapeDock", () => {});
+	vi.stubGlobal("isAutomatedVisit", async () => false);
 	vi.stubGlobal("applyDockUpdate", (patch: DockUpdate) => {
 		dock.push(patch);
 	});
@@ -165,6 +166,7 @@ test("a product page with nothing on it tells the service worker there was nothi
 	vi.stubGlobal("MutationObserver", window.MutationObserver);
 	vi.stubGlobal("location", { href: ASH_URL });
 	vi.stubGlobal("mountScrapeDock", () => {});
+	vi.stubGlobal("isAutomatedVisit", async () => false);
 	vi.stubGlobal("applyDockUpdate", () => {});
 	vi.stubGlobal("chrome", {
 		runtime: {
@@ -216,6 +218,7 @@ test("a check page instead of the product is reported as challenged, so the run 
 	vi.stubGlobal("MutationObserver", window.MutationObserver);
 	vi.stubGlobal("location", { href: ASH_URL });
 	vi.stubGlobal("mountScrapeDock", () => {});
+	vi.stubGlobal("isAutomatedVisit", async () => false);
 	vi.stubGlobal("applyDockUpdate", (patch: DockUpdate) => {
 		dock.push(patch);
 	});
@@ -245,4 +248,66 @@ test("a check page instead of the product is reported as challenged, so the run 
 	});
 
 	vi.useRealTimers();
+});
+
+test("on a run's visit, the product page is scrolled through to about its end before it's read; outside a run it isn't", async () => {
+	async function load(automated: boolean): Promise<string[]> {
+		vi.useFakeTimers();
+		// Every draw 0.5: steps of 750px.
+		vi.spyOn(Math, "random").mockReturnValue(0.5);
+		const html = readFileSync(
+			new URL("./fixtures/tcgplayer-latest-sales.html", import.meta.url),
+			"utf8",
+		);
+		const { document, window } = parseHTML(html);
+		const events: string[] = [];
+		const view = Object.assign(window, {
+			scrollY: 0,
+			innerHeight: 1000,
+			scrollBy({ top }: { top: number }) {
+				view.scrollY += top;
+				events.push(`scroll to ${view.scrollY}`);
+			},
+		});
+		// The page is 2700px tall: scrolled to the end at 1700.
+		Object.defineProperty(document.documentElement, "scrollHeight", {
+			value: 2700,
+		});
+		vi.stubGlobal("document", document);
+		vi.stubGlobal("window", view);
+		vi.stubGlobal("MutationObserver", window.MutationObserver);
+		vi.stubGlobal("location", { href: ASH_URL });
+		vi.stubGlobal("mountScrapeDock", () => {});
+		vi.stubGlobal("applyDockUpdate", () => {});
+		vi.stubGlobal("chrome", {
+			runtime: {
+				lastError: undefined,
+				sendMessage(
+					message: { type: string },
+					reply?: (response: unknown) => void,
+				) {
+					if (message.type === "YUGIOH_AUTOMATED_VISIT") {
+						reply?.({ automated });
+						return;
+					}
+					events.push(`send ${message.type}`);
+				},
+			},
+		});
+		vi.resetModules();
+		await import("../page-scroll.js");
+		await import("../tcgplayer-content.js");
+		await vi.advanceTimersByTimeAsync(60_000);
+		vi.useRealTimers();
+		vi.restoreAllMocks();
+		return events;
+	}
+
+	expect(await load(true)).toEqual([
+		"scroll to 750",
+		"scroll to 1500",
+		"scroll to 1700",
+		"send YUGIOH_TCGPLAYER_CAPTURE",
+	]);
+	expect(await load(false)).toEqual(["send YUGIOH_TCGPLAYER_CAPTURE"]);
 });

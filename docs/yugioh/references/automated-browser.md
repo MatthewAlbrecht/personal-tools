@@ -12,6 +12,7 @@ Platform facts for the scheduled capture run. A bash script, started by a user L
 - **`StartInterval` skips intervals that fall while the Mac sleeps, and intervals that fall while the job is still running** (verified, `man launchd.plist`). `StartCalendarInterval` runs once on wake, folding any missed runs into one.
 - **A user LaunchAgent runs in the `Aqua` (GUI) session by default and can launch GUI apps** (verified, TN2083). Use `launchctl bootstrap gui/$(id -u) <plist>`.
 - **When the job's main process exits, launchd kills anything left in the job's process group** unless `AbandonProcessGroup` is true (verified). This matters if the script runs the Chrome binary directly.
+- **Moving a tab to the next page (ticket 20):** a content script's `location.assign` sends the page's URL as `Referer` and `Sec-Fetch-Site: same-origin`; `chrome.tabs.create` sends no referrer and `Sec-Fetch-Site: none`; `chrome.tabs.update` sends no referrer and, by Chromium's source, `Sec-Fetch-Site: cross-site`. None sends `Sec-Fetch-User`. Scrolling from a content script fires genuine `scroll` events. See `navigation-and-scrolling.md`.
 - **Trigger pre-auction runs (ticket 16) by firing the LaunchAgent every 10 minutes and letting the app answer "not due"** (see §8). `StartCalendarInterval` dicts with only `Minute` match every hour, and missed slots fold into one run on wake (verified). Neither Convex nor `chrome.alarms` can start Chrome on the Mac. A T3 webhook task could, but each run costs an agent turn and needs the T3 app open. Nothing in user space wakes a sleeping Mac; `pmset schedule wake` needs root.
 
 ## 1. MV3 service worker lifetime
@@ -63,6 +64,8 @@ Source: [chrome.runtime](https://developer.chrome.com/docs/extensions/reference/
 - **Hand runs (unverified).** If Chrome is already running on that dir when the script runs, the profile is not starting again, so `onStartup` won't fire (see §6). Have the script start the run some other way as well, or check for this.
 
 ## 4. tabs.create / tabs.remove and background tabs
+
+> **Since ticket 20** a run no longer opens and closes a tab per page: it keeps one tab per marketplace in the run's window, opens each next eBay Search from the eBay page itself (`location.assign` in the content script), loads each next TCGplayer product with `chrome.tabs.update`, and scrolls each page before reading it. The headers each choice sends, and what scrolling triggers: `navigation-and-scrolling.md`. The tab being visited is made active in its window; the hidden-tab notes below now apply only to the other marketplace's idle tab, which can outlive 5 minutes but has nothing left to do (eBay pages come before TCGplayer pages).
 
 Sources: [chrome.tabs](https://developer.chrome.com/docs/extensions/reference/api/tabs), [content scripts](https://developer.chrome.com/docs/extensions/develop/concepts/content-scripts), [timer throttling (Chrome 88)](https://developer.chrome.com/blog/timer-throttling-in-chrome-88), [Freezing on Energy Saver](https://developer.chrome.com/blog/freezing-on-energy-saver).
 

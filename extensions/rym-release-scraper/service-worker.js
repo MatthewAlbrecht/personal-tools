@@ -684,6 +684,15 @@ chrome.runtime.onMessage.addListener((message, sender) => {
 	});
 });
 
+// A content script asks whether its tab is on a run's visit, to scroll
+// through the page before reading it the way a person would.
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+	if (!message || message.type !== "YUGIOH_AUTOMATED_VISIT") {
+		return;
+	}
+	sendResponse({ automated: pendingAutomatedVisits.has(sender.tab?.id) });
+});
+
 async function automationSettings() {
 	const cfg = await chrome.storage.sync.get([
 		SETTINGS_BACKEND_ORIGIN,
@@ -734,52 +743,99 @@ function challengedVisit(marketplace) {
 }
 
 /**
- * Opens one page in the run's window and waits for its capture, then closes
- * it. eBay's check pages live at /splashui/*, where no content script runs:
- * the tab's URL gives them away (the host permission lets us read it), so
- * the visit settles as challenged the moment the tab gets there.
+ * Opens one page in the run's tab for its marketplace (`openVisit`, from
+ * `makeVisitTabs`) and waits for its capture. The tab stays open for the
+ * next page; closing the run's window closes it. eBay's check pages live at
+ * /splashui/*, where no content script runs: the tab's URL gives them away
+ * (the host permission lets us read it), so the visit settles as challenged
+ * the moment the tab gets there.
+ *
+ * A page that sent nothing within 2 minutes has its tab closed, so a late
+ * capture from it can't settle the next visit; the next page of that
+ * marketplace opens a new tab.
  */
-async function visitPageInWindow(windowId, visit) {
-	const tab = await chrome.tabs.create({
-		windowId,
-		url: visit.url,
-		active: true,
-	});
+async function visitPageInTab(openVisit, visit) {
+	const waitingOn = new Set();
+	let tabId = null;
+	let timer = null;
 	let watchUrl = null;
 	try {
-		return await new Promise(function waitForCapture(resolve) {
-			function settle(outcome) {
-				clearTimeout(timer);
-				pendingAutomatedVisits.delete(tab.id);
-				resolve(outcome);
-			}
-			const timer = setTimeout(async function giveUp() {
-				const current = await chrome.tabs.get(tab.id).catch(function gone() {
-					return null;
-				});
-				const marketplace = checkPageAt(current?.url);
-				settle(
-					marketplace
-						? challengedVisit(marketplace)
-						: {
-								listingsCaptured: 0,
-								newListings: 0,
-								error: "The page sent nothing within 2 minutes.",
-							},
-				);
-			}, AUTOMATION_VISIT_TIMEOUT_MS);
-			watchUrl = function onUpdated(tabId, changeInfo) {
-				if (tabId !== tab.id) return;
+		return await new Promise(function waitForCapture(resolve, reject) {
+			watchUrl = function onUpdated(updatedTabId, changeInfo) {
+				if (!waitingOn.has(updatedTabId)) return;
 				const marketplace = checkPageAt(changeInfo.url);
-				if (marketplace) settle(challengedVisit(marketplace));
+				if (marketplace) resolve(challengedVisit(marketplace));
 			};
 			chrome.tabs.onUpdated.addListener(watchUrl);
-			pendingAutomatedVisits.set(tab.id, settle);
+			timer = setTimeout(async function giveUp() {
+				const current =
+					tabId === null
+						? null
+						: await chrome.tabs.get(tabId).catch(function gone() {
+								return null;
+							});
+				const marketplace = checkPageAt(current?.url);
+				if (marketplace) {
+					resolve(challengedVisit(marketplace));
+					return;
+				}
+				if (tabId !== null) {
+					await chrome.tabs.remove(tabId).catch(function alreadyClosed() {});
+				}
+				resolve({
+					listingsCaptured: 0,
+					newListings: 0,
+					error: "The page sent nothing within 2 minutes.",
+				});
+			}, AUTOMATION_VISIT_TIMEOUT_MS);
+			openVisit(visit, function ready(readyTabId) {
+				tabId = readyTabId;
+				waitingOn.add(readyTabId);
+				pendingAutomatedVisits.set(readyTabId, resolve);
+			}).catch(reject);
 		});
 	} finally {
+		clearTimeout(timer);
 		if (watchUrl) chrome.tabs.onUpdated.removeListener(watchUrl);
-		await chrome.tabs.remove(tab.id).catch(function alreadyClosed() {});
+		for (const waitedOn of waitingOn) pendingAutomatedVisits.delete(waitedOn);
 	}
+}
+
+/**
+ * The browser side of `makeVisitTabs` for one run's window: new tabs, tab
+ * loads, and asking the eBay page to open the next Search itself.
+ */
+function runTabs(runWindow) {
+	return makeVisitTabs({
+		async createTab(url) {
+			const tab = await chrome.tabs.create({
+				windowId: await runWindow(),
+				url,
+			});
+			return tab.id;
+		},
+		async updateTab(tabId, url) {
+			try {
+				await chrome.tabs.update(tabId, { url, active: true });
+				return true;
+			} catch {
+				return false;
+			}
+		},
+		async navigateFromPage(tabId, url) {
+			try {
+				await chrome.tabs.update(tabId, { active: true });
+				const reply = await chrome.tabs.sendMessage(tabId, {
+					type: "YUGIOH_NAVIGATE",
+					url,
+				});
+				return reply?.ok === true;
+			} catch {
+				// No content script answered (the tab is gone or on another page).
+				return false;
+			}
+		},
+	});
 }
 
 async function checkForAutomatedRun() {
@@ -795,15 +851,29 @@ async function checkForAutomatedRun() {
 		void chrome.runtime.getPlatformInfo();
 	}, AUTOMATION_KEEPALIVE_MS);
 	let windowId = null;
+	const openVisit = runTabs(async function runWindow() {
+		// Opened on the first page, and again if it was closed mid-run.
+		const open =
+			windowId !== null &&
+			(await chrome.windows.get(windowId).then(
+				function found() {
+					return true;
+				},
+				function gone() {
+					return false;
+				},
+			));
+		if (!open) {
+			const win = await chrome.windows.create({ focused: false });
+			windowId = win.id;
+		}
+		return windowId;
+	});
 	try {
 		const result = await runAutomatedRun({
 			call: postAutomationStep,
-			async visitPage(visit) {
-				if (windowId === null) {
-					const win = await chrome.windows.create({ focused: false });
-					windowId = win.id;
-				}
-				return await visitPageInWindow(windowId, visit);
+			visitPage(visit) {
+				return visitPageInTab(openVisit, visit);
 			},
 			pause: function pause(ms) {
 				return new Promise(function wait(resolve) {

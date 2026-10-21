@@ -25,6 +25,11 @@ declare global {
 	}) => Promise<{ runId: string; pagesVisited: number } | null>;
 	var visitOutcome: (response: unknown) => Outcome;
 	var checkPageAt: (url: string | undefined) => string | null;
+	var makeVisitTabs: (browser: {
+		createTab: (url: string) => Promise<number>;
+		updateTab: (tabId: number, url: string) => Promise<boolean>;
+		navigateFromPage: (tabId: number, url: string) => Promise<boolean>;
+	}) => (visit: Visit, ready: (tabId: number) => void) => Promise<number>;
 }
 
 /**
@@ -418,5 +423,102 @@ describe("what a page's capture counts as", () => {
 		expect(
 			globalThis.visitOutcome({ ok: true, backend: { skipped: true } }).error,
 		).toBe("Couldn't send the page: the ingest secret isn't set.");
+	});
+});
+
+describe("how a run opens its pages", () => {
+	/** A fake browser that logs every page load and how it was made. */
+	function fakeBrowser({ fromPage = true, gone = new Set<number>() } = {}) {
+		const loads: string[] = [];
+		let nextTab = 1;
+		return {
+			loads,
+			browser: {
+				async createTab(url: string) {
+					const tabId = nextTab++;
+					loads.push(`new tab ${tabId} ${url}`);
+					return tabId;
+				},
+				async updateTab(tabId: number, url: string) {
+					if (gone.has(tabId)) return false;
+					loads.push(`tab ${tabId} loads ${url}`);
+					return true;
+				},
+				async navigateFromPage(tabId: number, url: string) {
+					if (!fromPage || gone.has(tabId)) return false;
+					loads.push(`tab ${tabId} page goes to ${url}`);
+					return true;
+				},
+			},
+		};
+	}
+
+	const SOLD = PLAN[1] as Visit;
+	const NEWLY = PLAN[0] as Visit;
+	const PRODUCT = PLAN[2] as Visit;
+	const OTHER_PRODUCT: Visit = {
+		url: "https://www.tcgplayer.com/product/600000/y",
+		kind: "tcgplayer",
+		label: "Other",
+	};
+
+	test("one tab per marketplace; each next eBay Search is opened from the eBay page, products load in their tab", async () => {
+		const { browser, loads } = fakeBrowser();
+		const open = globalThis.makeVisitTabs(browser);
+		const ready: number[] = [];
+
+		for (const visit of [NEWLY, SOLD, PRODUCT, OTHER_PRODUCT]) {
+			await open(visit, (tabId) => ready.push(tabId));
+		}
+
+		expect(loads).toEqual([
+			`new tab 1 ${NEWLY.url}`,
+			`tab 1 page goes to ${SOLD.url}`,
+			`new tab 2 ${PRODUCT.url}`,
+			`tab 2 loads ${OTHER_PRODUCT.url}`,
+		]);
+		expect(ready).toEqual([1, 1, 2, 2]);
+	});
+
+	test("a run loads exactly one page per visit in its plan", async () => {
+		const { browser, loads } = fakeBrowser();
+		const open = globalThis.makeVisitTabs(browser);
+		const { deps } = fakeRun([], {
+			plan: [NEWLY, SOLD, PRODUCT, OTHER_PRODUCT],
+		});
+		deps.visitPage = async (visit: Visit) => {
+			await open(visit, () => {});
+			return { listingsCaptured: 0, newListings: 0, error: null };
+		};
+
+		await globalThis.runAutomatedRun(deps);
+
+		expect(loads).toHaveLength(4);
+	});
+
+	test("when the eBay page can't navigate itself, the tab loads the Search instead", async () => {
+		const { browser, loads } = fakeBrowser({ fromPage: false });
+		const open = globalThis.makeVisitTabs(browser);
+
+		await open(NEWLY, () => {});
+		await open(SOLD, () => {});
+
+		expect(loads).toEqual([
+			`new tab 1 ${NEWLY.url}`,
+			`tab 1 loads ${SOLD.url}`,
+		]);
+	});
+
+	test("a marketplace tab that was closed is opened again", async () => {
+		const gone = new Set<number>();
+		const { browser, loads } = fakeBrowser({ gone });
+		const open = globalThis.makeVisitTabs(browser);
+
+		await open(NEWLY, () => {});
+		gone.add(1);
+		const tabId = await open(SOLD, () => {});
+
+		expect(tabId).toBe(2);
+		expect(loads).toEqual([`new tab 1 ${NEWLY.url}`, `new tab 2 ${SOLD.url}`]);
 	});
 });

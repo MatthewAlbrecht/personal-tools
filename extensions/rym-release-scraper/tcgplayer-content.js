@@ -3,7 +3,8 @@
 // Yu-Gi-Oh tracker through the service worker. It opens the latest sales
 // window, and loads more sales (signed in) until they reach back past the
 // Reference price's 60 days. Runs once on load; the dock's button runs it
-// again, which also reads a product reached by in-page navigation.
+// again, which also reads a product reached by in-page navigation. On an
+// automated run's visit it scrolls through the page first (ticket 20).
 
 const TCGPLAYER_LISTINGS_WAIT_MS = 15000;
 const TCGPLAYER_SALES_WAIT_MS = 8000;
@@ -159,7 +160,17 @@ function tellTcgplayerNothingToSend(error, challenged = false) {
 	);
 }
 
-async function runTcgplayerCapture() {
+/** On a run's visit, skims down to about the end of the product page. */
+async function scrollThroughProductPage() {
+	if (!(await isAutomatedVisit())) return;
+	await scrollThroughPage({
+		endOf: function endOfPage() {
+			return document.documentElement.scrollHeight - window.innerHeight;
+		},
+	});
+}
+
+async function runTcgplayerCapture({ scroll = false } = {}) {
 	applyDockUpdate({
 		status: "running",
 		headline: "Reading Listings",
@@ -185,6 +196,7 @@ async function runTcgplayerCapture() {
 		});
 		return;
 	}
+	if (scroll) await scrollThroughProductPage();
 	await openLatestSales();
 
 	const product = readTcgplayerProduct(document, { url: location.href });
@@ -232,4 +244,4 @@ mountScrapeDock({
 	},
 });
 
-void runTcgplayerCapture();
+void runTcgplayerCapture({ scroll: true });
