@@ -238,6 +238,60 @@ describe("TCGplayer lookup when a Printing is added", () => {
 	});
 });
 
+describe("changing a linked Printing's TCGplayer link", () => {
+	// Another product page TCGplayer lists for the same Printing.
+	const otherQcsrUrl =
+		"https://www.tcgplayer.com/product/600001/yugioh-25th-anniversary-rarity-collection-ash-blossom-and-joyous-spring-quarter-century-secret-rare";
+
+	async function linkedAsh(t: ReturnType<typeof convexTest>) {
+		const { deckId } = await addAsh(t);
+		await t.finishAllScheduledFunctions(vi.runAllTimers);
+		const candidate = await firstCandidate(t, deckId);
+		expect(candidate.tcgplayer.productUrl).toBe(ashQcsrUrl);
+		return { deckId, printingId: candidate.printingId };
+	}
+
+	test("a pasted product page for the Printing replaces the link and its image", async () => {
+		const t = convexTest(schema, modules);
+		const { deckId, printingId } = await linkedAsh(t);
+		fakes.details.set(600001, {
+			...ashQcsrProduct,
+			productId: 600001,
+			productUrl: otherQcsrUrl,
+		});
+
+		await t.action(api.yugioh.tcgplayer.setProductUrl, {
+			printingId,
+			url: `${otherQcsrUrl}?Language=English`,
+		});
+
+		expect((await firstCandidate(t, deckId)).tcgplayer).toEqual({
+			status: "found",
+			productUrl: otherQcsrUrl,
+			imageUrl:
+				"https://tcgplayer-cdn.tcgplayer.com/product/600001_in_400x400.jpg",
+			searchUrl: searchFallback,
+		});
+	});
+
+	test("a replacement that fails ticket 03's checks keeps the old link", async () => {
+		const t = convexTest(schema, modules);
+		const { deckId, printingId } = await linkedAsh(t);
+
+		for (const url of ["https://www.ebay.com/itm/1234", ashSuperUrl]) {
+			await expect(
+				t.action(api.yugioh.tcgplayer.setProductUrl, { printingId, url }),
+			).rejects.toThrow(
+				"That isn't a TCGplayer product page for this Printing.",
+			);
+		}
+		expect((await firstCandidate(t, deckId)).tcgplayer).toMatchObject({
+			status: "found",
+			productUrl: ashQcsrUrl,
+		});
+	});
+});
+
 describe("pasting a TCGplayer product URL", () => {
 	async function ashNeedingPaste(t: ReturnType<typeof convexTest>) {
 		fakes.pick = { productId: null, probability: 1 };

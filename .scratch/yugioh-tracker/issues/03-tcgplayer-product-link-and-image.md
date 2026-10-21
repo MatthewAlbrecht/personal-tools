@@ -47,7 +47,16 @@ Spec: docs/superpowers/specs/2026-10-19-yugioh-max-rarity-tracker-design.md
 **Open / for later**
 - Not checked live: TypeSafe's pick accuracy (no key in dev), and whether TCGplayer's search endpoint answers from Convex's cloud IPs. It works from a local `curl`/Node.
 - There is no "Couldn't reach TCGplayer" message: a failed lookup looks the same as "couldn't find it".
-- There's no way to replace an already-found URL, and no re-lookup button for old Printings.
+- ~~There's no way to replace an already-found URL~~ (fixed 2026-10-20, see below). There's still no re-lookup button for old Printings.
 - Ticket 12's capture can reuse `parseTcgplayerProduct` and the stored `tcgplayerProductUrl`.
 
 **Dev data**: pasted a test URL (product 524817) onto "Ash Blossom & Joyous Spring" MP23-EN001 Starlight Rare in the first "Agent test Deck".
+
+## Fix: replacing a TCGplayer link (2026-10-20)
+
+- **UI:** a linked Printing in the Card drawer shows "Change TCGplayer link" next to "TCGplayer product page" (`LinkedProduct` in `tcgplayer-link.tsx`).
+  - It opens the same `PasteProductUrl` form an unlinked Printing gets, labelled "Paste the right product URL.", with "Search TCGplayer" and "Keep current link" (cancel).
+  - A save closes the form. A rejected URL shows the error and keeps the old link.
+  - Checked in the browser on dev (desktop light, 390px dark).
+- **Backend:** no change. `api.yugioh.tcgplayer.setProductUrl` never required `needsPaste`, so the paste runs ticket 03's checks unchanged: the pattern check, then TCGplayer's set code and rarity. A save replaces the URL, the image and `tcgplayerProductId`, so later captures of the new product page find the Printing. Tests are in `convex/yugioh/tcgplayer.test.ts` under "changing a linked Printing's TCGplayer link". They passed on first run because the backend already allowed it; they guard the flow.
+- **Open:** TCGplayer Listings and sales captured from the old product page stay matched to the Printing (their `url` is the old product URL), so they still count toward its TCGplayer Reference price until they age out. Clearing them on a link change wasn't done: it deletes data and wasn't asked for.

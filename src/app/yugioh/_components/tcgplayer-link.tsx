@@ -3,6 +3,7 @@
 import { useForm } from "@tanstack/react-form";
 import { useAction } from "convex/react";
 import { ExternalLink } from "lucide-react";
+import { useState } from "react";
 import type * as React from "react";
 import { Button } from "~/components/ui/button";
 import { Field, FieldError, FieldLabel } from "~/components/ui/field";
@@ -15,7 +16,8 @@ import type { CandidatePrinting } from "../_utils/types";
 
 /**
  * A Printing's TCGplayer product link: a spinner while AI looks for it, the
- * link once found, or a paste field (with a search link) when it wasn't.
+ * link once found (with "Change TCGplayer link" to paste another), or a paste
+ * field (with a search link) when it wasn't.
  */
 export function TcgplayerLink({
 	cardName,
@@ -37,12 +39,12 @@ export function TcgplayerLink({
 
 	if (tcgplayer.status === "found" && tcgplayer.productUrl) {
 		return (
-			<OutLink
-				href={tcgplayer.productUrl}
-				label={`TCGplayer product page for ${candidate.setCode} ${candidate.rarity}`}
-			>
-				TCGplayer product page
-			</OutLink>
+			<LinkedProduct
+				key={candidate.printingId}
+				cardName={cardName}
+				candidate={candidate}
+				productUrl={tcgplayer.productUrl}
+			/>
 		);
 	}
 
@@ -55,12 +57,67 @@ export function TcgplayerLink({
 	);
 }
 
-function PasteProductUrl({
+/**
+ * The linked product page, and "Change TCGplayer link", which opens the same
+ * checked paste field an unlinked Printing has.
+ */
+function LinkedProduct({
 	cardName,
 	candidate,
+	productUrl,
 }: {
 	cardName: string;
 	candidate: CandidatePrinting;
+	productUrl: string;
+}): React.ReactElement {
+	const [changing, setChanging] = useState(false);
+
+	if (changing) {
+		return (
+			<PasteProductUrl
+				cardName={cardName}
+				candidate={candidate}
+				label="Paste the right product URL."
+				onSaved={() => setChanging(false)}
+				onCancel={() => setChanging(false)}
+			/>
+		);
+	}
+
+	return (
+		<div className="flex flex-wrap items-center gap-x-4">
+			<OutLink
+				href={productUrl}
+				label={`TCGplayer product page for ${candidate.setCode} ${candidate.rarity}`}
+			>
+				TCGplayer product page
+			</OutLink>
+			<Button
+				type="button"
+				variant="link"
+				size="sm"
+				className="h-auto min-h-11 w-fit p-0 text-muted-foreground text-xs md:min-h-0"
+				aria-label={`Change TCGplayer link for ${candidate.setCode} ${candidate.rarity}`}
+				onClick={() => setChanging(true)}
+			>
+				Change TCGplayer link
+			</Button>
+		</div>
+	);
+}
+
+function PasteProductUrl({
+	cardName,
+	candidate,
+	label = "Couldn't find it. Paste the product URL.",
+	onSaved,
+	onCancel,
+}: {
+	cardName: string;
+	candidate: CandidatePrinting;
+	label?: string;
+	onSaved?: () => void;
+	onCancel?: () => void;
 }): React.ReactElement {
 	const setProductUrl = useAction(api.yugioh.tcgplayer.setProductUrl);
 	const schema = productUrlSchema({ cardName, rarity: candidate.rarity });
@@ -73,6 +130,7 @@ function PasteProductUrl({
 					printingId: candidate.printingId,
 					url: value.url,
 				});
+				onSaved?.();
 			} catch (error) {
 				formApi.setFieldMeta("url", (meta) => ({
 					...meta,
@@ -111,7 +169,7 @@ function PasteProductUrl({
 								htmlFor={id}
 								className="font-normal text-muted-foreground text-xs"
 							>
-								Couldn't find it. Paste the product URL.
+								{label}
 							</FieldLabel>
 							<div className="flex gap-2">
 								<Input
@@ -123,6 +181,7 @@ function PasteProductUrl({
 									onChange={(event) => field.handleChange(event.target.value)}
 									aria-invalid={invalid}
 									autoComplete="off"
+									autoFocus={onCancel !== undefined}
 									spellCheck={false}
 									placeholder="https://www.tcgplayer.com/product/…"
 									className="h-11 min-w-0 flex-1 text-base md:h-9 md:text-sm"
@@ -144,13 +203,24 @@ function PasteProductUrl({
 								</form.Subscribe>
 							</div>
 							{invalid ? <FieldError errors={field.state.meta.errors} /> : null}
-							<div>
+							<div className="flex flex-wrap items-center gap-x-4">
 								<OutLink
 									href={candidate.tcgplayer.searchUrl}
 									label={`Search TCGplayer for ${candidate.setCode}`}
 								>
 									Search TCGplayer
 								</OutLink>
+								{onCancel ? (
+									<Button
+										type="button"
+										variant="link"
+										size="sm"
+										className="h-auto min-h-11 w-fit p-0 text-muted-foreground text-xs md:min-h-0"
+										onClick={onCancel}
+									>
+										Keep current link
+									</Button>
+								) : null}
 							</div>
 						</Field>
 					);
