@@ -33,6 +33,7 @@ import {
 	yugiohCardOrderValidator,
 	yugiohConditionChoiceValidator,
 	yugiohConditionValidator,
+	yugiohCopiesChoiceValidator,
 	yugiohMarketplaceValidator,
 	yugiohMatchStatusValidator,
 	yugiohPriorityValidator,
@@ -1911,6 +1912,11 @@ export default defineSchema({
 		conditionOverride: v.optional(
 			v.union(yugiohConditionChoiceValidator, v.null()),
 		),
+		// The Copies in the Listing as I set them (1 to 3): they win over the
+		// title's read in the Per-copy price (so Reference prices, grades, cost
+		// to finish and pushes) and through re-reads and recaptures. Missing
+		// or null: the title's read stands.
+		copiesOverride: v.optional(v.union(yugiohCopiesChoiceValidator, v.null())),
 		// Reference prices (ticket 09). Optional because Listings captured
 		// before it have neither until `backfillSaleTimes` runs.
 		// When it sold (Unix ms; the sold date at midnight UTC) or, for an

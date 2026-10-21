@@ -2,7 +2,9 @@ import { describe, expect, test } from "vitest";
 import {
 	conditionChoice,
 	isConditionSetByYou,
+	isCopiesSetByYou,
 	listingCondition,
+	listingCopies,
 	rarityChoices,
 } from "./listing-edits";
 import type { TitleRead } from "./title-reading";
@@ -115,5 +117,33 @@ describe("rarityChoices", () => {
 			{ rarity: "Ultimate Rare", printingId: "p1", needed: false },
 			{ rarity: "Common", printingId: null, needed: false },
 		]);
+	});
+});
+
+describe("listingCopies", () => {
+	test("is the title's read without copies set by me, else 1", () => {
+		expect(listingCopies({ titleRead: { ...read, copies: 3 } })).toBe(3);
+		expect(
+			listingCopies({
+				titleRead: { ...read, copies: 2 },
+				copiesOverride: null,
+			}),
+		).toBe(2);
+		expect(listingCopies({ titleRead: null })).toBe(1);
+		expect(listingCopies({})).toBe(1);
+	});
+
+	test("copies I set win over the read, even with no read", () => {
+		expect(
+			listingCopies({ titleRead: { ...read, copies: 3 }, copiesOverride: 1 }),
+		).toBe(1);
+		expect(listingCopies({ titleRead: read, copiesOverride: 2 })).toBe(2);
+		expect(listingCopies({ titleRead: null, copiesOverride: 3 })).toBe(3);
+	});
+
+	test("knows when I set them", () => {
+		expect(isCopiesSetByYou({ titleRead: read })).toBe(false);
+		expect(isCopiesSetByYou({ copiesOverride: null })).toBe(false);
+		expect(isCopiesSetByYou({ copiesOverride: 1 })).toBe(true);
 	});
 });

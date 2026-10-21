@@ -42,8 +42,11 @@ import { largeTcgplayerImage } from "~/lib/yugioh/card-grid";
 import { rarityAbbreviation } from "~/lib/yugioh/deck";
 import {
 	type ConditionChoice,
+	type CopiesChoice,
 	isConditionSetByYou,
+	isCopiesSetByYou,
 	listingCondition,
+	listingCopies,
 } from "~/lib/yugioh/listing-edits";
 import {
 	type ListingFilters,
@@ -77,7 +80,11 @@ import {
 	toggledSort,
 	withListingSort,
 } from "~/lib/yugioh/listing-sort";
-import { keyboardMenuPoint, rowClickOpensMenu } from "~/lib/yugioh/row-menu";
+import {
+	isMenuKey,
+	keyboardMenuPoint,
+	rowMenuOpensAt,
+} from "~/lib/yugioh/row-menu";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import type { ListingView } from "../_utils/types";
@@ -303,6 +310,7 @@ export function ListingsPage({
 							onMarkWrong={rejection.markWrong}
 							onUnmark={rejection.unmark}
 							onSetCondition={edits.setCondition}
+							onSetCopies={edits.setCopies}
 							onSetRarity={edits.setRarity}
 						/>
 					</div>
@@ -322,6 +330,7 @@ export function ListingsPage({
 					rejection.unmark(listing);
 				}}
 				onSetCondition={edits.setCondition}
+				onSetCopies={edits.setCopies}
 				onSetRarity={(listing, choice) => {
 					// A rarity that takes it out of Listings closes the drawer first.
 					if (choice.printingId === null || !choice.needed) closeListing();
@@ -483,10 +492,11 @@ function ListingRow({
 /**
  * The Listings table: one Listing a row, every row the same two lines (a
  * primary line and a muted one), every column a set width whose text is cut
- * short with the whole of it on hover. Clicking a row (or Enter on it)
- * opens the row menu where I clicked: Details (the Listing drawer), Open on
- * the marketplace, Change rarity and condition, Hide the Card, and Remove
- * (mark wrong) or Restore.
+ * short. Clicking a row (or Enter on it) opens the Listing on its
+ * marketplace in a new tab, through a link over the whole row. Right-clicking
+ * it (or Shift+F10, or the menu key) opens the row menu where I clicked:
+ * Details (the Listing drawer), Open on the marketplace, Change rarity,
+ * condition and copies, Hide the Card, and Remove (mark wrong) or Restore.
  */
 export function ListingsTable({
 	listings,
@@ -499,6 +509,7 @@ export function ListingsTable({
 	onMarkWrong = () => {},
 	onUnmark = () => {},
 	onSetCondition,
+	onSetCopies,
 	onSetRarity,
 	onDetails,
 	onHideCard,
@@ -523,6 +534,8 @@ export function ListingsTable({
 		listing: ListingView,
 		condition: ConditionChoice | null,
 	) => void;
+	/** Sets the Copies in a Listing, from the row menu. */
+	onSetCopies?: (listing: ListingView, copies: CopiesChoice | null) => void;
 	/** Sets the rarity from the Card cell; without it, the rarity is plain. */
 	onSetRarity?: (
 		listing: ListingView,
@@ -533,17 +546,16 @@ export function ListingsTable({
 	// Marked wrong: restore a Listing before changing it.
 	const editable = !rejectedView;
 	const [menu, setMenu] = useState<RowMenuAt | null>(null);
-	// The row the menu came from, for focus to go back to.
-	const menuRow = useRef<HTMLElement | null>(null);
+	// The row link the menu came from, for focus to go back to.
+	const menuReturn = useRef<HTMLElement | null>(null);
 
 	function openMenu(
 		listing: ListingView,
 		row: HTMLElement,
-		x: number,
-		y: number,
+		at: { x: number; y: number },
 	) {
-		menuRow.current = row;
-		setMenu({ listing, x, y });
+		menuReturn.current = row.querySelector<HTMLElement>("[data-row-link]");
+		setMenu({ listing, ...at });
 	}
 
 	return (
@@ -604,43 +616,53 @@ export function ListingsTable({
 								key={listing._id}
 								data-leaving={isLeaving || undefined}
 								data-menu-open={menu?.listing._id === listing._id || undefined}
-								tabIndex={isLeaving ? -1 : 0}
 								aria-haspopup="menu"
 								aria-expanded={menu?.listing._id === listing._id}
-								aria-label={`${listing.match.printing?.cardName ?? listing.title}, ${MARKETPLACE_LABELS[listing.marketplace]}. Open actions`}
-								className="group/row relative cursor-default outline-none focus-visible:bg-muted active:bg-muted data-[leaving]:border-transparent data-[menu-open]:bg-muted"
-								onClick={(event) => {
+								className="group/row relative outline-none active:bg-muted has-[[data-row-link]:focus-visible]:bg-muted data-[leaving]:border-transparent data-[menu-open]:bg-muted"
+								onContextMenu={(event) => {
+									if (isLeaving) return;
 									const row = event.currentTarget;
-									if (
-										isLeaving ||
-										!rowClickOpensMenu({
-											button: event.button,
-											metaKey: event.metaKey,
-											ctrlKey: event.ctrlKey,
-											shiftKey: event.shiftKey,
-											altKey: event.altKey,
-											target: event.target as Element,
-											row,
-											selection: window.getSelection(),
-										})
-									) {
-										return;
-									}
-									openMenu(listing, row, event.clientX, event.clientY);
+									const at = rowMenuOpensAt({
+										button: event.button,
+										ctrlKey: event.ctrlKey,
+										clientX: event.clientX,
+										clientY: event.clientY,
+										target: event.target as Element,
+										row,
+										selection: window.getSelection(),
+										inset: MENU_INSET,
+									});
+									if (at === null) return;
+									event.preventDefault();
+									openMenu(listing, row, at);
 								}}
 								onKeyDown={(event) => {
-									if (event.target !== event.currentTarget) return;
-									if (event.key !== "Enter" && event.key !== " ") return;
+									if (isLeaving || !isMenuKey(event)) return;
+									const target = event.target as Element;
+									if (!target.matches("[data-row-link]")) return;
 									event.preventDefault();
 									const row = event.currentTarget;
-									const { x, y } = keyboardMenuPoint(
-										row.getBoundingClientRect(),
-										MENU_INSET,
+									openMenu(
+										listing,
+										row,
+										keyboardMenuPoint(row.getBoundingClientRect(), MENU_INSET),
 									);
-									openMenu(listing, row, x, y);
 								}}
 							>
 								<RowCell dim={dim}>
+									{/* The whole row opens the Listing, a real link (so Cmd- and
+									    middle-click work); its pickers sit above it. */}
+									<a
+										data-row-link
+										href={listing.url}
+										target="_blank"
+										rel="noopener noreferrer"
+										tabIndex={isLeaving ? -1 : undefined}
+										title={`Open on ${MARKETPLACE_LABELS[listing.marketplace]} · Right-click for more`}
+										className="absolute inset-0 outline-none"
+									>
+										<span className="sr-only">{rowLinkLabel(listing)}</span>
+									</a>
 									<div className="flex min-w-0 items-start gap-3">
 										<CardThumb printing={listing.match.printing} />
 										<div className="flex min-w-0 flex-col">
@@ -709,7 +731,7 @@ export function ListingsTable({
 				onCloseAutoFocus={(event) => {
 					// Back to the row, unless it left (marked wrong, hidden).
 					event.preventDefault();
-					const row = menuRow.current;
+					const row = menuReturn.current;
 					if (row?.isConnected) row.focus({ preventScroll: true });
 				}}
 				rejectedView={rejectedView}
@@ -718,10 +740,22 @@ export function ListingsTable({
 				onMarkWrong={onMarkWrong}
 				onUnmark={onUnmark}
 				onSetCondition={onSetCondition}
+				onSetCopies={onSetCopies}
 				onSetRarity={onSetRarity}
 			/>
 		</>
 	);
+}
+
+/**
+ * What the row's link says: the Listing, what a click does, and that a
+ * right-click has more. "Brionac, eBay. Open on eBay in a new tab.
+ * Right-click or Shift+F10 for more".
+ */
+function rowLinkLabel(listing: ListingView): string {
+	const marketplace = MARKETPLACE_LABELS[listing.marketplace];
+	const name = listing.match.printing?.cardName ?? listing.title;
+	return `${name}, ${marketplace}. Open on ${marketplace} in a new tab. Right-click or Shift+F10 for more`;
 }
 
 /**
@@ -953,9 +987,11 @@ function ConditionCell({
 		listingCondition(listing),
 		listing.deal.belowCondition,
 	);
+	const copies = listingCopies(listing);
+	const copiesSetByYou = isCopiesSetByYou(listing) && copies > 1;
 	const notes = [
 		...(cell?.below ? ["Below minimum"] : []),
-		...titleFlags(listing.titleRead).map((flag) => flag.label),
+		...titleFlags(listing.titleRead, copies).map((flag) => flag.label),
 	].join(" · ");
 	const why = setByYou
 		? "Not stated"
@@ -991,7 +1027,15 @@ function ConditionCell({
 					{value}
 				</p>
 			)}
-			<Secondary title={notes || undefined}>{notes || " "}</Secondary>
+			<Secondary title={notes || undefined}>
+				{notes || " "}
+				{copiesSetByYou ? (
+					<>
+						{" "}
+						<SetByYou what="Copies" />
+					</>
+				) : null}
+			</Secondary>
 		</>
 	);
 }
@@ -1066,10 +1110,13 @@ function CellTrigger({
 	);
 }
 
-/** The quiet pencil after a value I set myself. */
-function SetByYou(): React.ReactElement {
+/** The quiet pencil after a value I set myself ("Copies set by you"). */
+function SetByYou({ what }: { what?: string }): React.ReactElement {
 	return (
-		<span title="Set by you" className="inline-flex text-muted-foreground">
+		<span
+			title={what ? `${what} set by you` : "Set by you"}
+			className="inline-flex text-muted-foreground"
+		>
 			<PencilLine aria-hidden className="size-3" />
 		</span>
 	);

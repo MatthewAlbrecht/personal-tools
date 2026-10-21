@@ -867,6 +867,109 @@ describe("Condition set by me", () => {
 	});
 });
 
+describe("Copies set by me", () => {
+	async function idOf(t: T, itemId: string) {
+		return await t.run(async (ctx) => {
+			const listing = await ctx.db
+				.query("yugiohListings")
+				.withIndex("by_marketplace_and_itemId", (q) =>
+					q.eq("marketplace", "ebay").eq("itemId", itemId),
+				)
+				.unique();
+			if (!listing) throw new Error(`missing Listing ${itemId}`);
+			return listing._id;
+		});
+	}
+
+	async function viewOf(t: T, deckId: Id<"yugiohDecks">, itemId: string) {
+		const listing = (await listings(t, deckId)).find(
+			(l) => l.itemId === itemId,
+		);
+		if (!listing) throw new Error(`missing view ${itemId}`);
+		return listing;
+	}
+
+	test("divide the Per-copy price, and the Deal grade follows", async () => {
+		const t = setup();
+		const deckId = await ashDeck(t);
+		await capture(t, sold(40), sold(50), sold(60));
+		const [lot] = await capture(t, { price: 60 });
+		const id = await idOf(t, lot as string);
+		expect((await viewOf(t, deckId, lot as string)).perCopyPrice).toMatchObject(
+			{ copies: 1, perCopy: 60 },
+		);
+
+		await t.mutation(api.yugioh.listings.setListingCopies, {
+			listingId: id,
+			copies: 2,
+		});
+		const view = await viewOf(t, deckId, lot as string);
+		expect(view.copiesOverride).toBe(2);
+		expect(view.perCopyPrice).toMatchObject({ copies: 2, perCopy: 30 });
+		expect(view.deal).toMatchObject({ percentOfReference: 60, grade: "great" });
+	});
+
+	test("win over the title's read in the Reference price, through recaptures and re-reads", async () => {
+		const t = setup();
+		const deckId = await ashDeck(t);
+		const [, , , misread] = await capture(
+			t,
+			sold(40),
+			sold(50),
+			sold(60),
+			sold(90, { read: { copies: 3 } }),
+		);
+		// Read as a lot of three: $30 a copy.
+		expect(await ashReference(t, deckId)).toEqual({ price: 45, sales: 4 });
+
+		const id = await idOf(t, misread as string);
+		await t.mutation(api.yugioh.listings.setListingCopies, {
+			listingId: id,
+			copies: 1,
+		});
+		expect(await ashReference(t, deckId)).toEqual({ price: 55, sales: 4 });
+
+		// Captured again as is, then with a changed title the AI reads again.
+		await capture(t, sold(90, { itemId: misread, read: { copies: 3 } }));
+		await capture(
+			t,
+			sold(90, {
+				itemId: misread,
+				title: "Ash Blossom RA01-EN008 QCSR x3",
+				read: { copies: 3 },
+			}),
+		);
+		const view = await viewOf(t, deckId, misread as string);
+		expect(view.titleRead?.copies).toBe(3);
+		expect(view.copiesOverride).toBe(1);
+		expect(view.perCopyPrice).toMatchObject({ copies: 1, perCopy: 90 });
+		expect(await ashReference(t, deckId)).toEqual({ price: 55, sales: 4 });
+
+		// Back to the title's read.
+		await t.mutation(api.yugioh.listings.setListingCopies, {
+			listingId: id,
+			copies: null,
+		});
+		expect((await viewOf(t, deckId, misread as string)).copiesOverride).toBe(
+			null,
+		);
+		expect(await ashReference(t, deckId)).toEqual({ price: 45, sales: 4 });
+	});
+
+	test("are 1, 2 or 3", async () => {
+		const t = setup();
+		await ashDeck(t);
+		const [listing] = await capture(t, { price: 60 });
+		const id = await idOf(t, listing as string);
+		await expect(
+			t.mutation(api.yugioh.listings.setListingCopies, {
+				listingId: id,
+				copies: 4 as 3,
+			}),
+		).rejects.toThrow();
+	});
+});
+
 describe("Rarity from the row", () => {
 	async function idOf(t: T, itemId: string) {
 		return await t.run(async (ctx) => {
@@ -964,5 +1067,6 @@ test("setting a condition and a match is public", async () => {
 		{ isInternal?: boolean; isPublic?: boolean }
 	>;
 	expect(listings.setListingCondition?.isPublic).toBe(true);
+	expect(listings.setListingCopies?.isPublic).toBe(true);
 	expect(listings.setListingMatch?.isPublic).toBe(true);
 });

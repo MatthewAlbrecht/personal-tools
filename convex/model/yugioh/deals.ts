@@ -18,6 +18,7 @@ import {
 	referencePrice,
 } from "../../../src/lib/yugioh/deals";
 import type { Condition } from "../../../src/lib/yugioh/deck";
+import { listingCopies } from "../../../src/lib/yugioh/listing-edits";
 import type { Marketplace } from "../../../src/lib/yugioh/listing-filters";
 import { isRejected } from "../../../src/lib/yugioh/listing-rejection";
 import {
@@ -252,7 +253,7 @@ function listingPerCopyPrice(
 		saleRate !== null && isSale(listing, now)
 			? { ...pricing, usdPerUnit: () => saleRate }
 			: pricing;
-	return perCopyPrice(listing, listing.titleRead?.copies ?? 1, salePricing);
+	return perCopyPrice(listing, listingCopies(listing), salePricing);
 }
 
 /**

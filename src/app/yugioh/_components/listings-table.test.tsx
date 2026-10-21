@@ -54,6 +54,7 @@ function brionacSale(overrides: Partial<ListingView> = {}): ListingView {
 		tcgplayer: { seller: null, condition: "Heavily Played", quantity: 1 },
 		rejection: null,
 		conditionOverride: null,
+		copiesOverride: null,
 		rarityChoices: [
 			{
 				rarity: "Duel Terminal Ultra Parallel Rare",
@@ -195,9 +196,11 @@ async function measureTable(listings: ListingView[], width: number) {
 			}
 			return textRight - cellRight;
 		});
-		const name = [...document.querySelectorAll("tbody td span")].find((el) =>
-			el.textContent?.startsWith("Brionac"),
-		) as HTMLElement | undefined;
+		const name = [
+			...document.querySelectorAll("tbody td span:not(.sr-only)"),
+		].find((el) => el.textContent?.startsWith("Brionac")) as
+			| HTMLElement
+			| undefined;
 		const rows = [...document.querySelectorAll("tbody tr")].map(
 			(row) => row.getBoundingClientRect().height,
 		);
@@ -264,23 +267,52 @@ function tableHtml(listings: ListingView[]): string {
 }
 
 describe("a Listings table row", () => {
-	test("is one focusable control that opens the row menu", () => {
+	test("a click opens the Listing on its marketplace, in a new tab, through one real link", () => {
 		const html = tableHtml([brionacSale(), busyListing()]);
-		const rows = html.match(/<tr [^>]*tabindex="0"[^>]*>/g) ?? [];
+		const body = html.slice(html.indexOf("<tbody"));
+		const links = body.match(/<a [^>]*data-row-link[^>]*>.*?<\/a>/g) ?? [];
+		expect(links).toHaveLength(2);
+		expect(links[0]).toContain('href="https://www.tcgplayer.com/product/1"');
+		for (const link of links) {
+			expect(link).toContain('target="_blank"');
+			expect(link).toContain('rel="noopener noreferrer"');
+		}
+		// The link says what a click does, and that a right-click has more.
+		expect(links[0]).toContain(
+			"Brionac, TCGplayer. Open on TCGplayer in a new tab. Right-click or Shift+F10 for more",
+		);
+		expect(links[0]).toContain(
+			'title="Open on TCGplayer · Right-click for more"',
+		);
+	});
+
+	test("the link is the row's one tab stop; the row holds the menu", () => {
+		const html = tableHtml([brionacSale(), busyListing()]);
+		const rows = html.match(/<tr [^>]*aria-haspopup="menu"[^>]*>/g) ?? [];
 		expect(rows).toHaveLength(2);
 		for (const row of rows) {
-			expect(row).toContain('aria-haspopup="menu"');
+			expect(row).not.toContain("tabindex");
 			expect(row).toContain('aria-expanded="false"');
 		}
 	});
 
-	test("no longer links to the drawer, nor carries its own action buttons", () => {
+	test("carries no action buttons of its own, and keeps its inline pickers", () => {
 		const html = tableHtml([brionacSale()]);
 		const body = html.slice(html.indexOf("<tbody"));
-		expect(body).not.toContain("<a ");
 		expect(body).not.toContain("Mark as wrong");
-		// The inline condition and rarity pickers stay.
 		expect(body).toContain("Condition:");
 		expect(body).toContain("Rarity:");
+	});
+
+	test("a lot shows the Copies I set, with a pencil", () => {
+		const listing = busyListing();
+		const set = tableHtml([{ ...listing, copiesOverride: 2 }]);
+		expect(set).toContain("×2 copies");
+		expect(set).not.toContain("×3 copies");
+		expect(set).toContain('title="Copies set by you"');
+		expect(tableHtml([listing])).toContain("×3 copies");
+		expect(tableHtml([{ ...listing, copiesOverride: 1 }])).not.toContain(
+			"copies",
+		);
 	});
 });

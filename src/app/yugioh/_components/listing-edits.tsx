@@ -17,10 +17,15 @@ import {
 } from "~/components/ui/dropdown-menu";
 import { rarityAbbreviation } from "~/lib/yugioh/deck";
 import {
+	COPIES_CHOICES,
 	type ConditionChoice,
+	type CopiesChoice,
 	NOT_STATED,
 	conditionChoice,
+	copiesLabel,
 	isConditionSetByYou,
+	isCopiesSetByYou,
+	listingCopies,
 } from "~/lib/yugioh/listing-edits";
 import { READ_CONDITION_ABBREVIATIONS } from "~/lib/yugioh/listing-format";
 import {
@@ -38,7 +43,7 @@ const SAVE_FAILED = "Couldn't save. Try again.";
 type RarityChoice = ListingView["rarityChoices"][number];
 
 /**
- * Changing a Listing's condition and rarity from its row or drawer. Each
+ * Changing a Listing's condition, copies and rarity from its row or drawer. Each
  * change saves at once and a toast offers Undo. A rarity whose Printing the
  * Deck doesn't need folds the row away first; a rarity with no Printing
  * marks the Listing wrong ("Wrong rarity").
@@ -50,9 +55,11 @@ export function useListingEdits(
 		listing: ListingView,
 		condition: ConditionChoice | null,
 	) => void;
+	setCopies: (listing: ListingView, copies: CopiesChoice | null) => void;
 	setRarity: (listing: ListingView, choice: RarityChoice) => void;
 } {
 	const saveCondition = useMutation(api.yugioh.listings.setListingCondition);
+	const saveCopies = useMutation(api.yugioh.listings.setListingCopies);
 	const saveMatch = useMutation(api.yugioh.listings.setListingMatch);
 
 	async function attempt(save: () => Promise<unknown>): Promise<boolean> {
@@ -95,6 +102,32 @@ export function useListingEdits(
 		);
 	}
 
+	async function setCopies(
+		listing: ListingView,
+		copies: CopiesChoice | null,
+	): Promise<void> {
+		const previous = listing.copiesOverride;
+		if (copies === previous) return;
+		const listingId = listing._id;
+		if (!(await attempt(() => saveCopies({ listingId, copies })))) return;
+		toast(
+			copies === null
+				? "Copies back to what the title says"
+				: `Copies set to ${copies}`,
+			{
+				description:
+					copies === null
+						? listingName(listing)
+						: `${listingName(listing)}. Kept on future captures.`,
+				action: {
+					label: "Undo",
+					onClick: () =>
+						void attempt(() => saveCopies({ listingId, copies: previous })),
+				},
+			},
+		);
+	}
+
 	function setRarity(listing: ListingView, choice: RarityChoice): void {
 		const matched = listing.match.printing;
 		if (choice.printingId === null) {
@@ -132,6 +165,7 @@ export function useListingEdits(
 
 	return {
 		setCondition: (listing, condition) => void setCondition(listing, condition),
+		setCopies: (listing, copies) => void setCopies(listing, copies),
 		setRarity,
 	};
 }
@@ -222,6 +256,76 @@ export function ConditionMenuItems({
 
 function titleConditionShort(condition: ReadCondition | null): string {
 	return condition === null ? "None" : READ_CONDITION_ABBREVIATIONS[condition];
+}
+
+/**
+ * Picks the Copies in a Listing: 1, 2 or 3. Once I've set them, they can go
+ * back to what the title says. `children` is the trigger.
+ */
+export function CopiesMenu({
+	listing,
+	onPick,
+	align = "start",
+	children,
+}: {
+	listing: ListingView;
+	onPick: (copies: CopiesChoice | null) => void;
+	align?: "start" | "end";
+	children: React.ReactElement;
+}): React.ReactElement {
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
+			<DropdownMenuContent align={align} className="w-56">
+				<CopiesMenuItems listing={listing} onPick={onPick} />
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+
+/**
+ * The copies picker's items, for `CopiesMenu` and the row menu's "Change
+ * copies" submenu.
+ */
+export function CopiesMenuItems({
+	listing,
+	onPick,
+}: {
+	listing: ListingView;
+	onPick: (copies: CopiesChoice | null) => void;
+}): React.ReactElement {
+	return (
+		<>
+			<DropdownMenuLabel className="font-normal text-muted-foreground text-xs">
+				Copies in the lot: yours win over the title
+			</DropdownMenuLabel>
+			<DropdownMenuSeparator />
+			<DropdownMenuRadioGroup
+				value={String(listingCopies(listing))}
+				onValueChange={(value) => onPick(Number(value) as CopiesChoice)}
+			>
+				{COPIES_CHOICES.map((copies) => (
+					<DropdownMenuRadioItem key={copies} value={String(copies)}>
+						{copiesLabel(copies)}
+					</DropdownMenuRadioItem>
+				))}
+			</DropdownMenuRadioGroup>
+			{isCopiesSetByYou(listing) ? (
+				<>
+					<DropdownMenuSeparator />
+					<DropdownMenuItem onSelect={() => onPick(null)}>
+						<Undo2 aria-hidden />
+						Use the title's
+						<DropdownMenuShortcut className="tracking-normal">
+							{listing.titleRead === null
+								? "None"
+								: `×${listing.titleRead.copies}`}
+						</DropdownMenuShortcut>
+					</DropdownMenuItem>
+				</>
+			) : null}
+		</>
+	);
 }
 
 /**

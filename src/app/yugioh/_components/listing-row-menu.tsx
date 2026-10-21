@@ -6,6 +6,7 @@ import {
 	EyeOff,
 	Gauge,
 	Gem,
+	Layers,
 	PanelRightOpen,
 	Undo2,
 } from "lucide-react";
@@ -24,12 +25,18 @@ import { cn } from "~/lib/utils";
 import { rarityAbbreviation } from "~/lib/yugioh/deck";
 import {
 	type ConditionChoice,
+	type CopiesChoice,
 	listingCondition,
+	listingCopies,
 } from "~/lib/yugioh/listing-edits";
 import { MARKETPLACE_LABELS, conditionCell } from "~/lib/yugioh/listing-format";
 import type { RejectionReason } from "~/lib/yugioh/listing-rejection";
 import type { ListingView } from "../_utils/types";
-import { ConditionMenuItems, RarityMenuItems } from "./listing-edits";
+import {
+	ConditionMenuItems,
+	CopiesMenuItems,
+	RarityMenuItems,
+} from "./listing-edits";
 import { MarkWrongMenuItems } from "./mark-wrong";
 
 /** Where the row menu is open: the Listing, and the point it grows from. */
@@ -52,8 +59,9 @@ const MENU_MOTION =
 
 /**
  * The Listings table's row menu, one for the whole table, opened at a point
- * by a click on a row (or Enter on a focused one): Details, Open on the
- * marketplace, Change rarity ›, Change condition ›, Hide the Card, and
+ * by a right-click on a row (or Shift+F10 or the menu key on a focused one):
+ * Details, Open on the marketplace, Change rarity ›, Change condition ›,
+ * Change copies › (eBay: how many Copies the lot sells), Hide the Card, and
  * Remove › (mark wrong, with its reasons), or Restore under Marked wrong,
  * where a Listing is restored before it's changed.
  */
@@ -67,6 +75,7 @@ export function ListingRowMenu({
 	onMarkWrong,
 	onUnmark,
 	onSetCondition,
+	onSetCopies,
 	onSetRarity,
 }: {
 	at: RowMenuAt | null;
@@ -82,6 +91,7 @@ export function ListingRowMenu({
 		listing: ListingView,
 		condition: ConditionChoice | null,
 	) => void;
+	onSetCopies?: (listing: ListingView, copies: CopiesChoice | null) => void;
 	onSetRarity?: (
 		listing: ListingView,
 		choice: ListingView["rarityChoices"][number],
@@ -124,6 +134,7 @@ export function ListingRowMenu({
 						onMarkWrong={onMarkWrong}
 						onUnmark={onUnmark}
 						onSetCondition={onSetCondition}
+						onSetCopies={onSetCopies}
 						onSetRarity={onSetRarity}
 					/>
 				</DropdownMenuContent>
@@ -140,6 +151,7 @@ function RowMenuItems({
 	onMarkWrong,
 	onUnmark,
 	onSetCondition,
+	onSetCopies,
 	onSetRarity,
 }: {
 	listing: ListingView;
@@ -152,6 +164,7 @@ function RowMenuItems({
 		listing: ListingView,
 		condition: ConditionChoice | null,
 	) => void;
+	onSetCopies?: (listing: ListingView, copies: CopiesChoice | null) => void;
 	onSetRarity?: (
 		listing: ListingView,
 		choice: ListingView["rarityChoices"][number],
@@ -163,6 +176,9 @@ function RowMenuItems({
 	const editable = !rejectedView && listing.rejection === null;
 	const canSetRarity = editable && onSetRarity && printing !== null;
 	const canSetCondition = editable && onSetCondition;
+	// TCGplayer sells single Copies; only an eBay title can misread a lot.
+	const canSetCopies =
+		editable && onSetCopies && listing.marketplace === "ebay";
 	const condition = conditionCell(listingCondition(listing), false);
 	const name = cardName(listing);
 	return (
@@ -184,7 +200,7 @@ function RowMenuItems({
 					Open on {marketplace}
 				</a>
 			</DropdownMenuItem>
-			{canSetRarity || canSetCondition ? (
+			{canSetRarity || canSetCondition || canSetCopies ? (
 				<>
 					<DropdownMenuSeparator />
 					{canSetRarity ? (
@@ -223,6 +239,26 @@ function RowMenuItems({
 								<ConditionMenuItems
 									listing={listing}
 									onPick={(choice) => onSetCondition(listing, choice)}
+								/>
+							</DropdownMenuSubContent>
+						</DropdownMenuSub>
+					) : null}
+					{canSetCopies ? (
+						<DropdownMenuSub>
+							<SubTrigger
+								icon={<Layers aria-hidden />}
+								value={`×${listingCopies(listing)}`}
+							>
+								Change copies
+							</SubTrigger>
+							<DropdownMenuSubContent
+								sideOffset={4}
+								collisionPadding={8}
+								className={cn("w-60", MENU_MOTION, "duration-100")}
+							>
+								<CopiesMenuItems
+									listing={listing}
+									onPick={(copies) => onSetCopies(listing, copies)}
 								/>
 							</DropdownMenuSubContent>
 						</DropdownMenuSub>

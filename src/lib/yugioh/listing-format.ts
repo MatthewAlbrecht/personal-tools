@@ -128,19 +128,22 @@ export function conditionCell(
 /**
  * What a Listing's title says that sets it apart from a raw, English single,
  * besides its condition (which has its own column): "PSA 10", "KR",
- * "×3 copies".
+ * "×3 copies". `copies` is the Listing's Copies (`listingCopies`: mine
+ * over the title's); without it, the title's.
  */
-export function titleFlags(read: TitleRead | null): TitleFlag[] {
-	if (read === null) return [];
+export function titleFlags(
+	read: TitleRead | null,
+	copies: number = read?.copies ?? 1,
+): TitleFlag[] {
 	const flags: TitleFlag[] = [];
-	if (read.graded) {
+	if (read?.graded) {
 		flags.push({ kind: "graded", label: gradingLabel(read) });
 	}
-	if (read.language !== "english") {
+	if (read && read.language !== "english") {
 		flags.push({ kind: "language", label: LANGUAGE_CODES[read.language] });
 	}
-	if (read.copies > 1) {
-		flags.push({ kind: "lot", label: `×${read.copies} copies` });
+	if (copies > 1) {
+		flags.push({ kind: "lot", label: `×${copies} copies` });
 	}
 	return flags;
 }

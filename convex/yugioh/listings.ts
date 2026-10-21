@@ -10,6 +10,7 @@ import {
 	yugiohCapturedEbayListingValidator,
 	yugiohCapturedTcgplayerProductValidator,
 	yugiohConditionChoiceValidator,
+	yugiohCopiesChoiceValidator,
 	yugiohDealValidator,
 	yugiohListingFiltersValidator,
 	yugiohListingSortValidator,
@@ -45,6 +46,8 @@ const listingValidator = v.object({
 	rejection: v.union(yugiohRejectionValidator, v.null()),
 	/** The condition I set; null when the title's read stands. */
 	conditionOverride: v.union(yugiohConditionChoiceValidator, v.null()),
+	/** The Copies I set (1 to 3); null when the title's read stands. */
+	copiesOverride: v.union(yugiohCopiesChoiceValidator, v.null()),
 	/**
 	 * The rarities a matched Listing could be (its own included): my
 	 * Printings under its set code, then Overloaded rarities with no
@@ -207,6 +210,24 @@ export const setListingCondition = mutation({
 	handler: async (ctx, args) => {
 		requireAuth(ctx);
 		await Listings.setListingCondition(ctx, args.listingId, args.condition);
+		return null;
+	},
+});
+
+/**
+ * Sets the Copies in a Listing myself (1 to 3), or (null) goes back to what
+ * the title says. They divide its Per-copy price, so prices, grades, cost to
+ * finish and pushes follow, and stay through re-reads and recaptures.
+ */
+export const setListingCopies = mutation({
+	args: {
+		listingId: v.id("yugiohListings"),
+		copies: v.union(yugiohCopiesChoiceValidator, v.null()),
+	},
+	returns: v.null(),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+		await Listings.setListingCopies(ctx, args.listingId, args.copies);
 		return null;
 	},
 });

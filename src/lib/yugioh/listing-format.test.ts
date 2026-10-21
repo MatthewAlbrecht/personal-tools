@@ -119,6 +119,12 @@ describe("titleFlags", () => {
 		expect(titleFlags({ ...raw, condition: null })).toEqual([]);
 	});
 
+	test("a lot counts the Copies I set over the title's", () => {
+		expect(titleFlags({ ...raw, copies: 3 }, 1)).toEqual([]);
+		expect(titleFlags(raw, 2)).toEqual([{ kind: "lot", label: "×2 copies" }]);
+		expect(titleFlags(null, 3)).toEqual([{ kind: "lot", label: "×3 copies" }]);
+	});
+
 	test("a graded Listing without a stated company still says Graded", () => {
 		expect(titleFlags({ ...raw, graded: true })).toEqual([
 			{ kind: "graded", label: "Graded" },

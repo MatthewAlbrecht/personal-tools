@@ -37,8 +37,12 @@ import { REFERENCE_WINDOW_DAYS } from "~/lib/yugioh/deals";
 import { rarityAbbreviation } from "~/lib/yugioh/deck";
 import {
 	type ConditionChoice,
+	type CopiesChoice,
+	copiesLabel,
 	isConditionSetByYou,
+	isCopiesSetByYou,
 	listingCondition,
+	listingCopies,
 } from "~/lib/yugioh/listing-edits";
 import {
 	MARKETPLACE_LABELS,
@@ -62,7 +66,7 @@ import { errorMessage } from "../_utils/errors";
 import { NOT_A_MATCH, listingMatchSchema } from "../_utils/schemas";
 import type { ListingView } from "../_utils/types";
 import { DealGradeBadge, ReferenceLine } from "./deal-grade";
-import { ConditionMenu, RarityMenu } from "./listing-edits";
+import { ConditionMenu, CopiesMenu, RarityMenu } from "./listing-edits";
 import { MatchSummary } from "./listing-match";
 import { MarkWrongMenu } from "./mark-wrong";
 import { YugiohDrawer } from "./yugioh-drawer";
@@ -81,6 +85,7 @@ export function ListingDrawer({
 	onMarkWrong,
 	onUnmark,
 	onSetCondition,
+	onSetCopies,
 	onSetRarity,
 }: {
 	deckId: Id<"yugiohDecks">;
@@ -93,6 +98,7 @@ export function ListingDrawer({
 		listing: ListingView,
 		condition: ConditionChoice | null,
 	) => void;
+	onSetCopies: (listing: ListingView, copies: CopiesChoice | null) => void;
 	onSetRarity: (
 		listing: ListingView,
 		choice: ListingView["rarityChoices"][number],
@@ -174,6 +180,7 @@ export function ListingDrawer({
 						<ConditionAndRarity
 							listing={listing}
 							onSetCondition={(condition) => onSetCondition(listing, condition)}
+							onSetCopies={(copies) => onSetCopies(listing, copies)}
 							onSetRarity={(choice) => onSetRarity(listing, choice)}
 						/>
 					)}
@@ -307,7 +314,9 @@ function PriceBreakdown({
 				</ReadRow>
 				<ReadRow term="Copies in lot">
 					÷ {breakdown.copies}
-					{listing.titleRead === null ? (
+					{isCopiesSetByYou(listing) ? (
+						<span className="text-muted-foreground"> (set by you)</span>
+					) : listing.titleRead === null ? (
 						<span className="text-muted-foreground"> (title not read)</span>
 					) : null}
 				</ReadRow>
@@ -339,17 +348,20 @@ function importFeeNote(
 }
 
 /**
- * The Listing's condition and rarity, each a picker: the condition I set
- * wins over the title's, and a rarity re-matches it to that Printing. What
- * I set says so.
+ * The Listing's condition, copies and rarity, each a picker: the condition
+ * and copies I set win over the title's, and a rarity re-matches it to that
+ * Printing. What I set says so. Copies are for eBay only: TCGplayer sells
+ * single Copies.
  */
 function ConditionAndRarity({
 	listing,
 	onSetCondition,
+	onSetCopies,
 	onSetRarity,
 }: {
 	listing: ListingView;
 	onSetCondition: (condition: ConditionChoice | null) => void;
+	onSetCopies: (copies: CopiesChoice | null) => void;
 	onSetRarity: (choice: ListingView["rarityChoices"][number]) => void;
 }): React.ReactElement {
 	const condition = listingCondition(listing);
@@ -358,7 +370,9 @@ function ConditionAndRarity({
 	return (
 		<section aria-labelledby="listing-edits" className="flex flex-col gap-2">
 			<h3 id="listing-edits" className="font-medium text-sm">
-				Condition and rarity
+				{listing.marketplace === "ebay"
+					? "Condition, copies and rarity"
+					: "Condition and rarity"}
 			</h3>
 			<dl className="grid grid-cols-[auto_1fr] items-center gap-x-6 gap-y-2 text-sm">
 				<dt className="text-muted-foreground">Condition</dt>
@@ -380,6 +394,21 @@ function ConditionAndRarity({
 					</ConditionMenu>
 					{isConditionSetByYou(listing) ? <SetByYouNote /> : null}
 				</dd>
+				{listing.marketplace === "ebay" ? (
+					<>
+						<dt className="text-muted-foreground">Copies</dt>
+						<dd className="flex min-w-0 items-center gap-3">
+							<CopiesMenu listing={listing} onPick={onSetCopies}>
+								<PickerButton
+									label={copiesLabel(listingCopies(listing))}
+									short={null}
+									aria-label="Change copies"
+								/>
+							</CopiesMenu>
+							{isCopiesSetByYou(listing) ? <SetByYouNote /> : null}
+						</dd>
+					</>
+				) : null}
 				{printing ? (
 					<>
 						<dt className="text-muted-foreground">Rarity</dt>

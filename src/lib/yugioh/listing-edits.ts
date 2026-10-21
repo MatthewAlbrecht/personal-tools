@@ -46,6 +46,36 @@ export function conditionChoice(listing: ConditionFields): ConditionChoice {
 	return listingCondition(listing) ?? NOT_STATED;
 }
 
+/** How many Copies I can say a Listing sells, in the order the picker offers. */
+export const COPIES_CHOICES = [1, 2, 3] as const;
+export type CopiesChoice = (typeof COPIES_CHOICES)[number];
+
+/** A Listing's copies fields: the AI's read and the count I set, if any. */
+type CopiesFields = {
+	titleRead?: Pick<TitleRead, "copies"> | null;
+	/** Missing or null: I haven't set one. */
+	copiesOverride?: CopiesChoice | null;
+};
+
+/**
+ * The Copies in a Listing: the count I set, else what its title says, else
+ * 1. Every rule that divides by Copies (Per-copy price, and through it
+ * Reference prices, Deal grades, cost to finish and pushes) reads it here.
+ */
+export function listingCopies(listing: CopiesFields): number {
+	return listing.copiesOverride ?? listing.titleRead?.copies ?? 1;
+}
+
+/** Whether I set the Listing's Copies myself. */
+export function isCopiesSetByYou(listing: CopiesFields): boolean {
+	return (listing.copiesOverride ?? null) !== null;
+}
+
+/** "1 copy", "3 copies". */
+export function copiesLabel(copies: number): string {
+	return copies === 1 ? "1 copy" : `${copies} copies`;
+}
+
 /** A rarity a Listing could be: my Printing of it, or null when I have none. */
 export type RarityChoice<PrintingId extends string = string> = {
 	rarity: string;

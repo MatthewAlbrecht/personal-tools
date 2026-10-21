@@ -7,6 +7,7 @@ import {
 import { type Priority, cardPriority } from "../../../src/lib/yugioh/deck";
 import {
 	type ConditionChoice,
+	type CopiesChoice,
 	type RarityChoice,
 	isConditionSetByYou,
 	listingCondition,
@@ -546,6 +547,8 @@ export type ListingView = CapturedEbayListing & {
 	rejection: Rejection | null;
 	/** The condition I set; null when the title's read stands. */
 	conditionOverride: ConditionChoice | null;
+	/** The Copies I set; null when the title's read stands. */
+	copiesOverride: CopiesChoice | null;
 	/**
 	 * The rarities a matched Listing could be instead (its own included): my
 	 * Printings under its set code, then Overloaded rarities I have none of.
@@ -557,7 +560,7 @@ export type ListingView = CapturedEbayListing & {
 /**
  * The stored Listing as the Listings views show it, with its read, match,
  * Per-copy price and Deal grade. `deals` comes from `loadDealContext`, once
- * per query. Copies come from the title read, 1 when it's unknown. `newSince`
+ * per query. Copies are mine, else the title read's, else 1. `newSince`
  * is where "new" starts in the Deck (`readNewSince`).
  */
 export async function listingView(
@@ -594,6 +597,7 @@ export async function listingView(
 		tcgplayer: listing.tcgplayer ?? null,
 		rejection: listing.rejection ?? null,
 		conditionOverride: listing.conditionOverride ?? null,
+		copiesOverride: listing.copiesOverride ?? null,
 		rarityChoices: await rarities(listing),
 		...(await listingMatchView(ctx, listing)),
 	};
@@ -666,6 +670,25 @@ export async function setListingCondition(
 	await ctx.db.patch("yugiohListings", listingId, {
 		conditionOverride: condition,
 	});
+	if (shownMatchStatus(listing) === "match") {
+		await queuePushCheck(ctx, listingId);
+	}
+}
+
+/**
+ * Sets the Copies in a Listing myself (1 to 3), or (null) goes back to what
+ * the title says. They divide its Per-copy price, so Reference prices,
+ * grades, cost to finish and pushes follow, and stay through re-reads and
+ * recaptures.
+ */
+export async function setListingCopies(
+	ctx: MutationCtx,
+	listingId: Id<"yugiohListings">,
+	copies: CopiesChoice | null,
+): Promise<void> {
+	const listing = await ctx.db.get("yugiohListings", listingId);
+	if (!listing) throw new ConvexError("That Listing doesn't exist.");
+	await ctx.db.patch("yugiohListings", listingId, { copiesOverride: copies });
 	if (shownMatchStatus(listing) === "match") {
 		await queuePushCheck(ctx, listingId);
 	}

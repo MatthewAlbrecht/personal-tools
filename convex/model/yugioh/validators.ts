@@ -18,7 +18,10 @@ import type {
 	Priority,
 	Section,
 } from "../../../src/lib/yugioh/deck";
-import type { ConditionChoice } from "../../../src/lib/yugioh/listing-edits";
+import type {
+	ConditionChoice,
+	CopiesChoice,
+} from "../../../src/lib/yugioh/listing-edits";
 import type { ListingFilters } from "../../../src/lib/yugioh/listing-filters";
 import type { Rejection } from "../../../src/lib/yugioh/listing-rejection";
 import type { ListingSort } from "../../../src/lib/yugioh/listing-sort";
@@ -262,6 +265,13 @@ export const yugiohMatchStatusValidator = v.union(
 export const yugiohConditionChoiceValidator = v.union(
 	yugiohReadConditionValidator,
 	v.literal("notStated"),
+);
+
+/** How many Copies I can say a Listing sells (`CopiesChoice`). */
+export const yugiohCopiesChoiceValidator = v.union(
+	v.literal(1),
+	v.literal(2),
+	v.literal(3),
 );
 
 /** Why I marked a Listing wrong. */
@@ -576,6 +586,11 @@ const conditionChoicesAgree: Same<
 	ConditionChoice
 > = true;
 void conditionChoicesAgree;
+const copiesChoicesAgree: Same<
+	Infer<typeof yugiohCopiesChoiceValidator>,
+	CopiesChoice
+> = true;
+void copiesChoicesAgree;
 const perCopyPricesAgree: Same<
 	Infer<typeof yugiohPerCopyPriceValidator>,
 	PerCopyPrice
