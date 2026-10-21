@@ -114,6 +114,7 @@ import type * as model_yugioh_tcgplayer from "../model/yugioh/tcgplayer.js";
 import type * as model_yugioh_tcgplayerCapture from "../model/yugioh/tcgplayerCapture.js";
 import type * as model_yugioh_tcgplayerPicker from "../model/yugioh/tcgplayerPicker.js";
 import type * as model_yugioh_tcgplayerSearch from "../model/yugioh/tcgplayerSearch.js";
+import type * as model_yugioh_titleReadRetry from "../model/yugioh/titleReadRetry.js";
 import type * as model_yugioh_titleReader from "../model/yugioh/titleReader.js";
 import type * as model_yugioh_typesafe from "../model/yugioh/typesafe.js";
 import type * as model_yugioh_validators from "../model/yugioh/validators.js";
@@ -141,6 +142,7 @@ import type * as yugioh_pushes from "../yugioh/pushes.js";
 import type * as yugioh_searches from "../yugioh/searches.js";
 import type * as yugioh_seed from "../yugioh/seed.js";
 import type * as yugioh_tcgplayer from "../yugioh/tcgplayer.js";
+import type * as yugioh_titleReadRetry from "../yugioh/titleReadRetry.js";
 import type * as yugioh_titleReading from "../yugioh/titleReading.js";
 
 import type {
@@ -256,6 +258,7 @@ declare const fullApi: ApiFromModules<{
   "model/yugioh/tcgplayerCapture": typeof model_yugioh_tcgplayerCapture;
   "model/yugioh/tcgplayerPicker": typeof model_yugioh_tcgplayerPicker;
   "model/yugioh/tcgplayerSearch": typeof model_yugioh_tcgplayerSearch;
+  "model/yugioh/titleReadRetry": typeof model_yugioh_titleReadRetry;
   "model/yugioh/titleReader": typeof model_yugioh_titleReader;
   "model/yugioh/typesafe": typeof model_yugioh_typesafe;
   "model/yugioh/validators": typeof model_yugioh_validators;
@@ -283,6 +286,7 @@ declare const fullApi: ApiFromModules<{
   "yugioh/searches": typeof yugioh_searches;
   "yugioh/seed": typeof yugioh_seed;
   "yugioh/tcgplayer": typeof yugioh_tcgplayer;
+  "yugioh/titleReadRetry": typeof yugioh_titleReadRetry;
   "yugioh/titleReading": typeof yugioh_titleReading;
 }>;
 

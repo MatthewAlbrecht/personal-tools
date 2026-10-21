@@ -9,12 +9,14 @@ import {
 } from "../_generated/server";
 import * as Matching from "../model/yugioh/matching";
 import { judgeTitle } from "../model/yugioh/titleReader";
+import { TypesafeKeyMissingError } from "../model/yugioh/typesafe";
 import { yugiohTitleJudgmentsValidator } from "../model/yugioh/validators";
 
 /**
  * Reads one Listing's title with the AI, then matches the Listing. Scheduled
- * by ingest for a new Listing or a changed title, never on a timer. If the AI
- * fails, the title's set code still decides what it can.
+ * by ingest for a new Listing or a changed title, and again by the retry of
+ * failed reads. If the AI fails, the title's set code still decides what it
+ * can; a missing TypeSafe key fails at once and doesn't count as an attempt.
  */
 export const readTitle = internalAction({
 	args: { listingId: v.id("yugiohListings") },
@@ -26,15 +28,18 @@ export const readTitle = internalAction({
 		);
 		if (!toRead) return null;
 		let judgments: TitleJudgments | null = null;
+		let keyMissing = false;
 		try {
 			judgments = await judgeTitle(toRead.title, toRead);
 		} catch (error) {
+			keyMissing = error instanceof TypesafeKeyMissingError;
 			console.error(`Couldn't read Listing title "${toRead.title}"`, error);
 		}
 		await ctx.runMutation(internal.yugioh.titleReading.saveTitleRead, {
 			listingId,
 			title: toRead.title,
 			judgments,
+			keyMissing,
 		});
 		return null;
 	},
@@ -60,10 +65,11 @@ export const saveTitleRead = internalMutation({
 		listingId: v.id("yugiohListings"),
 		title: v.string(),
 		judgments: v.union(yugiohTitleJudgmentsValidator, v.null()),
+		keyMissing: v.optional(v.boolean()),
 	},
 	returns: v.null(),
-	handler: async (ctx, { listingId, title, judgments }) => {
-		await Matching.saveTitleRead(ctx, listingId, title, judgments);
+	handler: async (ctx, { listingId, title, judgments, keyMissing }) => {
+		await Matching.saveTitleRead(ctx, listingId, title, judgments, keyMissing);
 		return null;
 	},
 });

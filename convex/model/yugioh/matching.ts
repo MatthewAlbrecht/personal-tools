@@ -2,6 +2,7 @@
 // in through `saveTitleRead`; everything here is deterministic.
 import { ConvexError } from "convex/values";
 import { RARITY_NAMES } from "../../../src/lib/yugioh/deck";
+import { failedTitleRead } from "../../../src/lib/yugioh/title-read-retry";
 import {
 	type MatchStatus,
 	type TitleJudgments,
@@ -39,6 +40,9 @@ export async function queueTitleRead(
 	await ctx.db.patch("yugiohListings", listingId, {
 		titleReadStatus: "reading",
 		setCodeKey: setCode === null ? null : setCodeKey(setCode),
+		// A new title starts with a fresh set of attempts.
+		titleReadAttempts: undefined,
+		titleReadRetryAt: undefined,
 	});
 	await ctx.scheduler.runAfter(0, internal.yugioh.titleReading.readTitle, {
 		listingId,
@@ -120,7 +124,8 @@ export async function titleToRead(
 
 /**
  * Stores the AI's read of a title and matches the Listing. `judgments` is null
- * when the AI failed: the title's set code still decides what it can. A read
+ * when the AI failed: the title's set code still decides what it can, and the
+ * read is retried later (`keyMissing` failures don't count as attempts). A read
  * for a title the Listing no longer has is dropped (a newer one is queued).
  * A match I set myself is never changed.
  */
@@ -129,6 +134,7 @@ export async function saveTitleRead(
 	listingId: Id<"yugiohListings">,
 	title: string,
 	judgments: TitleJudgments | null,
+	keyMissing = false,
 ): Promise<void> {
 	const listing = await ctx.db.get("yugiohListings", listingId);
 	if (!listing || listing.title !== title) return;
@@ -137,10 +143,16 @@ export async function saveTitleRead(
 	const match = listing.matchOverridden
 		? null
 		: await automaticMatch(ctx, { setCode, rarity: read?.rarity ?? null });
+	const failure =
+		read === null
+			? failedTitleRead(listing.titleReadAttempts ?? 0, keyMissing, Date.now())
+			: null;
 	await ctx.db.patch("yugiohListings", listingId, {
 		titleReadStatus: read === null ? "failed" : "read",
 		titleRead: read,
 		setCodeKey: setCode === null ? null : setCodeKey(setCode),
+		titleReadAttempts: failure?.attempts || undefined,
+		titleReadRetryAt: failure?.retryAt,
 		...match,
 	});
 	if ((match?.matchStatus ?? listing.matchStatus) === "match") {

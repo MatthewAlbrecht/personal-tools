@@ -35,6 +35,9 @@ Everything the agents couldn't do, collected from the tickets' notes (`issues/*.
       `npx convex run --prod yugioh/pricing:refreshExchangeRates '{}'`
 - [ ] Title reads for Listings captured before ticket 07 (only if prod has any). Repeat until it returns `{ queued: 0 }`:
       `npx convex run --prod yugioh/titleReading:queueUnreadTitles '{}'`
+- [ ] Failed title reads (every eBay Listing captured before `TYPESAFE_API_KEY` was set failed its read, so language, condition and graded filters can't see them). **Set the key first** (Env vars above), then repeat, passing back `cursor`, until `isDone` is true. Reads start 250 ms apart, so give each page ~25 s before the next:
+      `npx convex run --prod yugioh/titleReadRetry:requeueFailedTitleReads '{"paginationOpts":{"numItems":100,"cursor":null}}'`
+      After that the hourly cron retries new failures itself (3 attempts each; a missing key doesn't count).
 - [ ] Sale times (ticket 09). Repeat, passing back `cursor`, until `isDone` is true:
       `npx convex run --prod yugioh/deals:backfillSaleTimes '{"paginationOpts":{"numItems":200,"cursor":null}}'`
 - [ ] TCGplayer product ids (ticket 12). Repeat, passing back `cursor`, until `isDone` is true:

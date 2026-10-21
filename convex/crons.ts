@@ -19,4 +19,12 @@ crons.daily(
 	{},
 );
 
+// Yu-Gi-Oh title reads that failed: retried when due, up to a few attempts.
+crons.interval(
+	"yugioh retry failed title reads",
+	{ hours: 1 },
+	internal.yugioh.titleReadRetry.retryFailedTitleReads,
+	{},
+);
+
 export default crons;

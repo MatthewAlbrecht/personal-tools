@@ -1883,6 +1883,10 @@ export default defineSchema({
 		// captured before it have none; missing reads as unread and unsure.
 		titleReadStatus: v.optional(yugiohTitleReadStatusValidator),
 		titleRead: v.optional(v.union(yugiohTitleReadValidator, v.null())),
+		// Failed AI reads of this title (a missing TypeSafe key isn't counted),
+		// and when a failed read is next retried: null once they're used up.
+		titleReadAttempts: v.optional(v.number()),
+		titleReadRetryAt: v.optional(v.union(v.number(), v.null())),
 		// The card the title's set code names in any language ("RA01-008"),
 		// null when the title has no single set code.
 		setCodeKey: v.optional(v.union(v.string(), v.null())),
@@ -1905,6 +1909,9 @@ export default defineSchema({
 	})
 		.index("by_marketplace_and_itemId", ["marketplace", "itemId"])
 		.index("by_setCodeKey", ["setCodeKey"])
+		// Failed title reads: re-queued by hand, and retried when due.
+		.index("by_titleReadStatus", ["titleReadStatus"])
+		.index("by_titleReadRetryAt", ["titleReadRetryAt"])
 		.index("by_matchedPrintingId", ["matchedPrintingId"])
 		// "Last captured 9h ago" (ticket 15).
 		.index("by_lastSeenAt", ["lastSeenAt"])
