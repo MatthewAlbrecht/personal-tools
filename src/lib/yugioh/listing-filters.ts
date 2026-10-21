@@ -37,7 +37,11 @@ export const MATCH_FILTERS = [
 ] as const;
 export type MatchFilter = MatchStatus | "reading";
 
-/** Every filter is optional; an unset filter lets every Listing in the view through. */
+/**
+ * Every filter is optional; an unset filter lets every Listing in the view
+ * through. The URL is another matter: there, English and not graded are the
+ * defaults (see `listingFiltersFromParams`).
+ */
 export type ListingFilters = {
 	/** Available (unset) or Sold. */
 	view?: ListingsView;
@@ -153,7 +157,33 @@ function passes(
 	return true;
 }
 
+// --- The defaults ----------------------------------------------------------
+
+/** Set when the URL doesn't say: the Listings that could count toward prices. */
+const DEFAULT_FILTERS = {
+	language: "english",
+	graded: false,
+} as const satisfies ListingFilters;
+
+/** The default filters, keeping the view and the New toggle. */
+export function defaultListingFilters(filters: ListingFilters): ListingFilters {
+	return { view: filters.view, new: filters.new, ...DEFAULT_FILTERS };
+}
+
+/** Whether only the defaults are set, beyond the view and the New toggle. */
+export function isDefaultListingFilters(filters: ListingFilters): boolean {
+	const extra = extraFilters(filters);
+	return (
+		extra.length === Object.keys(DEFAULT_FILTERS).length &&
+		filters.language === DEFAULT_FILTERS.language &&
+		filters.graded === DEFAULT_FILTERS.graded
+	);
+}
+
 // --- The URL ---------------------------------------------------------------
+
+/** A filter with a default is turned off with `=any` in the URL. */
+const ANY_PARAM = "any";
 
 /** Search params the filters own; any other param (`listing`, `sort`) is left alone. */
 const FILTER_PARAMS = [
@@ -196,9 +226,11 @@ function yesNo(value: string | null): boolean | undefined {
 const LEGACY_PARAMS = ["ending"] as const;
 
 /**
- * The filters a URL's search params hold. A value the filters don't know is
- * ignored, so a stale or mistyped link shows more, never nothing. Old links
- * (`type=sold`) still open the view they meant.
+ * The filters a URL's search params hold. With no `language` or `graded`
+ * param, English and not graded apply; `language=any` and `graded=any` turn
+ * them off. Any other value the filters don't know is ignored (a defaulted
+ * filter keeps its default), so a stale or mistyped link never shows nothing.
+ * Old links (`type=sold`) still open the view they meant.
  */
 export function listingFiltersFromParams(params: ParamReader): ListingFilters {
 	const legacySold = params.get("type") === "sold";
@@ -208,9 +240,16 @@ export function listingFiltersFromParams(params: ParamReader): ListingFilters {
 		new: params.get("new") === "1" || undefined,
 		marketplace: oneOf(MARKETPLACES, params.get("marketplace")),
 		type: oneOf(LISTING_KINDS, params.get("type")),
-		language: oneOf(LANGUAGES, params.get("language")),
+		language:
+			params.get("language") === ANY_PARAM
+				? undefined
+				: (oneOf(LANGUAGES, params.get("language")) ??
+					DEFAULT_FILTERS.language),
 		condition: oneOf(CONDITION_FILTERS, params.get("condition")),
-		graded: yesNo(params.get("graded")),
+		graded:
+			params.get("graded") === ANY_PARAM
+				? undefined
+				: (yesNo(params.get("graded")) ?? DEFAULT_FILTERS.graded),
 		match: oneOf(MATCH_FILTERS, params.get("match")),
 		location: text(params.get("location")),
 		card: text(params.get("card")),
@@ -232,11 +271,18 @@ export function withListingFilters(
 	return next;
 }
 
-/** How a filter reads in the URL: `view=sold`, `new=1`, `graded=no`. */
+/**
+ * How a filter reads in the URL: `view=sold`, `new=1`, `graded=yes`. A
+ * default leaves no param; a defaulted filter that's off is `any`.
+ */
 function paramValue(
 	name: keyof ListingFilters,
 	value: ListingFilters[keyof ListingFilters],
 ): string | undefined {
+	if (name === "language" || name === "graded") {
+		if (value === undefined) return ANY_PARAM;
+		if (value === DEFAULT_FILTERS[name]) return undefined;
+	}
 	if (value === undefined) return undefined;
 	if (name === "view" && value === "available") return undefined;
 	if (name === "graded") return value ? "yes" : "no";

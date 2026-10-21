@@ -28,7 +28,9 @@ import {
 	type ListingsView,
 	type Marketplace,
 	type MatchFilter,
+	defaultListingFilters,
 	extraFilters,
+	isDefaultListingFilters,
 } from "~/lib/yugioh/listing-filters";
 import { MARKETPLACE_LABELS } from "~/lib/yugioh/listing-format";
 import {
@@ -75,7 +77,9 @@ type CardOption = { _id: string; label: string };
 /**
  * The Listings toolbar: the view (Available · Sold), the New toggle within
  * it, the Filters button with how many more are set, and those filters as
- * removable chips. Every change is a URL change, through `onChange`.
+ * removable chips, the defaults (English, Not graded) included so it's clear
+ * why some Listings are hidden. Every change is a URL change, through
+ * `onChange`.
  */
 export function ListingsToolbar({
 	deckId,
@@ -141,16 +145,18 @@ export function ListingsToolbar({
 							</li>
 						);
 					})}
-					<li>
-						<Button
-							variant="ghost"
-							size="sm"
-							className="h-11 md:h-8"
-							onClick={() => onChange(keepView(filters))}
-						>
-							Clear
-						</Button>
-					</li>
+					{!isDefaultListingFilters(filters) && (
+						<li>
+							<Button
+								variant="ghost"
+								size="sm"
+								className="h-11 md:h-8"
+								onClick={() => onChange(defaultListingFilters(filters))}
+							>
+								Reset
+							</Button>
+						</li>
+					)}
 				</ul>
 			)}
 			<ListingFiltersDrawer
@@ -164,11 +170,6 @@ export function ListingsToolbar({
 			/>
 		</div>
 	);
-}
-
-/** Clearing filters keeps the view and the New toggle. */
-function keepView(filters: ListingFilters): ListingFilters {
-	return { view: filters.view, new: filters.new };
 }
 
 /**
@@ -350,6 +351,8 @@ function ListingFiltersDrawer({
 		name: keyof FilterFormValues;
 		label: string;
 		options: SelectOption[];
+		/** What the field's "no filter" choice says. */
+		anyLabel?: string;
 	}> = [
 		{ name: "card", label: "Card", options: cardSelectOptions },
 		{ name: "type", label: "Type", options: entries(KIND_LABELS) },
@@ -365,6 +368,7 @@ function ListingFiltersDrawer({
 		{
 			name: "language",
 			label: "Language",
+			anyLabel: "Any language",
 			options: LANGUAGES.map((value) => ({
 				value,
 				label: LANGUAGE_LABELS[value],
@@ -373,6 +377,7 @@ function ListingFiltersDrawer({
 		{
 			name: "graded",
 			label: "Graded",
+			anyLabel: "Graded or not",
 			options: [
 				{ value: "yes", label: "Graded" },
 				{ value: "no", label: "Not graded" },
@@ -391,15 +396,16 @@ function ListingFiltersDrawer({
 			open={open}
 			onOpenChange={onOpenChange}
 			title="Filters"
-			description="Filters narrow this view. Nothing is hidden until you set one."
+			description="Filters narrow this view. English and Not graded are on until you change them."
 			footer={
 				<div className="flex gap-2">
 					<Button
 						variant="outline"
 						className="h-11 flex-1 md:h-9"
-						onClick={() => onChange(keepView(filters))}
+						disabled={isDefaultListingFilters(filters)}
+						onClick={() => onChange(defaultListingFilters(filters))}
 					>
-						Clear filters
+						Reset filters
 					</Button>
 					<Button
 						className="h-11 flex-1 md:h-9"
@@ -413,7 +419,7 @@ function ListingFiltersDrawer({
 			}
 		>
 			<FieldGroup>
-				{fields.map(({ name, label, options }) => (
+				{fields.map(({ name, label, options, anyLabel = "Any" }) => (
 					<form.Field key={name} name={name}>
 						{(field) => (
 							<Field>
@@ -438,7 +444,7 @@ function ListingFiltersDrawer({
 									</SelectTrigger>
 									<SelectContent>
 										<SelectGroup>
-											<SelectItem value={ANY}>Any</SelectItem>
+											<SelectItem value={ANY}>{anyLabel}</SelectItem>
 											{options.map((option) => (
 												<SelectItem key={option.value} value={option.value}>
 													{option.label}

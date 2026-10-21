@@ -37,7 +37,9 @@ import { cn } from "~/lib/utils";
 import {
 	type ListingFilters,
 	type ListingsView,
-	activeFilterCount,
+	defaultListingFilters,
+	extraFilters,
+	isDefaultListingFilters,
 	listingFiltersFromParams,
 	withListingFilters,
 } from "~/lib/yugioh/listing-filters";
@@ -194,11 +196,7 @@ export function ListingsPage({
 		<section aria-label="Listings" className="flex flex-col gap-3">
 			{toolbar}
 			{page.matching === 0 ? (
-				<NothingShown
-					view={view}
-					filters={filters}
-					onClear={() => setFilters({ view: filters.view })}
-				/>
+				<NothingShown view={view} filters={filters} onChange={setFilters} />
 			) : (
 				<>
 					<div className="flex items-center justify-between gap-3">
@@ -250,19 +248,22 @@ export function ListingsPage({
 }
 
 /**
- * Nothing in the view: "Nothing matches these filters." with a way out, or,
- * with no filters set, that the view itself is empty.
+ * Nothing in the view: "Nothing matches these filters." with a way out (back
+ * to the defaults, or past them when only they are set), or, with no filters
+ * set, that the view itself is empty.
  */
 function NothingShown({
 	view,
 	filters,
-	onClear,
+	onChange,
 }: {
 	view: ListingsView;
 	filters: ListingFilters;
-	onClear: () => void;
+	onChange: (filters: ListingFilters) => void;
 }): React.ReactElement {
-	const filtered = filters.new || activeFilterCount(filters) > 0;
+	const onlyDefaults = !filters.new && isDefaultListingFilters(filters);
+	const filtered =
+		onlyDefaults || filters.new || extraFilters(filters).length > 0;
 	return (
 		<Empty className="border">
 			<EmptyHeader>
@@ -279,9 +280,23 @@ function NothingShown({
 			</EmptyHeader>
 			{filtered && (
 				<EmptyContent>
-					<Button variant="outline" onClick={onClear}>
-						Clear filters
-					</Button>
+					{onlyDefaults ? (
+						<Button
+							variant="outline"
+							onClick={() => onChange({ view: filters.view })}
+						>
+							Show every language, graded or not
+						</Button>
+					) : (
+						<Button
+							variant="outline"
+							onClick={() =>
+								onChange(defaultListingFilters({ view: filters.view }))
+							}
+						>
+							Reset filters
+						</Button>
+					)}
 				</EmptyContent>
 			)}
 		</Empty>

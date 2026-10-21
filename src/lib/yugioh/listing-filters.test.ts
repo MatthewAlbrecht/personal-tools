@@ -4,7 +4,9 @@ import {
 	type ListingFilters,
 	activeFilterCount,
 	applyListingFilters,
+	defaultListingFilters,
 	extraFilters,
+	isDefaultListingFilters,
 	listingFiltersFromParams,
 	withListingFilters,
 } from "./listing-filters";
@@ -218,42 +220,107 @@ describe("filters in the URL", () => {
 		expect(listingFiltersFromParams(params)).toEqual(filters);
 	});
 
-	test("Available is the default and leaves no param", () => {
+	test("Available, English and not graded are the defaults and leave no param", () => {
 		const params = withListingFilters(new URLSearchParams(), {
 			view: "available",
 			new: true,
+			language: "english",
+			graded: false,
 		});
 		expect(params.toString()).toBe("new=1");
-		expect(listingFiltersFromParams(params)).toEqual({ new: true });
+		expect(listingFiltersFromParams(params)).toEqual({
+			new: true,
+			language: "english",
+			graded: false,
+		});
+	});
+
+	test("no language or graded param means English and not graded", () => {
+		expect(listingFiltersFromParams(new URLSearchParams())).toEqual({
+			language: "english",
+			graded: false,
+		});
+	});
+
+	test("any language and graded or not are kept as language=any and graded=any", () => {
+		const params = withListingFilters(new URLSearchParams(), {});
+		expect(params.toString()).toBe("language=any&graded=any");
+		expect(listingFiltersFromParams(params)).toEqual({});
 	});
 
 	test("an unset filter leaves no param, and other params are kept", () => {
 		const params = withListingFilters(
 			new URLSearchParams("listing=abc&view=sold&new=1&sort=price"),
-			{ type: "auction" },
+			{ type: "auction", language: "english", graded: false },
 		);
 		expect(params.toString()).toBe("listing=abc&sort=price&type=auction");
 	});
 
-	test("old links: type=sold opens Sold, ending=1 opens Available", () => {
+	test("old links: type=sold opens Sold, ending=1 opens Available, graded=no and language=english still work", () => {
 		expect(listingFiltersFromParams(new URLSearchParams("type=sold"))).toEqual({
 			view: "sold",
+			language: "english",
+			graded: false,
 		});
 		expect(
 			listingFiltersFromParams(new URLSearchParams("ending=1&new=1")),
-		).toEqual({ new: true });
+		).toEqual({ new: true, language: "english", graded: false });
+		expect(
+			listingFiltersFromParams(
+				new URLSearchParams("language=english&graded=no"),
+			),
+		).toEqual({ language: "english", graded: false });
+		expect(listingFiltersFromParams(new URLSearchParams("graded=yes"))).toEqual(
+			{ language: "english", graded: true },
+		);
 		const rewritten = withListingFilters(
 			new URLSearchParams("type=sold&ending=1"),
-			{ view: "sold" },
+			{ view: "sold", language: "english", graded: false },
 		);
 		expect(rewritten.toString()).toBe("view=sold");
 	});
 
-	test("unknown values are ignored rather than hiding everything", () => {
+	test("unknown values are ignored: the defaults hold and nothing else is set", () => {
 		const params = new URLSearchParams(
 			"type=preorder&language=klingon&graded=maybe&new=yes&location=%20&view=all",
 		);
-		expect(listingFiltersFromParams(params)).toEqual({});
+		expect(listingFiltersFromParams(params)).toEqual({
+			language: "english",
+			graded: false,
+		});
+	});
+});
+
+describe("the default filters", () => {
+	test("are English and not graded, keeping the view and New", () => {
+		expect(
+			defaultListingFilters({
+				view: "sold",
+				new: true,
+				language: "korean",
+				graded: true,
+				card: "x",
+			}),
+		).toEqual({ view: "sold", new: true, language: "english", graded: false });
+	});
+
+	test("are recognised whatever the view and New", () => {
+		expect(
+			isDefaultListingFilters({
+				view: "sold",
+				new: true,
+				language: "english",
+				graded: false,
+			}),
+		).toBe(true);
+		expect(isDefaultListingFilters({ language: "english" })).toBe(false);
+		expect(
+			isDefaultListingFilters({
+				language: "english",
+				graded: false,
+				card: "x",
+			}),
+		).toBe(false);
 	});
 });
 
