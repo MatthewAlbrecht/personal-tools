@@ -226,6 +226,21 @@ test("a Printing whose set code and rarity match but whose name the URL doesn't 
 	expect(printing?.tcgplayerProductId ?? null).toBeNull();
 });
 
+test("a Printing with the Card's short name is linked to its page", async () => {
+	const t = setup();
+	const { deckId } = await deckWith(t, { ...BRIONAC, cardName: "Brionac" });
+
+	const report = await captureBrionac(t);
+
+	expect(report).toMatchObject({ linked: true, reason: null, created: 1 });
+	const deck = await t.query(api.yugioh.decks.getDeck, { deckId });
+	const card = deck?.sections.flatMap((section) => section.cards)[0];
+	expect(card?.candidates[0]?.tcgplayer).toMatchObject({
+		status: "found",
+		productUrl: BRIONAC.productUrl,
+	});
+});
+
 test("a matching Printing already linked to another product is named, with the paste instruction", async () => {
 	const t = setup();
 	const { printingId } = await deckWith(t, BRIONAC);

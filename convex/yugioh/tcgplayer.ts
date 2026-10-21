@@ -1,6 +1,7 @@
 import { paginationOptsValidator } from "convex/server";
 import { ConvexError, v } from "convex/values";
 import {
+	MAX_PRODUCT_URL_LENGTH,
 	REJECTED_PRODUCT_URL,
 	type TcgplayerProduct,
 	type TcgplayerProductLink,
@@ -113,10 +114,10 @@ export const savePastedLink = internalMutation({
 });
 
 /**
- * Saves a pasted TCGplayer product URL. It must pass the same pattern check
- * as a looked-up one; when TCGplayer answers, its product must also have the
- * Printing's set code and rarity. If TCGplayer can't be reached, the pattern
- * check alone decides.
+ * Saves a pasted TCGplayer product URL. When TCGplayer answers, its details
+ * decide: the product must have the Printing's set code and rarity, and the
+ * URL must fit TCGplayer's own name for it. If TCGplayer can't be reached,
+ * the pattern check against the Card's name decides.
  */
 export const setProductUrl = action({
 	args: { printingId: v.id("yugiohPrintings"), url: v.string() },
@@ -128,14 +129,15 @@ export const setProductUrl = action({
 			onlyWhileSearching: false,
 		});
 		if (!printing) throw new ConvexError("This Printing doesn't exist.");
-		const link = checkTcgplayerProductUrl(url, printing);
+		const productId =
+			url.length > MAX_PRODUCT_URL_LENGTH ? null : tcgplayerProductIdOf(url);
+		if (productId === null) throw new ConvexError(REJECTED_PRODUCT_URL);
+		const product = await productDetails(printingId, productId);
+		const link =
+			product === undefined
+				? checkTcgplayerProductUrl(url, printing)
+				: Tcgplayer.checkPastedUrl(url, product, printing);
 		if (!link) throw new ConvexError(REJECTED_PRODUCT_URL);
-		const product = await productDetails(printingId, link.productId);
-		if (product !== undefined) {
-			if (product === null || !Tcgplayer.productIsPrinting(product, printing)) {
-				throw new ConvexError(REJECTED_PRODUCT_URL);
-			}
-		}
 		await ctx.runMutation(internal.yugioh.tcgplayer.savePastedLink, {
 			printingId,
 			link,

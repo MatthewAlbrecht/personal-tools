@@ -4,7 +4,8 @@ import type { Infer } from "convex/values";
 import { saleTime } from "../../../src/lib/yugioh/deals";
 import { normalizeSetCode } from "../../../src/lib/yugioh/deck";
 import {
-	checkTcgplayerProductUrl,
+	cardNameFitsProduct,
+	checkTcgplayerProductUrlFor,
 	rarityNamesAgree,
 	readTcgplayerCondition,
 	tcgplayerCardName,
@@ -225,10 +226,9 @@ export async function ingestTcgplayerProduct(
 
 /**
  * A product page no Printing is linked to: its own set code and rarity say
- * which Printing it is. The one matching Printing without a link is linked,
- * after the same checks as a pasted URL (the URL fits the Card and rarity;
- * the page's details have the Printing's set code and rarity). Otherwise,
- * says why not.
+ * which Printing it is. The one matching Printing without a link is linked
+ * when the Card's name is the page's (or its start, "Brionac") and the URL
+ * fits the page's name and rarity. Otherwise, says why not.
  */
 async function linkPageToPrinting(
 	ctx: MutationCtx,
@@ -251,7 +251,9 @@ async function linkPageToPrinting(
 	}
 	const [only] = matches;
 	if (matches.length === 1 && only && !isLinked(only)) {
-		const link = checkTcgplayerProductUrl(product.url, only);
+		const link = cardNameFitsProduct(only.cardName, details)
+			? checkTcgplayerProductUrlFor(product.url, details)
+			: null;
 		if (!link || link.productId !== product.productId) {
 			return `This page is ${setCode} ${details.rarity}, but its URL doesn't match ${only.cardName}, so it wasn't linked.`;
 		}

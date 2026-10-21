@@ -150,6 +150,38 @@ export function checkTcgplayerProductUrl(
 	return null;
 }
 
+/**
+ * The pattern check against TCGplayer's own name for the product rather than
+ * the Card's name in the app, which may be short ("Brionac" for "Brionac,
+ * Dragon of the Ice Barrier"). For when TCGplayer's data says which product
+ * it is.
+ */
+export function checkTcgplayerProductUrlFor(
+	url: string,
+	product: { productName: string; rarity: string; setName?: string | null },
+): TcgplayerProductLink | null {
+	return checkTcgplayerProductUrl(url, {
+		cardName: tcgplayerCardName(product.productName, product.rarity),
+		rarity: product.rarity,
+		setName: product.setName,
+	});
+}
+
+/**
+ * Whether a Card's name is TCGplayer's name for the product, or its start
+ * ("Brionac" for "Brionac, Dragon of the Ice Barrier").
+ */
+export function cardNameFitsProduct(
+	cardName: string,
+	product: { productName: string; rarity: string },
+): boolean {
+	const card = tcgplayerSlugPart(cardName);
+	const name = tcgplayerSlugPart(
+		tcgplayerCardName(product.productName, product.rarity),
+	);
+	return card !== "" && (name === card || name.startsWith(`${card}-`));
+}
+
 /** The product id in a TCGplayer product URL, or null if it isn't one. */
 export function tcgplayerProductIdOf(url: string): number | null {
 	return parseProductUrl(url)?.productId ?? null;

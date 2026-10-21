@@ -168,6 +168,41 @@ describe("TCGplayer lookup when a Printing is added", () => {
 		);
 	});
 
+	test("stores the AI's pick when TCGplayer says it's the Printing, even if the Card has a short name", async () => {
+		const t = convexTest(schema, modules);
+		const brionacUrl =
+			"https://www.tcgplayer.com/product/80926/yugioh-duel-terminal-1-brionac-dragon-of-the-ice-barrier";
+		fakes.products = [
+			{
+				productId: 80926,
+				productName: "Brionac, Dragon of the Ice Barrier",
+				setName: "Duel Terminal 1",
+				rarityName: "Duel Terminal Ultra Parallel Rare",
+				setCode: "DT01-EN031",
+				productUrl: brionacUrl,
+			},
+		];
+		fakes.pick = { productId: 80926, probability: 0.95 };
+		const deckId = await t.mutation(api.yugioh.decks.createDeck, {
+			name: "Ice Barrier",
+		});
+		await t.mutation(api.yugioh.decks.addCard, {
+			deckId,
+			cardName: "Brionac",
+			setCode: "DT01-EN031",
+			rarity: "Duel Terminal Ultra Parallel Rare",
+			overloadedRarities: [],
+			section: "extra",
+			copiesNeeded: 1,
+		});
+		await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+		expect((await firstCandidate(t, deckId)).tcgplayer).toMatchObject({
+			status: "found",
+			productUrl: brionacUrl,
+		});
+	});
+
 	test("rejects a product with another set code", async () => {
 		const t = convexTest(schema, modules);
 		fakes.products = [{ ...ashQcsrProduct, setCode: "RA02-EN008" }];
@@ -351,6 +386,48 @@ describe("pasting a TCGplayer product URL", () => {
 		expect((await firstCandidate(t, deckId)).tcgplayer.status).toBe(
 			"needsPaste",
 		);
+	});
+
+	// Bug: a Card named by its short name ("Brionac") was rejected, because the
+	// slug's rest ("-dragon-of-the-ice-barrier") was read as a wrong rarity,
+	// though TCGplayer's own data says the product is exactly this Printing.
+	test("a pasted product page is saved when TCGplayer says it's the Printing, even if the Card has a short name", async () => {
+		const t = convexTest(schema, modules);
+		const brionacUrl =
+			"https://www.tcgplayer.com/product/80926/yugioh-duel-terminal-1-brionac-dragon-of-the-ice-barrier";
+		fakes.pick = { productId: null, probability: 1 };
+		fakes.details.set(80926, {
+			productId: 80926,
+			productName: "Brionac, Dragon of the Ice Barrier",
+			setName: "Duel Terminal 1",
+			rarityName: "Duel Terminal Ultra Parallel Rare",
+			setCode: "DT01-EN031",
+			productUrl: brionacUrl,
+		});
+		const deckId = await t.mutation(api.yugioh.decks.createDeck, {
+			name: "Ice Barrier",
+		});
+		await t.mutation(api.yugioh.decks.addCard, {
+			deckId,
+			cardName: "Brionac",
+			setCode: "DT01-EN031",
+			rarity: "Duel Terminal Ultra Parallel Rare",
+			overloadedRarities: [],
+			section: "extra",
+			copiesNeeded: 1,
+		});
+		await t.finishAllScheduledFunctions(vi.runAllTimers);
+		const { printingId } = await firstCandidate(t, deckId);
+
+		await t.action(api.yugioh.tcgplayer.setProductUrl, {
+			printingId,
+			url: `${brionacUrl}?page=1&Language=English`,
+		});
+
+		expect((await firstCandidate(t, deckId)).tcgplayer).toMatchObject({
+			status: "found",
+			productUrl: brionacUrl,
+		});
 	});
 
 	test("a pasted product from another set code is rejected", async () => {
