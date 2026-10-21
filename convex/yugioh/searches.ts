@@ -9,6 +9,7 @@ const searchValidator = v.object({
 	printings: v.array(
 		v.object({ cardName: v.string(), setCode: v.string(), rarity: v.string() }),
 	),
+	keywords: v.string(),
 	newlyListedUrl: v.string(),
 	soldUrl: v.string(),
 });

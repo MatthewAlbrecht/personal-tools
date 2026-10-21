@@ -55,3 +55,36 @@ describe("only Cards still missing copies are searched", () => {
 		expect(setCodes).not.toContain("LODT-EN026");
 	});
 });
+
+describe("a Search's keywords", () => {
+	test("are the eBay query its Newly Listed and Sold pages run", () => {
+		const [search] = buildDeckSearches([
+			{
+				cardName: "Ash Blossom & Joyous Spring",
+				copiesNeeded: 3,
+				copiesOwned: 0,
+				chosenPrintingId: null,
+				candidates: [
+					{
+						printingId: "p1",
+						setCode: "RA01-EN008",
+						rarity: "Quarter Century Secret Rare",
+						overloadedRarities: ["Super Rare", "Ultra Rare"],
+					},
+					{
+						printingId: "p2",
+						setCode: "MP21-EN021",
+						rarity: "Quarter Century Secret Rare",
+						overloadedRarities: ["Super Rare", "Ultra Rare"],
+					},
+				],
+			},
+		]);
+		if (!search) throw new Error("no Search");
+
+		expect(search.keywords).toBe("(MP21-EN021,RA01-EN008) -super -ultra");
+		for (const url of [search.newlyListedUrl, search.soldUrl]) {
+			expect(new URL(url).searchParams.get("_nkw")).toBe(search.keywords);
+		}
+	});
+});

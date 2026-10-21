@@ -1,13 +1,22 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import { CircleCheck, ExternalLink, Search as SearchIcon } from "lucide-react";
+import {
+	Check,
+	CircleCheck,
+	Copy,
+	ExternalLink,
+	Search as SearchIcon,
+} from "lucide-react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import type * as React from "react";
+import { toast } from "sonner";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
 	Card,
+	CardAction,
 	CardContent,
 	CardFooter,
 	CardHeader,
@@ -22,6 +31,7 @@ import {
 	EmptyTitle,
 } from "~/components/ui/empty";
 import { Skeleton } from "~/components/ui/skeleton";
+import { cn } from "~/lib/utils";
 import { MAX_SET_CODES_PER_SEARCH, missesCopies } from "~/lib/yugioh/searches";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
@@ -135,6 +145,9 @@ function SearchCard({
 						{count} {count === 1 ? "set code" : "set codes"}
 					</span>
 				</CardTitle>
+				<CardAction>
+					<CopyKeywordsButton keywords={search.keywords} number={number} />
+				</CardAction>
 			</CardHeader>
 			<CardContent className="flex flex-1 flex-col gap-3">
 				<ul aria-label="Set codes" className="flex flex-wrap gap-1.5">
@@ -194,6 +207,60 @@ function SearchCard({
 				</Button>
 			</CardFooter>
 		</Card>
+	);
+}
+
+/** Copies a Search's eBay query; the icon morphs to a check to confirm. */
+function CopyKeywordsButton({
+	keywords,
+	number,
+}: {
+	keywords: string;
+	number: number;
+}): React.ReactElement {
+	const [copied, setCopied] = useState(false);
+
+	// Syncs with a timer: morph the check back to the copy icon.
+	useEffect(() => {
+		if (!copied) return;
+		const timeout = setTimeout(() => setCopied(false), 1500);
+		return () => clearTimeout(timeout);
+	}, [copied]);
+
+	async function copy(): Promise<void> {
+		try {
+			await navigator.clipboard.writeText(keywords);
+			setCopied(true);
+		} catch {
+			toast.error("Couldn't copy the eBay search");
+		}
+	}
+
+	const icon =
+		"col-start-1 row-start-1 transition-[opacity,scale] duration-200 ease-out motion-reduce:transition-none";
+	return (
+		<Button
+			variant="ghost"
+			size="icon"
+			className="-my-3 -mr-2 sm:-my-2 size-11 text-muted-foreground sm:size-9"
+			aria-label={`Copy eBay search, Search ${number}`}
+			title={keywords}
+			onClick={copy}
+		>
+			<span aria-hidden className="grid place-items-center">
+				<Copy className={cn(icon, copied && "scale-75 opacity-0")} />
+				<Check
+					className={cn(
+						icon,
+						"text-foreground",
+						!copied && "scale-75 opacity-0",
+					)}
+				/>
+			</span>
+			<span aria-live="polite" className="sr-only">
+				{copied ? "Copied" : ""}
+			</span>
+		</Button>
 	);
 }
 

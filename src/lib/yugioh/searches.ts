@@ -29,6 +29,8 @@ export type Search = {
 	exclusions: string[];
 	/** The Printings this Search looks for, by set code then Card name. */
 	printings: SearchPrinting[];
+	/** The eBay query its pages run: "(RA01-EN008,RA01-EN024) -super". */
+	keywords: string;
 	newlyListedUrl: string;
 	soldUrl: string;
 };
@@ -189,6 +191,7 @@ function toSearch(
 		setCodes,
 		exclusions,
 		printings: setCodes.flatMap((code) => byCode.get(code) ?? []),
+		keywords,
 		newlyListedUrl: ebayNewlyListedUrl(keywords),
 		soldUrl: ebaySoldUrl(keywords),
 	};
