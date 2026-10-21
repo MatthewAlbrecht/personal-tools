@@ -24,12 +24,14 @@ import {
 	TableHeader,
 	TableRow,
 } from "~/components/ui/table";
+import { useMinuteClock } from "~/lib/hooks/use-minute-clock";
 import { cn } from "~/lib/utils";
 import { formatMoney, listingTypeLabel } from "~/lib/yugioh/listing-format";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { MAX_LISTINGS_SHOWN } from "../../../../convex/model/yugioh/listings";
 import type { ListingView } from "../_utils/types";
+import { DealGradeSummary } from "./deal-grade";
 import { ListingDrawer } from "./listing-drawer";
 import { MatchSummary, TitleFlagBadges } from "./listing-match";
 
@@ -44,7 +46,8 @@ export function ListingsPage({
 }: {
 	deckId: Id<"yugiohDecks">;
 }): React.ReactElement {
-	const listings = useQuery(api.yugioh.listings.listListings, { deckId });
+	const now = useMinuteClock();
+	const listings = useQuery(api.yugioh.listings.listListings, { deckId, now });
 	const router = useRouter();
 	const pathname = usePathname() ?? `/yugioh/decks/${deckId}/listings`;
 	const searchParams = useSearchParams() ?? new URLSearchParams();
@@ -75,7 +78,6 @@ export function ListingsPage({
 		);
 	}
 
-	const now = Date.now();
 	const openListingId = searchParams.get("listing");
 	const openListing =
 		listings.find((listing) => listing._id === openListingId) ?? null;
@@ -150,8 +152,11 @@ function ListingRow({
 				notMatch && "opacity-60",
 			)}
 		>
-			<span className="flex items-baseline justify-between gap-3">
-				<PerCopy listing={listing} />
+			<span className="flex items-center justify-between gap-3">
+				<span className="flex min-w-0 items-center gap-2">
+					<PerCopy listing={listing} />
+					<DealGradeSummary deal={listing.deal} />
+				</span>
 				<span className="shrink-0 text-muted-foreground text-xs tabular-nums">
 					eBay · {listingTypeLabel(listing, now)}
 				</span>
@@ -166,7 +171,10 @@ function ListingRow({
 				<span className="min-w-0 flex-1 truncate text-muted-foreground text-xs">
 					{listing.title}
 				</span>
-				<TitleFlagBadges titleRead={listing.titleRead} />
+				<TitleFlagBadges
+					titleRead={listing.titleRead}
+					belowCondition={listing.deal.belowCondition}
+				/>
 			</div>
 		</Link>
 	);
@@ -186,6 +194,7 @@ function ListingsTable({
 			<TableHeader>
 				<TableRow>
 					<TableHead className="text-right">Per-copy</TableHead>
+					<TableHead>Grade</TableHead>
 					<TableHead>Card / Printing</TableHead>
 					<TableHead className="w-full">Title</TableHead>
 					<TableHead>Type</TableHead>
@@ -208,6 +217,9 @@ function ListingsTable({
 						<TableCell className="text-right align-top">
 							<PerCopy listing={listing} />
 						</TableCell>
+						<TableCell className="align-top">
+							<DealGradeSummary deal={listing.deal} stacked />
+						</TableCell>
 						<TableCell className="max-w-72 align-top">
 							{/* The whole row opens the Listing drawer through this link. */}
 							<Link
@@ -220,11 +232,15 @@ function ListingsTable({
 							</Link>
 						</TableCell>
 						<TableCell className="max-w-0 align-top">
-							<div className="flex items-center gap-2">
-								<p className="min-w-0 flex-1 truncate" title={listing.title}>
+							{/* Flags sit under the title, so a narrow column can't push them into Type. */}
+							<div className="flex flex-col items-start gap-1">
+								<p className="w-full truncate" title={listing.title}>
 									{listing.title}
 								</p>
-								<TitleFlagBadges titleRead={listing.titleRead} />
+								<TitleFlagBadges
+									titleRead={listing.titleRead}
+									belowCondition={listing.deal.belowCondition}
+								/>
 							</div>
 						</TableCell>
 						<TableCell className="align-top tabular-nums">

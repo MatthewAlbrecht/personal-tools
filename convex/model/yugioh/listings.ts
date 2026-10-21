@@ -1,18 +1,17 @@
 import type { Infer } from "convex/values";
-import {
-	type PerCopyPrice,
-	type Pricing,
-	perCopyPrice,
-} from "../../../src/lib/yugioh/pricing";
+import { isSale, saleTime } from "../../../src/lib/yugioh/deals";
+import type { PerCopyPrice } from "../../../src/lib/yugioh/pricing";
 import { setCodeKey } from "../../../src/lib/yugioh/title-reading";
 import type { Doc, Id } from "../../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../../_generated/server";
+import type { DealContext, DealView } from "./deals";
 import { MAX_CANDIDATES_PER_DECK } from "./decks";
 import {
 	type ListingMatchView,
 	listingMatchView,
 	queueTitleRead,
 } from "./matching";
+import { currentUsdPerUnit } from "./pricing";
 import type { yugiohCapturedEbayListingValidator } from "./validators";
 
 export type CapturedEbayListing = Infer<
@@ -76,6 +75,8 @@ export async function ingestEbayListings(
 				matchStatus: "unsure",
 				matchedPrintingId: null,
 				matchOverridden: false,
+				saleAt: saleTime(captured, now),
+				capturedUsdPerUnit: await currentUsdPerUnit(ctx, captured.currency),
 			});
 			await observe(ctx, listingId, captured, now);
 			await queueTitleRead(ctx, listingId, captured.title);
@@ -84,9 +85,18 @@ export async function ingestEbayListings(
 		}
 
 		const merged = mergeCapture(existing, captured);
+		// A sale keeps the exchange rate of the last capture before it sold.
+		const rateFrozen =
+			isSale(existing, now) && existing.capturedUsdPerUnit !== undefined;
 		await ctx.db.patch("yugiohListings", existing._id, {
 			...merged,
 			lastSeenAt: now,
+			saleAt: saleTime(merged, existing.saleAt ?? now),
+			...(rateFrozen
+				? {}
+				: {
+						capturedUsdPerUnit: await currentUsdPerUnit(ctx, merged.currency),
+					}),
 		});
 		if (observationChanged(existing, merged)) {
 			await observe(ctx, existing._id, merged, now);
@@ -243,18 +253,20 @@ export type ListingView = CapturedEbayListing & {
 	lastSeenAt: number;
 	/** Null when there's no price, or no exchange rate for its currency yet. */
 	perCopyPrice: PerCopyPrice | null;
+	deal: DealView;
 } & ListingMatchView;
 
 /**
- * The stored Listing as the Listings views show it, with its read, match and
- * Per-copy price. `pricing` comes from `loadPricing`, once per query. Copies
- * come from the title read, 1 when it's unknown.
+ * The stored Listing as the Listings views show it, with its read, match,
+ * Per-copy price and Deal grade. `deals` comes from `loadDealContext`, once
+ * per query. Copies come from the title read, 1 when it's unknown.
  */
 export async function listingView(
 	ctx: QueryCtx,
 	listing: Doc<"yugiohListings">,
-	pricing: Pricing,
+	deals: DealContext,
 ): Promise<ListingView> {
+	const perCopyPrice = deals.perCopyPrice(listing);
 	return {
 		_id: listing._id,
 		_creationTime: listing._creationTime,
@@ -275,11 +287,8 @@ export async function listingView(
 		soldDate: listing.soldDate,
 		firstSeenAt: listing.firstSeenAt,
 		lastSeenAt: listing.lastSeenAt,
-		perCopyPrice: perCopyPrice(
-			listing,
-			listing.titleRead?.copies ?? 1,
-			pricing,
-		),
+		perCopyPrice,
+		deal: await deals.deal(listing, perCopyPrice),
 		...(await listingMatchView(ctx, listing)),
 	};
 }

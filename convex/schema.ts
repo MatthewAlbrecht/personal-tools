@@ -1867,10 +1867,20 @@ export default defineSchema({
 		matchedPrintingId: v.optional(v.union(v.id("yugiohPrintings"), v.null())),
 		// True once I set the match myself: it then wins over every later read.
 		matchOverridden: v.optional(v.boolean()),
+		// Reference prices (ticket 09). Optional because Listings captured
+		// before it have neither until `backfillSaleTimes` runs.
+		// When it sold (Unix ms; the sold date at midnight UTC) or, for an
+		// auction, when it ends. Null for a fixed-price Listing still for sale.
+		saleAt: v.optional(v.union(v.number(), v.null())),
+		// The exchange rate (dollars per unit of `currency`) at the last capture
+		// before it became a sale, then frozen: a sale's Per-copy price keeps
+		// the rate of when it sold. Null when there was no rate yet.
+		capturedUsdPerUnit: v.optional(v.union(v.number(), v.null())),
 	})
 		.index("by_marketplace_and_itemId", ["marketplace", "itemId"])
 		.index("by_setCodeKey", ["setCodeKey"])
-		.index("by_matchedPrintingId", ["matchedPrintingId"]),
+		.index("by_matchedPrintingId", ["matchedPrintingId"])
+		.index("by_matchedPrintingId_and_saleAt", ["matchedPrintingId", "saleAt"]),
 
 	// A Listing's price over time: one row when it's first captured, then one
 	// each time a capture sees a different price, shipping, bid count or sold

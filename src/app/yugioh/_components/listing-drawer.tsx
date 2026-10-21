@@ -26,6 +26,7 @@ import {
 	SelectValue,
 } from "~/components/ui/select";
 import { Spinner } from "~/components/ui/spinner";
+import { REFERENCE_WINDOW_DAYS } from "~/lib/yugioh/deals";
 import {
 	formatMoney,
 	gradingLabel,
@@ -41,6 +42,7 @@ import type { Id } from "../../../../convex/_generated/dataModel";
 import { errorMessage } from "../_utils/errors";
 import { NOT_A_MATCH, listingMatchSchema } from "../_utils/schemas";
 import type { ListingView } from "../_utils/types";
+import { DealGradeBadge, ReferenceLine } from "./deal-grade";
 import { MatchSummary } from "./listing-match";
 import { YugiohDrawer } from "./yugioh-drawer";
 
@@ -74,6 +76,7 @@ export function ListingDrawer({
 						<p className="text-muted-foreground text-sm tabular-nums">
 							eBay · {listingTypeLabel(listing, now)}
 						</p>
+						<DealLine deal={listing.deal} />
 					</DrawerHeader>
 				) : undefined
 			}
@@ -101,6 +104,41 @@ export function ListingDrawer({
 				</div>
 			) : null}
 		</YugiohDrawer>
+	);
+}
+
+/**
+ * How the Listing compares with its Printing's eBay Reference price: the
+ * grade and "78% of $54.00 eBay ref (11 sales, 60 days)". Without a grade,
+ * why not. Nothing for a Listing that isn't for a Printing this Deck wants.
+ */
+function DealLine({
+	deal,
+}: {
+	deal: ListingView["deal"];
+}): React.ReactElement | null {
+	const reference = deal.reference;
+	if (reference === null) return null;
+	if (
+		reference.price === null ||
+		deal.grade === null ||
+		deal.percentOfReference === null
+	) {
+		return <ReferenceLine reference={reference} className="text-sm" />;
+	}
+	return (
+		<div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm tabular-nums">
+			<DealGradeBadge deal={deal} />
+			<span>
+				{deal.percentOfReference}% of {formatMoney(reference.price, "USD")} eBay
+				ref
+				<span className="text-muted-foreground">
+					{" "}
+					({reference.sales} {reference.sales === 1 ? "sale" : "sales"},{" "}
+					{REFERENCE_WINDOW_DAYS} days)
+				</span>
+			</span>
+		</div>
 	);
 }
 

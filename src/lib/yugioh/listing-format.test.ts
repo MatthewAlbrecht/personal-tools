@@ -124,6 +124,19 @@ describe("titleFlags", () => {
 		]);
 	});
 
+	test("flags a condition below the Card's Lowest acceptable condition", () => {
+		expect(
+			titleFlags(
+				{ ...raw, condition: "lightlyPlayed" },
+				{ belowCondition: true },
+			),
+		).toEqual([{ kind: "belowCondition", label: "LP" }]);
+		expect(
+			titleFlags({ ...raw, condition: "damaged" }, { belowCondition: true }),
+		).toEqual([{ kind: "belowCondition", label: "DMG" }]);
+		expect(titleFlags({ ...raw, condition: "lightlyPlayed" })).toEqual([]);
+	});
+
 	test("an unread title has no flags", () => {
 		expect(titleFlags(null)).toEqual([]);
 	});

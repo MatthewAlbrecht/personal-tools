@@ -1,4 +1,5 @@
 import { type Infer, v } from "convex/values";
+import type { DealGrade, Reference } from "../../../src/lib/yugioh/deals";
 import type {
 	CardOrder,
 	Condition,
@@ -15,6 +16,7 @@ import type {
 	TitleJudgments,
 	TitleRead,
 } from "../../../src/lib/yugioh/title-reading";
+import type { DealView } from "./deals";
 
 export const yugiohSectionValidator = v.union(
 	v.literal("main"),
@@ -158,6 +160,28 @@ export const yugiohMatchStatusValidator = v.union(
 	v.literal("unsure"),
 );
 
+/** A Printing's Reference price on one marketplace; null price: not enough sales. */
+export const yugiohReferenceValidator = v.object({
+	price: v.union(v.number(), v.null()),
+	sales: v.number(),
+});
+
+export const yugiohDealGradeValidator = v.union(
+	v.literal("great"),
+	v.literal("good"),
+	v.literal("fair"),
+	v.literal("poor"),
+);
+
+/** How a Listing compares with its Printing's eBay Reference price, in one Deck. */
+export const yugiohDealValidator = v.object({
+	qualifying: v.boolean(),
+	belowCondition: v.boolean(),
+	reference: v.union(yugiohReferenceValidator, v.null()),
+	grade: v.union(yugiohDealGradeValidator, v.null()),
+	percentOfReference: v.union(v.number(), v.null()),
+});
+
 // Compile-time check that the validators and the domain library agree.
 type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
 const sectionsAgree: Same<Infer<typeof yugiohSectionValidator>, Section> = true;
@@ -207,3 +231,15 @@ void exchangeRatesAgree;
 void sectionsAgree;
 void cardOrdersAgree;
 void conditionsAgree;
+const referencesAgree: Same<
+	Infer<typeof yugiohReferenceValidator>,
+	Reference
+> = true;
+const dealGradesAgree: Same<
+	Infer<typeof yugiohDealGradeValidator>,
+	DealGrade
+> = true;
+void referencesAgree;
+void dealGradesAgree;
+const dealsAgree: Same<Infer<typeof yugiohDealValidator>, DealView> = true;
+void dealsAgree;

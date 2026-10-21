@@ -97,6 +97,7 @@ import type * as migrations_backfillUserTracks from "../migrations/backfillUserT
 import type * as migrations_importMusicFunnelFromProd from "../migrations/importMusicFunnelFromProd.js";
 import type * as migrations_initializeRatingHistory from "../migrations/initializeRatingHistory.js";
 import type * as migrations_migrateRatingsToThreeTier from "../migrations/migrateRatingsToThreeTier.js";
+import type * as model_yugioh_deals from "../model/yugioh/deals.js";
 import type * as model_yugioh_decks from "../model/yugioh/decks.js";
 import type * as model_yugioh_exchangeRateSource from "../model/yugioh/exchangeRateSource.js";
 import type * as model_yugioh_listings from "../model/yugioh/listings.js";
@@ -122,6 +123,7 @@ import type * as smartPlaylists from "../smartPlaylists.js";
 import type * as spotify from "../spotify.js";
 import type * as spotifyListenRepair from "../spotifyListenRepair.js";
 import type * as spotifyPlayEvents from "../spotifyPlayEvents.js";
+import type * as yugioh_deals from "../yugioh/deals.js";
 import type * as yugioh_decks from "../yugioh/decks.js";
 import type * as yugioh_listings from "../yugioh/listings.js";
 import type * as yugioh_pricing from "../yugioh/pricing.js";
@@ -226,6 +228,7 @@ declare const fullApi: ApiFromModules<{
   "migrations/importMusicFunnelFromProd": typeof migrations_importMusicFunnelFromProd;
   "migrations/initializeRatingHistory": typeof migrations_initializeRatingHistory;
   "migrations/migrateRatingsToThreeTier": typeof migrations_migrateRatingsToThreeTier;
+  "model/yugioh/deals": typeof model_yugioh_deals;
   "model/yugioh/decks": typeof model_yugioh_decks;
   "model/yugioh/exchangeRateSource": typeof model_yugioh_exchangeRateSource;
   "model/yugioh/listings": typeof model_yugioh_listings;
@@ -251,6 +254,7 @@ declare const fullApi: ApiFromModules<{
   spotify: typeof spotify;
   spotifyListenRepair: typeof spotifyListenRepair;
   spotifyPlayEvents: typeof spotifyPlayEvents;
+  "yugioh/deals": typeof yugioh_deals;
   "yugioh/decks": typeof yugioh_decks;
   "yugioh/listings": typeof yugioh_listings;
   "yugioh/pricing": typeof yugioh_pricing;

@@ -71,7 +71,10 @@ async function listings(t: T) {
 		});
 		decks.set(t, deckId);
 	}
-	return await t.query(api.yugioh.listings.listListings, { deckId });
+	return await t.query(api.yugioh.listings.listListings, {
+		deckId,
+		now: Date.now(),
+	});
 }
 
 beforeEach(() => {
@@ -146,6 +149,8 @@ describe("eBay capture", () => {
 		expect(listing.price).toBe(38);
 		const detail = await t.query(api.yugioh.listings.getListing, {
 			listingId: listing._id,
+			deckId: decks.get(t) as Id<"yugiohDecks">,
+			now: Date.now(),
 		});
 		expect(
 			detail?.observations.map((o) => ({
@@ -177,6 +182,8 @@ describe("eBay capture", () => {
 		if (!listing) throw new Error("Listing missing");
 		const detail = await t.query(api.yugioh.listings.getListing, {
 			listingId: listing._id,
+			deckId: decks.get(t) as Id<"yugiohDecks">,
+			now: Date.now(),
 		});
 		expect(detail?.observations.map((o) => [o.price, o.bids])).toEqual([
 			[18.5, 4],

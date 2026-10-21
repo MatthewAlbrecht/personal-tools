@@ -31,6 +31,24 @@ export async function loadPricing(ctx: QueryCtx): Promise<Pricing> {
 }
 
 /**
+ * Today's stored rate for a currency: what 1 unit is worth in dollars. A
+ * Listing without a currency is in dollars. Null before the first refresh
+ * has a rate for it.
+ */
+export async function currentUsdPerUnit(
+	ctx: QueryCtx,
+	currency: string | null,
+): Promise<number | null> {
+	const code = (currency ?? "USD").toUpperCase();
+	if (code === "USD") return 1;
+	const rate = await ctx.db
+		.query("yugiohExchangeRates")
+		.withIndex("by_currency", (q) => q.eq("currency", code))
+		.unique();
+	return rate?.usdPerUnit ?? null;
+}
+
+/**
  * Stores the daily refresh: each currency's rate is overwritten in place, so
  * one row per currency is kept. Currencies the source dropped keep their last
  * rate.

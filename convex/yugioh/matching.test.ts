@@ -132,7 +132,10 @@ async function capture(
 }
 
 async function listings(t: T, deckId: Id<"yugiohDecks">) {
-	return await t.query(api.yugioh.listings.listListings, { deckId });
+	return await t.query(api.yugioh.listings.listListings, {
+		deckId,
+		now: Date.now(),
+	});
 }
 
 async function only(t: T, deckId: Id<"yugiohDecks">) {

@@ -6,11 +6,12 @@ import {
 	query,
 } from "../_generated/server";
 import { requireAuth } from "../auth";
+import { loadDealContext } from "../model/yugioh/deals";
 import * as Listings from "../model/yugioh/listings";
 import * as Matching from "../model/yugioh/matching";
-import { loadPricing } from "../model/yugioh/pricing";
 import {
 	yugiohCapturedEbayListingValidator,
+	yugiohDealValidator,
 	yugiohMarketplaceValidator,
 	yugiohMatchStatusValidator,
 	yugiohPerCopyPriceValidator,
@@ -29,6 +30,8 @@ const listingValidator = v.object({
 	 * the Listing. Null without a price or an exchange rate for its currency.
 	 */
 	perCopyPrice: v.union(yugiohPerCopyPriceValidator, v.null()),
+	/** Qualifying, flags and Deal grade against the eBay Reference price. */
+	deal: yugiohDealValidator,
 	/** What the AI read from the title; null until read, or when reading failed. */
 	titleRead: v.union(yugiohTitleReadValidator, v.null()),
 	match: v.object({
@@ -60,23 +63,33 @@ const observationValidator = v.object({
 	sold: v.boolean(),
 });
 
-/** A Deck's Listings, newest first (see `readDeckListings`). */
+/**
+ * A Deck's Listings, newest first (see `readDeckListings`), graded at `now`
+ * (Unix ms, from the client: a query can't read the clock).
+ */
 export const listListings = query({
-	args: { deckId: v.id("yugiohDecks") },
+	args: { deckId: v.id("yugiohDecks"), now: v.number() },
 	returns: v.array(listingValidator),
 	handler: async (ctx, args) => {
 		requireAuth(ctx);
 		const listings = await Listings.readDeckListings(ctx, args.deckId);
-		const pricing = await loadPricing(ctx);
+		const deals = await loadDealContext(ctx, args.deckId, args.now);
 		return await Promise.all(
-			listings.map((listing) => Listings.listingView(ctx, listing, pricing)),
+			listings.map((listing) => Listings.listingView(ctx, listing, deals)),
 		);
 	},
 });
 
-/** One Listing with its price observations, newest first. */
+/**
+ * One Listing with its price observations, newest first, graded in a Deck at
+ * `now`.
+ */
 export const getListing = query({
-	args: { listingId: v.id("yugiohListings") },
+	args: {
+		listingId: v.id("yugiohListings"),
+		deckId: v.id("yugiohDecks"),
+		now: v.number(),
+	},
 	returns: v.union(
 		listingValidator.extend({ observations: v.array(observationValidator) }),
 		v.null(),
@@ -86,9 +99,9 @@ export const getListing = query({
 		const listing = await Listings.readListing(ctx, args.listingId);
 		if (!listing) return null;
 		const { observations, ...doc } = listing;
-		const pricing = await loadPricing(ctx);
+		const deals = await loadDealContext(ctx, args.deckId, args.now);
 		return {
-			...(await Listings.listingView(ctx, doc, pricing)),
+			...(await Listings.listingView(ctx, doc, deals)),
 			observations,
 		};
 	},

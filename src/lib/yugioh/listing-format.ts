@@ -1,6 +1,10 @@
 import { format, intervalToDuration, parseISO } from "date-fns";
 
-import { LANGUAGE_CODES, type TitleRead } from "./title-reading";
+import {
+	LANGUAGE_CODES,
+	type ReadCondition,
+	type TitleRead,
+} from "./title-reading";
 
 // Display helpers for Listings. Relative imports only.
 
@@ -59,22 +63,41 @@ export function listingTypeLabel(
 }
 
 export type TitleFlag = {
-	kind: "graded" | "unknownCondition" | "language" | "lot";
+	kind: "graded" | "unknownCondition" | "belowCondition" | "language" | "lot";
 	label: string;
+};
+
+/** Short condition labels for flags: "LP", "DMG". */
+const READ_CONDITION_ABBREVIATIONS: Record<ReadCondition, string> = {
+	nearMint: "NM",
+	lightlyPlayed: "LP",
+	moderatelyPlayed: "MP",
+	heavilyPlayed: "HP",
+	damaged: "DMG",
 };
 
 /**
  * What a Listing's title says that sets it apart from a raw, English, Near
- * Mint single: "PSA 10", "Condition?", "KR", "×3 copies". A Graded Listing
- * never asks for its condition.
+ * Mint single: "PSA 10", "Condition?", "LP" (below the Card's Lowest
+ * acceptable condition), "KR", "×3 copies". A Graded Listing never asks for
+ * its condition.
  */
-export function titleFlags(read: TitleRead | null): TitleFlag[] {
+export function titleFlags(
+	read: TitleRead | null,
+	{ belowCondition = false }: { belowCondition?: boolean } = {},
+): TitleFlag[] {
 	if (read === null) return [];
 	const flags: TitleFlag[] = [];
 	if (read.graded) {
 		flags.push({ kind: "graded", label: gradingLabel(read) });
 	} else if (read.condition === null) {
 		flags.push({ kind: "unknownCondition", label: "Condition?" });
+	}
+	if (belowCondition && read.condition !== null) {
+		flags.push({
+			kind: "belowCondition",
+			label: READ_CONDITION_ABBREVIATIONS[read.condition],
+		});
 	}
 	if (read.language !== "english") {
 		flags.push({ kind: "language", label: LANGUAGE_CODES[read.language] });

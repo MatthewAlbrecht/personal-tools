@@ -1,7 +1,7 @@
 "use client";
 
 import { useForm } from "@tanstack/react-form";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { ChevronDown, Minus, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import type * as React from "react";
@@ -51,7 +51,10 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "~/components/ui/select";
+import { Skeleton } from "~/components/ui/skeleton";
 import { Spinner } from "~/components/ui/spinner";
+import { useMinuteClock } from "~/lib/hooks/use-minute-clock";
+import type { Reference } from "~/lib/yugioh/deals";
 import {
 	CONDITIONS,
 	CONDITION_LABELS,
@@ -71,6 +74,7 @@ import {
 } from "../_utils/schemas";
 import type { CandidatePrinting, DeckCard } from "../_utils/types";
 import { CardArt } from "./card-art";
+import { ReferenceLine } from "./deal-grade";
 import { OverloadedRaritiesCombobox, RarityCombobox } from "./printing-fields";
 import { TcgplayerLink } from "./tcgplayer-link";
 import { YugiohDrawer } from "./yugioh-drawer";
@@ -186,7 +190,7 @@ export function CardDrawer({
 						}
 					/>
 
-					<Printings key={shown._id} card={shown} />
+					<Printings key={shown._id} deckId={deckId} card={shown} />
 				</div>
 			) : null}
 		</YugiohDrawer>
@@ -321,8 +325,28 @@ function ConditionField({
  * Candidate Printings as a radio group. Once one is chosen, the others
  * collapse under "N other Printings" but stay saved.
  */
-function Printings({ card }: { card: DeckCard }): React.ReactElement {
+function Printings({
+	deckId,
+	card,
+}: {
+	deckId: Id<"yugiohDecks">;
+	card: DeckCard;
+}): React.ReactElement {
 	const choosePrinting = useMutation(api.yugioh.decks.choosePrinting);
+	const now = useMinuteClock();
+	const references = useQuery(api.yugioh.deals.listReferencePrices, {
+		deckId,
+		now,
+	});
+	function ebayReference(
+		printingId: Id<"yugiohPrintings">,
+	): Reference | undefined {
+		return references?.find(
+			(reference) =>
+				reference.deckCardId === card._id &&
+				reference.printingId === printingId,
+		)?.ebay;
+	}
 	const [showOthers, setShowOthers] = useState(false);
 	const [adding, setAdding] = useState(false);
 	const decided = card.chosenPrintingId !== null;
@@ -368,6 +392,7 @@ function Printings({ card }: { card: DeckCard }): React.ReactElement {
 							<CandidateOption
 								cardName={card.cardName}
 								candidate={first}
+								ebayReference={ebayReference(first.printingId)}
 								chosen={first.printingId === card.chosenPrintingId}
 								canRemove={canRemove}
 							/>
@@ -403,6 +428,7 @@ function Printings({ card }: { card: DeckCard }): React.ReactElement {
 												key={candidate._id}
 												cardName={card.cardName}
 												candidate={candidate}
+												ebayReference={ebayReference(candidate.printingId)}
 												chosen={false}
 												canRemove={canRemove}
 											/>
@@ -448,11 +474,14 @@ function Printings({ card }: { card: DeckCard }): React.ReactElement {
 function CandidateOption({
 	cardName,
 	candidate,
+	ebayReference,
 	chosen,
 	canRemove,
 }: {
 	cardName: string;
 	candidate: CandidatePrinting;
+	/** Undefined while loading. */
+	ebayReference: Reference | undefined;
 	chosen: boolean;
 	canRemove: boolean;
 }): React.ReactElement {
@@ -480,7 +509,12 @@ function CandidateOption({
 						<RadioGroupItem value={candidate.printingId} id={id} />
 					</Field>
 				</FieldLabel>
-				<div className="px-3 pb-1">
+				<div className="flex flex-col gap-1 px-3 pb-1">
+					{ebayReference === undefined ? (
+						<Skeleton className="h-5 w-40" />
+					) : (
+						<ReferenceLine reference={ebayReference} className="text-sm" />
+					)}
 					<TcgplayerLink cardName={cardName} candidate={candidate} />
 				</div>
 			</div>
