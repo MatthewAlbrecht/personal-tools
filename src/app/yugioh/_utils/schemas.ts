@@ -138,6 +138,7 @@ export const listingFiltersSchema = z.object({
 	location: z.string(),
 	card: z.string(),
 	priority: z.array(z.enum(PRIORITIES)),
+	section: z.array(z.enum(SECTIONS)),
 });
 
 /** The Cards tab's priority filter: every Card, or one priority's. */

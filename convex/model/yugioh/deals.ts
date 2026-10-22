@@ -13,6 +13,7 @@ import {
 	isQualifying,
 	isRunningAuction,
 	isSale,
+	listingLanguage,
 	mostLenientCondition,
 	percentOfReference,
 	referencePrice,
@@ -49,7 +50,12 @@ export type DealView = {
 	 * isn't matched to a Printing this Deck wants.
 	 */
 	reference: Reference | null;
-	/** Null for a running auction, a Listing that isn't gradable, or no Reference price. */
+	/**
+	 * Null for a running auction, a Listing that isn't English, or no
+	 * Reference price. A Listing below the Lowest acceptable condition still
+	 * grades against the Reference price (to show how cheap it is) but doesn't
+	 * qualify.
+	 */
 	grade: DealGrade | null;
 	percentOfReference: number | null;
 };
@@ -102,7 +108,7 @@ export async function loadDealContext(
 			const percent =
 				reference.price === null ||
 				perCopy === null ||
-				!getsDealGrade(listing, condition) ||
+				listingLanguage(listing) !== "english" ||
 				isRunningAuction(listing, now)
 					? null
 					: percentOfReference(perCopy.perCopy, reference.price);

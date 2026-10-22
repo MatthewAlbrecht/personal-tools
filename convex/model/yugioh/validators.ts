@@ -355,10 +355,14 @@ export const yugiohListingFiltersValidator = v.object({
 	location: v.optional(v.string()),
 	/** A Deck Card ID, as it appears in the URL; an unknown one matches nothing. */
 	card: v.optional(v.string()),
+	/** A Printing ID, as it appears in the URL; an unknown one matches nothing. */
+	printing: v.optional(v.string()),
 	/** Deck Card IDs whose Listings are hidden (`hide` in the URL). */
 	excludeCards: v.optional(v.array(v.string())),
 	/** Only Listings for Cards of these priorities; empty lets all through. */
 	priority: v.optional(v.array(yugiohPriorityValidator)),
+	/** Only Listings for Cards in these Sections; empty lets all through. */
+	section: v.optional(v.array(yugiohSectionValidator)),
 });
 
 /** What started an automated browser run. */

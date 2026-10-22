@@ -3,7 +3,7 @@
 // only narrow a view. Relative imports only (Convex imports this).
 
 import { isSale, listingLanguage } from "./deals";
-import { PRIORITIES, type Priority } from "./deck";
+import { PRIORITIES, type Priority, SECTIONS, type Section } from "./deck";
 import { type ConditionChoice, listingCondition } from "./listing-edits";
 import { type Rejection, isRejected } from "./listing-rejection";
 import { countryKey } from "./pricing";
@@ -54,6 +54,8 @@ export type ListingFilters = {
 	location?: string;
 	/** A Card in the Deck (its ID): Listings matched to the Printings it searches. */
 	card?: string;
+	/** A Printing (its ID): Listings matched to it. */
+	printing?: string;
 	/**
 	 * Cards in the Deck (their IDs) whose Listings are hidden: the Printings
 	 * each searches, as with `card`. In the URL as `hide`.
@@ -64,6 +66,12 @@ export type ListingFilters = {
 	 * each such Card searches, as with `card`. Empty lets everything through.
 	 */
 	priority?: Priority[];
+	/**
+	 * Only Listings for Cards in these Sections (Main, Extra, Side): the
+	 * Printings each such Card searches, as with `card`. Empty lets everything
+	 * through.
+	 */
+	section?: Section[];
 };
 
 /** What filtering needs to know about a stored Listing. */
@@ -97,6 +105,8 @@ export type FilterContext = {
 	neededPrintings: ReadonlySet<string>;
 	/** Each Card's priority, by Card ID. */
 	cardPriorities: ReadonlyMap<string, Priority>;
+	/** Each Card's Section, by Card ID. */
+	cardSections: ReadonlyMap<string, Section>;
 };
 
 /**
@@ -149,6 +159,7 @@ function passes(
 		cardPrintings,
 		neededPrintings,
 		cardPriorities,
+		cardSections,
 	}: FilterContext,
 ): boolean {
 	if (!isShownInDeck(listing, neededPrintings)) return false;
@@ -208,6 +219,27 @@ function passes(
 				);
 			});
 		if (!forWantedCard) return false;
+	}
+	if (filters.section?.length) {
+		const printingId = listing.matchedPrintingId ?? null;
+		const wanted = new Set(filters.section);
+		const inWantedSection =
+			printingId !== null &&
+			[...cardPrintings].some(([cardId, printings]) => {
+				const section = cardSections.get(cardId);
+				return (
+					section !== undefined &&
+					wanted.has(section) &&
+					printings.has(printingId)
+				);
+			});
+		if (!inWantedSection) return false;
+	}
+	if (
+		filters.printing !== undefined &&
+		(listing.matchedPrintingId ?? null) !== filters.printing
+	) {
+		return false;
 	}
 	if (filters.card !== undefined) {
 		const printings = cardPrintings.get(filters.card);
@@ -286,8 +318,10 @@ const FILTER_PARAMS = [
 	"graded",
 	"location",
 	"card",
+	"printing",
 	"excludeCards",
 	"priority",
+	"section",
 	"rejected",
 ] as const satisfies ReadonlyArray<keyof ListingFilters>;
 
@@ -314,6 +348,13 @@ function priorityList(value: string | null): Priority[] | undefined {
 	const named = new Set(idList(value));
 	const priorities = PRIORITIES.filter((priority) => named.has(priority));
 	return priorities.length > 0 ? priorities : undefined;
+}
+
+/** Sections, comma-separated, once each in Deck order; unknown ones dropped. */
+function sectionList(value: string | null): Section[] | undefined {
+	const named = new Set(idList(value));
+	const sections = SECTIONS.filter((section) => named.has(section));
+	return sections.length > 0 ? sections : undefined;
 }
 
 type ParamReader = { get(name: string): string | null };
@@ -369,8 +410,10 @@ export function listingFiltersFromParams(params: ParamReader): ListingFilters {
 				: (yesNo(params.get("graded")) ?? DEFAULT_FILTERS.graded),
 		location: text(params.get("location")),
 		card: text(params.get("card")),
+		printing: text(params.get("printing")),
 		excludeCards: idList(params.get("hide")),
 		priority: priorityList(params.get("priority")),
+		section: sectionList(params.get("section")),
 		rejected: params.get("rejected") === "1" || undefined,
 	};
 	return withoutUnset(filters);
@@ -435,7 +478,8 @@ export function extraFilters(
 			name !== "rejected" &&
 			filters[name] !== undefined &&
 			!(name === "excludeCards" && filters.excludeCards?.length === 0) &&
-			!(name === "priority" && filters.priority?.length === 0),
+			!(name === "priority" && filters.priority?.length === 0) &&
+			!(name === "section" && filters.section?.length === 0),
 	);
 }
 

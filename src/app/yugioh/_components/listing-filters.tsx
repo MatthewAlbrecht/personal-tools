@@ -22,7 +22,10 @@ import {
 	PRIORITIES,
 	PRIORITY_LABELS,
 	type Priority,
+	SECTIONS,
 	SECTION_LABELS,
+	type Section,
+	rarityAbbreviation,
 } from "~/lib/yugioh/deck";
 import {
 	CONDITION_FILTERS,
@@ -104,6 +107,7 @@ export function ListingsToolbar({
 	const [drawerOpen, setDrawerOpen] = useState(false);
 	const deck = useQuery(api.yugioh.decks.getDeck, { deckId });
 	const cards: CardOption[] = cardOptions(deck);
+	const printings = printingLabels(deck);
 	const extra = extraFilters(filters);
 	const count = activeFilterCount(filters);
 
@@ -146,7 +150,7 @@ export function ListingsToolbar({
 								</li>
 							));
 						}
-						const label = filterLabel(name, filters, cards);
+						const label = filterLabel(name, filters, cards, printings);
 						return (
 							<li key={name}>
 								<FilterChip
@@ -327,6 +331,7 @@ type FilterFormValues = {
 	location: string;
 	card: string;
 	priority: Priority[];
+	section: Section[];
 };
 
 function formValues(filters: ListingFilters): FilterFormValues {
@@ -339,6 +344,7 @@ function formValues(filters: ListingFilters): FilterFormValues {
 		location: filters.location ?? ANY,
 		card: filters.card ?? ANY,
 		priority: filters.priority ?? [],
+		section: filters.section ?? [],
 	};
 }
 
@@ -361,8 +367,10 @@ function filtersFrom(
 		rejected: filters.rejected,
 		location: set(values.location),
 		card: set(values.card),
+		printing: filters.printing,
 		excludeCards: filters.excludeCards,
 		priority: values.priority.length > 0 ? values.priority : undefined,
+		section: values.section.length > 0 ? values.section : undefined,
 	};
 }
 
@@ -413,7 +421,7 @@ function ListingFiltersDrawer({
 	}
 
 	const fields: Array<{
-		name: Exclude<keyof FilterFormValues, "priority">;
+		name: Exclude<keyof FilterFormValues, "priority" | "section">;
 		label: string;
 		options: SelectOption[];
 		/** What the field's "no filter" choice says. */
@@ -521,6 +529,38 @@ function ListingFiltersDrawer({
 						</Field>
 					)}
 				</form.Field>
+				<form.Field name="section">
+					{(field) => (
+						<Field>
+							<FieldLabel id="listing-filter-section-label">Section</FieldLabel>
+							<ToggleGroup
+								aria-labelledby="listing-filter-section-label"
+								multiple
+								variant="outline"
+								spacing={0}
+								className="w-full"
+								value={filters.section ?? []}
+								onValueChange={(next) => {
+									// As with the selects: start from the URL, then apply this.
+									form.reset(formValues(filters));
+									const picked = new Set(next);
+									field.handleChange(SECTIONS.filter((s) => picked.has(s)));
+									void form.handleSubmit();
+								}}
+							>
+								{SECTIONS.map((section) => (
+									<ToggleGroupItem
+										key={section}
+										value={section}
+										className="h-11 flex-1 md:h-9"
+									>
+										{SECTION_LABELS[section]}
+									</ToggleGroupItem>
+								))}
+							</ToggleGroup>
+						</Field>
+					)}
+				</form.Field>
 				{fields.map(({ name, label, options, anyLabel = "Any" }) => (
 					<form.Field key={name} name={name}>
 						{(field) => (
@@ -585,11 +625,30 @@ function cardOptions(deck: DeckView | null | undefined): CardOption[] {
 		.sort((a, b) => a.label.localeCompare(b.label));
 }
 
+/** "Caius the Shadow Monarch TU03-EN000 · UtR", by Printing ID. */
+function printingLabels(
+	deck: DeckView | null | undefined,
+): Map<string, string> {
+	const labels = new Map<string, string>();
+	for (const section of deck?.sections ?? []) {
+		for (const card of section.cards) {
+			for (const candidate of card.candidates) {
+				labels.set(
+					candidate.printingId,
+					`${card.cardName} ${candidate.setCode} · ${rarityAbbreviation(candidate.rarity)}`,
+				);
+			}
+		}
+	}
+	return labels;
+}
+
 /** A set filter in words, for its removable badge. */
 function filterLabel(
 	name: keyof ListingFilters,
 	filters: ListingFilters,
 	cards: CardOption[],
+	printings: ReadonlyMap<string, string>,
 ): string {
 	switch (name) {
 		case "view":
@@ -616,10 +675,16 @@ function filterLabel(
 			return filters.location ?? "";
 		case "card":
 			return filters.card ? cardLabel(filters.card, cards) : "";
+		case "printing":
+			return filters.printing
+				? (printings.get(filters.printing) ?? "A removed Printing")
+				: "";
 		case "excludeCards":
 			return `Hiding ${filters.excludeCards?.length ?? 0} Cards`;
 		case "priority":
 			return priorityLabel(filters.priority ?? []);
+		case "section":
+			return sectionLabel(filters.section ?? []);
 	}
 }
 
@@ -631,6 +696,16 @@ function priorityLabel(priorities: Priority[]): string {
 			? `${names.slice(0, -1).join(", ")} or ${names.at(-1)}`
 			: (names[0] ?? "");
 	return `${list} priority`;
+}
+
+/** "Main Deck", "Main or Side Deck": the Section filter's chip. */
+function sectionLabel(sections: Section[]): string {
+	const names = sections.map((section) => SECTION_LABELS[section]);
+	const list =
+		names.length > 1
+			? `${names.slice(0, -1).join(", ")} or ${names.at(-1)}`
+			: (names[0] ?? "");
+	return `${list} Deck`;
 }
 
 /** A Card's name as the Card filter shows it, or "A removed Card". */

@@ -7,6 +7,7 @@ import {
 	ArrowUp,
 	ArrowUpDown,
 	ChevronDown,
+	ExternalLink,
 	ListFilter,
 	PencilLine,
 	Tag,
@@ -225,10 +226,7 @@ export function ListingsPage({
 	 * changed in between stay.
 	 */
 	function hideCard(listing: ListingView): void {
-		const printingId = listing.match.printing?._id;
-		const card = page?.cards.find((c) =>
-			c.printingIds.some((id) => id === printingId),
-		);
+		const card = cardOf(listing);
 		if (!card) return;
 		setFilters(withCardHidden(filters, card._id));
 		toast(`Hiding ${card.cardName}`, {
@@ -246,6 +244,30 @@ export function ListingsPage({
 				},
 			},
 		});
+	}
+
+	/** The Deck's Card searching the Listing's Printing. */
+	function cardOf(
+		listing: ListingView,
+	): NonNullable<typeof page>["cards"][number] | undefined {
+		const printingId = listing.match.printing?._id;
+		return page?.cards.find((c) =>
+			c.printingIds.some((id) => id === printingId),
+		);
+	}
+
+	/** Only the Listing's Card, from its name: drops a Printing filter. */
+	function filterByCard(listing: ListingView): void {
+		const card = cardOf(listing);
+		if (!card) return;
+		setFilters({ ...filters, card: card._id, printing: undefined });
+	}
+
+	/** Only the Listing's Printing, from its set code: replaces a Card filter. */
+	function filterByPrinting(listing: ListingView): void {
+		const printingId = listing.match.printing?._id;
+		if (!printingId) return;
+		setFilters({ ...filters, card: undefined, printing: printingId });
 	}
 
 	function closeListing(): void {
@@ -302,6 +324,8 @@ export function ListingsPage({
 								router.replace(listingHref(listing._id), { scroll: false })
 							}
 							onHideCard={hideCard}
+							onFilterCard={filterByCard}
+							onFilterPrinting={filterByPrinting}
 							view={view}
 							rejectedView={filters.rejected ?? false}
 							sort={sort}
@@ -513,6 +537,8 @@ export function ListingsTable({
 	onSetRarity,
 	onDetails,
 	onHideCard,
+	onFilterCard,
+	onFilterPrinting,
 }: {
 	listings: ListingView[];
 	now: number;
@@ -520,6 +546,10 @@ export function ListingsTable({
 	onDetails?: (listing: ListingView) => void;
 	/** Hides the Listing's Card from Listings (a filter). */
 	onHideCard?: (listing: ListingView) => void;
+	/** Shows only the Listing's Card's Listings, from its name. */
+	onFilterCard?: (listing: ListingView) => void;
+	/** Shows only the Listing's Printing's Listings, from its set code. */
+	onFilterPrinting?: (listing: ListingView) => void;
 	view: ListingsView;
 	/** Marked wrong: the Grade column says why instead. */
 	rejectedView?: boolean;
@@ -666,9 +696,15 @@ export function ListingsTable({
 									<div className="flex min-w-0 items-start gap-3">
 										<CardThumb printing={listing.match.printing} />
 										<div className="flex min-w-0 flex-col">
-											<CardName listing={listing} />
+											<CardName
+												listing={listing}
+												onFilter={onFilterCard && (() => onFilterCard(listing))}
+											/>
 											<PrintingCell
 												listing={listing}
+												onFilter={
+													onFilterPrinting && (() => onFilterPrinting(listing))
+												}
 												onPick={
 													editable && onSetRarity
 														? (choice) => onSetRarity(listing, choice)
@@ -700,9 +736,7 @@ export function ListingsTable({
 								</RowCell>
 								<RowCell dim={dim}>
 									<Primary title={type}>{type}</Primary>
-									<Secondary>
-										{MARKETPLACE_LABELS[listing.marketplace]}
-									</Secondary>
+									<ListingLink listing={listing} />
 								</RowCell>
 								<RowCell dim={dim}>
 									<Primary title={seller ?? undefined}>
@@ -888,13 +922,32 @@ function CardThumb({
 }
 
 /** The Card name, with a quiet "New" after it when first seen since my last visit. */
-function CardName({ listing }: { listing: ListingView }): React.ReactElement {
-	const name = listing.match.printing?.cardName ?? "Not matched";
+function CardName({
+	listing,
+	onFilter,
+}: {
+	listing: ListingView;
+	/** Filters to the Card's Listings; without it, the name is plain. */
+	onFilter?: () => void;
+}): React.ReactElement {
+	const printing = listing.match.printing;
+	const name = printing?.cardName ?? "Not matched";
 	return (
 		<span className="flex min-w-0 items-center gap-1.5 text-sm leading-5">
-			<span className="truncate font-medium" title={name}>
-				{name}
-			</span>
+			{onFilter && printing ? (
+				<FilterTrigger
+					className="font-medium"
+					title={`Only ${name}`}
+					aria-label={`Only ${name}'s Listings`}
+					onClick={onFilter}
+				>
+					{name}
+				</FilterTrigger>
+			) : (
+				<span className="truncate font-medium" title={name}>
+					{name}
+				</span>
+			)}
 			{listing.isNew ? (
 				<span className="shrink-0 rounded-sm bg-primary/10 px-1 font-semibold text-[0.625rem] text-primary uppercase leading-4 tracking-wide">
 					New
@@ -1047,12 +1100,15 @@ function ConditionCell({
 function PrintingCell({
 	listing,
 	onPick,
+	onFilter,
 }: {
 	listing: ListingView;
 	onPick?: (choice: ListingView["rarityChoices"][number]) => void;
+	/** Filters to the Printing's Listings, from its set code. */
+	onFilter?: () => void;
 }): React.ReactElement {
 	const printing = listing.match.printing;
-	if (!printing || !onPick) {
+	if (!printing || (!onPick && !onFilter)) {
 		return (
 			<Secondary title={printingTitle(listing)}>
 				{printingLine(printing) ?? listing.title}
@@ -1060,25 +1116,90 @@ function PrintingCell({
 		);
 	}
 	const setByYou = listing.match.overridden;
+	const rarity = rarityAbbreviation(printing.rarity);
 	return (
 		<div className="flex h-5 min-w-0 items-center text-muted-foreground text-xs">
-			<span className="truncate" title={printingTitle(listing)}>
-				{printing.setCode}
-			</span>
+			{onFilter ? (
+				<FilterTrigger
+					title={`Only ${printingTitle(listing)}`}
+					aria-label={`Only ${printing.setCode} ${printing.rarity} Listings`}
+					onClick={onFilter}
+				>
+					{printing.setCode}
+				</FilterTrigger>
+			) : (
+				<span className="truncate" title={printingTitle(listing)}>
+					{printing.setCode}
+				</span>
+			)}
 			<span aria-hidden className="shrink-0 whitespace-pre">
 				{" · "}
 			</span>
-			<RarityMenu listing={listing} onPick={onPick}>
-				<CellTrigger
-					className="shrink-0"
-					title={printing.rarity}
-					aria-label={`Rarity: ${printing.rarity}${setByYou ? ", set by you" : ""}. Change`}
-				>
-					{rarityAbbreviation(printing.rarity)}
-					{setByYou ? <SetByYou /> : null}
-				</CellTrigger>
-			</RarityMenu>
+			{onPick ? (
+				<RarityMenu listing={listing} onPick={onPick}>
+					<CellTrigger
+						className="shrink-0"
+						title={printing.rarity}
+						aria-label={`Rarity: ${printing.rarity}${setByYou ? ", set by you" : ""}. Change`}
+					>
+						{rarity}
+						{setByYou ? <SetByYou /> : null}
+					</CellTrigger>
+				</RarityMenu>
+			) : (
+				<span className="shrink-0" title={printing.rarity}>
+					{rarity}
+				</span>
+			)}
 		</div>
+	);
+}
+
+/**
+ * A value that filters to itself (a Card's name, a set code): reads as the
+ * text it replaces, lifted above the row link, and underlines on hover.
+ */
+function FilterTrigger({
+	className,
+	children,
+	...props
+}: React.ComponentProps<"button">): React.ReactElement {
+	return (
+		<button
+			type="button"
+			className={cn(
+				"relative z-10 min-w-0 cursor-pointer truncate rounded-sm text-left underline-offset-2 outline-none hover:text-foreground hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50",
+				className,
+			)}
+			{...props}
+		>
+			{children}
+		</button>
+	);
+}
+
+/**
+ * The Type cell's second line: the marketplace, with an external-link icon,
+ * as its own link to the Listing (the row opens it too).
+ */
+function ListingLink({
+	listing,
+}: { listing: ListingView }): React.ReactElement {
+	const marketplace = MARKETPLACE_LABELS[listing.marketplace];
+	return (
+		<p className="flex h-5 min-w-0 items-center text-muted-foreground text-xs">
+			<a
+				href={listing.url}
+				target="_blank"
+				rel="noopener noreferrer"
+				tabIndex={-1}
+				title={`Open on ${marketplace}`}
+				className="relative z-10 inline-flex min-w-0 items-center gap-1 rounded-sm underline-offset-2 outline-none hover:text-foreground hover:underline"
+			>
+				<span className="truncate">{marketplace}</span>
+				<ExternalLink aria-hidden className="size-3 shrink-0" />
+			</a>
+		</p>
 	);
 }
 

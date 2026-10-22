@@ -58,6 +58,7 @@ const context = {
 	cardPrintings: new Map([["card1", new Set(["p1"])]]),
 	neededPrintings: new Set(["p1", "p2"]),
 	cardPriorities: new Map([["card1", "medium" as const]]),
+	cardSections: new Map([["card1", "main" as const]]),
 };
 
 function ids(
@@ -209,6 +210,17 @@ describe("applyListingFilters", () => {
 		expect(ids(all, { card: "gone" })).toEqual([]);
 	});
 
+	test("printing: Listings matched to that Printing", () => {
+		const all = [
+			listing({ id: "a" }),
+			listing({ id: "b", matchedPrintingId: "p2" }),
+			listing({ id: "c" }),
+		];
+		expect(ids(all, { printing: "p1" })).toEqual(["a", "c"]);
+		expect(ids(all, { printing: "p2" })).toEqual(["b"]);
+		expect(ids(all, { printing: "gone" })).toEqual([]);
+	});
+
 	test("hidden Cards: their Listings leave, whatever else is set", () => {
 		const all = [
 			listing({ id: "p1" }),
@@ -264,6 +276,34 @@ describe("applyListingFilters", () => {
 		expect(withPriority([])).toEqual(["ash", "nibiru", "droll"]);
 	});
 
+	test("section: Listings for Cards in the chosen Sections", () => {
+		const all = [
+			listing({ id: "ash" }),
+			listing({ id: "baronne", matchedPrintingId: "p2" }),
+			listing({ id: "nibiru", matchedPrintingId: "p3" }),
+		];
+		const threeCards = {
+			...context,
+			neededPrintings: new Set(["p1", "p2", "p3"]),
+			cardPrintings: new Map([
+				["ash", new Set(["p1"])],
+				["baronne", new Set(["p2"])],
+				["nibiru", new Set(["p3"])],
+			]),
+			cardSections: new Map([
+				["ash", "main" as const],
+				["baronne", "extra" as const],
+				["nibiru", "side" as const],
+			]),
+		};
+		function inSections(section: ListingFilters["section"]): string[] {
+			return applyListingFilters(all, { section }, threeCards).map((l) => l.id);
+		}
+		expect(inSections(["main"])).toEqual(["ash"]);
+		expect(inSections(["extra", "side"])).toEqual(["baronne", "nibiru"]);
+		expect(inSections([])).toEqual(["ash", "baronne", "nibiru"]);
+	});
+
 	test("new: first seen since my last visit, within the view", () => {
 		const all = [
 			listing({ id: "old", firstSeenAt: NOW - 3 * HOUR }),
@@ -301,8 +341,10 @@ describe("filters in the URL", () => {
 			rejected: true,
 			location: "United Kingdom",
 			card: "k57abc",
+			printing: "k97xyz",
 			excludeCards: ["k57def", "k57ghi"],
 			priority: ["high", "low"],
+			section: ["main", "side"],
 		};
 		const params = withListingFilters(new URLSearchParams(), filters);
 		expect(listingFiltersFromParams(params)).toEqual(filters);
@@ -320,6 +362,25 @@ describe("filters in the URL", () => {
 		).toEqual({ language: "english", graded: false, priority: ["low"] });
 		expect(
 			listingFiltersFromParams(new URLSearchParams("priority=urgent")),
+		).toEqual({ language: "english", graded: false });
+	});
+
+	test("section is one comma-separated param in Deck order, unknown values dropped", () => {
+		const params = withListingFilters(new URLSearchParams(), {
+			language: "english",
+			graded: false,
+			section: ["main", "extra"],
+		});
+		expect(params.toString()).toBe("section=main%2Cextra");
+		expect(
+			listingFiltersFromParams(new URLSearchParams("section=side,deck,main")),
+		).toEqual({
+			language: "english",
+			graded: false,
+			section: ["main", "side"],
+		});
+		expect(
+			listingFiltersFromParams(new URLSearchParams("section=deck")),
 		).toEqual({ language: "english", graded: false });
 	});
 
@@ -432,6 +493,7 @@ describe("the default filters", () => {
 				card: "x",
 				excludeCards: ["y"],
 				priority: ["high"],
+				section: ["extra"],
 			}),
 		).toEqual({ view: "sold", new: true, language: "english", graded: false });
 	});
@@ -501,6 +563,19 @@ describe("the Filters button", () => {
 		expect(extraFilters({ priority: ["high"], card: "x" })).toEqual([
 			"card",
 			"priority",
+		]);
+		expect(extraFilters({ printing: "p", card: "x" })).toEqual([
+			"card",
+			"printing",
+		]);
+	});
+
+	test("counts section once, however many are picked", () => {
+		expect(activeFilterCount({ section: ["main", "side"] })).toBe(1);
+		expect(activeFilterCount({ section: [] })).toBe(0);
+		expect(extraFilters({ section: ["main"], priority: ["high"] })).toEqual([
+			"priority",
+			"section",
 		]);
 	});
 

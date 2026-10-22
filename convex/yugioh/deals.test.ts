@@ -318,10 +318,13 @@ describe("Qualifying Listings", () => {
 			qualifying: true,
 			belowCondition: false,
 		});
+		// Below the bar it doesn't count, but still grades against the
+		// Reference price, so I can see how cheap it is.
 		expect(await dealFor(t, deckId, mp as string)).toMatchObject({
 			qualifying: false,
 			belowCondition: true,
-			grade: null,
+			grade: "great",
+			percentOfReference: 2,
 		});
 	});
 
@@ -829,7 +832,8 @@ describe("Condition set by me", () => {
 		expect(await dealFor(t, deckId, listing as string)).toMatchObject({
 			qualifying: false,
 			belowCondition: true,
-			grade: null,
+			grade: "great",
+			percentOfReference: 60,
 		});
 
 		// "Not stated" counts, like a title that doesn't say.

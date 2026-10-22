@@ -548,4 +548,26 @@ describe("views, sorting and filters", () => {
 		const nowMedium = await listings(t, deckId, { priority: ["medium"] });
 		expect(nowMedium.matching).toBe(0);
 	});
+
+	test("section keeps the Listings of Cards in that Section", async () => {
+		const t = setup();
+		const { deckId, deckCardId } = await ashDeck(t);
+		await capture(t, {}, { sellerLocation: "Japan" });
+
+		const main = await listings(t, deckId, { section: ["main"] });
+		expect(main.matching).toBe(2);
+		const extraOrSide = await listings(t, deckId, {
+			section: ["extra", "side"],
+		});
+		expect(extraOrSide.matching).toBe(0);
+
+		await t.mutation(api.yugioh.decks.updateCard, {
+			deckCardId,
+			section: "side",
+		});
+		const nowSide = await listings(t, deckId, { section: ["side"] });
+		expect(nowSide.matching).toBe(2);
+		const nowMain = await listings(t, deckId, { section: ["main"] });
+		expect(nowMain.matching).toBe(0);
+	});
 });

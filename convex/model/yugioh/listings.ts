@@ -4,7 +4,11 @@ import {
 	isSale,
 	saleTime,
 } from "../../../src/lib/yugioh/deals";
-import { type Priority, cardPriority } from "../../../src/lib/yugioh/deck";
+import {
+	type Priority,
+	type Section,
+	cardPriority,
+} from "../../../src/lib/yugioh/deck";
 import {
 	type ConditionChoice,
 	type CopiesChoice,
@@ -372,6 +376,9 @@ export async function readDeckListingsPage(
 		neededPrintings: neededPrintingIds<string>(cards, candidates),
 		cardPriorities: new Map(
 			cards.map((card): [string, Priority] => [card._id, cardPriority(card)]),
+		),
+		cardSections: new Map(
+			cards.map((card): [string, Section] => [card._id, card.section]),
 		),
 	};
 	const shown = all.filter((listing) =>
