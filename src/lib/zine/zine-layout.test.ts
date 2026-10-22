@@ -8,9 +8,11 @@ import {
 	ZINE_FOOTER_ZONE_HEIGHT_PT,
 	ZINE_FOOTER_ZONE_IN,
 	ZINE_PAGE,
+	ZINE_PRINT_NUDGE,
 	ZINE_TEXT_CONDENSE,
 	type ZineSongLayoutOptions,
 	clampZineBookletOuterPaddingIn,
+	clampZinePrintNudgeIn,
 	computeLyricsFontSize,
 	computeSingleLineFontSize,
 	countLyricsLines,
@@ -19,6 +21,16 @@ import {
 	getZineLyricsMinFontSizePt,
 	padZinePageCount,
 } from "./zine-layout";
+
+test("clampZinePrintNudgeIn steps by 0.01in, allows negatives and clamps", () => {
+	assert.equal(ZINE_PRINT_NUDGE.stepIn, 0.01);
+	assert.equal(clampZinePrintNudgeIn(-0.014), -0.01);
+	assert.equal(clampZinePrintNudgeIn(0.126), 0.13);
+	assert.equal(clampZinePrintNudgeIn(-0.004), 0);
+	assert.ok(Object.is(clampZinePrintNudgeIn(-0.004), 0));
+	assert.equal(clampZinePrintNudgeIn(-2), -0.5);
+	assert.equal(clampZinePrintNudgeIn(2), 0.5);
+});
 
 const baseSongHeader = {
 	showSectionLabels: true,

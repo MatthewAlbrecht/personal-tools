@@ -52,8 +52,10 @@ import {
 	ZINE_BOOKLET_OUTER_PADDING,
 	ZINE_BOOKLET_PANEL_PADDING_IN,
 	ZINE_LYRICS_SIZE_SLIDER,
+	ZINE_PRINT_NUDGE,
 	ZINE_TEXT_CONDENSE,
 	clampZineBookletOuterPaddingIn,
+	clampZinePrintNudgeIn,
 } from "~/lib/zine/zine-layout";
 import type { ZinePageRecommendation } from "~/lib/zine/zine-page-recommendations";
 import {
@@ -165,6 +167,12 @@ export function LyricsZine({
 	const [bookletOuterPaddingIn, setBookletOuterPaddingIn] = useState<number>(
 		ZINE_BOOKLET_OUTER_PADDING.defaultIn,
 	);
+	const [printNudgeIn, setPrintNudgeIn] = useState<ZinePrintNudge>({
+		frontX: 0,
+		frontY: 0,
+		backX: 0,
+		backY: 0,
+	});
 
 	const [displaySettings, setDisplaySettings] = useState<ZineDisplaySettings>(
 		() => resolveZineDisplaySettings(displaySettingsProp),
@@ -868,6 +876,10 @@ export function LyricsZine({
 				style={
 					{
 						"--zine-booklet-outer-pad-in": `${bookletOuterPaddingIn}in`,
+						"--zine-print-nudge-front-x-in": `${printNudgeIn.frontX}in`,
+						"--zine-print-nudge-front-y-in": `${printNudgeIn.frontY}in`,
+						"--zine-print-nudge-back-x-in": `${printNudgeIn.backX}in`,
+						"--zine-print-nudge-back-y-in": `${printNudgeIn.backY}in`,
 					} as CSSProperties
 				}
 			>
@@ -985,16 +997,45 @@ export function LyricsZine({
 						</div>
 					</fieldset>
 
+					<fieldset className="no-print mt-3 space-y-2 rounded-lg border bg-card px-4 py-3 shadow-sm">
+						<legend className="px-1 font-medium text-sm">
+							Printer offset correction
+						</legend>
+						<p className="text-muted-foreground text-xs leading-snug">
+							For printers that don't print centred. Print one sheet at 100%
+							scale and measure the white margins on that side. Set Right&nbsp;=
+							(left margin − right margin) ÷ 2 and Down&nbsp;= (top margin −
+							bottom margin) ÷ 2. A negative value moves the print left or up.
+							Front and back sides are set separately. These values reset when
+							you reload the page.
+						</p>
+						<div className="grid gap-3 sm:grid-cols-2">
+							{ZINE_PRINT_NUDGE_FIELDS.map((field) => (
+								<ZinePrintNudgeStepper
+									key={field.key}
+									label={field.label}
+									value={printNudgeIn[field.key]}
+									onChange={(next) =>
+										setPrintNudgeIn((current) => ({
+											...current,
+											[field.key]: next,
+										}))
+									}
+								/>
+							))}
+						</div>
+					</fieldset>
+
 					{canEdit ? (
 						<div className="no-print mt-4 rounded-lg border bg-card p-4 shadow-sm">
 							<p className="mb-1 font-medium text-sm">Cover image</p>
 							<p className="mb-3 text-muted-foreground text-xs leading-snug">
 								One wide image spans the front and back cover on the outer sheet
 								(left = back, right = front) as one continuous wraparound. Full
-								bleed fills the sheet edge-to-edge; turn it off to inset only the
-								sheet’s outer edges (the fold stays continuous). The playlist
-								title sits on the front cover only, with a translucent white
-								background.
+								bleed fills the sheet edge-to-edge; turn it off to inset only
+								the sheet’s outer edges (the fold stays continuous). The
+								playlist title sits on the front cover only, with a translucent
+								white background.
 							</p>
 							<div className="space-y-3">
 								<div className="space-y-2">
@@ -2142,6 +2183,64 @@ function ZineLyricsColumnOptionRow({
 			/>
 			<span className="text-sm">{label}</span>
 		</label>
+	);
+}
+
+type ZinePrintNudge = {
+	frontX: number;
+	frontY: number;
+	backX: number;
+	backY: number;
+};
+
+const ZINE_PRINT_NUDGE_FIELDS = [
+	{ key: "frontX", label: "Front · right" },
+	{ key: "frontY", label: "Front · down" },
+	{ key: "backX", label: "Back · right" },
+	{ key: "backY", label: "Back · down" },
+] as const satisfies readonly { key: keyof ZinePrintNudge; label: string }[];
+
+function ZinePrintNudgeStepper({
+	label,
+	value,
+	onChange,
+}: {
+	label: string;
+	value: number;
+	onChange: (next: number) => void;
+}) {
+	return (
+		<div className="flex items-center gap-2">
+			<span className="w-24 text-muted-foreground text-xs">{label}</span>
+			<Button
+				aria-label={`${label}: decrease`}
+				disabled={value <= ZINE_PRINT_NUDGE.minIn}
+				onClick={() =>
+					onChange(clampZinePrintNudgeIn(value - ZINE_PRINT_NUDGE.stepIn))
+				}
+				size="sm"
+				type="button"
+				variant="outline"
+			>
+				−
+			</Button>
+			<span className="min-w-[4.5rem] text-center font-medium text-sm tabular-nums">
+				{value > 0 ? "+" : ""}
+				{value.toFixed(2)} in
+			</span>
+			<Button
+				aria-label={`${label}: increase`}
+				disabled={value >= ZINE_PRINT_NUDGE.maxIn}
+				onClick={() =>
+					onChange(clampZinePrintNudgeIn(value + ZINE_PRINT_NUDGE.stepIn))
+				}
+				size="sm"
+				type="button"
+				variant="outline"
+			>
+				+
+			</Button>
+		</div>
 	);
 }
 

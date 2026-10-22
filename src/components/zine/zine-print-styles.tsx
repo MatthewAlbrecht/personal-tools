@@ -1167,11 +1167,30 @@ export function ZinePrintStyles() {
 							print-color-adjust: exact;
 						}
 
+						/* Printer offset correction: shift each side as seen on paper. */
+						.zine-booklet-sheet[data-booklet-sheet-side="front"] {
+							transform: translate(
+								var(--zine-print-nudge-front-x-in, 0in),
+								var(--zine-print-nudge-front-y-in, 0in)
+							);
+						}
+
+						.zine-booklet-sheet[data-booklet-sheet-side="back"] {
+							transform: translate(
+								var(--zine-print-nudge-back-x-in, 0in),
+								var(--zine-print-nudge-back-y-in, 0in)
+							);
+						}
+
 						.zine-print-booklet-root[data-zine-duplex-binding="long-edge"]
 							.zine-booklet-sheet[data-booklet-sheet-side="back"],
 						.zine-print-booklet-root[data-zine-export-mode="pdf"]
 							.zine-booklet-sheet[data-booklet-sheet-side="back"] {
-							transform: rotate(180deg);
+							transform: translate(
+									var(--zine-print-nudge-back-x-in, 0in),
+									var(--zine-print-nudge-back-y-in, 0in)
+								)
+								rotate(180deg);
 							transform-origin: center center;
 						}
 

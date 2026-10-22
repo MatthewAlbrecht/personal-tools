@@ -28,6 +28,27 @@ export function clampZineBookletOuterPaddingIn(value: number): number {
 	);
 }
 
+/**
+ * Shifts each printed side (inches; +x right, +y down as seen on that side) to
+ * cancel a printer that doesn't print centred. Front and back are separate
+ * because duplex printers offset each side differently.
+ */
+export const ZINE_PRINT_NUDGE = {
+	minIn: -0.5,
+	maxIn: 0.5,
+	stepIn: 0.01,
+} as const;
+
+export function clampZinePrintNudgeIn(value: number): number {
+	const stepped =
+		Math.round(value / ZINE_PRINT_NUDGE.stepIn) * ZINE_PRINT_NUDGE.stepIn;
+	const clamped = Math.min(
+		ZINE_PRINT_NUDGE.maxIn,
+		Math.max(ZINE_PRINT_NUDGE.minIn, Number(stepped.toFixed(2))),
+	);
+	return clamped === 0 ? 0 : clamped;
+}
+
 export const ZINE_ALBUM_ART_IN = 1.7;
 
 /** Bottom band for cliffnotes/credits lines; half of album-art height. */
