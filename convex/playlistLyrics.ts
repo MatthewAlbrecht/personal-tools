@@ -17,6 +17,7 @@ import {
 	zineCoverTextAnchorValidator,
 	zineCoverTextLayoutMutationValidator,
 } from "./_utils/zineCoverTextLayout";
+import { zineDrcLogoCornerValidator } from "./_utils/zineDrcLogo";
 import {
 	zineInsideBackContentAlignStoredValidator,
 	zineInsideBackLayoutMutationValidator,
@@ -29,7 +30,12 @@ import {
 	normalizeZinePageRecommendations,
 	zinePageRecommendationsValidator,
 } from "./_utils/zinePageRecommendations";
-import { zineDrcLogoCornerValidator } from "./_utils/zineDrcLogo";
+import {
+	type ZineQrService,
+	buildZineQrImagePatch,
+	buildZineQrTogglesPatch,
+	resolveZineQrImageUrls,
+} from "./_utils/zineQr";
 import { requireAuth } from "./auth";
 import {
 	ensureCreditLabelHiddenByDefault,
@@ -362,14 +368,7 @@ export const getBySlug = query({
 			playlist: {
 				...playlist,
 				zineCoverImageUrl: await resolveZineCoverImageUrl(ctx, playlist),
-				zineSpotifyQrImageUrl: await resolveZineSpotifyQrImageUrl(
-					ctx,
-					playlist,
-				),
-				zineAppleMusicQrImageUrl: await resolveZineAppleMusicQrImageUrl(
-					ctx,
-					playlist,
-				),
+				...(await resolveZineQrImageUrls(ctx, playlist)),
 			},
 			songs,
 			siteWideHiddenCreditLabelKeys,
@@ -896,7 +895,7 @@ export const updateZineSpotifyQr = mutation({
 	returns: v.object({ qrImageUrl: v.optional(v.string()) }),
 	handler: async (ctx, args) => {
 		requireAuth(ctx);
-		return await updateZineQrImage(ctx, args.playlistId, "spotify", args);
+		return await updatePlaylistQrImage(ctx, args.playlistId, "spotify", args);
 	},
 });
 
@@ -909,7 +908,12 @@ export const updateZineAppleMusicQr = mutation({
 	returns: v.object({ qrImageUrl: v.optional(v.string()) }),
 	handler: async (ctx, args) => {
 		requireAuth(ctx);
-		return await updateZineQrImage(ctx, args.playlistId, "appleMusic", args);
+		return await updatePlaylistQrImage(
+			ctx,
+			args.playlistId,
+			"appleMusic",
+			args,
+		);
 	},
 });
 
@@ -925,19 +929,7 @@ export const updateZineQrToggles = mutation({
 
 		await requirePlaylist(ctx, args.playlistId);
 
-		const patch: {
-			zineShowSpotifyQr?: boolean;
-			zineShowAppleMusicQr?: boolean;
-			updatedAt: number;
-		} = { updatedAt: Date.now() };
-
-		if (args.showSpotifyQr !== undefined) {
-			patch.zineShowSpotifyQr = args.showSpotifyQr ? true : undefined;
-		}
-		if (args.showAppleMusicQr !== undefined) {
-			patch.zineShowAppleMusicQr = args.showAppleMusicQr ? true : undefined;
-		}
-
+		const patch = { ...buildZineQrTogglesPatch(args), updatedAt: Date.now() };
 		await ctx.db.patch(args.playlistId, patch);
 
 		return null;
@@ -1247,7 +1239,9 @@ export const applyCreditDefaultsToPlaylist = mutation({
 				getIgnoredCreditLabelKeys(ctx),
 				ctx.db
 					.query("playlistLyricsItems")
-					.withIndex("by_playlistId", (q) => q.eq("playlistId", args.playlistId))
+					.withIndex("by_playlistId", (q) =>
+						q.eq("playlistId", args.playlistId),
+					)
 					.collect(),
 			]);
 
@@ -1685,10 +1679,12 @@ async function attachScrapes(
 function toPublicPlaylist(ctx: QueryCtx, playlist: Doc<"playlistLyrics">) {
 	return Promise.all([
 		resolveZineCoverImageUrl(ctx, playlist),
-		resolveZineSpotifyQrImageUrl(ctx, playlist),
-		resolveZineAppleMusicQrImageUrl(ctx, playlist),
+		resolveZineQrImageUrls(ctx, playlist),
 	]).then(
-		([zineCoverImageUrl, zineSpotifyQrImageUrl, zineAppleMusicQrImageUrl]) => ({
+		([
+			zineCoverImageUrl,
+			{ zineSpotifyQrImageUrl, zineAppleMusicQrImageUrl },
+		]) => ({
 			title: playlist.title,
 			slug: playlist.slug,
 			theme: playlist.theme,
@@ -1736,87 +1732,21 @@ async function resolveZineCoverImageUrl(
 	return playlist.zineCoverImageUrl;
 }
 
-async function resolveZineSpotifyQrImageUrl(
-	ctx: QueryCtx | MutationCtx,
-	playlist: Doc<"playlistLyrics">,
-): Promise<string | undefined> {
-	if (playlist.zineSpotifyQrStorageId) {
-		return (
-			(await ctx.storage.getUrl(playlist.zineSpotifyQrStorageId)) ?? undefined
-		);
-	}
-
-	return playlist.zineSpotifyQrImageUrl;
-}
-
-async function resolveZineAppleMusicQrImageUrl(
-	ctx: QueryCtx | MutationCtx,
-	playlist: Doc<"playlistLyrics">,
-): Promise<string | undefined> {
-	if (playlist.zineAppleMusicQrStorageId) {
-		return (
-			(await ctx.storage.getUrl(playlist.zineAppleMusicQrStorageId)) ??
-			undefined
-		);
-	}
-
-	return playlist.zineAppleMusicQrImageUrl;
-}
-
-type ZineQrService = "spotify" | "appleMusic";
-
-async function updateZineQrImage(
+async function updatePlaylistQrImage(
 	ctx: MutationCtx,
 	playlistId: Id<"playlistLyrics">,
 	service: ZineQrService,
 	args: { qrImageUrl?: string; storageId?: Id<"_storage"> },
 ): Promise<{ qrImageUrl?: string }> {
 	const playlist = await requirePlaylist(ctx, playlistId);
-	const now = Date.now();
-	const storageField =
-		service === "spotify"
-			? "zineSpotifyQrStorageId"
-			: "zineAppleMusicQrStorageId";
-	const urlField =
-		service === "spotify"
-			? "zineSpotifyQrImageUrl"
-			: "zineAppleMusicQrImageUrl";
-
-	if (args.storageId !== undefined) {
-		const existingStorageId = playlist[storageField];
-		if (existingStorageId && existingStorageId !== args.storageId) {
-			await ctx.storage.delete(existingStorageId);
-		}
-
-		await ctx.db.patch(playlistId, {
-			[storageField]: args.storageId,
-			[urlField]: undefined,
-			updatedAt: now,
-		});
-
-		return {
-			qrImageUrl: (await ctx.storage.getUrl(args.storageId)) ?? undefined,
-		};
-	}
-
-	if (args.qrImageUrl !== undefined) {
-		const existingStorageId = playlist[storageField];
-		if (existingStorageId) {
-			await ctx.storage.delete(existingStorageId);
-		}
-
-		const normalized = normalizeOptionalString(args.qrImageUrl);
-
-		await ctx.db.patch(playlistId, {
-			[urlField]: normalized,
-			[storageField]: undefined,
-			updatedAt: now,
-		});
-
-		return { qrImageUrl: normalized };
-	}
-
-	throw new Error("No QR image provided");
+	const { patch, qrImageUrl } = await buildZineQrImagePatch(
+		ctx,
+		playlist,
+		service,
+		args,
+	);
+	await ctx.db.patch(playlistId, { ...patch, updatedAt: Date.now() });
+	return { qrImageUrl };
 }
 
 function toPublicItemWithScrape(item: ItemWithScrape) {

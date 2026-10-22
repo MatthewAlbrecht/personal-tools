@@ -66,6 +66,7 @@ import type * as _utils_zineDrcLogo from "../_utils/zineDrcLogo.js";
 import type * as _utils_zineInsideBackLayout from "../_utils/zineInsideBackLayout.js";
 import type * as _utils_zineInsideBackSections from "../_utils/zineInsideBackSections.js";
 import type * as _utils_zinePageRecommendations from "../_utils/zinePageRecommendations.js";
+import type * as _utils_zineQr from "../_utils/zineQr.js";
 import type * as albumDuels from "../albumDuels.js";
 import type * as albumEnrichment from "../albumEnrichment.js";
 import type * as albumEnrichmentTrials from "../albumEnrichmentTrials.js";
@@ -210,6 +211,7 @@ declare const fullApi: ApiFromModules<{
   "_utils/zineInsideBackLayout": typeof _utils_zineInsideBackLayout;
   "_utils/zineInsideBackSections": typeof _utils_zineInsideBackSections;
   "_utils/zinePageRecommendations": typeof _utils_zinePageRecommendations;
+  "_utils/zineQr": typeof _utils_zineQr;
   albumDuels: typeof albumDuels;
   albumEnrichment: typeof albumEnrichment;
   albumEnrichmentTrials: typeof albumEnrichmentTrials;

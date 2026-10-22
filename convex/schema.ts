@@ -279,6 +279,12 @@ export default defineSchema({
 		zineInsideBackRecommendationRowAlign: v.optional(
 			zineInsideBackRecommendationRowAlignValidator,
 		),
+		zineSpotifyQrStorageId: v.optional(v.id("_storage")),
+		zineSpotifyQrImageUrl: v.optional(v.string()),
+		zineAppleMusicQrStorageId: v.optional(v.id("_storage")),
+		zineAppleMusicQrImageUrl: v.optional(v.string()),
+		zineShowSpotifyQr: v.optional(v.boolean()),
+		zineShowAppleMusicQr: v.optional(v.boolean()),
 		zinePageRecommendations: v.optional(zinePageRecommendationsValidator),
 		albumTitleOverride: v.optional(v.string()),
 		artistNameOverride: v.optional(v.string()),

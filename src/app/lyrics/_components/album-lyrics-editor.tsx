@@ -27,6 +27,7 @@ import {
 	ZineEditorShell,
 } from "~/components/zine/editor/zine-editor-shell";
 import { ZineField } from "~/components/zine/editor/zine-field";
+import { ZineBackCoverQrEditor } from "~/components/zine/editor/zine-qr-slot-editor";
 import {
 	ZineTrackRow,
 	type ZineTrackRowFields,
@@ -101,6 +102,14 @@ export function AlbumLyricsEditor({ slug }: { slug: string }): ReactElement {
 	);
 	const bulkUpsertDiscographyAlbums = useMutation(
 		api.spotify.bulkUpsertDiscographyAlbums,
+	);
+	const updateSpotifyQr = useMutation(api.geniusAlbums.updateZineSpotifyQr);
+	const updateAppleMusicQr = useMutation(
+		api.geniusAlbums.updateZineAppleMusicQr,
+	);
+	const updateQrToggles = useMutation(api.geniusAlbums.updateZineQrToggles);
+	const generateZineUploadUrl = useMutation(
+		api.geniusAlbums.generateZineCoverUploadUrl,
 	);
 
 	const [isAutoMatching, setIsAutoMatching] = useState(false);
@@ -448,6 +457,7 @@ export function AlbumLyricsEditor({ slug }: { slug: string }): ReactElement {
 			})),
 		},
 		{ id: "inside-back", label: "Inside back" },
+		{ id: "back-cover", label: "Back cover" },
 	];
 
 	return (
@@ -723,6 +733,38 @@ export function AlbumLyricsEditor({ slug }: { slug: string }): ReactElement {
 									},
 								}
 							: undefined
+					}
+				/>
+			</ZineEditorChapter>
+
+			<ZineEditorChapter
+				id="back-cover"
+				title="Back cover"
+				description="Bottom-left of the back cover, only when uploaded and shown."
+			>
+				<ZineBackCoverQrEditor
+					idPrefix="album"
+					spotify={{
+						imageUrl: album.zineSpotifyQrImageUrl,
+						show: album.zineShowSpotifyQr === true,
+					}}
+					appleMusic={{
+						imageUrl: album.zineAppleMusicQrImageUrl,
+						show: album.zineShowAppleMusicQr === true,
+					}}
+					onStatusChange={handleTrackStatus}
+					generateUploadUrl={() => generateZineUploadUrl({})}
+					saveImage={(service, image) =>
+						service === "spotify"
+							? updateSpotifyQr({ albumId: album._id, ...image })
+							: updateAppleMusicQr({ albumId: album._id, ...image })
+					}
+					saveShow={(service, show) =>
+						updateQrToggles(
+							service === "spotify"
+								? { albumId: album._id, showSpotifyQr: show }
+								: { albumId: album._id, showAppleMusicQr: show },
+						)
 					}
 				/>
 			</ZineEditorChapter>

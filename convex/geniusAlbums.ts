@@ -25,8 +25,8 @@ import {
 	slugify,
 } from "./_utils/geniusParser";
 import {
-	buildGeniusTrackAlbumArtPatch,
 	type SyncTrackDurationsResult,
+	buildGeniusTrackAlbumArtPatch,
 	syncGeniusAlbumTrackDurationsFromSpotify,
 } from "./_utils/geniusSpotifyTrackDurations";
 import {
@@ -34,6 +34,7 @@ import {
 	zineCoverTextAnchorValidator,
 	zineCoverTextLayoutMutationValidator,
 } from "./_utils/zineCoverTextLayout";
+import { zineDrcLogoCornerValidator } from "./_utils/zineDrcLogo";
 import {
 	zineInsideBackContentAlignStoredValidator,
 	zineInsideBackLayoutMutationValidator,
@@ -46,7 +47,12 @@ import {
 	normalizeZinePageRecommendations,
 	zinePageRecommendationsValidator,
 } from "./_utils/zinePageRecommendations";
-import { zineDrcLogoCornerValidator } from "./_utils/zineDrcLogo";
+import {
+	type ZineQrService,
+	buildZineQrImagePatch,
+	buildZineQrTogglesPatch,
+	resolveZineQrImageUrls,
+} from "./_utils/zineQr";
 import { requireAuth } from "./auth";
 import {
 	ensureCreditLabelHiddenByDefault,
@@ -1141,7 +1147,11 @@ async function getAlbumBySlugWithSongs(
 	ctx: QueryCtx,
 	slug: string,
 ): Promise<{
-	album: Doc<"geniusAlbums"> & { zineCoverImageUrl?: string };
+	album: Doc<"geniusAlbums"> & {
+		zineCoverImageUrl?: string;
+		zineSpotifyQrImageUrl?: string;
+		zineAppleMusicQrImageUrl?: string;
+	};
 	songs: Doc<"geniusSongs">[];
 	siteWideHiddenCreditLabelKeys: string[];
 	ignoredCreditLabelKeys: string[];
@@ -1167,6 +1177,7 @@ async function getAlbumBySlugWithSongs(
 		album: {
 			...album,
 			zineCoverImageUrl: await resolveAlbumCoverImageUrl(ctx, album),
+			...(await resolveZineQrImageUrls(ctx, album)),
 		},
 		songs,
 		siteWideHiddenCreditLabelKeys,
@@ -1198,6 +1209,69 @@ export const generateZineCoverUploadUrl = mutation({
 		return await ctx.storage.generateUploadUrl();
 	},
 });
+
+export const updateZineSpotifyQr = mutation({
+	args: {
+		albumId: v.id("geniusAlbums"),
+		qrImageUrl: v.optional(v.string()),
+		storageId: v.optional(v.id("_storage")),
+	},
+	returns: v.object({ qrImageUrl: v.optional(v.string()) }),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+		return await updateAlbumQrImage(ctx, args.albumId, "spotify", args);
+	},
+});
+
+export const updateZineAppleMusicQr = mutation({
+	args: {
+		albumId: v.id("geniusAlbums"),
+		qrImageUrl: v.optional(v.string()),
+		storageId: v.optional(v.id("_storage")),
+	},
+	returns: v.object({ qrImageUrl: v.optional(v.string()) }),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+		return await updateAlbumQrImage(ctx, args.albumId, "appleMusic", args);
+	},
+});
+
+export const updateZineQrToggles = mutation({
+	args: {
+		albumId: v.id("geniusAlbums"),
+		showSpotifyQr: v.optional(v.boolean()),
+		showAppleMusicQr: v.optional(v.boolean()),
+	},
+	returns: v.null(),
+	handler: async (ctx, args) => {
+		requireAuth(ctx);
+		const album = await ctx.db.get(args.albumId);
+		if (!album) throw new Error("Album not found");
+		await ctx.db.patch(args.albumId, {
+			...buildZineQrTogglesPatch(args),
+			updatedAt: Date.now(),
+		});
+		return null;
+	},
+});
+
+async function updateAlbumQrImage(
+	ctx: MutationCtx,
+	albumId: Id<"geniusAlbums">,
+	service: ZineQrService,
+	args: { qrImageUrl?: string; storageId?: Id<"_storage"> },
+): Promise<{ qrImageUrl?: string }> {
+	const album = await ctx.db.get(albumId);
+	if (!album) throw new Error("Album not found");
+	const { patch, qrImageUrl } = await buildZineQrImagePatch(
+		ctx,
+		album,
+		service,
+		args,
+	);
+	await ctx.db.patch(albumId, { ...patch, updatedAt: Date.now() });
+	return { qrImageUrl };
+}
 
 export const updateZineCoverImage = mutation({
 	args: {
@@ -1652,8 +1726,7 @@ export const upsertAlbumForSync = mutation({
 			zineCoverImageUrl: normalizeOptionalString(args.zineCoverImageUrl),
 			zineCoverImageStorageId: undefined,
 			zineCoverGreyscale: args.zineCoverGreyscale ? true : undefined,
-			zineCoverFullBleed:
-				args.zineCoverFullBleed === false ? false : undefined,
+			zineCoverFullBleed: args.zineCoverFullBleed === false ? false : undefined,
 			zineCoverTextAnchor: args.zineCoverTextAnchor,
 			zineCoverTextAlign: args.zineCoverTextAlign,
 			zineCoverTextOffsetXIn: args.zineCoverTextOffsetXIn,

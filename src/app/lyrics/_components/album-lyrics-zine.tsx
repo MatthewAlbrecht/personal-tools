@@ -141,6 +141,16 @@ export function AlbumLyricsZine({ slug, variant }: AlbumLyricsZineProps) {
 			canEdit={canEdit}
 			collectionTitle={displayAlbumTitle}
 			coverArtistName={displayArtistName}
+			backCoverQrCodes={{
+				spotify: {
+					imageUrl: albumData.album.zineSpotifyQrImageUrl,
+					show: albumData.album.zineShowSpotifyQr === true,
+				},
+				appleMusic: {
+					imageUrl: albumData.album.zineAppleMusicQrImageUrl,
+					show: albumData.album.zineShowAppleMusicQr === true,
+				},
+			}}
 			cover={{
 				imageUrl: albumData.album.zineCoverImageUrl,
 				greyscale: albumData.album.zineCoverGreyscale === true,

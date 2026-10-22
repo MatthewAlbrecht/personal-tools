@@ -23,6 +23,7 @@ import {
 	ZineEditorShell,
 } from "~/components/zine/editor/zine-editor-shell";
 import { ZineField } from "~/components/zine/editor/zine-field";
+import { ZineBackCoverQrEditor } from "~/components/zine/editor/zine-qr-slot-editor";
 import {
 	ZineTrackRow,
 	type ZineTrackRowFields,
@@ -68,6 +69,14 @@ export function PlaylistLyricsEditor({ slug }: { slug: string }): ReactElement {
 	const createManualItem = useMutation(api.playlistLyrics.createManualItem);
 	const updateZineInsideBackSections = useMutation(
 		api.playlistLyrics.updateZineInsideBackSections,
+	);
+	const updateSpotifyQr = useMutation(api.playlistLyrics.updateZineSpotifyQr);
+	const updateAppleMusicQr = useMutation(
+		api.playlistLyrics.updateZineAppleMusicQr,
+	);
+	const updateQrToggles = useMutation(api.playlistLyrics.updateZineQrToggles);
+	const generateZineUploadUrl = useMutation(
+		api.playlistLyrics.generateZineCoverUploadUrl,
 	);
 	const { userId } = useAuthToken();
 
@@ -789,24 +798,31 @@ export function PlaylistLyricsEditor({ slug }: { slug: string }): ReactElement {
 					title="Back cover"
 					description="Bottom-left of the back cover, only when uploaded and shown."
 				>
-					<div className="grid gap-8 sm:grid-cols-2">
-						<PlaylistQrSlotEditor
-							playlistId={playlist._id}
-							service="spotify"
-							label="Spotify"
-							initialImageUrl={playlist.zineSpotifyQrImageUrl}
-							initialShow={playlist.zineShowSpotifyQr === true}
-							onStatusChange={handleTrackStatus}
-						/>
-						<PlaylistQrSlotEditor
-							playlistId={playlist._id}
-							service="appleMusic"
-							label="Apple Music"
-							initialImageUrl={playlist.zineAppleMusicQrImageUrl}
-							initialShow={playlist.zineShowAppleMusicQr === true}
-							onStatusChange={handleTrackStatus}
-						/>
-					</div>
+					<ZineBackCoverQrEditor
+						idPrefix="playlist"
+						spotify={{
+							imageUrl: playlist.zineSpotifyQrImageUrl,
+							show: playlist.zineShowSpotifyQr === true,
+						}}
+						appleMusic={{
+							imageUrl: playlist.zineAppleMusicQrImageUrl,
+							show: playlist.zineShowAppleMusicQr === true,
+						}}
+						onStatusChange={handleTrackStatus}
+						generateUploadUrl={() => generateZineUploadUrl({})}
+						saveImage={(service, image) =>
+							service === "spotify"
+								? updateSpotifyQr({ playlistId: playlist._id, ...image })
+								: updateAppleMusicQr({ playlistId: playlist._id, ...image })
+						}
+						saveShow={(service, show) =>
+							updateQrToggles(
+								service === "spotify"
+									? { playlistId: playlist._id, showSpotifyQr: show }
+									: { playlistId: playlist._id, showAppleMusicQr: show },
+							)
+						}
+					/>
 				</ZineEditorChapter>
 			</ZineEditorShell>
 
@@ -999,175 +1015,6 @@ function PlaylistTrackEditor({
 			onRecommendationsChange={recsPersist.setValue}
 			recommendationsUserId={recommendationsUserId}
 		/>
-	);
-}
-
-function PlaylistQrSlotEditor({
-	playlistId,
-	service,
-	label,
-	initialImageUrl,
-	initialShow,
-	onStatusChange,
-}: {
-	playlistId: Id<"playlistLyrics">;
-	service: "spotify" | "appleMusic";
-	label: string;
-	initialImageUrl?: string;
-	initialShow: boolean;
-	onStatusChange: (id: string, status: ZineEditorPersistStatus) => void;
-}): ReactNode {
-	const updateSpotifyQr = useMutation(api.playlistLyrics.updateZineSpotifyQr);
-	const updateAppleMusicQr = useMutation(
-		api.playlistLyrics.updateZineAppleMusicQr,
-	);
-	const updateQrToggles = useMutation(api.playlistLyrics.updateZineQrToggles);
-	const generateUploadUrl = useMutation(
-		api.playlistLyrics.generateZineCoverUploadUrl,
-	);
-
-	const statusKey = `qr-${service}`;
-	const [showOnBackCover, setShowOnBackCover] = useState(initialShow);
-	const [isUploading, setIsUploading] = useState(false);
-	const fileInputRef = useRef<HTMLInputElement>(null);
-
-	const urlPersist = useZineEditorPersist(
-		initialImageUrl ?? "",
-		async (nextUrl) => {
-			const updateQr =
-				service === "spotify" ? updateSpotifyQr : updateAppleMusicQr;
-			await updateQr({
-				playlistId,
-				qrImageUrl: nextUrl.trim().length > 0 ? nextUrl.trim() : "",
-			});
-		},
-	);
-
-	useEffect(() => {
-		setShowOnBackCover(initialShow);
-	}, [initialShow]);
-
-	useEffect(() => {
-		onStatusChange(statusKey, urlPersist.status);
-	}, [onStatusChange, statusKey, urlPersist.status]);
-
-	const resolvedImageUrl = urlPersist.value.trim() || undefined;
-	const inputIdPrefix = `playlist-qr-${service}`;
-
-	async function handleFileUpload(file: File | undefined): Promise<void> {
-		if (!file) return;
-		const maxBytes = 15 * 1024 * 1024;
-		if (file.size > maxBytes) {
-			toast.error("Image must be 15 MB or smaller");
-			return;
-		}
-		setIsUploading(true);
-		onStatusChange(statusKey, "saving");
-		try {
-			const uploadUrl = await generateUploadUrl({});
-			const response = await fetch(uploadUrl, {
-				method: "POST",
-				headers: { "Content-Type": file.type },
-				body: file,
-			});
-			if (!response.ok) throw new Error("Upload failed");
-			const { storageId } = (await response.json()) as { storageId: string };
-			const updateQr =
-				service === "spotify" ? updateSpotifyQr : updateAppleMusicQr;
-			const result = await updateQr({
-				playlistId,
-				storageId: storageId as Id<"_storage">,
-			});
-			urlPersist.setValue(result.qrImageUrl ?? "");
-			toast.success(`${label} QR uploaded`);
-			onStatusChange(statusKey, "saved");
-		} catch {
-			toast.error(`Failed to upload ${label} QR`);
-			onStatusChange(statusKey, "error");
-		} finally {
-			setIsUploading(false);
-			if (fileInputRef.current) {
-				fileInputRef.current.value = "";
-			}
-		}
-	}
-
-	async function handleShowToggle(checked: boolean): Promise<void> {
-		setShowOnBackCover(checked);
-		try {
-			await updateQrToggles(
-				service === "spotify"
-					? { playlistId, showSpotifyQr: checked }
-					: { playlistId, showAppleMusicQr: checked },
-			);
-		} catch {
-			setShowOnBackCover(!checked);
-			toast.error(`Failed to update ${label} visibility`);
-		}
-	}
-
-	return (
-		<div className="space-y-3">
-			<p className="font-medium text-sm">{label}</p>
-			{resolvedImageUrl ? (
-				<img
-					alt={`${label} QR preview`}
-					className="h-24 w-24 rounded-sm bg-white object-contain"
-					src={resolvedImageUrl}
-				/>
-			) : null}
-			<ZineField
-				label="Image URL"
-				htmlFor={`${inputIdPrefix}-url`}
-				placement="Back cover, bottom-left."
-			>
-				<Input
-					id={`${inputIdPrefix}-url`}
-					type="url"
-					value={urlPersist.value}
-					placeholder="https://…"
-					onChange={(event) => urlPersist.setValue(event.currentTarget.value)}
-				/>
-			</ZineField>
-			<p className="text-center text-muted-foreground text-xs">or</p>
-			<div className="space-y-2">
-				<input
-					ref={fileInputRef}
-					accept="image/jpeg,image/png,image/webp,image/gif"
-					className="sr-only"
-					id={`${inputIdPrefix}-file`}
-					type="file"
-					onChange={(event) => {
-						void handleFileUpload(event.target.files?.[0]);
-					}}
-				/>
-				<Button
-					type="button"
-					variant="outline"
-					size="sm"
-					disabled={isUploading}
-					onClick={() => fileInputRef.current?.click()}
-				>
-					{isUploading ? "Uploading…" : "Choose file"}
-				</Button>
-			</div>
-			<div className="flex items-center gap-2">
-				<Checkbox
-					id={`${inputIdPrefix}-show`}
-					checked={showOnBackCover}
-					disabled={!resolvedImageUrl || isUploading}
-					onCheckedChange={(checked) => {
-						void handleShowToggle(checked === true);
-					}}
-				/>
-				<Label
-					htmlFor={`${inputIdPrefix}-show`}
-					className="font-normal text-sm"
-				>
-					Show on back cover
-				</Label>
-			</div>
-		</div>
 	);
 }
 

@@ -138,13 +138,13 @@ export function ZineCoverPage({
 				/>
 			) : null}
 			{showBackCoverQrs ? (
-				<div className="zine-back-cover-qrs" aria-label="Playlist QR codes">
+				<div className="zine-back-cover-qrs" aria-label="Listen QR codes">
 					{showSpotifyQr ? (
 						<div className="zine-back-cover-qr-item">
 							<SpotifyLogo className="zine-back-cover-qr-logo" />
 							{/* biome-ignore lint/a11y/noRedundantAlt: decorative QR with service label */}
 							<img
-								alt="Spotify playlist QR code"
+								alt="Spotify QR code"
 								className="zine-back-cover-qr-image"
 								src={spotifyQr.imageUrl}
 							/>
@@ -160,7 +160,7 @@ export function ZineCoverPage({
 							<AppleMusicLogo className="zine-back-cover-qr-logo" />
 							{/* biome-ignore lint/a11y/noRedundantAlt: decorative QR with service label */}
 							<img
-								alt="Apple Music playlist QR code"
+								alt="Apple Music QR code"
 								className="zine-back-cover-qr-image"
 								src={appleMusicQr.imageUrl}
 							/>
