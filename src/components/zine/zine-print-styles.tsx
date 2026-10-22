@@ -849,6 +849,42 @@ export function ZinePrintStyles() {
 						color: #555;
 					}
 
+					/* No pitches: smaller art, text centred on it, packed left. */
+					.zine-page-recommendations-compact {
+						flex-direction: row;
+						flex-wrap: wrap;
+						align-items: center;
+						column-gap: 14pt;
+						row-gap: 5pt;
+					}
+
+					.zine-page-recommendations-compact .zine-page-recommendation {
+						flex: 0 1 auto;
+						align-items: center;
+						gap: 6pt;
+						max-width: 48%;
+					}
+
+					.zine-page-recommendations-compact .zine-page-recommendation-art,
+					.zine-page-recommendations-compact.zine-page-recommendations-pair
+						.zine-page-recommendation-art {
+						width: 0.36in;
+						height: 0.36in;
+					}
+
+					.zine-page-recommendations-compact .zine-page-recommendation-artist {
+						margin-top: 1pt;
+					}
+
+					.zine-page-recommendation-year {
+						margin: 1.5pt 0 0;
+						font-size: 5pt;
+						font-variant-numeric: tabular-nums;
+						letter-spacing: 0.06em;
+						line-height: 1.15;
+						color: #888888;
+					}
+
 					.zine-song-footer {
 						display: flex;
 						flex-direction: column;

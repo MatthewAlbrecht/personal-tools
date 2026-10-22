@@ -4,6 +4,7 @@ import {
 	ZINE_PAGE_RECOMMENDATION_LIMITS,
 	getPageRecommendationLayout,
 	getVisiblePageRecommendations,
+	hasPageRecommendationPitch,
 	isPageRecommendationVisible,
 	resolveSongPageRecommendations,
 } from "./zine-page-recommendations";
@@ -16,6 +17,27 @@ test("two recommendations use a pair row", () => {
 	assert.equal(getPageRecommendationLayout(2), "pair");
 	assert.equal(getPageRecommendationLayout(1), "stack");
 	assert.equal(getPageRecommendationLayout(3), "stack");
+});
+
+test("pitch detection ignores blank pitches", () => {
+	assert.equal(
+		hasPageRecommendationPitch([
+			{ albumTitle: "QWERTY", artistName: "Saya Gray" },
+			{ albumTitle: "Kid A", artistName: "Radiohead", pitch: "   " },
+		]),
+		false,
+	);
+	assert.equal(
+		hasPageRecommendationPitch([
+			{ albumTitle: "QWERTY", artistName: "Saya Gray" },
+			{
+				albumTitle: "Kid A",
+				artistName: "Radiohead",
+				pitch: "Cold and clean.",
+			},
+		]),
+		true,
+	);
 });
 
 test("visible recommendations require title and artist", () => {

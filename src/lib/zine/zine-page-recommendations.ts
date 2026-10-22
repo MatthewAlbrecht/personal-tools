@@ -49,6 +49,13 @@ export function getPageRecommendationLayout(count: number): "pair" | "stack" {
 	return count === 2 ? "pair" : "stack";
 }
 
+/** True when any item has a pitch; without one the block uses a compact layout. */
+export function hasPageRecommendationPitch(
+	items: readonly ZinePageRecommendation[],
+): boolean {
+	return items.some((item) => item.pitch?.trim());
+}
+
 export function coerceZinePageRecommendations(
 	items: readonly ZinePageRecommendation[] | undefined,
 ): ZinePageRecommendation[] {

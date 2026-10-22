@@ -2,6 +2,7 @@ import { cn } from "~/lib/utils";
 import {
 	type ZinePageRecommendation,
 	getPageRecommendationLayout,
+	hasPageRecommendationPitch,
 } from "~/lib/zine/zine-page-recommendations";
 
 export function ZineSongPageRecommendations({
@@ -18,6 +19,7 @@ export function ZineSongPageRecommendations({
 	}
 
 	const layout = getPageRecommendationLayout(items.length);
+	const compact = !hasPageRecommendationPitch(items);
 
 	return (
 		<div
@@ -36,12 +38,14 @@ export function ZineSongPageRecommendations({
 				className={cn(
 					"zine-page-recommendations",
 					layout === "pair" && "zine-page-recommendations-pair",
+					compact && "zine-page-recommendations-compact",
 				)}
 			>
 				{items.map((item, index) => (
 					<PageRecommendationItem
 						key={`${item.albumTitle}-${item.artistName}-${index}`}
 						item={item}
+						compact={compact}
 					/>
 				))}
 			</ul>
@@ -49,7 +53,13 @@ export function ZineSongPageRecommendations({
 	);
 }
 
-function PageRecommendationItem({ item }: { item: ZinePageRecommendation }) {
+function PageRecommendationItem({
+	item,
+	compact,
+}: {
+	item: ZinePageRecommendation;
+	compact: boolean;
+}) {
 	return (
 		<li className="zine-page-recommendation">
 			{item.imageUrl ? (
@@ -66,6 +76,9 @@ function PageRecommendationItem({ item }: { item: ZinePageRecommendation }) {
 				<p className="zine-page-recommendation-artist">{item.artistName}</p>
 				{item.pitch?.trim() ? (
 					<p className="zine-page-recommendation-pitch">{item.pitch}</p>
+				) : null}
+				{compact && item.year ? (
+					<p className="zine-page-recommendation-year">{item.year}</p>
 				) : null}
 			</div>
 		</li>
