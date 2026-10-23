@@ -5,7 +5,8 @@
 import { type RunSlot, dueSlot } from "./run-timing";
 import { type Search, ebayEndingSoonUrl } from "./searches";
 
-export type RunTrigger = "launchAgent" | "t3" | "manual";
+/** `app`: Run now in Settings; the Mac starts it at its next ask. */
+export type RunTrigger = "launchAgent" | "t3" | "manual" | "app";
 
 /**
  * A full run visits every page; a refresh run only the pages of auctions

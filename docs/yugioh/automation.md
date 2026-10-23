@@ -6,7 +6,7 @@ Platform facts and sources: `references/automated-browser.md` (§8 covers how ex
 
 ## How a run works
 
-1. **Trigger.** The LaunchAgent (every 10 minutes), a T3 Code scheduled task, or I run `scripts/yugioh-automation/run.sh`.
+1. **Trigger.** The LaunchAgent (every 10 minutes), a T3 Code scheduled task, or I run `scripts/yugioh-automation/run.sh`. Or I press **Run now** in Settings → Automated runs: that adds a full run to the list at once ("From Settings", "Waiting for your Mac"), and the next ask, within 10 minutes, starts it (`runNow` in `convex/model/yugioh/automation.ts`). It runs like a hand run: no start delay, TCGplayer too, and during a check-page cool-down. The button is off while a run is open. If no ask comes within 3½ hours (the Mac is off), it fails: "Your Mac didn't ask for it within 3½ hours."
 2. **Ask.** The script posts `{ op: "request" }` to `/api/yugioh/automation` with the extension secret. The app answers with a run ID and its kind (`full` or `refresh`), or with `runId: null` when nothing is due, and the script exits quietly. If a run is already open, the script leaves that run alone and exits, so two triggers never overlap. See "When a run is due" below.
 3. **Wait a moment.** A scheduled run comes with a start delay the app picks at random (`startDelayMs`): up to 4 minutes for a full run, up to 90 s for a refresh run, so runs don't start on the 10-minute marks. (Slot times are jittered, but a slot only starts at the next ask, which is on a 10-minute mark, so the delay still matters.) T3 Code and hand runs don't wait.
 4. **Open Chrome.** The script opens Chrome with the automation profile (`--user-data-dir`). That profile runs as its own Chrome, beside my everyday one. If the profile is already open, the script leaves it open.

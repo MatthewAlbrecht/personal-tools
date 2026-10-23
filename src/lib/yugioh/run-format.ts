@@ -50,6 +50,8 @@ export type RunSummary = {
 	kind?: RunKind;
 	status: RunStatus;
 	requestedAt: number;
+	/** When the Mac took a Run now from Settings; missing until then. */
+	handedOutAt?: number;
 	startedAt: number | null;
 	endedAt: number | null;
 	pagesPlanned: number;
@@ -85,6 +87,7 @@ const TRIGGER_LABELS: Record<RunTrigger, string> = {
 	launchAgent: "Scheduled",
 	t3: "From T3 Code",
 	manual: "By hand",
+	app: "From Settings",
 };
 
 /** One run as the Settings list shows it. */
@@ -120,7 +123,10 @@ export function describeRun(run: RunSummary, now: number): RunLines {
 	if (run.status === "requested") {
 		return {
 			when,
-			outcome: "Waiting for Chrome",
+			outcome:
+				run.trigger === "app" && run.handedOutAt === undefined
+					? "Waiting for your Mac, which checks every 10 min"
+					: "Waiting for Chrome",
 			pages,
 			listings,
 			tone: "running",

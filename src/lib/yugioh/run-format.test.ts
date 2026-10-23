@@ -158,6 +158,30 @@ describe("a run in the list", () => {
 		});
 	});
 
+	test("a Run now from Settings waits for the Mac until its next ask", () => {
+		const waiting = {
+			...finished,
+			trigger: "app" as const,
+			status: "requested" as const,
+			startedAt: null,
+			endedAt: null,
+			pagesPlanned: 0,
+			pagesVisited: 0,
+			searchPagesVisited: 0,
+			productPagesVisited: 0,
+			listingsCaptured: 0,
+			newListings: 0,
+		};
+		expect(describeRun(waiting, NOW)).toMatchObject({
+			when: "Today, 2:40 PM · From Settings",
+			outcome: "Waiting for your Mac, which checks every 10 min",
+			tone: "running",
+		});
+		expect(describeRun({ ...waiting, handedOutAt: NOW }, NOW).outcome).toBe(
+			"Waiting for Chrome",
+		);
+	});
+
 	test("a failed run on an earlier day gives its reason", () => {
 		expect(
 			describeRun(

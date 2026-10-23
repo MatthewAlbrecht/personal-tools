@@ -1,11 +1,14 @@
 "use client";
 
-import { useQuery } from "convex/react";
-import { CircleAlert, CircleCheck, CircleX } from "lucide-react";
+import { useMutation, useQuery } from "convex/react";
+import { CircleAlert, CircleCheck, CircleX, Play } from "lucide-react";
 import type * as React from "react";
+import { toast } from "sonner";
 import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
 import {
 	Card,
+	CardAction,
 	CardContent,
 	CardDescription,
 	CardHeader,
@@ -22,6 +25,7 @@ import {
 	describeRunDay,
 } from "~/lib/yugioh/run-format";
 import { api } from "../../../../convex/_generated/api";
+import { errorMessage } from "../_utils/errors";
 
 const KIND_LABELS = {
 	ebayNewlyListed: "Newly Listed",
@@ -48,6 +52,16 @@ export function AutomatedRuns(): React.ReactElement {
 					profile. It looks again about 20 minutes before a matched auction
 					ends, so the alert shows a fresh price.
 				</CardDescription>
+				<CardAction>
+					<RunNowButton
+						open={
+							runs === undefined ||
+							runs.some(
+								(run) => run.status === "requested" || run.status === "running",
+							)
+						}
+					/>
+				</CardAction>
 			</CardHeader>
 			<CardContent className="flex flex-col gap-4">
 				<RunTimingSection now={now} />
@@ -75,6 +89,33 @@ export function AutomatedRuns(): React.ReactElement {
 				)}
 			</CardContent>
 		</Card>
+	);
+}
+
+/**
+ * Adds a full run to the list; the Mac starts it at its next ask, within 10
+ * minutes. Off while a run is open.
+ */
+function RunNowButton({ open }: { open: boolean }): React.ReactElement {
+	const runNow = useMutation(api.yugioh.automation.runNow);
+
+	return (
+		<Button
+			variant="outline"
+			size="sm"
+			disabled={open}
+			onClick={async () => {
+				try {
+					await runNow({});
+					toast.success("Run added. Your Mac starts it within 10 minutes.");
+				} catch (error) {
+					toast.error(errorMessage(error, "Couldn't add a run. Try again."));
+				}
+			}}
+		>
+			<Play aria-hidden />
+			Run now
+		</Button>
 	);
 }
 

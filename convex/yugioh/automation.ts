@@ -1,5 +1,10 @@
 import { v } from "convex/values";
-import { internalMutation, internalQuery, query } from "../_generated/server";
+import {
+	internalMutation,
+	internalQuery,
+	mutation,
+	query,
+} from "../_generated/server";
 import { requireAuth } from "../auth";
 import * as Automation from "../model/yugioh/automation";
 import { readLatestRunDay } from "../model/yugioh/runDays";
@@ -9,7 +14,7 @@ import {
 	yugiohPlannedVisitValidator,
 	yugiohRunDayValidator,
 	yugiohRunKindValidator,
-	yugiohRunTriggerValidator,
+	yugiohScriptTriggerValidator,
 	yugiohVisitReportValidator,
 } from "../model/yugioh/validators";
 
@@ -29,7 +34,7 @@ const runValidator = yugiohAutomationRunValidator.extend({
  * `startDelayMs`: how long the script waits before opening Chrome.
  */
 export const requestRun = internalMutation({
-	args: { trigger: yugiohRunTriggerValidator },
+	args: { trigger: yugiohScriptTriggerValidator },
 	returns: v.object({
 		runId: v.union(v.id("yugiohAutomationRuns"), v.null()),
 		alreadyOpen: v.boolean(),
@@ -39,6 +44,19 @@ export const requestRun = internalMutation({
 	}),
 	handler: async (ctx, args) =>
 		await Automation.requestRun(ctx, args.trigger, Date.now()),
+});
+
+/**
+ * Run now in Settings: adds a full run to the log, which the Mac's next ask
+ * (within 10 minutes) starts. Throws while a run is open.
+ */
+export const runNow = mutation({
+	args: {},
+	returns: v.id("yugiohAutomationRuns"),
+	handler: async (ctx) => {
+		requireAuth(ctx);
+		return await Automation.runNow(ctx, Date.now());
+	},
 });
 
 /** The extension claims the oldest run asked for, with its visit plan. */

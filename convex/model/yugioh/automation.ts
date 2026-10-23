@@ -1,4 +1,4 @@
-import type { Infer } from "convex/values";
+import { ConvexError, type Infer } from "convex/values";
 import {
 	CHECK_PAGE_COOL_DOWN_MS,
 	type EndingAuction,
@@ -86,7 +86,8 @@ const OPEN_STATUSES = ["requested", "running"] as const;
 /**
  * Asks for a run. While one is still open (asked for or running) it's
  * returned instead, so two triggers never run at once. An open run older than
- * RUN_ABANDONED_AFTER_MS is closed as failed first.
+ * RUN_ABANDONED_AFTER_MS is closed as failed first. A Run now from Settings
+ * (`runNow`) waiting for the Mac goes to the first ask as a new run.
  *
  * T3 Code and hand runs are always full runs. The LaunchAgent asks every 10
  * minutes and gets a full run when a slot of today's plan is due (about
@@ -106,27 +107,22 @@ export async function requestRun(
 	now: number,
 ): Promise<RunRequest> {
 	const lastCheckPage = await readLastCheckPage(ctx, now);
-	for (const status of OPEN_STATUSES) {
-		const open = await ctx.db
-			.query("yugiohAutomationRuns")
-			.withIndex("by_status", (q) => q.eq("status", status))
-			.take(10);
-		for (const run of open) {
-			if (now - (run.startedAt ?? run.requestedAt) < RUN_ABANDONED_AFTER_MS) {
-				return {
-					runId: run._id,
-					alreadyOpen: true,
-					kind: runKind(run),
-					lastCheckPage,
-					startDelayMs: 0,
-				};
-			}
-			await ctx.db.patch("yugiohAutomationRuns", run._id, {
-				status: "failed",
-				endedAt: now,
-				error: "Didn't finish. Closed when the next run was asked for.",
+	const open = await openRun(ctx, now);
+	if (open !== null) {
+		// Run now in Settings: the first ask after it starts it.
+		const waiting = open.trigger === "app" && open.handedOutAt === undefined;
+		if (waiting) {
+			await ctx.db.patch("yugiohAutomationRuns", open._id, {
+				handedOutAt: now,
 			});
 		}
+		return {
+			runId: open._id,
+			alreadyOpen: !waiting,
+			kind: runKind(open),
+			lastCheckPage,
+			startDelayMs: 0,
+		};
 	}
 	const kind =
 		trigger === "launchAgent" ? await scheduledRun(ctx, now) : "full";
@@ -139,7 +135,70 @@ export async function requestRun(
 			startDelayMs: 0,
 		};
 	}
-	const runId = await ctx.db.insert("yugiohAutomationRuns", {
+	const runId = await insertRun(ctx, trigger, kind, now);
+	return {
+		runId,
+		alreadyOpen: false,
+		kind,
+		lastCheckPage,
+		startDelayMs: startDelay(trigger, kind, Math.random()),
+	};
+}
+
+/**
+ * Run now in Settings: a full run, in the log at once, that the Mac's next
+ * ask starts (`requestRun`). It runs like a hand run: no start delay,
+ * TCGplayer too, and during a check-page cool-down. Throws while a run is
+ * open.
+ */
+export async function runNow(
+	ctx: MutationCtx,
+	now: number,
+): Promise<Id<"yugiohAutomationRuns">> {
+	if ((await openRun(ctx, now)) !== null) {
+		throw new ConvexError("A run is already going.");
+	}
+	return await insertRun(ctx, "app", "full", now);
+}
+
+/**
+ * The run still open (asked for or running), or null. An open run older than
+ * RUN_ABANDONED_AFTER_MS is closed as failed first.
+ */
+async function openRun(
+	ctx: MutationCtx,
+	now: number,
+): Promise<Doc<"yugiohAutomationRuns"> | null> {
+	for (const status of OPEN_STATUSES) {
+		const open = await ctx.db
+			.query("yugiohAutomationRuns")
+			.withIndex("by_status", (q) => q.eq("status", status))
+			.take(10);
+		for (const run of open) {
+			if (now - (run.startedAt ?? run.requestedAt) < RUN_ABANDONED_AFTER_MS) {
+				return run;
+			}
+			await ctx.db.patch("yugiohAutomationRuns", run._id, {
+				status: "failed",
+				endedAt: now,
+				error:
+					run.trigger === "app" && run.handedOutAt === undefined
+						? "Your Mac didn't ask for it within 3½ hours."
+						: "Didn't finish. Closed when the next run was asked for.",
+			});
+		}
+	}
+	return null;
+}
+
+/** A new run, asked for and not yet claimed. */
+async function insertRun(
+	ctx: MutationCtx,
+	trigger: RunTrigger,
+	kind: RunKind,
+	now: number,
+): Promise<Id<"yugiohAutomationRuns">> {
+	return await ctx.db.insert("yugiohAutomationRuns", {
 		trigger,
 		kind,
 		status: "requested",
@@ -158,13 +217,6 @@ export async function requestRun(
 		pageErrors: [],
 		checkPage: null,
 	});
-	return {
-		runId,
-		alreadyOpen: false,
-		kind,
-		lastCheckPage,
-		startDelayMs: startDelay(trigger, kind, Math.random()),
-	};
 }
 
 /**

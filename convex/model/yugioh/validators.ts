@@ -370,6 +370,14 @@ export const yugiohRunTriggerValidator = v.union(
 	v.literal("launchAgent"),
 	v.literal("t3"),
 	v.literal("manual"),
+	v.literal("app"),
+);
+
+/** The triggers the script asks with; `app` runs are made in Settings. */
+export const yugiohScriptTriggerValidator = v.union(
+	v.literal("launchAgent"),
+	v.literal("t3"),
+	v.literal("manual"),
 );
 
 /**
@@ -442,6 +450,11 @@ export const yugiohAutomationRunValidator = v.object({
 	kind: v.optional(yugiohRunKindValidator),
 	status: yugiohRunStatusValidator,
 	requestedAt: v.number(),
+	/**
+	 * When a script's ask took an `app` run (Run now in Settings) to start
+	 * it; missing until then, and on other runs.
+	 */
+	handedOutAt: v.optional(v.number()),
 	startedAt: v.union(v.number(), v.null()),
 	endedAt: v.union(v.number(), v.null()),
 	pagesPlanned: v.number(),

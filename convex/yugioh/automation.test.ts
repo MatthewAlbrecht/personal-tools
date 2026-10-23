@@ -475,6 +475,105 @@ describe("one run at a time", () => {
 	});
 });
 
+describe("Run now in Settings", () => {
+	test("adds a run to the log at once, and the Mac's next ask starts it with no wait", async () => {
+		const t = setup();
+
+		const runId = await t.mutation(api.yugioh.automation.runNow, {});
+
+		const [listed] = (await t.query(
+			api.yugioh.automation.listRuns,
+			{},
+		)) as Run[];
+		expect(listed).toMatchObject({
+			_id: runId,
+			trigger: "app",
+			kind: "full",
+			status: "requested",
+			requestedAt: NOW,
+		});
+		expect(listed).not.toHaveProperty("handedOutAt");
+
+		vi.setSystemTime(NOW + 7 * MINUTE);
+		const asked = await automation(t, {
+			op: "request",
+			trigger: "launchAgent",
+		});
+		expect(asked.json).toEqual({
+			runId,
+			alreadyOpen: false,
+			kind: "full",
+			lastCheckPage: null,
+			startDelayMs: 0,
+		});
+		expect(
+			(await t.query(api.yugioh.automation.listRuns, {}))[0],
+		).toMatchObject({ handedOutAt: NOW + 7 * MINUTE });
+
+		// A second ask before the extension claims it leaves it to the first.
+		const again = await automation(t, {
+			op: "request",
+			trigger: "launchAgent",
+		});
+		expect((again.json as { alreadyOpen: boolean }).alreadyOpen).toBe(true);
+		expect(await t.query(api.yugioh.automation.listRuns, {})).toHaveLength(1);
+	});
+
+	test("starts during a check-page cool-down", async () => {
+		const t = setup();
+		const { runId: stopped } = await startRun(t);
+		await automation(t, {
+			op: "visit",
+			runId: stopped,
+			visit: {
+				url: "https://www.ebay.com/splashui/challenge",
+				kind: "ebayNewlyListed",
+				label: "RA01-EN008",
+				listingsCaptured: 0,
+				newListings: 0,
+				error: "Check page",
+				challenged: true,
+			},
+		});
+		vi.setSystemTime(NOW + HOUR);
+
+		const runId = await t.mutation(api.yugioh.automation.runNow, {});
+		const asked = await automation(t, {
+			op: "request",
+			trigger: "launchAgent",
+		});
+
+		expect(asked.json).toMatchObject({ runId, alreadyOpen: false });
+	});
+
+	test("does nothing new while a run is open", async () => {
+		const t = setup();
+		const { runId } = await startRun(t);
+
+		await expect(t.mutation(api.yugioh.automation.runNow, {})).rejects.toThrow(
+			"A run is already going.",
+		);
+		expect(await t.query(api.yugioh.automation.listRuns, {})).toEqual([
+			expect.objectContaining({ _id: runId }),
+		]);
+	});
+
+	test("one the Mac never asked for in 3½ hours fails saying so", async () => {
+		const t = setup();
+		const runId = await t.mutation(api.yugioh.automation.runNow, {});
+		vi.setSystemTime(NOW + 3.5 * HOUR + MINUTE);
+
+		await automation(t, { op: "request", trigger: "manual" });
+
+		const runs = (await t.query(api.yugioh.automation.listRuns, {})) as Run[];
+		expect(runs[1]).toMatchObject({
+			_id: runId,
+			status: "failed",
+			error: "Your Mac didn't ask for it within 3½ hours.",
+		});
+	});
+});
+
 describe("the server channel", () => {
 	test("needs the server secret", async () => {
 		const t = setup();
