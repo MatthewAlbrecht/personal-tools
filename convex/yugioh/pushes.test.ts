@@ -33,7 +33,6 @@ vi.mock("../model/yugioh/titleReader", () => ({
 		setCode: null,
 		rarity: "Quarter Century Secret Rare",
 		condition: "nearMint",
-		copies: 1,
 		language: "english",
 		graded: false,
 		gradingCompany: null,

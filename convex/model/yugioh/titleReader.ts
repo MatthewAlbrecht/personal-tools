@@ -8,7 +8,6 @@ import {
 	GRADING_COMPANIES,
 	LANGUAGES,
 	LANGUAGE_LABELS,
-	MAX_COPIES_READ,
 	READ_CONDITIONS,
 	type ReadCondition,
 	type TitleJudgments,
@@ -57,16 +56,6 @@ export async function judgeTitle(
 	});
 	setCodeCriteria[NOT_STATED] = "None of these is the card being sold.";
 
-	const copiesCriteria: Record<string, string> = {};
-	for (let copies = 1; copies <= MAX_COPIES_READ; copies++) {
-		copiesCriteria[`copies_${copies}`] =
-			copies === 1
-				? "1 card: a single, or the title doesn't give a count"
-				: copies === 3
-					? "3 cards, e.g. 3x, x3, a playset"
-					: `${copies} cards`;
-	}
-
 	const languageCriteria: Record<string, string> = {};
 	for (const language of LANGUAGES) {
 		languageCriteria[language] =
@@ -103,10 +92,6 @@ export async function judgeTitle(
 					...CONDITION_CRITERIA,
 					[NOT_STATED]: "The title doesn't state a condition.",
 				},
-			),
-			copies: choice(
-				"How many physical copies of the card does the Listing in `listingTitle` sell?",
-				copiesCriteria,
 			),
 			language: choice(
 				"Which language is the card sold in `listingTitle` printed in?",
@@ -147,7 +132,6 @@ export async function judgeTitle(
 		setCode,
 		rarity,
 		condition,
-		copies: Number(answers.copies.choice.slice("copies_".length)) || 1,
 		language:
 			LANGUAGES.find((known) => known === answers.language.choice) ?? "english",
 		graded,

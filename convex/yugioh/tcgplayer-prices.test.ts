@@ -19,7 +19,6 @@ vi.mock("../model/yugioh/titleReader", () => ({
 		setCode: null,
 		rarity: null,
 		condition: "nearMint",
-		copies: 1,
 		language: "english",
 		graded: false,
 		gradingCompany: null,

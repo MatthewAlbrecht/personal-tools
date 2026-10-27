@@ -218,7 +218,6 @@ export const yugiohTitleJudgmentsValidator = v.object({
 	setCode: v.union(v.string(), v.null()),
 	rarity: v.union(v.string(), v.null()),
 	condition: v.union(yugiohReadConditionValidator, v.null()),
-	copies: v.number(),
 	language: yugiohLanguageValidator,
 	graded: v.boolean(),
 	gradingCompany: v.union(v.string(), v.null()),

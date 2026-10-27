@@ -23,7 +23,6 @@ vi.mock("../model/yugioh/titleReader", () => ({
 		setCode: null,
 		rarity: "Quarter Century Secret Rare",
 		condition: "nearMint",
-		copies: 1,
 		language: "english",
 		graded: false,
 		gradingCompany: null,
@@ -232,7 +231,9 @@ describe("eBay Reference price", () => {
 		await capture(
 			t,
 			sold(45, { shipping: 5 }),
-			sold(150, { read: { copies: 3 } }),
+			sold(150, {
+				title: "Ash Blossom RA01-EN008 Quarter Century Secret Rare x3",
+			}),
 			sold(50, { sellerLocation: "Chile" }),
 		);
 
@@ -921,7 +922,9 @@ describe("Copies set by me", () => {
 			sold(40),
 			sold(50),
 			sold(60),
-			sold(90, { read: { copies: 3 } }),
+			sold(90, {
+				title: "Ash Blossom RA01-EN008 Quarter Century Secret Rare 3x",
+			}),
 		);
 		// Read as a lot of three: $30 a copy.
 		expect(await ashReference(t, deckId)).toEqual({ price: 45, sales: 4 });
@@ -934,13 +937,18 @@ describe("Copies set by me", () => {
 		expect(await ashReference(t, deckId)).toEqual({ price: 55, sales: 4 });
 
 		// Captured again as is, then with a changed title the AI reads again.
-		await capture(t, sold(90, { itemId: misread, read: { copies: 3 } }));
+		await capture(
+			t,
+			sold(90, {
+				itemId: misread,
+				title: "Ash Blossom RA01-EN008 Quarter Century Secret Rare 3x",
+			}),
+		);
 		await capture(
 			t,
 			sold(90, {
 				itemId: misread,
 				title: "Ash Blossom RA01-EN008 QCSR x3",
-				read: { copies: 3 },
 			}),
 		);
 		const view = await viewOf(t, deckId, misread as string);

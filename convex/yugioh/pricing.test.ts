@@ -10,7 +10,6 @@ import schema from "../schema";
 
 // The AI, TCGplayer and the exchange-rate source are faked.
 const fakes = vi.hoisted(() => ({
-	copies: 1,
 	aiFails: false,
 	rates: null as null | {
 		source: string;
@@ -25,7 +24,6 @@ vi.mock("../model/yugioh/titleReader", () => ({
 			setCode: null,
 			rarity: "Quarter Century Secret Rare",
 			condition: "nearMint",
-			copies: fakes.copies,
 			language: "english",
 			graded: false,
 			gradingCompany: null,
@@ -60,7 +58,6 @@ beforeEach(() => {
 	vi.stubEnv("CONVEX_SERVER_SECRET", SECRET);
 	vi.useFakeTimers();
 	vi.setSystemTime(NOW);
-	fakes.copies = 1;
 	fakes.aiFails = false;
 	fakes.rates = null;
 });
@@ -232,8 +229,11 @@ describe("Copies in the Listing", () => {
 	test("a lot is divided by the Copies the title reading found", async () => {
 		const t = setup();
 		const deckId = await ashDeck(t);
-		fakes.copies = 3;
-		await capture(t, { price: 60, shipping: 6 });
+		await capture(t, {
+			price: 60,
+			shipping: 6,
+			title: "Ash Blossom RA01-EN008 Quarter Century Secret Rare NM 3x",
+		});
 
 		expect(await perCopyPrice(t, deckId)).toMatchObject({
 			copies: 3,

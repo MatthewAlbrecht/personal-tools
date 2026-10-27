@@ -1,6 +1,6 @@
 // Reading eBay Listing titles and matching them to Printings. The AI supplies
-// judgments (rarity, condition, Copies, …); everything a title states exactly
-// (set codes, the language suffix, a slab's grade) is read here, in code.
+// judgments (rarity, condition, …); everything a title states exactly (set
+// codes, the language suffix, a slab's grade, Copies) is read here, in code.
 // Relative imports only: Convex imports this module.
 
 import { normalizeRarity } from "./deck";
@@ -236,7 +236,6 @@ export type TitleJudgments = {
 	rarity: string | null;
 	/** Null when the title doesn't say. */
 	condition: ReadCondition | null;
-	copies: number;
 	language: Language;
 	graded: boolean;
 	gradingCompany: string | null;
@@ -265,6 +264,39 @@ function findGrade(title: string): { company: string; grade: string } | null {
 		company: company === "BECKETT" ? "BGS" : company,
 		grade: match[2] ?? "",
 	};
+}
+
+const COUNT_WORDS: Record<string, number> = { two: 2, three: 3, four: 4 };
+const COUNT = "(\\d{1,2}|two|three|four)";
+
+/**
+ * Explicit Copies markers: "3x", "x3", "lot of 2", "2 copies", "2-Card Lot",
+ * "playset" (3). A bare number isn't one: it's usually a set name ("Champion
+ * Pack 4"), a seller's code ("K3") or a listing number ("#2"). An "x" between
+ * inch marks is a size ("27”x40”").
+ */
+const COPIES_PATTERNS: readonly RegExp[] = [
+	/(?<![\w”"'.-])(\d{1,2})\s*x(?![\w”"'])/i,
+	/(?<![\w”"'])x\s*(\d{1,2})(?![\w”"'.])/i,
+	new RegExp(`\\b(?:lot|set|bundle) of ${COUNT}\\b`, "i"),
+	new RegExp(`\\b${COUNT}[\\s-]*(?:copies|cards?|pcs|pieces)\\b`, "i"),
+];
+const PLAYSET_PATTERN = /\bplay\s*-?\s*set\b/i;
+
+/**
+ * The Copies a title states it sells (at most MAX_COPIES_READ), 1 when it
+ * states no count. Only the part before a spaced " + " is read: what follows
+ * is another card ("+ Lonefire x2", "+ 6 Holographics").
+ */
+export function copiesStatedIn(title: string): number {
+	const words = (title.split(/\s\+\s/)[0] ?? "").replace(SET_CODE_PATTERN, " ");
+	for (const pattern of COPIES_PATTERNS) {
+		const count = pattern.exec(words)?.[1]?.toLowerCase();
+		if (count === undefined) continue;
+		const copies = COUNT_WORDS[count] ?? Number(count);
+		if (copies >= 1) return Math.min(copies, MAX_COPIES_READ);
+	}
+	return PLAYSET_PATTERN.test(words) ? 3 : 1;
 }
 
 /**
@@ -305,7 +337,7 @@ export function readTitle(title: string, judgments: TitleJudgments): TitleRead {
 		condition: judgments.graded
 			? judgments.condition
 			: (conditionStatedIn(title) ?? judgments.condition),
-		copies: judgments.copies,
+		copies: copiesStatedIn(title),
 		language,
 		graded: judgments.graded,
 		gradingCompany: judgments.graded

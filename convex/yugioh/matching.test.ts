@@ -45,7 +45,6 @@ const plainRead: TitleJudgments = {
 	setCode: null,
 	rarity: "Quarter Century Secret Rare",
 	condition: "nearMint",
-	copies: 1,
 	language: "english",
 	graded: false,
 	gradingCompany: null,
@@ -179,7 +178,6 @@ describe("reading titles", () => {
 		fakes.judgments = () => ({
 			...plainRead,
 			condition: "lightlyPlayed",
-			copies: 3,
 		});
 		await capture(t, "1", "3x Ash Blossom RA01-EN008 QCSR LP");
 
@@ -534,6 +532,7 @@ describe("Listings read before a stated language beat the set code", () => {
 				titleRead: {
 					...plainRead,
 					setCode: "RA01-EN008",
+					copies: 1,
 					grade: null,
 				},
 			});
@@ -610,6 +609,49 @@ describe("Listings read before a stated condition beat the AI's", () => {
 		expect(byItem.get("1")).toBe("moderatelyPlayed");
 		expect(byItem.get("2")).toBe("nearMint");
 		expect(byItem.get("3")).toBe("moderatelyPlayed");
+		expect(fakes.reads).toHaveLength(readsBefore);
+	});
+});
+
+describe("Listings whose Copies the AI read", () => {
+	test("a backfill re-derives their Copies from the title, without the AI", async () => {
+		const t = setup();
+		await ashDeck(t);
+		await capture(t, "1", "Ash Blossom RA01-EN008 QCSR Champion Pack 4");
+		await capture(t, "2", "Ash Blossom RA01-EN008 QCSR 3x");
+		await capture(t, "3", "Ash Blossom RA01-EN008 QCSR #2");
+		await settle(t);
+		// As the AI stored them: a count read from any number.
+		await t.run(async (ctx) => {
+			for (const listing of await ctx.db.query("yugiohListings").take(10)) {
+				if (!listing.titleRead) throw new Error("Listing unread");
+				const copies = { "1": 4, "2": 3, "3": 2 }[listing.itemId] ?? 1;
+				await ctx.db.patch("yugiohListings", listing._id, {
+					titleRead: { ...listing.titleRead, copies },
+				});
+			}
+		});
+		const readsBefore = fakes.reads.length;
+
+		const first = await t.mutation(
+			internal.yugioh.titleReading.rederiveListingCopies,
+			{ paginationOpts: { numItems: 1, cursor: null } },
+		);
+		const second = await t.mutation(
+			internal.yugioh.titleReading.rederiveListingCopies,
+			{ paginationOpts: { numItems: 10, cursor: first.cursor } },
+		);
+		expect(first.updated + second.updated).toBe(2);
+		expect(second.isDone).toBe(true);
+
+		const byItem = new Map(
+			(await t.run(async (ctx) => ctx.db.query("yugiohListings").take(10))).map(
+				(l) => [l.itemId, l.titleRead?.copies],
+			),
+		);
+		expect(byItem.get("1")).toBe(1);
+		expect(byItem.get("2")).toBe(3);
+		expect(byItem.get("3")).toBe(1);
 		expect(fakes.reads).toHaveLength(readsBefore);
 	});
 });

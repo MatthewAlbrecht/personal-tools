@@ -8,6 +8,7 @@ import {
 	type TitleJudgments,
 	type TitleRead,
 	conditionStatedIn,
+	copiesStatedIn,
 	findSetCodes,
 	languageStatedIn,
 	matchListing,
@@ -123,6 +124,23 @@ export async function rederiveListingCondition(
 	}
 	await ctx.db.patch("yugiohListings", listing._id, {
 		titleRead: { ...listing.titleRead, condition },
+	});
+	return true;
+}
+
+/**
+ * Re-derives an eBay Listing's Copies from its title, for Listings whose
+ * Copies the AI read. True when it changed. Copies I set myself win anyway.
+ */
+export async function rederiveListingCopies(
+	ctx: MutationCtx,
+	listing: Doc<"yugiohListings">,
+): Promise<boolean> {
+	if (!listing.titleRead || listing.marketplace === "tcgplayer") return false;
+	const copies = copiesStatedIn(listing.title);
+	if (copies === listing.titleRead.copies) return false;
+	await ctx.db.patch("yugiohListings", listing._id, {
+		titleRead: { ...listing.titleRead, copies },
 	});
 	return true;
 }

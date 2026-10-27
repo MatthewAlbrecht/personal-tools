@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
 	type TitleJudgments,
 	conditionStatedIn,
+	copiesStatedIn,
 	findSetCodes,
 	languageOfSetCode,
 	languageStatedIn,
@@ -74,7 +75,6 @@ const judgments: TitleJudgments = {
 	setCode: null,
 	rarity: "Quarter Century Secret Rare",
 	condition: "nearMint",
-	copies: 1,
 	language: "english",
 	graded: false,
 	gradingCompany: null,
@@ -395,5 +395,72 @@ describe("readTitle's condition", () => {
 				gradingCompany: "PSA",
 			}).condition,
 		).toBeNull();
+	});
+});
+
+// Real eBay titles: the AI read a count from set names, seller codes and
+// listing numbers. Only an explicit marker (3x, x2, playset, lot of 2,
+// 2 copies) counts.
+describe("copiesStatedIn", () => {
+	test.each([
+		["Yu-Gi-Oh Dark Ruler No More RA01-EN060 Ultimate Rare 1st X3", 3],
+		["Yu-Gi-Oh Dark Ruler No More RA01-EN060 Secret Rare 1st Edition X2", 2],
+		["Mystical Space Typhoon x 3 - Playset - RA02-EN048 - Secret Rare", 3],
+		["YUGIOH! HEAVY STORM-SUPER RARE-MRD-142 x 2", 2],
+		["x3 Lumina, Lightsworn Summoner BLLR EN038 Ultra Rare Yugioh", 3],
+		["2x D.D. Crow STON-EN024 Rare Unlimited LP", 2],
+		["Garoth, Lightsworn Warrior 3x - BLLR-EN037 - Ultra Rare", 3],
+		["yugioh 2X Heavy Storm MRD-142 Unlimited Edition Super Rare near mint", 2],
+		["Yugioh lot 3x Ash Blossom 25th quarter century PSA 10", 3],
+		["Dark Ruler No More RA01-EN060 Secret Rare 1st Ed Lot of 2 NM", 2],
+		["Chaos Magical Hats TP7-EN005 2-Card Lot English Foil 1st", 2],
+		["Giant Trunade MRL-048 Super Rare 1st Edition (2 cards)", 2],
+		[
+			"YuGiOh Cyber Dragon OP16-EN001 (Ultimate Rare) (NM) Play Set (3 Copies)",
+			3,
+		],
+		["YUGIOH! 3x Threatening Roar - CP07-EN003 - Super Rare Vlp-Lp Playset", 3],
+		["Ash Blossom RA01-EN008 QCSR NM PLAYSET", 3],
+		["Ash Blossom RA01-EN008 QCSR set of three", 3],
+	] as const)("%s reads as %i", (title, copies) => {
+		expect(copiesStatedIn(title)).toBe(copies);
+	});
+
+	test("a count above the most read is capped", () => {
+		expect(copiesStatedIn("Ash Blossom RA01-EN008 QCSR 12x")).toBe(10);
+		expect(copiesStatedIn("Ash Blossom RA01-EN008 QCSR lot of 12")).toBe(10);
+	});
+
+	test.each([
+		"Tragoedia TU04-EN000 2010 Konami Yu-Gi-Oh! Ultimate Rare Turbo Booster Four KD",
+		"Colossal Fighter (UTR) TU05-EN000 Turbo Pack: Booster Five YU-GI-OH LP",
+		"Bottomless Trap Hole CP04-EN003 Champion Pack 4 Unlimited",
+		"2008 Yugioh PSA 9 Trap Dustshoot CP05-EN005 Champion Pack 5 Super Holo Pop 3",
+		"Monster Reincarnation RDS-EN045 Rise of Destiny Yu-Gi-Oh 1st Ed - NM - K3",
+		"Yu-Gi-Oh! The Transmigration Prophecy Unlimited STON-EN054 NM B1-5",
+		"Yugioh D.D. Crow Ultimate Rare 1st Edition STON-EN024 English MP #2",
+		"Black Rose Dragon (UTR) CSOC-EN039 Crossroads of Chaos Unlimited #2",
+		"Yugioh! - Cyber Dragon CRV-EN015 + Graceful Charity SDP-040 1st Edition",
+		"Yu-Gi-Oh! TCG Heavy Storm Metal Raiders MRD-EN142 Super Rare MP + 6 Holographics",
+		"Stardust Dragon (UTR) TDGS-EN040 Ultimate Rare Yu-Gi-Oh Unlimited + Lonefire x2",
+		"Alpha Myr [MRD - 142] BUY2GET4FREE",
+		"HAMNET 2025 Original DS One Sheet 27”x40” Movie Poster",
+		"Speed Duel SGX1-ENA01 Blue-Eyes",
+		"Yu-Gi-Oh! Bottomless Trap Hole CP04-EN003 (2) Super Rare MODERATELY PLAYED",
+		"YUGIOH MRD-142 HEAVY STORM SUPER RARE UNLIMITED 2",
+	])("reads %s as a single", (title) => {
+		expect(copiesStatedIn(title)).toBe(1);
+	});
+});
+
+describe("readTitle's copies", () => {
+	test("come from the title, not the AI", () => {
+		expect(readTitle("Ash Blossom RA01-EN008 QCSR 3x", judgments).copies).toBe(
+			3,
+		);
+		expect(
+			readTitle("Monster Reincarnation RDS-EN045 1st Ed - NM - K3", judgments)
+				.copies,
+		).toBe(1);
 	});
 });
