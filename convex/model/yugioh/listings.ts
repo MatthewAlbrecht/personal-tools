@@ -45,10 +45,7 @@ import {
 	neededPrintingIds,
 	searchedPrintingsByCard,
 } from "../../../src/lib/yugioh/searches";
-import {
-	setCodeKey,
-	shownMatchStatus,
-} from "../../../src/lib/yugioh/title-reading";
+import { shownMatchStatus } from "../../../src/lib/yugioh/title-reading";
 import { isNewListing } from "../../../src/lib/yugioh/whats-new";
 import type { Doc, Id } from "../../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../../_generated/server";
@@ -63,11 +60,7 @@ import {
 	loadDealContext,
 	matchedPrintingId,
 } from "./deals";
-import {
-	MAX_CANDIDATES_PER_DECK,
-	listDeckCandidates,
-	listDeckCards,
-} from "./decks";
+import { listDeckCandidates, listDeckCards } from "./decks";
 import {
 	type ListingMatchView,
 	listingMatchView,
@@ -106,9 +99,12 @@ export type IngestReport = {
 /** Most Listings one capture may carry (an eBay page shows up to 240). */
 export const MAX_LISTINGS_PER_CAPTURE = 250;
 export const MAX_LISTINGS_SHOWN = 200;
+/**
+ * Most Listings a Deck's Listings view reads per needed Printing, newest
+ * first. Above `MAX_LISTINGS_SHOWN`, so a sort reaches past the newest 200.
+ */
+export const MAX_LISTINGS_PER_PRINTING = 400;
 export const MAX_OBSERVATIONS_SHOWN = 100;
-/** Most Listings without a single set code shown in a Deck's Listings. */
-export const MAX_LISTINGS_WITHOUT_SET_CODE = 50;
 
 /**
  * Stores one eBay search-results page. Each result is upserted by item ID;
@@ -265,64 +261,26 @@ export async function observe(
 }
 
 /**
- * A Deck's Listings, newest first: those filed under its Printings' set codes
- * (in any language, matched or not), those matched to its Printings by my
- * override, and those with no single set code in the title, which could be
- * for any Deck. Nothing is hidden for being "not a match".
+ * The Listings matched to `printingIds` (the Deck's needed Printings: only
+ * those can show), up to `MAX_LISTINGS_PER_PRINTING` newest per Printing,
+ * newest first.
  */
 export async function readDeckListings(
 	ctx: QueryCtx,
-	deckId: Id<"yugiohDecks">,
+	printingIds: Iterable<Id<"yugiohPrintings">>,
 ): Promise<Doc<"yugiohListings">[]> {
-	const candidates = await ctx.db
-		.query("yugiohCandidatePrintings")
-		.withIndex("by_deckId", (q) => q.eq("deckId", deckId))
-		.take(MAX_CANDIDATES_PER_DECK);
-	const printingIds = [...new Set(candidates.map((c) => c.printingId))];
-	const keys = new Set<string>();
-	for (const printingId of printingIds) {
-		const printing = await ctx.db.get("yugiohPrintings", printingId);
-		const key = printing && setCodeKey(printing.setCode);
-		if (key) keys.add(key);
-	}
-
-	const found = new Map<Id<"yugiohListings">, Doc<"yugiohListings">>();
-	function add(listings: Doc<"yugiohListings">[]): void {
-		for (const listing of listings) found.set(listing._id, listing);
-	}
-	for (const key of keys) {
-		add(
-			await ctx.db
-				.query("yugiohListings")
-				.withIndex("by_setCodeKey", (q) => q.eq("setCodeKey", key))
-				.order("desc")
-				.take(MAX_LISTINGS_SHOWN),
-		);
-	}
-	// Listings without a single set code (lots, vague titles, captures from
-	// before title reading) could be for any Deck. Fewer of them, so they
-	// can't push the Deck's own Listings out of view.
-	for (const key of [null, undefined]) {
-		add(
-			await ctx.db
-				.query("yugiohListings")
-				.withIndex("by_setCodeKey", (q) => q.eq("setCodeKey", key))
-				.order("desc")
-				.take(MAX_LISTINGS_WITHOUT_SET_CODE),
-		);
-	}
-	for (const printingId of printingIds) {
-		add(
-			await ctx.db
+	const batches = await Promise.all(
+		[...printingIds].map((printingId) =>
+			ctx.db
 				.query("yugiohListings")
 				.withIndex("by_matchedPrintingId", (q) =>
 					q.eq("matchedPrintingId", printingId),
 				)
 				.order("desc")
-				.take(MAX_LISTINGS_SHOWN),
-		);
-	}
-	return [...found.values()].sort((a, b) => b._creationTime - a._creationTime);
+				.take(MAX_LISTINGS_PER_PRINTING),
+		),
+	);
+	return batches.flat().sort((a, b) => b._creationTime - a._creationTime);
 }
 
 /** The Listings a Deck's Listings view shows, with what's needed to explain them. */
@@ -362,18 +320,22 @@ export async function readDeckListingsPage(
 	filters: ListingFilters,
 	sort: ListingSort | null = null,
 ): Promise<DeckListingsPage> {
-	const all = await readDeckListings(ctx, deckId);
-	const newSince = await readNewSince(ctx, deckId);
 	const [cards, candidates] = await Promise.all([
 		listDeckCards(ctx, deckId),
 		listDeckCandidates(ctx, deckId),
+	]);
+	const neededPrintings = neededPrintingIds(cards, candidates);
+	const [all, newSince, deals] = await Promise.all([
+		readDeckListings(ctx, neededPrintings),
+		readNewSince(ctx, deckId),
+		loadDealContext(ctx, deckId, now),
 	]);
 	const searched = searchedPrintingsByCard(cards, candidates);
 	const context = {
 		now,
 		newSince,
 		cardPrintings: cardPrintings(searched),
-		neededPrintings: neededPrintingIds<string>(cards, candidates),
+		neededPrintings: neededPrintings as ReadonlySet<string>,
 		cardPriorities: new Map(
 			cards.map((card): [string, Priority] => [card._id, cardPriority(card)]),
 		),
@@ -387,7 +349,6 @@ export async function readDeckListingsPage(
 	const view = filters.view ?? "available";
 	const order = sort ?? defaultListingSort(view);
 	const matching = applyListingFilters(shown, filters, context);
-	const deals = await loadDealContext(ctx, deckId, now);
 	const rarities = loadRarityChoices(ctx, context.neededPrintings);
 	const values = await sortValues(ctx, matching, order, view, now, deals);
 	const ordered = sortListings(
@@ -438,19 +399,24 @@ async function sortValues(
 		Id<"yugiohPrintings">,
 		Promise<Doc<"yugiohPrintings"> | null>
 	>();
-	for (const listing of listings) {
-		values.set(
-			listing._id,
-			await sortValue(listing, sort.key, view, now, deals, (printingId) => {
-				let printing = printings.get(printingId);
-				if (!printing) {
-					printing = ctx.db.get("yugiohPrintings", printingId);
-					printings.set(printingId, printing);
-				}
-				return printing;
-			}),
-		);
+	function printing(
+		printingId: Id<"yugiohPrintings">,
+	): Promise<Doc<"yugiohPrintings"> | null> {
+		let found = printings.get(printingId);
+		if (!found) {
+			found = ctx.db.get("yugiohPrintings", printingId);
+			printings.set(printingId, found);
+		}
+		return found;
 	}
+	await Promise.all(
+		listings.map(async (listing) => {
+			values.set(
+				listing._id,
+				await sortValue(listing, sort.key, view, now, deals, printing),
+			);
+		}),
+	);
 	return values;
 }
 

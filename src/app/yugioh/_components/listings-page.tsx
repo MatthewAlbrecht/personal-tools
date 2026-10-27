@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import { formatDistanceToNowStrict } from "date-fns";
+import { formatDistanceToNowStrict, roundToNearestMinutes } from "date-fns";
 import {
 	ArrowDown,
 	ArrowUp,
@@ -100,6 +100,12 @@ import { useListingRejection } from "./mark-wrong";
 const SKELETON_ROWS = [0, 1, 2, 3, 4, 5, 6, 7];
 
 /**
+ * How often the Listings are regraded on the clock. Each new `now` reruns
+ * the whole query, so it moves in steps; rows keep their minute clock.
+ */
+const QUERY_CLOCK_MINUTES = 5;
+
+/**
  * The Deck's Listings in one view, Available (the default) or Sold: those
  * matched to a Printing the Deck still needs, Rejected ones only under
  * Marked wrong. The view, filters and sort live in the URL; filters only
@@ -123,7 +129,10 @@ export function ListingsPage({
 	const page = useHeldWhileLoading(
 		useQuery(api.yugioh.listings.listListings, {
 			deckId,
-			now,
+			now: roundToNearestMinutes(now, {
+				nearestTo: QUERY_CLOCK_MINUTES,
+				roundingMethod: "floor",
+			}).getTime(),
 			filters,
 			sort,
 		}),

@@ -196,6 +196,22 @@ describe("new since my last visit", () => {
 		expect(await newItemIds(t, deckId)).toEqual([during, after]);
 	});
 
+	test("a visit that continues leaves where new starts untouched", async () => {
+		const t = setup();
+		const { deckId } = await ashDeck(t);
+		await visit(t, deckId);
+		const marks = () =>
+			t.run((ctx) => ctx.db.query("yugiohDeckNewSince").collect());
+		const [first] = await marks();
+		at(NOW + 20 * MINUTE);
+		await visit(t, deckId);
+		expect(await marks()).toEqual([first]);
+
+		at(NOW + 2 * HOUR);
+		await visit(t, deckId);
+		expect(await marks()).toEqual([{ ...first, newSince: NOW + 20 * MINUTE }]);
+	});
+
 	test("the next visit, after a break, starts from where this one ended", async () => {
 		const t = setup();
 		const { deckId } = await ashDeck(t);
@@ -438,8 +454,7 @@ describe("views, sorting and filters", () => {
 		const t = setup();
 		const { deckId } = await ashDeck(t);
 		// The cheapest is captured first, so it's the oldest: the 201st newest.
-		// (It has no set code: the Deck reads its set code's newest 200, plus
-		// up to 50 that could be for any Deck. I matched it myself, so it shows.)
+		// (It has no set code. I matched it myself, so it shows.)
 		const [cheapest] = await capture(
 			t,
 			{ price: 1, title: "Yugioh Quarter Century Secret Rare binder lot" },

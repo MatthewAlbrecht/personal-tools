@@ -1,8 +1,11 @@
 import type { OptimisticLocalStore } from "convex/browser";
+import type { FunctionReturnType } from "convex/server";
+import { dealGrade, percentOfReference } from "~/lib/yugioh/deals";
 import { type CardOrder, deckProgress, moveToIndex } from "~/lib/yugioh/deck";
+import { listingCopies } from "~/lib/yugioh/listing-edits";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
-import type { DeckCard, DeckView } from "./types";
+import type { DeckCard, DeckView, ListingView } from "./types";
 
 /**
  * Applies an optimistic change to every cached getDeck for the Deck: the
@@ -17,6 +20,81 @@ export function updateCachedDeck(
 		if (args.deckId !== deckId || !value) continue;
 		store.setQuery(api.yugioh.decks.getDeck, args, update(value));
 	}
+}
+
+type ListingsPageView = FunctionReturnType<
+	typeof api.yugioh.listings.listListings
+>;
+
+/**
+ * Applies an optimistic change to a Listing in every cached Listings view
+ * that shows it. `update` returns the changed Listing, or null when the
+ * change takes it out of the view.
+ */
+export function updateCachedListing(
+	store: OptimisticLocalStore,
+	listingId: ListingView["_id"],
+	update: (listing: ListingView) => ListingView | null,
+): void {
+	const query = api.yugioh.listings.listListings;
+	for (const { args, value } of store.getAllQueries(query)) {
+		if (!value) continue;
+		const next = applyListingUpdate(value, listingId, update);
+		if (next !== value) store.setQuery(query, args, next);
+	}
+}
+
+/** `updateCachedListing` on one cached page; the same page when it doesn't show the Listing. */
+export function applyListingUpdate(
+	page: ListingsPageView,
+	listingId: ListingView["_id"],
+	update: (listing: ListingView) => ListingView | null,
+): ListingsPageView {
+	const listing = page.listings.find((l) => l._id === listingId);
+	if (!listing) return page;
+	const next = update(listing);
+	if (next === null) {
+		return {
+			...page,
+			listings: page.listings.filter((l) => l._id !== listingId),
+			matching: page.matching - 1,
+		};
+	}
+	return {
+		...page,
+		listings: page.listings.map((l) => (l._id === listingId ? next : l)),
+	};
+}
+
+/**
+ * A Listing with the Copies I set (null: the title's), repriced as the server
+ * will: the landed total over the new Copies, regraded against the same
+ * Reference price when it was graded.
+ */
+export function withCopies(
+	listing: ListingView,
+	copies: ListingView["copiesOverride"],
+): ListingView {
+	const next = { ...listing, copiesOverride: copies };
+	const price = listing.perCopyPrice;
+	if (price === null) return next;
+	const lot = listingCopies(next);
+	const total = price.price + (price.shipping ?? 0) + price.importFees;
+	const perCopy = Math.round((total / lot) * 100) / 100;
+	const reference = listing.deal.reference?.price ?? null;
+	const graded = listing.deal.percentOfReference !== null && reference !== null;
+	const percent = graded ? percentOfReference(perCopy, reference) : null;
+	return {
+		...next,
+		perCopyPrice: { ...price, copies: lot, perCopy },
+		deal: graded
+			? {
+					...listing.deal,
+					percentOfReference: percent,
+					grade: percent === null ? null : dealGrade(percent),
+				}
+			: listing.deal,
+	};
 }
 
 export type CardPatch = Partial<

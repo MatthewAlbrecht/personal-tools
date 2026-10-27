@@ -31,6 +31,18 @@ export async function recordDeckVisit(
 	) {
 		await ctx.db.patch("yugiohDeckVisits", existing._id, visit);
 	}
+	// Written only when it moves, so a continuing visit leaves it alone.
+	const mark = await readNewSinceMark(ctx, deckId);
+	if (mark === null) {
+		await ctx.db.insert("yugiohDeckNewSince", {
+			deckId,
+			newSince: visit.newSince,
+		});
+	} else if (mark.newSince !== visit.newSince) {
+		await ctx.db.patch("yugiohDeckNewSince", mark._id, {
+			newSince: visit.newSince,
+		});
+	}
 }
 
 /** Where "new" starts in a Deck this visit; null before my first visit. */
@@ -38,7 +50,17 @@ export async function readNewSince(
 	ctx: QueryCtx,
 	deckId: Id<"yugiohDecks">,
 ): Promise<number | null> {
+	const mark = await readNewSinceMark(ctx, deckId);
+	if (mark) return mark.newSince;
+	// A Deck not visited since the mark was split out of its visit.
 	return (await readVisit(ctx, deckId))?.newSince ?? null;
+}
+
+async function readNewSinceMark(ctx: QueryCtx, deckId: Id<"yugiohDecks">) {
+	return await ctx.db
+		.query("yugiohDeckNewSince")
+		.withIndex("by_deckId", (q) => q.eq("deckId", deckId))
+		.unique();
 }
 
 async function readVisit(ctx: QueryCtx, deckId: Id<"yugiohDecks">) {

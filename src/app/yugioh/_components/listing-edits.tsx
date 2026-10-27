@@ -35,6 +35,7 @@ import {
 } from "~/lib/yugioh/title-reading";
 import { api } from "../../../../convex/_generated/api";
 import { errorMessage } from "../_utils/errors";
+import { updateCachedListing, withCopies } from "../_utils/optimistic";
 import type { ListingView } from "../_utils/types";
 import { listingName, type useListingRejection } from "./mark-wrong";
 
@@ -58,9 +59,28 @@ export function useListingEdits(
 	setCopies: (listing: ListingView, copies: CopiesChoice | null) => void;
 	setRarity: (listing: ListingView, choice: RarityChoice) => void;
 } {
-	const saveCondition = useMutation(api.yugioh.listings.setListingCondition);
-	const saveCopies = useMutation(api.yugioh.listings.setListingCopies);
-	const saveMatch = useMutation(api.yugioh.listings.setListingMatch);
+	const saveCondition = useMutation(
+		api.yugioh.listings.setListingCondition,
+	).withOptimisticUpdate((store, { listingId, condition }) =>
+		updateCachedListing(store, listingId, (listing) => ({
+			...listing,
+			conditionOverride: condition,
+		})),
+	);
+	const saveCopies = useMutation(
+		api.yugioh.listings.setListingCopies,
+	).withOptimisticUpdate((store, { listingId, copies }) =>
+		updateCachedListing(store, listingId, (listing) =>
+			withCopies(listing, copies),
+		),
+	);
+	const saveMatch = useMutation(
+		api.yugioh.listings.setListingMatch,
+	).withOptimisticUpdate((store, { listingId, printingId, overridden }) =>
+		updateCachedListing(store, listingId, (listing) =>
+			withRarity(listing, printingId, overridden ?? true),
+		),
+	);
 
 	async function attempt(save: () => Promise<unknown>): Promise<boolean> {
 		try {
@@ -167,6 +187,31 @@ export function useListingEdits(
 		setCondition: (listing, condition) => void setCondition(listing, condition),
 		setCopies: (listing, copies) => void setCopies(listing, copies),
 		setRarity,
+	};
+}
+
+/**
+ * A Listing rematched to one of its rarity choices, as the server will show
+ * it: gone when the Deck doesn't need that Printing (or for "Not a match").
+ * A Printing outside its choices is left for the server to answer.
+ */
+function withRarity(
+	listing: ListingView,
+	printingId: RarityChoice["printingId"],
+	overridden: boolean,
+): ListingView | null {
+	if (printingId === null) return null;
+	const choice = listing.rarityChoices.find((c) => c.printingId === printingId);
+	const printing = listing.match.printing;
+	if (!choice || !printing) return listing;
+	if (!choice.needed) return null;
+	return {
+		...listing,
+		match: {
+			...listing.match,
+			overridden,
+			printing: { ...printing, _id: printingId, rarity: choice.rarity },
+		},
 	};
 }
 

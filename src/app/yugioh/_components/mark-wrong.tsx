@@ -19,6 +19,7 @@ import {
 } from "~/lib/yugioh/listing-rejection";
 import { api } from "../../../../convex/_generated/api";
 import { errorMessage } from "../_utils/errors";
+import { updateCachedListing } from "../_utils/optimistic";
 import type { ListingView } from "../_utils/types";
 
 /** How long a row takes to fold away once it's marked (or unmarked). */
@@ -47,7 +48,12 @@ export function useListingRejection(): {
 		onSaved: () => void,
 	) => void;
 } {
-	const setRejection = useMutation(api.yugioh.listings.setListingRejection);
+	// Marking or unmarking takes the Listing out of the view it's shown in.
+	const setRejection = useMutation(
+		api.yugioh.listings.setListingRejection,
+	).withOptimisticUpdate((store, { listingId }) =>
+		updateCachedListing(store, listingId, () => null),
+	);
 	const [leaving, setLeaving] = useState<ReadonlySet<string>>(new Set());
 
 	function setLeavingFor(listingId: string, isLeaving: boolean): void {

@@ -1876,6 +1876,13 @@ export default defineSchema({
 		newSince: v.number(),
 	}).index("by_deckId", ["deckId"]),
 
+	// Where "new" starts in a Deck, apart from `yugiohDeckVisits` so a visit's
+	// heartbeat doesn't rerun the queries that mark Listings new.
+	yugiohDeckNewSince: defineTable({
+		deckId: v.id("yugiohDecks"),
+		newSince: v.number(),
+	}).index("by_deckId", ["deckId"]),
+
 	yugiohCandidatePrintings: defineTable({
 		deckId: v.id("yugiohDecks"),
 		deckCardId: v.id("yugiohDeckCards"),
