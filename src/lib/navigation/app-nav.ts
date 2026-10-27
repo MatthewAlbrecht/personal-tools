@@ -2,12 +2,12 @@ export type AppNavItem = {
 	id: string;
 	label: string;
 	href: string;
-	/** Path prefixes that count as active for this item */
+	/** Path prefixes that count as active for this item, besides `href` itself */
 	matchPrefixes?: string[];
 };
 
 export type AppNavGroup = {
-	id: "my-albums" | "music" | "more";
+	id: "my-albums" | "music" | "yugioh" | "more";
 	label: string;
 	items: AppNavItem[];
 	/** Collapsed by default on desktop */
@@ -60,6 +60,19 @@ export const APP_NAV_GROUPS: AppNavGroup[] = [
 		],
 	},
 	{
+		id: "yugioh",
+		label: "Yu-Gi-Oh",
+		items: [
+			{
+				id: "yugioh-decks",
+				label: "Decks",
+				href: "/yugioh",
+				matchPrefixes: ["/yugioh/decks"],
+			},
+			{ id: "yugioh-settings", label: "Settings", href: "/yugioh/settings" },
+		],
+	},
+	{
 		id: "more",
 		label: "More",
 		defaultCollapsed: true,
@@ -84,12 +97,6 @@ export const APP_NAV_GROUPS: AppNavGroup[] = [
 			{ id: "articles", label: "Articles", href: "/articles" },
 			{ id: "books", label: "Books", href: "/books" },
 			{ id: "bookcase", label: "Bookcase", href: "/bookcase" },
-			{
-				id: "yugioh",
-				label: "Yu-Gi-Oh",
-				href: "/yugioh",
-				matchPrefixes: ["/yugioh"],
-			},
 		],
 	},
 ];
@@ -99,6 +106,7 @@ export function getAppNavGroups(): AppNavGroup[] {
 }
 
 export function isNavItemActive(pathname: string, item: AppNavItem): boolean {
+	if (pathname === item.href) return true;
 	const prefixes = item.matchPrefixes ?? [item.href];
 	return prefixes.some(
 		(prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),

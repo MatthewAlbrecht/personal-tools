@@ -50,12 +50,31 @@ test("album view active states do not bleed across peers", () => {
 	assert.equal(isNavItemActive("/albums/details/abc", listens), false);
 });
 
-test("Yu-Gi-Oh lives under More and stays active on Deck pages", () => {
+test("Yu-Gi-Oh is its own section with Decks and Settings", () => {
 	const more = APP_NAV_GROUPS.find((g) => g.id === "more");
 	assert.ok(more);
-	const yugioh = more.items.find((i) => i.id === "yugioh");
-	assert.ok(yugioh);
-	assert.equal(yugioh.label, "Yu-Gi-Oh");
-	assert.equal(isNavItemActive("/yugioh", yugioh), true);
-	assert.equal(isNavItemActive("/yugioh/decks/abc", yugioh), true);
+	assert.ok(!more.items.some((i) => i.id === "yugioh"));
+
+	const group = APP_NAV_GROUPS.find((g) => g.id === "yugioh");
+	assert.ok(group);
+	assert.equal(group.label, "Yu-Gi-Oh");
+	assert.deepEqual(
+		group.items.map((i) => i.label),
+		["Decks", "Settings"],
+	);
+});
+
+test("Yu-Gi-Oh Decks stays active on Deck pages, not on Settings", () => {
+	const group = APP_NAV_GROUPS.find((g) => g.id === "yugioh");
+	assert.ok(group);
+	const decks = group.items.find((i) => i.id === "yugioh-decks");
+	const settings = group.items.find((i) => i.id === "yugioh-settings");
+	assert.ok(decks && settings);
+
+	assert.equal(isNavItemActive("/yugioh", decks), true);
+	assert.equal(isNavItemActive("/yugioh/decks/abc", decks), true);
+	assert.equal(isNavItemActive("/yugioh/decks/abc/listings", decks), true);
+	assert.equal(isNavItemActive("/yugioh/settings", decks), false);
+	assert.equal(isNavItemActive("/yugioh/settings", settings), true);
+	assert.equal(isNavItemActive("/yugioh", settings), false);
 });
