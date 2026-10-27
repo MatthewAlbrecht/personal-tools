@@ -1,7 +1,8 @@
 // @vitest-environment node
 // The automated run as the service worker drives it: claim a run, visit each
-// page in its plan (Searches and products shuffled) with a varied pause
-// between them, report every page, then finish. The app, the tabs, the clock
+// page in its plan (Searches and products shuffled; eBay and TCGplayer at the
+// same time) with a varied pause between a lane's pages, report every page,
+// then finish. The app, the tabs, the clock
 // and the random draws are fakes.
 
 import { describe, expect, test } from "vitest";
@@ -34,11 +35,12 @@ declare global {
 }
 
 /**
- * The pauses of a two-page run (a Search page, then a TCGplayer page, so
- * nothing to shuffle) whose random() gives `draws` in order.
+ * The pauses of a two-page eBay run whose random() gives `draws` in order
+ * (the first draw only shuffles two Search pages).
  */
 async function pauses(...draws: number[]): Promise<string[]> {
-	const { deps, events } = fakeRun([], { plan: [PLAN[0], PLAN[2]] as Visit[] });
+	const { deps, events } = fakeRun([], { plan: EBAY_PLAN });
+	draws.unshift(0.5);
 	deps.random = scripted(...draws);
 	await globalThis.runAutomatedRun(deps);
 	return events.filter((event) => event.startsWith("pause"));
@@ -66,6 +68,9 @@ const PLAN: Visit[] = [
 		label: "Ash Blossom & Joyous Spring RA01-EN008",
 	},
 ];
+
+/** Two eBay pages: one lane, visited in plan order (random() 0.5 keeps it). */
+const EBAY_PLAN = PLAN.slice(0, 2);
 
 function fakeRun(
 	outcomes: Array<Outcome | Error>,
@@ -103,25 +108,23 @@ function fakeRun(
 
 describe("an automated run", () => {
 	test("visits each page in order with a pause between, reports each one, then finishes", async () => {
-		const { deps, events, calls } = fakeRun([
-			{ listingsCaptured: 48, newListings: 12, error: null },
-			{ listingsCaptured: 60, newListings: 0, error: null },
-			{ listingsCaptured: 15, newListings: 3, error: null },
-		]);
+		const { deps, events, calls } = fakeRun(
+			[
+				{ listingsCaptured: 48, newListings: 12, error: null },
+				{ listingsCaptured: 60, newListings: 0, error: null },
+			],
+			{ plan: EBAY_PLAN },
+		);
 
 		const result = await globalThis.runAutomatedRun(deps);
 
-		expect(result).toEqual({ runId: "run1", pagesVisited: 3 });
-		const pause = "pause 40000";
+		expect(result).toEqual({ runId: "run1", pagesVisited: 2 });
 		expect(events).toEqual([
 			"call claim",
 			"visit ebayNewlyListed",
 			"call visit",
-			pause,
+			"pause 40000",
 			"visit ebaySold",
-			"call visit",
-			pause,
-			"visit tcgplayer",
 			"call visit",
 			"call finish",
 		]);
@@ -145,7 +148,30 @@ describe("an automated run", () => {
 		expect(await pauses(0.17, 0)).toEqual(["pause 20000"]);
 	});
 
-	test("shuffles the Search pages and the TCGplayer pages; pages before an auction ends stay first", async () => {
+	test("eBay and TCGplayer pages go at the same time, each lane pausing between its own pages", async () => {
+		const plan = [
+			...PLAN,
+			{ ...PLAN[2], url: "https://www.tcgplayer.com/product/2/y" },
+		] as Visit[];
+		const { deps, events, calls } = fakeRun([], { plan });
+
+		const result = await globalThis.runAutomatedRun(deps);
+
+		expect(result).toEqual({ runId: "run1", pagesVisited: 4 });
+		// Both lanes open their first page before either is reported.
+		expect(events.slice(0, 3)).toEqual([
+			"call claim",
+			"visit ebayNewlyListed",
+			"visit tcgplayer",
+		]);
+		expect(events.filter((e) => e.startsWith("pause"))).toHaveLength(2);
+		expect(calls.filter((c) => c.op === "finish")).toEqual([
+			{ op: "finish", runId: "run1", error: null },
+		]);
+		expect(events.at(-1)).toBe("call finish");
+	});
+
+	test("shuffles the Search pages (Ending soon too) and the TCGplayer pages; pages before an auction ends stay first", async () => {
 		function page(kind: string, label: string): Visit {
 			return { url: `https://example.com/${label}`, kind, label };
 		}
@@ -154,6 +180,7 @@ describe("an automated run", () => {
 			page("ebayEndingSoon", "soon-2"),
 			page("ebayNewlyListed", "a"),
 			page("ebaySold", "b"),
+			page("ebayEndingSoon", "d"),
 			page("ebayNewlyListed", "c"),
 			page("tcgplayer", "p"),
 			page("tcgplayer", "q"),
@@ -164,11 +191,21 @@ describe("an automated run", () => {
 
 		await globalThis.runAutomatedRun(deps);
 
-		expect(
-			calls
-				.filter((c) => c.op === "visit")
-				.map((c) => (c.visit as Visit).label),
-		).toEqual(["soon-1", "soon-2", "b", "c", "a", "q", "p"]);
+		const visited = calls
+			.filter((c) => c.op === "visit")
+			.map((c) => (c.visit as Visit).label);
+		expect(visited.filter((label) => !["p", "q"].includes(label))).toEqual([
+			"soon-1",
+			"soon-2",
+			"b",
+			"d",
+			"c",
+			"a",
+		]);
+		expect(visited.filter((label) => ["p", "q"].includes(label))).toEqual([
+			"q",
+			"p",
+		]);
 	});
 
 	test("does nothing when no run was asked for", async () => {
@@ -218,7 +255,7 @@ describe("an automated run", () => {
 	});
 
 	test("stops when the app says the run has ended", async () => {
-		const { deps, events } = fakeRun([], { runningFor: 1 });
+		const { deps, events } = fakeRun([], { plan: EBAY_PLAN, runningFor: 1 });
 
 		const result = await globalThis.runAutomatedRun(deps);
 
@@ -240,11 +277,18 @@ describe("a check page", () => {
 	};
 
 	test("ends the run: the page is reported and no further page is visited", async () => {
+		const plan = [
+			PLAN[0],
+			PLAN[1],
+			{ ...PLAN[0], url: "https://www.ebay.com/sch/i.html?_nkw=x" },
+		] as Visit[];
 		const { deps, events, calls } = fakeRun(
 			[{ listingsCaptured: 48, newListings: 12, error: null }, CHECK_PAGE],
 			// The app ends the run when the check page is reported.
-			{ runningFor: 2 },
+			{ plan, runningFor: 2 },
 		);
+		// Keeps the plan's order: Newly Listed, then Sold, then the other page.
+		deps.random = scripted(0.99, 0.5, 0.5, 0.5);
 
 		const result = await globalThis.runAutomatedRun(deps);
 
@@ -269,7 +313,7 @@ describe("a check page", () => {
 	});
 
 	test("stops even when the app doesn't end the run, and ends it with the reason", async () => {
-		const { deps, events, calls } = fakeRun([CHECK_PAGE]);
+		const { deps, events, calls } = fakeRun([CHECK_PAGE], { plan: EBAY_PLAN });
 
 		await globalThis.runAutomatedRun(deps);
 
@@ -285,6 +329,73 @@ describe("a check page", () => {
 			error:
 				"Stopped on a check page: eBay showed a check page instead of results.",
 		});
+	});
+
+	test("a check page in one lane stops the other lane before its next page", async () => {
+		const plan = [
+			PLAN[0],
+			PLAN[1],
+			PLAN[2],
+			{ ...PLAN[2], url: "https://www.tcgplayer.com/product/2/y" },
+		] as Visit[];
+		const { deps, events } = fakeRun([]);
+		const call = deps.call;
+		deps.call = async (body: Call) =>
+			body.op === "claim"
+				? { run: { runId: "run1", visits: plan } }
+				: await call(body);
+		deps.visitPage = async (visit: Visit) => {
+			events.push(`visit ${visit.kind}`);
+			if (visit.kind === "tcgplayer") {
+				// TCGplayer is still loading when eBay shows its check page.
+				await new Promise((resolve) => setTimeout(resolve, 5));
+				return { listingsCaptured: 15, newListings: 3, error: null };
+			}
+			return CHECK_PAGE;
+		};
+
+		const result = await globalThis.runAutomatedRun(deps);
+
+		expect(result).toEqual({
+			runId: "run1",
+			pagesVisited: 2,
+			stoppedOnCheckPage: true,
+		});
+		expect(events.filter((e) => e.startsWith("visit"))).toEqual([
+			"visit ebayNewlyListed",
+			"visit tcgplayer",
+		]);
+	});
+
+	test("a check page stops the other lane even while its report is still being sent", async () => {
+		const plan = [
+			PLAN[0],
+			PLAN[2],
+			{ ...PLAN[2], url: "https://www.tcgplayer.com/product/2/y" },
+		] as Visit[];
+		const { deps, events } = fakeRun([]);
+		const call = deps.call;
+		deps.call = async (body: Call) => {
+			if (body.op === "claim") return { run: { runId: "run1", visits: plan } };
+			const visit = body.visit as Outcome | undefined;
+			if (visit?.challenged) {
+				await new Promise((resolve) => setTimeout(resolve, 5));
+			}
+			return await call(body);
+		};
+		deps.visitPage = async (visit: Visit) => {
+			events.push(`visit ${visit.kind}`);
+			return visit.kind === "tcgplayer"
+				? { listingsCaptured: 15, newListings: 3, error: null }
+				: CHECK_PAGE;
+		};
+
+		await globalThis.runAutomatedRun(deps);
+
+		expect(events.filter((e) => e.startsWith("visit"))).toEqual([
+			"visit ebayNewlyListed",
+			"visit tcgplayer",
+		]);
 	});
 
 	test("a check page the content script reported counts as challenged", () => {

@@ -826,15 +826,15 @@ async function visitPageInTab(openVisit, visit) {
 }
 
 /**
- * The browser side of `makeVisitTabs` for one run's window: new tabs, tab
- * loads, and asking the marketplace page in a tab to open the next page
- * itself (run-navigation.js).
+ * The browser side of `makeVisitTabs` for one run's windows (one per
+ * marketplace, `runWindow(url)`): new tabs, tab loads, and asking the
+ * marketplace page in a tab to open the next page itself (run-navigation.js).
  */
 function runTabs(runWindow) {
 	return makeVisitTabs({
 		async createTab(url) {
 			const tab = await chrome.tabs.create({
-				windowId: await runWindow(),
+				windowId: await runWindow(url),
 				url,
 			});
 			return tab.id;
@@ -875,12 +875,17 @@ async function checkForAutomatedRun() {
 	const keepAlive = setInterval(function ping() {
 		void chrome.runtime.getPlatformInfo();
 	}, AUTOMATION_KEEPALIVE_MS);
-	let windowId = null;
-	const openVisit = runTabs(async function runWindow() {
-		// Opened on the first page, and again if it was closed mid-run.
+	// One window per marketplace: the eBay and TCGplayer lanes go at the same
+	// time, and each tab stays the active tab of its window, so Chrome doesn't
+	// throttle it as a background tab.
+	const windowIds = new Map();
+	const openVisit = runTabs(async function runWindow(url) {
+		// Opened on the marketplace's first page, and again if it was closed mid-run.
+		const site = siteOf(url);
+		const known = windowIds.get(site);
 		const open =
-			windowId !== null &&
-			(await chrome.windows.get(windowId).then(
+			known !== undefined &&
+			(await chrome.windows.get(known).then(
 				function found() {
 					return true;
 				},
@@ -888,11 +893,10 @@ async function checkForAutomatedRun() {
 					return false;
 				},
 			));
-		if (!open) {
-			const win = await chrome.windows.create({ focused: false });
-			windowId = win.id;
-		}
-		return windowId;
+		if (open) return known;
+		const win = await chrome.windows.create({ focused: false });
+		windowIds.set(site, win.id);
+		return win.id;
 	});
 	try {
 		const result = await runAutomatedRun({
@@ -916,7 +920,7 @@ async function checkForAutomatedRun() {
 		console.error("[yugioh-automation] run failed", error);
 	} finally {
 		clearInterval(keepAlive);
-		if (windowId !== null) {
+		for (const windowId of windowIds.values()) {
 			await chrome.windows.remove(windowId).catch(function alreadyClosed() {});
 		}
 		automationActive = false;

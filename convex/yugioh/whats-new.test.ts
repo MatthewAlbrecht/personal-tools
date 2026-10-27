@@ -510,8 +510,8 @@ describe("views, sorting and filters", () => {
 		expect(everything.total).toBe(3);
 		// The location filter offers every seller country in the Deck's Listings.
 		expect(everything.locations).toEqual(["Japan", "United States"]);
-		const korean = await listings(t, deckId, { language: "korean" });
-		expect(korean.listings.map((l) => l.itemId)).toEqual([kr]);
+		const asian = await listings(t, deckId, { language: "asian" });
+		expect(asian.listings.map((l) => l.itemId)).toEqual([kr]);
 		const slabs = await listings(t, deckId, { graded: true });
 		expect(slabs.listings.map((l) => l.itemId)).toEqual([graded]);
 		const japan = await listings(t, deckId, { location: "Japan" });

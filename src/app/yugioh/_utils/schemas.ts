@@ -8,6 +8,7 @@ import {
 } from "~/lib/yugioh/deck";
 import {
 	CONDITION_FILTERS,
+	LANGUAGE_GROUPS,
 	LISTING_KINDS,
 	LISTING_VIEWS,
 	MARKETPLACES,
@@ -22,7 +23,6 @@ import {
 	REJECTED_PRODUCT_URL,
 	checkTcgplayerProductUrl,
 } from "~/lib/yugioh/tcgplayer";
-import { LANGUAGES } from "~/lib/yugioh/title-reading";
 
 // Field schemas mirror the checks in convex/model/yugioh/decks.ts.
 
@@ -132,7 +132,7 @@ export const ANY = "any";
 export const listingFiltersSchema = z.object({
 	marketplace: z.enum([ANY, ...MARKETPLACES]),
 	type: z.enum([ANY, ...LISTING_KINDS]),
-	language: z.enum([ANY, ...LANGUAGES]),
+	language: z.enum([ANY, ...LANGUAGE_GROUPS]),
 	condition: z.enum([ANY, ...CONDITION_FILTERS]),
 	graded: z.enum([ANY, "yes", "no"]),
 	location: z.string(),

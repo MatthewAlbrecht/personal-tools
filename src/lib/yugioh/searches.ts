@@ -43,6 +43,8 @@ export type Search = {
 	keywords: string;
 	newlyListedUrl: string;
 	soldUrl: string;
+	/** Its running auctions, ending soonest first. */
+	endingSoonUrl: string;
 };
 
 /** A Card still missing copies is searched; one with every copy owned is done. */
@@ -392,6 +394,7 @@ function toSearch(
 		keywords,
 		newlyListedUrl: ebayNewlyListedUrl(keywords),
 		soldUrl: ebaySoldUrl(keywords),
+		endingSoonUrl: ebayEndingSoonUrl(keywords),
 	};
 }
 
@@ -435,8 +438,9 @@ export function ebayNewlyListedUrl(keywords: string): string {
 }
 
 /**
- * Running auctions only, ending soonest first (`LH_Auction=1`, `_sop=1`):
- * the refresh page before an auction's push (ticket 16).
+ * Running auctions only, ending soonest first (`LH_Auction=1`, `_sop=1`): a
+ * page of every full run, and the refresh page before an auction's push
+ * (ticket 16).
  */
 export function ebayEndingSoonUrl(keywords: string): string {
 	const params = new URLSearchParams({

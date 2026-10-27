@@ -427,12 +427,17 @@ describe("refresh visits", () => {
 			kind: "ebayEndingSoon",
 			label: "RA01-EN008",
 		});
+		// Ash's Search's own Ending soon page is that first page.
 		expect(visits.slice(1).map((visit) => visit.kind)).toEqual([
 			"ebayNewlyListed",
 			"ebaySold",
+			"ebayEndingSoon",
 			"ebayNewlyListed",
 			"ebaySold",
 		]);
+		expect(
+			visits.filter((visit) => visit.url === ASH_ENDING_SOON),
+		).toHaveLength(1);
 	});
 
 	test("a refresh whose page failed (a captcha) isn't tried again 10 minutes later", async () => {

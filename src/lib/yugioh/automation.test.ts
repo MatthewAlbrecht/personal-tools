@@ -13,12 +13,15 @@ const ash = {
 	newlyListedUrl: "https://www.ebay.com/sch/i.html?_nkw=ash&_sop=10",
 	soldUrl:
 		"https://www.ebay.com/sch/i.html?_nkw=ash&LH_Sold=1&LH_Complete=1&_sop=13",
+	endingSoonUrl: "https://www.ebay.com/sch/i.html?_nkw=ash&LH_Auction=1&_sop=1",
 };
 const called = {
 	setCodes: ["RA01-EN060"],
 	newlyListedUrl: "https://www.ebay.com/sch/i.html?_nkw=called&_sop=10",
 	soldUrl:
 		"https://www.ebay.com/sch/i.html?_nkw=called&LH_Sold=1&LH_Complete=1&_sop=13",
+	endingSoonUrl:
+		"https://www.ebay.com/sch/i.html?_nkw=called&LH_Auction=1&_sop=1",
 };
 const ashProduct = {
 	cardName: "Ash Blossom & Joyous Spring",
@@ -27,7 +30,7 @@ const ashProduct = {
 };
 
 describe("the visit plan", () => {
-	test("each Search's Newly Listed then Sold page, then the TCGplayer pages", () => {
+	test("each Search's Newly Listed, Sold and Ending soon pages, then the TCGplayer pages", () => {
 		expect(buildVisitPlan([ash, called], [ashProduct], [])).toEqual([
 			{
 				url: ash.newlyListedUrl,
@@ -36,11 +39,21 @@ describe("the visit plan", () => {
 			},
 			{ url: ash.soldUrl, kind: "ebaySold", label: "MP23-EN001, RA01-EN008" },
 			{
+				url: ash.endingSoonUrl,
+				kind: "ebayEndingSoon",
+				label: "MP23-EN001, RA01-EN008",
+			},
+			{
 				url: called.newlyListedUrl,
 				kind: "ebayNewlyListed",
 				label: "RA01-EN060",
 			},
 			{ url: called.soldUrl, kind: "ebaySold", label: "RA01-EN060" },
+			{
+				url: called.endingSoonUrl,
+				kind: "ebayEndingSoon",
+				label: "RA01-EN060",
+			},
 			{
 				url: ashProduct.productUrl,
 				kind: "tcgplayer",
@@ -58,8 +71,23 @@ describe("the visit plan", () => {
 		expect(plan.map((visit) => visit.kind)).toEqual([
 			"ebayNewlyListed",
 			"ebaySold",
+			"ebayEndingSoon",
 			"tcgplayer",
 		]);
+	});
+
+	test("a Search's Ending soon page already visited for an auction about to end stays first, once", () => {
+		const refresh = {
+			url: called.endingSoonUrl,
+			kind: "ebayEndingSoon" as const,
+			label: "RA01-EN060",
+		};
+		const plan = buildVisitPlan([ash, called], [], [refresh]);
+		expect(plan[0]).toEqual(refresh);
+		expect(
+			plan.filter((visit) => visit.url === called.endingSoonUrl),
+		).toHaveLength(1);
+		expect(plan[1]?.kind).toBe("ebayNewlyListed");
 	});
 
 	test("is capped", () => {

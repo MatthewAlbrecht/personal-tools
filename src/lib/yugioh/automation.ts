@@ -269,12 +269,15 @@ export const MAX_VISITS_PER_RUN = 300;
 
 /**
  * The pages one run visits, in order: the refresh pages, then each
- * Search's Newly Listed page then its Sold page, then each TCGplayer product
- * page. A URL is visited once.
+ * Search's Newly Listed, Sold and Ending soon pages, then each TCGplayer
+ * product page. A URL is visited once, at its first place: a Search's Ending
+ * soon page that is also a refresh page stays first. The extension tells the
+ * refresh pages by that: they are the Ending soon pages before the first
+ * other page.
  */
 export function buildVisitPlan(
 	searches: ReadonlyArray<
-		Pick<Search, "setCodes" | "newlyListedUrl" | "soldUrl">
+		Pick<Search, "setCodes" | "newlyListedUrl" | "soldUrl" | "endingSoonUrl">
 	>,
 	products: ReadonlyArray<{
 		cardName: string;
@@ -290,6 +293,7 @@ export function buildVisitPlan(
 			return [
 				{ url: search.newlyListedUrl, kind: "ebayNewlyListed", label },
 				{ url: search.soldUrl, kind: "ebaySold", label },
+				{ url: search.endingSoonUrl, kind: "ebayEndingSoon", label },
 			];
 		}),
 		...products.map(

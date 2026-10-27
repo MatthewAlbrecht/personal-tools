@@ -30,7 +30,10 @@ import {
 import {
 	CONDITION_FILTERS,
 	type ConditionFilter,
+	LANGUAGE_GROUPS,
+	LANGUAGE_GROUP_LABELS,
 	LISTING_VIEWS,
+	type LanguageGroup,
 	type ListingFilters,
 	type ListingKind,
 	type ListingsView,
@@ -42,12 +45,7 @@ import {
 	withCardShown,
 } from "~/lib/yugioh/listing-filters";
 import { MARKETPLACE_LABELS } from "~/lib/yugioh/listing-format";
-import {
-	LANGUAGES,
-	LANGUAGE_LABELS,
-	type Language,
-	READ_CONDITION_LABELS,
-} from "~/lib/yugioh/title-reading";
+import { READ_CONDITION_LABELS } from "~/lib/yugioh/title-reading";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import {
@@ -325,7 +323,7 @@ function ViewToggles({
 type FilterFormValues = {
 	marketplace: Marketplace | typeof ANY;
 	type: ListingKind | typeof ANY;
-	language: Language | typeof ANY;
+	language: LanguageGroup | typeof ANY;
 	condition: ConditionFilter | typeof ANY;
 	graded: "yes" | "no" | typeof ANY;
 	location: string;
@@ -441,9 +439,9 @@ function ListingFiltersDrawer({
 			name: "language",
 			label: "Language",
 			anyLabel: "Any language",
-			options: LANGUAGES.map((value) => ({
+			options: LANGUAGE_GROUPS.map((value) => ({
 				value,
-				label: LANGUAGE_LABELS[value],
+				label: LANGUAGE_GROUP_LABELS[value],
 			})),
 		},
 		{
@@ -660,7 +658,7 @@ function filterLabel(
 		case "type":
 			return filters.type ? KIND_LABELS[filters.type] : "";
 		case "language":
-			return filters.language ? LANGUAGE_LABELS[filters.language] : "";
+			return filters.language ? LANGUAGE_GROUP_LABELS[filters.language] : "";
 		case "condition":
 			return filters.condition === "unknown"
 				? "Condition not stated"

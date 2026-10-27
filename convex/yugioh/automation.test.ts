@@ -136,7 +136,7 @@ type Claimed = {
 };
 
 describe("the visit plan", () => {
-	test("a claimed run visits every Search's Newly Listed and Sold pages, then each TCGplayer product page, once across Decks", async () => {
+	test("a claimed run visits every Search's Newly Listed, Sold and Ending soon pages, then each TCGplayer product page, once across Decks", async () => {
 		const t = setup();
 		const first = await t.mutation(api.yugioh.decks.createDeck, {
 			name: "Snake-Eye",
@@ -172,6 +172,11 @@ describe("the visit plan", () => {
 					kind: "ebaySold",
 					label: search.setCodes.join(", "),
 				},
+				{
+					url: search.endingSoonUrl,
+					kind: "ebayEndingSoon",
+					label: search.setCodes.join(", "),
+				},
 			]),
 			{
 				url: ASH.productUrl,
@@ -200,6 +205,7 @@ describe("the visit plan", () => {
 		expect(run?.visits.map((visit) => [visit.kind, visit.label])).toEqual([
 			["ebayNewlyListed", CALLED.setCode],
 			["ebaySold", CALLED.setCode],
+			["ebayEndingSoon", CALLED.setCode],
 			["tcgplayer", `${CALLED.cardName} ${CALLED.setCode}`],
 		]);
 	});
@@ -254,7 +260,8 @@ describe("recording a run", () => {
 		const ash = await addCard(t, deckId, ASH);
 		await pasteProductUrl(t, ash, ASH.productUrl);
 		const { runId, visits } = await startRun(t);
-		expect(visits).toHaveLength(3);
+		// Newly Listed, Sold, Ending soon, then the TCGplayer page.
+		expect(visits).toHaveLength(4);
 
 		vi.setSystemTime(NOW + 1 * MINUTE);
 		const reported = await automation(t, {
@@ -282,7 +289,7 @@ describe("recording a run", () => {
 			op: "visit",
 			runId,
 			visit: {
-				...visits[2],
+				...visits[3],
 				listingsCaptured: 0,
 				newListings: 0,
 				error: "The page sent nothing within 2 minutes.",
@@ -301,7 +308,7 @@ describe("recording a run", () => {
 			requestedAt: NOW,
 			startedAt: NOW,
 			endedAt: NOW + 4 * MINUTE,
-			pagesPlanned: 3,
+			pagesPlanned: 4,
 			pagesVisited: 3,
 			searchPagesVisited: 2,
 			productPagesVisited: 1,

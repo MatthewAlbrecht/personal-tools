@@ -14,6 +14,7 @@ const searchValidator = v.object({
 	keywords: v.string(),
 	newlyListedUrl: v.string(),
 	soldUrl: v.string(),
+	endingSoonUrl: v.string(),
 });
 
 /** A Deck's eBay Searches with their Newly Listed and Sold links. */

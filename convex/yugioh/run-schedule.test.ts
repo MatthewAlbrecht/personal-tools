@@ -326,12 +326,14 @@ describe("TCGplayer twice a day", () => {
 		expect(kinds(await scheduledFullRun(t))).toEqual([
 			"ebayNewlyListed",
 			"ebaySold",
+			"ebayEndingSoon",
 			"tcgplayer",
 		]);
 		at(SLOTS[1] ?? 0);
 		expect(kinds(await scheduledFullRun(t))).toEqual([
 			"ebayNewlyListed",
 			"ebaySold",
+			"ebayEndingSoon",
 		]);
 		at(SLOTS[2] ?? 0);
 		expect(kinds(await scheduledFullRun(t))).not.toContain("tcgplayer");

@@ -1,7 +1,8 @@
 // Automated browser runs for the Yu-Gi-Oh tracker (docs/yugioh/automation.md).
 // The service worker of the automation Chrome profile claims a run the
-// script asked for, visits every page in its plan one at a time, reports each
-// page, then finishes the run. No chrome APIs here: the service worker passes
+// script asked for, visits every page in its plan (eBay and TCGplayer at the
+// same time, each one page at a time), reports each page, then finishes the
+// run. No chrome APIs here: the service worker passes
 // them in, so Vitest can drive a run with fakes.
 
 // Varied pacing (ticket 19): 20–60 s between page loads, and about 1 pause
@@ -22,22 +23,30 @@ const MAX_LONG_PAUSE_MS = 180_000;
  *   add `auctionsWithoutEndTime`; a check page adds `challenged: true`).
  * - `pause(ms)` waits; `random()` is Math.random.
  *
- * The plan's Search pages, and its TCGplayer pages, are shuffled
- * (`shuffleVisits`); the pages of auctions about to end stay first. Pauses
- * vary (`pauseLength`).
+ * The eBay pages and the TCGplayer pages are two lanes that go at the same
+ * time, each in its own tab with its own pauses (`pauseLength`). In the eBay
+ * lane the pages of auctions about to end come first, then its Search pages
+ * shuffled; the TCGplayer pages are shuffled too (`laneVisits`).
  *
- * A check page (a captcha or bot challenge) ends the run at once: it's
- * reported, and no further page is visited. The app ends the run on that
- * report; an app from before check pages is told with a finish.
+ * A check page (a captcha or bot challenge) ends the run: it's reported, and
+ * neither lane opens another page. The app ends the run on that report; an
+ * app from before check pages is told with a finish. When the app says the
+ * run has ended, or a lane breaks, the other lane stops after its page too.
  */
 async function runAutomatedRun({ call, visitPage, pause, random }) {
 	const { run } = await call({ op: "claim" });
 	if (!run) return null;
 
 	let pagesVisited = 0;
-	try {
-		for (const [index, visit] of shuffleVisits(run.visits, random).entries()) {
+	// Why the run stopped early: `ended`, `checkPage` or `broke`; null while it goes.
+	let stop = null;
+	let failure = null;
+
+	async function runLane(visits) {
+		for (const [index, visit] of visits.entries()) {
+			if (stop) return;
 			if (index > 0) await pause(pauseLength(random));
+			if (stop) return;
 			let outcome;
 			try {
 				outcome = await visitPage(visit);
@@ -49,54 +58,80 @@ async function runAutomatedRun({ call, visitPage, pause, random }) {
 				};
 			}
 			pagesVisited += 1;
+			// Stops the other lane at once, not after the report is sent.
+			const firstCheckPage = outcome.challenged && stop !== "checkPage";
+			if (outcome.challenged) stop = "checkPage";
 			const { running } = await call({
 				op: "visit",
 				runId: run.runId,
 				visit: { ...visit, ...outcome },
 			});
 			if (outcome.challenged) {
-				if (running) {
+				if (firstCheckPage && running) {
 					await call({
 						op: "finish",
 						runId: run.runId,
 						error: `Stopped on a check page: ${outcome.error}`,
 					});
 				}
-				return { runId: run.runId, pagesVisited, stoppedOnCheckPage: true };
+				return;
 			}
 			// The script gave up on the run (it timed out): stop visiting.
-			if (!running) return { runId: run.runId, pagesVisited };
+			if (!running) {
+				stop ??= "ended";
+				return;
+			}
 		}
-	} catch (error) {
+	}
+
+	const lanes = laneVisits(run.visits, random).map(async function lane(visits) {
+		try {
+			await runLane(visits);
+		} catch (error) {
+			stop ??= "broke";
+			failure ??= error;
+		}
+	});
+	await Promise.all(lanes);
+
+	if (failure) {
 		// Try to end the run with the reason; the script's timeout is the backstop.
 		await call({
 			op: "finish",
 			runId: run.runId,
-			error: `Stopped after ${pagesVisited} pages: ${messageOf(error)}`,
+			error: `Stopped after ${pagesVisited} pages: ${messageOf(failure)}`,
 		}).catch(function ignore() {});
-		throw error;
+		throw failure;
 	}
+	if (stop === "checkPage") {
+		return { runId: run.runId, pagesVisited, stoppedOnCheckPage: true };
+	}
+	if (stop === "ended") return { runId: run.runId, pagesVisited };
 
 	await call({ op: "finish", runId: run.runId, error: null });
 	return { runId: run.runId, pagesVisited };
 }
 
 /**
- * The plan in visiting order: the pages of auctions about to end first, as
- * planned (soonest ending first), then the Search pages shuffled, then the
- * TCGplayer pages shuffled.
+ * The plan as lanes, each in visiting order: the eBay pages, then the
+ * TCGplayer pages; a lane with no pages is left out. The plan's leading
+ * Ending soon pages are the pages of auctions about to end (`buildVisitPlan`
+ * puts them first): they stay first, as planned (soonest ending first). The
+ * eBay Search pages after them (an Ending soon page among them) are
+ * shuffled, and so are the TCGplayer pages.
  */
-function shuffleVisits(visits, random) {
-	const endingSoon = visits.filter((visit) => visit.kind === "ebayEndingSoon");
-	const searches = visits.filter(
-		(visit) => visit.kind !== "ebayEndingSoon" && visit.kind !== "tcgplayer",
+function laneVisits(visits, random) {
+	const ebay = visits.filter((visit) => visit.kind !== "tcgplayer");
+	const refreshCount = ebay.findIndex(
+		(visit) => visit.kind !== "ebayEndingSoon",
 	);
+	const refresh = refreshCount === -1 ? ebay : ebay.slice(0, refreshCount);
+	const searches = refreshCount === -1 ? [] : ebay.slice(refreshCount);
 	const products = visits.filter((visit) => visit.kind === "tcgplayer");
 	return [
-		...endingSoon,
-		...shuffled(searches, random),
-		...shuffled(products, random),
-	];
+		[...refresh, ...shuffled(searches, random)],
+		shuffled(products, random),
+	].filter((lane) => lane.length > 0);
 }
 
 /** A Fisher–Yates shuffle of a copy of `items`. */

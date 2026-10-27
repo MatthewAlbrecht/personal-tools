@@ -29,6 +29,37 @@ export type ListingsView = (typeof LISTING_VIEWS)[number];
 export const LISTING_KINDS = ["buyItNow", "auction"] as const;
 export type ListingKind = (typeof LISTING_KINDS)[number];
 
+/**
+ * How the language filter groups the languages: English on its own, the
+ * European printings (German, French, Italian, Spanish, Portuguese) and the
+ * Asian ones (Japanese, Korean, Chinese).
+ */
+export const LANGUAGE_GROUPS = ["english", "european", "asian"] as const;
+export type LanguageGroup = (typeof LANGUAGE_GROUPS)[number];
+
+export const LANGUAGE_GROUP_LABELS: Record<LanguageGroup, string> = {
+	english: "English",
+	european: "European",
+	asian: "Asian",
+};
+
+const GROUP_OF_LANGUAGE: Record<Language, LanguageGroup> = {
+	english: "english",
+	german: "european",
+	french: "european",
+	italian: "european",
+	spanish: "european",
+	portuguese: "european",
+	japanese: "asian",
+	korean: "asian",
+	chinese: "asian",
+};
+
+/** The language group a language is in. */
+export function languageGroupOf(language: Language): LanguageGroup {
+	return GROUP_OF_LANGUAGE[language];
+}
+
 export const CONDITION_FILTERS = [...READ_CONDITIONS, "unknown"] as const;
 export type ConditionFilter = ReadCondition | "unknown";
 
@@ -44,7 +75,8 @@ export type ListingFilters = {
 	new?: boolean;
 	marketplace?: Marketplace;
 	type?: ListingKind;
-	language?: Language;
+	/** English, European or Asian (see `LANGUAGE_GROUPS`). */
+	language?: LanguageGroup;
 	/** As read from the title; "unknown" when the title doesn't say. */
 	condition?: ConditionFilter;
 	graded?: boolean;
@@ -172,7 +204,10 @@ function passes(
 		return false;
 	}
 	if (filters.type && listingKind(listing) !== filters.type) return false;
-	if (filters.language && listingLanguage(listing) !== filters.language) {
+	if (
+		filters.language &&
+		languageGroupOf(listingLanguage(listing)) !== filters.language
+	) {
 		return false;
 	}
 	if (
@@ -366,6 +401,17 @@ function oneOf<T extends string>(
 	return values.find((v) => v === value);
 }
 
+/**
+ * A language group from the URL; an old link's single language
+ * (`language=korean`) opens its group, anything else English.
+ */
+function languageGroupParam(value: string | null): LanguageGroup {
+	const group = oneOf(LANGUAGE_GROUPS, value);
+	if (group) return group;
+	const language = oneOf(LANGUAGES, value);
+	return language ? languageGroupOf(language) : DEFAULT_FILTERS.language;
+}
+
 function text(value: string | null): string | undefined {
 	const trimmed = value?.trim();
 	return trimmed ? trimmed : undefined;
@@ -386,7 +432,8 @@ const LEGACY_PARAMS = ["ending"] as const;
 /**
  * The filters a URL's search params hold. With no `language` or `graded`
  * param, English and not graded apply; `language=any` and `graded=any` turn
- * them off. Any other value the filters don't know is ignored (a defaulted
+ * them off. Old links naming one language (`language=korean`) open its
+ * group. Any other value the filters don't know is ignored (a defaulted
  * filter keeps its default), so a stale or mistyped link never shows nothing.
  * Old links (`type=sold`) still open the view they meant.
  */
@@ -401,8 +448,7 @@ export function listingFiltersFromParams(params: ParamReader): ListingFilters {
 		language:
 			params.get("language") === ANY_PARAM
 				? undefined
-				: (oneOf(LANGUAGES, params.get("language")) ??
-					DEFAULT_FILTERS.language),
+				: languageGroupParam(params.get("language")),
 		condition: oneOf(CONDITION_FILTERS, params.get("condition")),
 		graded:
 			params.get("graded") === ANY_PARAM

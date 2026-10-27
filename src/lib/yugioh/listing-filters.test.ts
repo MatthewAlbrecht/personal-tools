@@ -1,17 +1,20 @@
 import { describe, expect, test } from "vitest";
 import {
 	type FilterableListing,
+	LANGUAGE_GROUPS,
 	type ListingFilters,
 	activeFilterCount,
 	applyListingFilters,
 	defaultListingFilters,
 	extraFilters,
 	isDefaultListingFilters,
+	languageGroupOf,
 	listingFiltersFromParams,
 	withCardHidden,
 	withCardShown,
 	withListingFilters,
 } from "./listing-filters";
+import { LANGUAGES } from "./title-reading";
 
 const NOW = Date.UTC(2026, 9, 20, 12, 0);
 const HOUR = 60 * 60 * 1000;
@@ -148,14 +151,30 @@ describe("applyListingFilters", () => {
 		expect(ids(all, { view: "sold", type: "auction" })).toEqual(["ended"]);
 	});
 
-	test("language: from the title read, else the set code's region", () => {
+	test("language: English, European or Asian, from the title read, else the set code's region", () => {
 		const all = [
 			listing({ id: "en", titleRead: read }),
 			listing({ id: "kr-read", titleRead: { ...read, language: "korean" } }),
 			listing({ id: "kr-code", title: "Ash Blossom RA01-KR008" }),
+			listing({ id: "jp-read", titleRead: { ...read, language: "japanese" } }),
+			listing({ id: "de-read", titleRead: { ...read, language: "german" } }),
+			listing({ id: "fr-code", title: "Ash Blossom RA01-FR008" }),
 		];
-		expect(ids(all, { language: "korean" })).toEqual(["kr-read", "kr-code"]);
+		expect(ids(all, { language: "asian" })).toEqual([
+			"kr-read",
+			"kr-code",
+			"jp-read",
+		]);
+		expect(ids(all, { language: "european" })).toEqual(["de-read", "fr-code"]);
 		expect(ids(all, { language: "english" })).toEqual(["en"]);
+	});
+
+	test("every language is in one language group", () => {
+		for (const language of LANGUAGES) {
+			expect(LANGUAGE_GROUPS).toContain(languageGroupOf(language));
+		}
+		expect(languageGroupOf("portuguese")).toBe("european");
+		expect(languageGroupOf("chinese")).toBe("asian");
 	});
 
 	test("condition: as read, or unknown when the title doesn't say", () => {
@@ -335,7 +354,7 @@ describe("filters in the URL", () => {
 			new: true,
 			marketplace: "ebay",
 			type: "auction",
-			language: "korean",
+			language: "asian",
 			condition: "unknown",
 			graded: false,
 			rejected: true,
@@ -471,6 +490,20 @@ describe("filters in the URL", () => {
 		expect(rewritten.toString()).toBe("view=sold");
 	});
 
+	test("old links with one language open its group", () => {
+		expect(
+			listingFiltersFromParams(new URLSearchParams("language=korean")).language,
+		).toBe("asian");
+		expect(
+			listingFiltersFromParams(new URLSearchParams("language=italian"))
+				.language,
+		).toBe("european");
+		expect(
+			listingFiltersFromParams(new URLSearchParams("language=european"))
+				.language,
+		).toBe("european");
+	});
+
 	test("unknown values are ignored: the defaults hold and nothing else is set", () => {
 		const params = new URLSearchParams(
 			"type=preorder&language=klingon&graded=maybe&new=yes&location=%20&view=all",
@@ -488,7 +521,7 @@ describe("the default filters", () => {
 			defaultListingFilters({
 				view: "sold",
 				new: true,
-				language: "korean",
+				language: "asian",
 				graded: true,
 				card: "x",
 				excludeCards: ["y"],

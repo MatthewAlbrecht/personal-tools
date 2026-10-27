@@ -344,7 +344,10 @@ export const yugiohListingFiltersValidator = v.object({
 	new: v.optional(v.boolean()),
 	marketplace: v.optional(yugiohMarketplaceValidator),
 	type: v.optional(v.union(v.literal("buyItNow"), v.literal("auction"))),
-	language: v.optional(yugiohLanguageValidator),
+	/** English, European or Asian. */
+	language: v.optional(
+		v.union(v.literal("english"), v.literal("european"), v.literal("asian")),
+	),
 	condition: v.optional(
 		v.union(yugiohReadConditionValidator, v.literal("unknown")),
 	),
