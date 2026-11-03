@@ -117,6 +117,7 @@ export function AlbumLyricsZine({ slug, variant }: AlbumLyricsZineProps) {
 				aboutOverride: song.aboutOverride,
 				durationSecondsOverride: song.durationSecondsOverride,
 				albumArtUrlOverride: song.albumArtUrlOverride,
+				trackImageUrl: song.trackImageUrl,
 				hiddenCreditLabels: song.hiddenCreditLabels,
 				shownCreditLabels: song.shownCreditLabels,
 				zinePageRecommendations: song.zinePageRecommendations,

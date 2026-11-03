@@ -86,3 +86,47 @@ test("uses display overrides and falls back from blank text overrides", () => {
 	assert.equal(fallback.about, undefined);
 	assert.equal(fallback.durationSeconds, undefined);
 });
+
+test("uses the generated track image when the song has no art override", () => {
+	const result = buildAlbumZineSongInput({
+		album: { albumTitle: "A", artistName: "B", albumArtUrl: "https://cover" },
+		song: {
+			id: "s",
+			trackNumber: 1,
+			songTitle: "T",
+			lyrics: "",
+			trackImageUrl: "https://track",
+		},
+	});
+	assert.equal(result.albumArtUrl, "https://track");
+});
+
+test("an override that just repeats the album cover does not hide the track image", () => {
+	const result = buildAlbumZineSongInput({
+		album: { albumTitle: "A", artistName: "B", albumArtUrl: "https://cover" },
+		song: {
+			id: "s",
+			trackNumber: 1,
+			songTitle: "T",
+			lyrics: "",
+			albumArtUrlOverride: "https://cover",
+			trackImageUrl: "https://track",
+		},
+	});
+	assert.equal(result.albumArtUrl, "https://track");
+});
+
+test("a real art override still beats the generated track image", () => {
+	const result = buildAlbumZineSongInput({
+		album: { albumTitle: "A", artistName: "B", albumArtUrl: "https://cover" },
+		song: {
+			id: "s",
+			trackNumber: 1,
+			songTitle: "T",
+			lyrics: "",
+			albumArtUrlOverride: "https://picked",
+			trackImageUrl: "https://track",
+		},
+	});
+	assert.equal(result.albumArtUrl, "https://picked");
+});

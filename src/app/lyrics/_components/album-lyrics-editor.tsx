@@ -36,6 +36,7 @@ import { IntroContentEditor } from "~/components/zine/intro-content-editor";
 import { ZineInsideBackSectionsEditor } from "~/components/zine/zine-inside-back-sections-editor";
 import { useAuthToken } from "~/lib/hooks/use-auth-token";
 import { useSpotifyAuth } from "~/lib/hooks/use-spotify-auth";
+import { resolvePickedArtOverride } from "~/lib/zine/album-song-input";
 import { mapDiscographyReleasesToAlbumUpserts } from "~/lib/zine/spotify-discography-import";
 import type { ZineInsideBackSection } from "~/lib/zine/zine-inside-back-sections";
 import { coerceZineInsideBackSections } from "~/lib/zine/zine-inside-back-sections";
@@ -804,7 +805,8 @@ function AlbumTrackEditor({
 			artist: "",
 			album: "",
 			durationInput: formatTrackDurationInput(effectiveDuration),
-			albumArtUrl: song.albumArtUrlOverride ?? albumArtUrl ?? "",
+			albumArtUrl:
+				resolvePickedArtOverride(song.albumArtUrlOverride, albumArtUrl) ?? "",
 			intro: song.aboutOverride ?? "",
 			note: "",
 		};
@@ -943,7 +945,7 @@ function AlbumTrackEditor({
 			}
 			placeholders={{
 				title: song.songTitle,
-				albumArtUrl,
+				albumArtUrl: song.trackImageUrl ?? albumArtUrl,
 				intro: song.about?.trim() || undefined,
 			}}
 			showArtistAlbumArt={true}
