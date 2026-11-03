@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { api } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import { action, mutation, query } from "./_generated/server";
+import { action, internalMutation, mutation, query } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import {
 	artistKeysIntersect,
@@ -1152,7 +1152,7 @@ async function getAlbumBySlugWithSongs(
 		zineSpotifyQrImageUrl?: string;
 		zineAppleMusicQrImageUrl?: string;
 	};
-	songs: Doc<"geniusSongs">[];
+	songs: Array<Doc<"geniusSongs"> & { trackImageUrl: string | null }>;
 	siteWideHiddenCreditLabelKeys: string[];
 	ignoredCreditLabelKeys: string[];
 } | null> {
@@ -1179,7 +1179,14 @@ async function getAlbumBySlugWithSongs(
 			zineCoverImageUrl: await resolveAlbumCoverImageUrl(ctx, album),
 			...(await resolveZineQrImageUrls(ctx, album)),
 		},
-		songs,
+		songs: await Promise.all(
+			songs.map(async (song) => ({
+				...song,
+				trackImageUrl: song.trackImageStorageId
+					? await ctx.storage.getUrl(song.trackImageStorageId)
+					: null,
+			})),
+		),
 		siteWideHiddenCreditLabelKeys,
 		ignoredCreditLabelKeys,
 	};
@@ -1207,6 +1214,35 @@ export const generateZineCoverUploadUrl = mutation({
 	handler: async (ctx) => {
 		requireAuth(ctx);
 		return await ctx.storage.generateUploadUrl();
+	},
+});
+
+// Track artwork is generated offline and attached with `npx convex run`.
+export const generateTrackImageUploadUrl = internalMutation({
+	args: {},
+	returns: v.string(),
+	handler: async (ctx) => {
+		return await ctx.storage.generateUploadUrl();
+	},
+});
+
+export const setTrackImage = internalMutation({
+	args: {
+		songId: v.id("geniusSongs"),
+		storageId: v.id("_storage"),
+	},
+	returns: v.null(),
+	handler: async (ctx, args) => {
+		const song = await ctx.db.get(args.songId);
+		if (!song) throw new Error("Song not found");
+		if (
+			song.trackImageStorageId &&
+			song.trackImageStorageId !== args.storageId
+		) {
+			await ctx.storage.delete(song.trackImageStorageId);
+		}
+		await ctx.db.patch(args.songId, { trackImageStorageId: args.storageId });
+		return null;
 	},
 });
 

@@ -23,6 +23,12 @@ const config = {
 				hostname: "image-cdn-fa.spotifycdn.com",
 				pathname: "/image/**",
 			},
+			// Convex file storage (generated lyrics track artwork).
+			{
+				protocol: "https",
+				hostname: "*.convex.cloud",
+				pathname: "/api/storage/**",
+			},
 			// Yu-Gi-Oh Card images (TCGplayer product images).
 			{
 				protocol: "https",

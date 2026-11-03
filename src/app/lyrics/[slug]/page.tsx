@@ -9,6 +9,7 @@ import {
 	Pencil,
 	Printer,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import React, { useState } from "react";
 import { toast } from "sonner";
@@ -70,8 +71,12 @@ export default function AlbumLyricsPage({
 		);
 	}
 
-	const { album, songs, siteWideHiddenCreditLabelKeys, ignoredCreditLabelKeys } =
-		albumData;
+	const {
+		album,
+		songs,
+		siteWideHiddenCreditLabelKeys,
+		ignoredCreditLabelKeys,
+	} = albumData;
 	const displayAlbumTitle =
 		album.albumTitleOverride?.trim() || album.albumTitle;
 	const displayArtistName =
@@ -200,6 +205,17 @@ export default function AlbumLyricsPage({
 								key={song._id}
 								className="page-break-inside-avoid print:mb-16"
 							>
+								{song.trackImageUrl ? (
+									<div className="relative mb-4 aspect-square w-full max-w-sm overflow-hidden rounded-lg bg-muted">
+										<Image
+											src={song.trackImageUrl}
+											alt={`Artwork for ${displayTitle}`}
+											fill
+											sizes="384px"
+											className="object-cover"
+										/>
+									</div>
+								) : null}
 								{/* Track Number */}
 								<span className="text-muted-foreground text-sm print:text-xs">
 									Track {song.trackNumber}

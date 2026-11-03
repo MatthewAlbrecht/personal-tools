@@ -321,6 +321,7 @@ export default defineSchema({
 		aboutOverride: v.optional(v.string()),
 		durationSecondsOverride: v.optional(v.number()),
 		albumArtUrlOverride: v.optional(v.string()),
+		trackImageStorageId: v.optional(v.id("_storage")), // Generated per-track artwork
 		hiddenCreditLabels: v.optional(v.array(v.string())),
 		shownCreditLabels: v.optional(v.array(v.string())),
 		zineLyricsColumnCount: v.optional(v.union(v.literal(1), v.literal(2))),
