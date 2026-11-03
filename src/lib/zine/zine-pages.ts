@@ -117,7 +117,6 @@ export function buildZinePages({
 	intro?: {
 		content: string;
 		settings: ZineIntroSettings;
-		includeWhenEmpty?: boolean;
 	};
 	insideBack?: {
 		sections: ZineInsideBackSection[];
@@ -140,10 +139,7 @@ export function buildZinePages({
 		},
 	];
 
-	if (
-		intro &&
-		(intro.content.trim() !== "" || intro.includeWhenEmpty === true)
-	) {
+	if (intro && intro.content.trim() !== "") {
 		pages.push({
 			kind: "intro",
 			content: intro.content,

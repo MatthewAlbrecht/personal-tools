@@ -252,3 +252,54 @@ test("buildZinePages always produces a count divisible by four", () => {
 		assert.equal(pages[pages.length - 1]?.kind, "back-cover");
 	}
 });
+
+// Regression: an editor's empty intro used to become a printed page (via includeWhenEmpty), and the
+// booklet padded it with three blanks — four empty pages on Morir Saltando (6 songs) and Promises
+// (9 instrumentals). An empty intro must never become a page, whoever is viewing.
+const EDITOR_EMPTY_INTRO = {
+	content: "",
+	settings: {
+		paragraphSpacingPt: 8,
+		marginPt: 12,
+		verticalAlign: "top" as const,
+		fontSizePt: 10,
+	},
+};
+
+test("buildZinePages never pages an empty intro, so a 6-song album prints 8 pages with no blanks", () => {
+	const pages = buildZinePages({
+		playlistTitle: "Morir Saltando",
+		songs: Array.from({ length: 6 }, (_, i) => ({
+			id: `s${i}`,
+			position: i + 1,
+			title: `Song ${i}`,
+			artistName: "Hesse Kassel",
+			lyrics: "line",
+		})),
+		intro: EDITOR_EMPTY_INTRO,
+		insideBack: { sections: [], includeWhenEmpty: false },
+	});
+
+	assert.equal(pages.length, 8);
+	assert.equal(pages.filter((page) => page.kind === "intro").length, 0);
+	assert.equal(pages.filter((page) => page.kind === "blank").length, 0);
+});
+
+test("buildZinePages never pages an empty intro, so 9 instrumentals print 4 pages with no blanks", () => {
+	const pages = buildZinePages({
+		playlistTitle: "Promises",
+		songs: Array.from({ length: 9 }, (_, i) => ({
+			id: `m${i}`,
+			position: i + 1,
+			title: `Movement ${i + 1}`,
+			artistName: "Floating Points",
+			lyrics: "",
+		})),
+		intro: EDITOR_EMPTY_INTRO,
+		insideBack: { sections: [], includeWhenEmpty: false },
+	});
+
+	assert.equal(pages.length, 4);
+	assert.equal(pages.filter((page) => page.kind === "intro").length, 0);
+	assert.equal(pages.filter((page) => page.kind === "blank").length, 0);
+});
