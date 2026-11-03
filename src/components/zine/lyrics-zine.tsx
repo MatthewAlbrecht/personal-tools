@@ -274,6 +274,7 @@ export function LyricsZine({
 	const [introPageContent, setIntroPageContent] = useState(
 		introPage?.content ?? "",
 	);
+	const [isAddIntroDialogOpen, setIsAddIntroDialogOpen] = useState(false);
 	const [insideBackLayoutSettings, setInsideBackLayoutSettings] =
 		useState<ZineInsideBackLayoutSettings>(() =>
 			resolveZineInsideBackLayoutSettings(insideBackLayoutProp),
@@ -372,7 +373,6 @@ export function LyricsZine({
 			? {
 					content: introPageContent,
 					settings: introSettings,
-					includeWhenEmpty: canEdit,
 				}
 			: undefined,
 		collapseInstrumentalTracks: !displaySettings.separateInstrumentalPages,
@@ -384,6 +384,13 @@ export function LyricsZine({
 		},
 	});
 	const bookletSheets = buildBookletSheets(pages);
+	// Kept while its dialog is open so typing the first character (which adds the intro page) doesn't
+	// unmount the dialog mid-edit.
+	const showAddIntroPanel =
+		canEdit &&
+		introPage !== undefined &&
+		persistence?.saveIntroPageContent !== undefined &&
+		(introPageContent.trim() === "" || isAddIntroDialogOpen);
 	const songsById = new Map(songsForPages.map((song) => [song.id, song]));
 	const creditVisibility: CreditVisibilityState = {
 		siteWideHiddenLabelKeys: siteWideHiddenCreditLabelKeys,
@@ -1416,6 +1423,21 @@ export function LyricsZine({
 													/>
 												</aside>
 											) : null}
+											{showAddIntroPanel ? (
+												<aside className="no-print zine-song-columns-panel space-y-2 rounded-lg border bg-card px-3 py-3 shadow-sm">
+													<p className="font-medium text-sm">Intro page</p>
+													<p className="text-muted-foreground text-xs leading-snug">
+														No intro yet — add text to add the page after the
+														cover.
+													</p>
+													<ZineIntroPageContentDialog
+														content={introPageContent}
+														onContentChange={updateIntroPageContent}
+														open={isAddIntroDialogOpen}
+														onOpenChange={setIsAddIntroDialogOpen}
+													/>
+												</aside>
+											) : null}
 										</>
 									) : (
 										renderPageByReadingIndex(index, `scr-${index}`)
@@ -1705,14 +1727,18 @@ export function LyricsZine({
 function ZineIntroPageContentDialog({
 	content,
 	onContentChange,
+	open,
+	onOpenChange,
 }: {
 	content: string;
 	onContentChange: (content: string) => void;
+	open?: boolean;
+	onOpenChange?: (open: boolean) => void;
 }) {
 	const hasContent = content.trim() !== "";
 
 	return (
-		<Dialog>
+		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogTrigger asChild>
 				<Button
 					type="button"
