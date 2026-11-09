@@ -337,9 +337,8 @@ per outage.
 
 ## Further Notes
 
-- **Assumption to confirm:** starring overrides the push rules for new and
-  relisted units (story 43). I asked; no answer yet. If not wanted, a starred
-  unit or plan only affects drop pushes.
+- **Confirmed (2026-11-08):** starring overrides the push rules for new and
+  relisted units (story 43).
 - History starts the day this ships; the first week's 7- and 14-day changes
   will be short.
 - The property's pricing moves often; if drop pushes on starred units turn

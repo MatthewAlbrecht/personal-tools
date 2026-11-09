@@ -32,8 +32,7 @@ export function pushRuleMiss(unit: PushRuleFacts): string | null {
  * plan) always does, else it must pass the rules.
  */
 export function pushesNewUnit(unit: PushRuleFacts, starred: boolean): boolean {
-	// The star override: the spec's flagged assumption (story 43), not yet
-	// confirmed. Drop this branch if starring should only drive drop pushes.
+	// The star override (story 43, confirmed): starred units always push.
 	if (starred) return true;
 	return pushRuleMiss(unit) === null;
 }

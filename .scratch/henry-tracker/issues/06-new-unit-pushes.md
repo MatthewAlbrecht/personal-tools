@@ -6,7 +6,7 @@
 
 **Status:** done (a real push on the phone is left for the user)
 
-Spec: docs/superpowers/specs/2026-11-08-henry-tracker-design.md (Push rules; stories 37–41, 43–50). Note the spec's flagged assumption: starring overrides the rules (story 43) — not yet confirmed by the user.
+Spec: docs/superpowers/specs/2026-11-08-henry-tracker-design.md (Push rules; stories 37–41, 43–50). Starring overrides the rules (story 43), confirmed by the user 2026-11-08.
 
 - [x] Push rule as in the spec (prototype snippet), plus the star override; baseline units never push
 - [x] Push decided inside record check for listed and relisted units; sent to all subscribed devices via the existing Web Push sending
