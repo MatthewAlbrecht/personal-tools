@@ -7,7 +7,7 @@ export type AppNavItem = {
 };
 
 export type AppNavGroup = {
-	id: "my-albums" | "music" | "yugioh" | "more";
+	id: "my-albums" | "music" | "yugioh" | "henry" | "more";
 	label: string;
 	items: AppNavItem[];
 	/** Collapsed by default on desktop */
@@ -71,6 +71,11 @@ export const APP_NAV_GROUPS: AppNavGroup[] = [
 			},
 			{ id: "yugioh-settings", label: "Settings", href: "/yugioh/settings" },
 		],
+	},
+	{
+		id: "henry",
+		label: "The Henry",
+		items: [{ id: "henry", label: "Units", href: "/henry" }],
 	},
 	{
 		id: "more",

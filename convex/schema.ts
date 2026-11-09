@@ -28,6 +28,12 @@ import {
 import { zineInsideBackSectionsValidator } from "./_utils/zineInsideBackSections";
 import { zinePageRecommendationsValidator } from "./_utils/zinePageRecommendations";
 import {
+	henryCheckOutcomeValidator,
+	henryUnitEventKindValidator,
+	henryUnitFactsValidator,
+	henryUnitStatusValidator,
+} from "./model/henry/validators";
+import {
 	yugiohAutomationRunValidator,
 	yugiohCapturedEbayListingValidator,
 	yugiohCardOrderValidator,
@@ -2064,4 +2070,50 @@ export default defineSchema({
 		// Why it was skipped or failed.
 		note: v.union(v.string(), v.null()),
 	}).index("by_listingId_and_kind", ["listingId", "kind"]),
+
+	// The Henry: one row per apartment SightMap has ever listed, keyed by its
+	// SightMap unit id. Facts, price and move-in date are as of `lastSeenAt`.
+	henryUnits: defineTable({
+		...henryUnitFactsValidator.fields,
+		status: henryUnitStatusValidator,
+		firstSeenAt: v.number(),
+		lastSeenAt: v.number(),
+		// When it came on the market after the baseline (listed, or relisted in
+		// ticket 04); null for units on the market since tracking began.
+		listedAt: v.union(v.number(), v.null()),
+		// Successful checks in a row it was missing from (ticket 04: two = gone).
+		missedChecks: v.number(),
+		offMarketAt: v.union(v.number(), v.null()),
+	})
+		.index("by_sightmapId", ["sightmapId"])
+		.index("by_status_and_price", ["status", "price"])
+		.index("by_firstSeenAt", ["firstSeenAt"]),
+
+	// A unit's base rent each time it changed, starting with the price it was
+	// first seen at.
+	henryPricePoints: defineTable({
+		unitId: v.id("henryUnits"),
+		at: v.number(),
+		price: v.number(),
+		totalPrice: v.number(),
+		leaseTermMonths: v.union(v.number(), v.null()),
+	}).index("by_unitId_and_at", ["unitId", "at"]),
+
+	// A unit's timeline besides price changes, with its price at the time.
+	henryUnitEvents: defineTable({
+		unitId: v.id("henryUnits"),
+		kind: henryUnitEventKindValidator,
+		at: v.number(),
+		price: v.number(),
+	}).index("by_unitId_and_at", ["unitId", "at"]),
+
+	// Every hourly check. Kept 30 days, pruned a few at a time by later checks.
+	henryChecks: defineTable({
+		at: v.number(),
+		outcome: henryCheckOutcomeValidator,
+		reason: v.union(v.string(), v.null()),
+		unitCount: v.union(v.number(), v.null()),
+	})
+		.index("by_at", ["at"])
+		.index("by_outcome_and_at", ["outcome", "at"]),
 });

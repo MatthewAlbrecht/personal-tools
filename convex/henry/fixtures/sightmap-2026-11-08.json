@@ -1,0 +1,525 @@
+{
+	"data": {
+		"units": [
+			{
+				"id": "348217",
+				"unit_number": "733",
+				"floor_id": "7393",
+				"floor_plan_id": "648493",
+				"area": 630,
+				"price": 1823,
+				"total_price": [1829.06, 1829.06],
+				"display_lease_term": "15 Months",
+				"available_on": "2026-11-08",
+				"specials_description": null
+			},
+			{
+				"id": "348220",
+				"unit_number": "437",
+				"floor_id": "7390",
+				"floor_plan_id": "648493",
+				"area": 634,
+				"price": 1737,
+				"total_price": [1743.06, 1743.06],
+				"display_lease_term": "15 Months",
+				"available_on": "2026-11-08",
+				"specials_description": null
+			},
+			{
+				"id": "348227",
+				"unit_number": "743",
+				"floor_id": "7393",
+				"floor_plan_id": "648493",
+				"area": 634,
+				"price": 1714,
+				"total_price": [1720.06, 1720.06],
+				"display_lease_term": "15 Months",
+				"available_on": "2026-11-08",
+				"specials_description": null
+			},
+			{
+				"id": "348232",
+				"unit_number": "509",
+				"floor_id": "7391",
+				"floor_plan_id": "648481",
+				"area": 664,
+				"price": 2308,
+				"total_price": [2314.06, 2314.06],
+				"display_lease_term": "15 Months",
+				"available_on": "2026-11-08",
+				"specials_description": null
+			},
+			{
+				"id": "348267",
+				"unit_number": "381",
+				"floor_id": "7389",
+				"floor_plan_id": "648482",
+				"area": 710,
+				"price": 1936,
+				"total_price": [1942.06, 1942.06],
+				"display_lease_term": "15 Months",
+				"available_on": "2026-11-08",
+				"specials_description": null
+			},
+			{
+				"id": "348277",
+				"unit_number": "458",
+				"floor_id": "7390",
+				"floor_plan_id": "648482",
+				"area": 710,
+				"price": 2092,
+				"total_price": [2098.06, 2098.06],
+				"display_lease_term": "15 Months",
+				"available_on": "2026-11-08",
+				"specials_description": null
+			},
+			{
+				"id": "348289",
+				"unit_number": "506",
+				"floor_id": "7391",
+				"floor_plan_id": "648482",
+				"area": 710,
+				"price": 2117,
+				"total_price": [2123.06, 2123.06],
+				"display_lease_term": "15 Months",
+				"available_on": "2026-12-04",
+				"specials_description": null
+			},
+			{
+				"id": "348311",
+				"unit_number": "612",
+				"floor_id": "7392",
+				"floor_plan_id": "648482",
+				"area": 710,
+				"price": 2087,
+				"total_price": [2093.06, 2093.06],
+				"display_lease_term": "15 Months",
+				"available_on": "2026-11-08",
+				"specials_description": null
+			},
+			{
+				"id": "348315",
+				"unit_number": "624",
+				"floor_id": "7392",
+				"floor_plan_id": "648482",
+				"area": 710,
+				"price": 2132,
+				"total_price": [2138.06, 2138.06],
+				"display_lease_term": "15 Months",
+				"available_on": "2026-11-13",
+				"specials_description": null
+			},
+			{
+				"id": "348329",
+				"unit_number": "706",
+				"floor_id": "7393",
+				"floor_plan_id": "648482",
+				"area": 710,
+				"price": 2207,
+				"total_price": [2213.06, 2213.06],
+				"display_lease_term": "15 Months",
+				"available_on": "2026-11-08",
+				"specials_description": null
+			},
+			{
+				"id": "348330",
+				"unit_number": "710",
+				"floor_id": "7393",
+				"floor_plan_id": "648482",
+				"area": 710,
+				"price": 2212,
+				"total_price": [2218.06, 2218.06],
+				"display_lease_term": "15 Months",
+				"available_on": "2026-12-05",
+				"specials_description": null
+			},
+			{
+				"id": "348361",
+				"unit_number": "584",
+				"floor_id": "7391",
+				"floor_plan_id": "648482",
+				"area": 710,
+				"price": 2220,
+				"total_price": [2226.06, 2226.06],
+				"display_lease_term": "15 Months",
+				"available_on": "2026-11-08",
+				"specials_description": null
+			},
+			{
+				"id": "348374",
+				"unit_number": "477",
+				"floor_id": "7390",
+				"floor_plan_id": "648483",
+				"area": 722,
+				"price": 1862,
+				"total_price": [1868.06, 1868.06],
+				"display_lease_term": "15 Months",
+				"available_on": "2026-11-08",
+				"specials_description": null
+			},
+			{
+				"id": "348378",
+				"unit_number": "677",
+				"floor_id": "7392",
+				"floor_plan_id": "648483",
+				"area": 722,
+				"price": 1901,
+				"total_price": [1907.06, 1907.06],
+				"display_lease_term": "15 Months",
+				"available_on": "2026-11-08",
+				"specials_description": null
+			},
+			{
+				"id": "348380",
+				"unit_number": "777",
+				"floor_id": "7393",
+				"floor_plan_id": "648483",
+				"area": 722,
+				"price": 1975,
+				"total_price": [1981.06, 1981.06],
+				"display_lease_term": "15 Months",
+				"available_on": "2026-11-08",
+				"specials_description": null
+			},
+			{
+				"id": "348395",
+				"unit_number": "516",
+				"floor_id": "7391",
+				"floor_plan_id": "648484",
+				"area": 813,
+				"price": 2256,
+				"total_price": [2262.06, 2262.06],
+				"display_lease_term": "15 Months",
+				"available_on": "2026-11-08",
+				"specials_description": null
+			},
+			{
+				"id": "348400",
+				"unit_number": "373",
+				"floor_id": "7389",
+				"floor_plan_id": "648485",
+				"area": 768,
+				"price": 1884,
+				"total_price": [1890.06, 1890.06],
+				"display_lease_term": "15 Months",
+				"available_on": "2026-11-08",
+				"specials_description": null
+			},
+			{
+				"id": "348409",
+				"unit_number": "673",
+				"floor_id": "7392",
+				"floor_plan_id": "648485",
+				"area": 768,
+				"price": 1972,
+				"total_price": [1978.06, 1978.06],
+				"display_lease_term": "15 Months",
+				"available_on": "2026-11-08",
+				"specials_description": null
+			},
+			{
+				"id": "348415",
+				"unit_number": "359",
+				"floor_id": "7389",
+				"floor_plan_id": "648485",
+				"area": 768,
+				"price": 1884,
+				"total_price": [1890.06, 1890.06],
+				"display_lease_term": "15 Months",
+				"available_on": "2026-11-08",
+				"specials_description": null
+			},
+			{
+				"id": "348426",
+				"unit_number": "651",
+				"floor_id": "7392",
+				"floor_plan_id": "648485",
+				"area": 768,
+				"price": 1972,
+				"total_price": [1978.06, 1978.06],
+				"display_lease_term": "15 Months",
+				"available_on": "2026-11-08",
+				"specials_description": null
+			},
+			{
+				"id": "348449",
+				"unit_number": "713",
+				"floor_id": "7393",
+				"floor_plan_id": "648487",
+				"area": 839,
+				"price": 2428,
+				"total_price": [2434.06, 2434.06],
+				"display_lease_term": "16 Months",
+				"available_on": "2026-11-23",
+				"specials_description": null
+			},
+			{
+				"id": "348450",
+				"unit_number": "101",
+				"floor_id": "7387",
+				"floor_plan_id": "648487",
+				"area": 839,
+				"price": 2195,
+				"total_price": [2201.06, 2201.06],
+				"display_lease_term": "15 Months",
+				"available_on": "2026-11-08",
+				"specials_description": null
+			},
+			{
+				"id": "348451",
+				"unit_number": "201",
+				"floor_id": "7388",
+				"floor_plan_id": "648487",
+				"area": 839,
+				"price": 2112,
+				"total_price": [2118.06, 2118.06],
+				"display_lease_term": "16 Months",
+				"available_on": "2026-11-29",
+				"specials_description": null
+			},
+			{
+				"id": "348469",
+				"unit_number": "647",
+				"floor_id": "7392",
+				"floor_plan_id": "648490",
+				"area": 1069,
+				"price": 2883,
+				"total_price": [2889.06, 2889.06],
+				"display_lease_term": "15 Months",
+				"available_on": "2026-12-08",
+				"specials_description": null
+			},
+			{
+				"id": "348486",
+				"unit_number": "326",
+				"floor_id": "7389",
+				"floor_plan_id": "648491",
+				"area": 1098,
+				"price": 2811,
+				"total_price": [2817.06, 2817.06],
+				"display_lease_term": "16 Months",
+				"available_on": "2026-11-08",
+				"specials_description": null
+			},
+			{
+				"id": "348490",
+				"unit_number": "526",
+				"floor_id": "7391",
+				"floor_plan_id": "648491",
+				"area": 1098,
+				"price": 2697,
+				"total_price": [2703.06, 2703.06],
+				"display_lease_term": "16 Months",
+				"available_on": "2026-11-08",
+				"specials_description": null
+			},
+			{
+				"id": "348517",
+				"unit_number": "563",
+				"floor_id": "7391",
+				"floor_plan_id": "648491",
+				"area": 1091,
+				"price": 2622,
+				"total_price": [2628.06, 2628.06],
+				"display_lease_term": "16 Months",
+				"available_on": "2026-11-08",
+				"specials_description": null
+			},
+			{
+				"id": "348518",
+				"unit_number": "571",
+				"floor_id": "7391",
+				"floor_plan_id": "648491",
+				"area": 1091,
+				"price": 2455,
+				"total_price": [2461.06, 2461.06],
+				"display_lease_term": "16 Months",
+				"available_on": "2026-11-08",
+				"specials_description": null
+			},
+			{
+				"id": "348522",
+				"unit_number": "608",
+				"floor_id": "7392",
+				"floor_plan_id": "648491",
+				"area": 1091,
+				"price": 2656,
+				"total_price": [2662.06, 2662.06],
+				"display_lease_term": "16 Months",
+				"available_on": "2026-11-08",
+				"specials_description": null
+			},
+			{
+				"id": "348525",
+				"unit_number": "655",
+				"floor_id": "7392",
+				"floor_plan_id": "648491",
+				"area": 1091,
+				"price": 2474,
+				"total_price": [2480.06, 2480.06],
+				"display_lease_term": "16 Months",
+				"available_on": "2026-11-08",
+				"specials_description": null
+			},
+			{
+				"id": "348529",
+				"unit_number": "672",
+				"floor_id": "7392",
+				"floor_plan_id": "648491",
+				"area": 1091,
+				"price": 2605,
+				"total_price": [2611.06, 2611.06],
+				"display_lease_term": "16 Months",
+				"available_on": "2026-11-08",
+				"specials_description": null
+			},
+			{
+				"id": "348540",
+				"unit_number": "779",
+				"floor_id": "7393",
+				"floor_plan_id": "648491",
+				"area": 1091,
+				"price": 2544,
+				"total_price": [2550.06, 2550.06],
+				"display_lease_term": "16 Months",
+				"available_on": "2026-11-08",
+				"specials_description": null
+			},
+			{
+				"id": "348589",
+				"unit_number": "127",
+				"floor_id": "7387",
+				"floor_plan_id": "648494",
+				"area": 1490,
+				"price": 3271,
+				"total_price": [3277.06, 3277.06],
+				"display_lease_term": "16 Months",
+				"available_on": "2026-11-08",
+				"specials_description": null
+			}
+		],
+		"floors": [
+			{
+				"id": "7387",
+				"filter_label": "Floor 1",
+				"filter_short_label": "1"
+			},
+			{
+				"id": "7388",
+				"filter_label": "Floor 2",
+				"filter_short_label": "2"
+			},
+			{
+				"id": "7389",
+				"filter_label": "Floor 3",
+				"filter_short_label": "3"
+			},
+			{
+				"id": "7390",
+				"filter_label": "Floor 4",
+				"filter_short_label": "4"
+			},
+			{
+				"id": "7391",
+				"filter_label": "Floor 5",
+				"filter_short_label": "5"
+			},
+			{
+				"id": "7392",
+				"filter_label": "Floor 6",
+				"filter_short_label": "6"
+			},
+			{
+				"id": "7393",
+				"filter_label": "Floor 7",
+				"filter_short_label": "7"
+			}
+		],
+		"floor_plans": [
+			{
+				"id": "648481",
+				"name": "{\"name\":\"A1\",\"provider_id\":\"1\"}",
+				"bedroom_count": 1,
+				"bathroom_count": 1
+			},
+			{
+				"id": "648482",
+				"name": "{\"name\":\"A2\",\"provider_id\":\"3\"}",
+				"bedroom_count": 1,
+				"bathroom_count": 1
+			},
+			{
+				"id": "648483",
+				"name": "{\"name\":\"A3\",\"provider_id\":\"7\"}",
+				"bedroom_count": 1,
+				"bathroom_count": 1
+			},
+			{
+				"id": "648484",
+				"name": "{\"name\":\"A4\",\"provider_id\":\"8\"}",
+				"bedroom_count": 1,
+				"bathroom_count": 1
+			},
+			{
+				"id": "648485",
+				"name": "{\"name\":\"A5\",\"provider_id\":\"10\"}",
+				"bedroom_count": 1,
+				"bathroom_count": 1
+			},
+			{
+				"id": "648486",
+				"name": "{\"name\":\"A6\",\"provider_id\":\"15\"}",
+				"bedroom_count": 1,
+				"bathroom_count": 1
+			},
+			{
+				"id": "648487",
+				"name": "{\"name\":\"A7\",\"provider_id\":\"17\"}",
+				"bedroom_count": 1,
+				"bathroom_count": 1
+			},
+			{
+				"id": "648488",
+				"name": "{\"name\":\"A8\",\"provider_id\":\"21\"}",
+				"bedroom_count": 1,
+				"bathroom_count": 1
+			},
+			{
+				"id": "648489",
+				"name": "{\"name\":\"A9\",\"provider_id\":\"22\"}",
+				"bedroom_count": 1,
+				"bathroom_count": 1
+			},
+			{
+				"id": "648490",
+				"name": "{\"name\":\"B1\",\"provider_id\":\"23\"}",
+				"bedroom_count": 2,
+				"bathroom_count": 2
+			},
+			{
+				"id": "648491",
+				"name": "{\"name\":\"B2\",\"provider_id\":\"30\"}",
+				"bedroom_count": 2,
+				"bathroom_count": 2
+			},
+			{
+				"id": "648492",
+				"name": "{\"name\":\"B3\",\"provider_id\":\"36\"}",
+				"bedroom_count": 2,
+				"bathroom_count": 2
+			},
+			{
+				"id": "648493",
+				"name": "{\"name\":\"U1\",\"provider_id\":\"37\"}",
+				"bedroom_count": 0,
+				"bathroom_count": 1
+			},
+			{
+				"id": "648494",
+				"name": "{\"name\":\"TH\",\"provider_id\":\"43\"}",
+				"bedroom_count": 2,
+				"bathroom_count": 3
+			}
+		]
+	}
+}

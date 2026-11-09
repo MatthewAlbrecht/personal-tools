@@ -78,3 +78,15 @@ test("Yu-Gi-Oh Decks stays active on Deck pages, not on Settings", () => {
 	assert.equal(isNavItemActive("/yugioh/settings", settings), true);
 	assert.equal(isNavItemActive("/yugioh", settings), false);
 });
+
+test("The Henry is its own section, after Yu-Gi-Oh", () => {
+	const ids = APP_NAV_GROUPS.map((g) => g.id);
+	assert.equal(ids.indexOf("henry"), ids.indexOf("yugioh") + 1);
+	const group = APP_NAV_GROUPS.find((g) => g.id === "henry");
+	assert.ok(group);
+	assert.equal(group.label, "The Henry");
+	const [units] = group.items;
+	assert.ok(units);
+	assert.equal(units.href, "/henry");
+	assert.equal(isNavItemActive("/henry", units), true);
+});

@@ -27,4 +27,12 @@ crons.interval(
 	{},
 );
 
+// The Henry: SightMap's availability, read every hour.
+crons.interval(
+	"henry check sightmap",
+	{ hours: 1 },
+	internal.henry.checks.checkSightmap,
+	{},
+);
+
 export default crons;
