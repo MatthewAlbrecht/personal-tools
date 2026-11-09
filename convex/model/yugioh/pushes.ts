@@ -390,11 +390,7 @@ export async function claimDelivery(
 			ttlSeconds = Math.min(ttlSeconds, secondsLeft);
 		}
 	}
-	const devices = await ctx.db
-		.query("yugiohPushSubscriptions")
-		.withIndex("by_lastSeenAt")
-		.order("desc")
-		.take(MAX_PUSH_DEVICES);
+	const devices = await pushDevices(ctx);
 	if (devices.length === 0) {
 		await skip(ctx, pushId, "No device has alerts on.");
 		return null;
@@ -418,27 +414,45 @@ export async function claimDelivery(
 			urgency: push.kind === "auction" ? "high" : "normal",
 			topic: push.listingId === null ? null : pushTopic(push.listingId),
 		},
-		subscriptions: devices.map((device) => ({
-			_id: device._id,
-			endpoint: device.endpoint,
-			keys: { p256dh: device.p256dh, auth: device.auth },
-		})),
+		subscriptions: devices,
 	};
 }
 
 /**
- * Records what the push service said for each device. A subscription it
- * says is gone (404/410) is deleted. The push is sent if any device got it.
+ * Every device with push on (the most recently seen first, up to
+ * `MAX_PUSH_DEVICES`), as a delivery sends to them. Shared by every
+ * feature's pushes.
  */
-export async function recordDelivery(
+export async function pushDevices(
+	ctx: QueryCtx,
+): Promise<Delivery["subscriptions"]> {
+	const devices = await ctx.db
+		.query("yugiohPushSubscriptions")
+		.withIndex("by_lastSeenAt")
+		.order("desc")
+		.take(MAX_PUSH_DEVICES);
+	return devices.map((device) => ({
+		_id: device._id,
+		endpoint: device.endpoint,
+		keys: { p256dh: device.p256dh, auth: device.auth },
+	}));
+}
+
+/** What the push service said for each device of one push. */
+export type DeviceResults = Array<{
+	subscriptionId: Id<"yugiohPushSubscriptions">;
+	outcome: PushOutcome;
+}>;
+
+/**
+ * Applies what the push service said for each device: a subscription it
+ * says is gone (404/410) is deleted. Returns how many devices got the push,
+ * and a note on why some didn't. Shared by every feature's pushes.
+ */
+export async function recordDeviceOutcomes(
 	ctx: MutationCtx,
-	pushId: Id<"yugiohPushes">,
-	results: Array<{
-		subscriptionId: Id<"yugiohPushSubscriptions">;
-		outcome: PushOutcome;
-	}>,
-	now: number,
-): Promise<void> {
+	results: DeviceResults,
+): Promise<{ reached: number; note: string | null }> {
 	let reached = 0;
 	let note: string | null = null;
 	for (const { subscriptionId, outcome } of results) {
@@ -453,6 +467,20 @@ export async function recordDelivery(
 			note = outcome.reason;
 		}
 	}
+	return { reached, note };
+}
+
+/**
+ * Records what the push service said for each device. A subscription it
+ * says is gone (404/410) is deleted. The push is sent if any device got it.
+ */
+export async function recordDelivery(
+	ctx: MutationCtx,
+	pushId: Id<"yugiohPushes">,
+	results: DeviceResults,
+	now: number,
+): Promise<void> {
+	const { reached, note } = await recordDeviceOutcomes(ctx, results);
 	await ctx.db.patch("yugiohPushes", pushId, {
 		status: reached > 0 ? "sent" : "failed",
 		sentAt: now,
@@ -717,9 +745,9 @@ function isPushEndpoint(endpoint: string): boolean {
 
 /**
  * The push service's Topic header, so a re-sent push for the same Listing
- * replaces one still waiting on an offline device. It allows at most 32
- * URL-safe base64 characters.
+ * (or Henry unit) replaces one still waiting on an offline device. It allows
+ * at most 32 URL-safe base64 characters.
  */
-function pushTopic(listingId: Id<"yugiohListings">): string | null {
-	return /^[A-Za-z0-9_-]{1,32}$/.test(listingId) ? listingId : null;
+export function pushTopic(id: string): string | null {
+	return /^[A-Za-z0-9_-]{1,32}$/.test(id) ? id : null;
 }

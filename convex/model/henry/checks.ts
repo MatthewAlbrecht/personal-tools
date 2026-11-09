@@ -1,6 +1,7 @@
 import type { Infer } from "convex/values";
 import type { Doc } from "../../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../../_generated/server";
+import { pushNewUnit } from "./pushes";
 import { type HenryUnitFacts, parseSightmap } from "./sightmap";
 import type { henryCheckResultValidator } from "./validators";
 
@@ -104,6 +105,10 @@ async function recordUnit(
 			price: facts.price,
 		});
 		await recordPricePoint(ctx, unitId, now, facts);
+		if (!isBaseline) {
+			const unit = await ctx.db.get("henryUnits", unitId);
+			if (unit) await pushNewUnit(ctx, unit, "listed", now);
+		}
 		return;
 	}
 
@@ -111,7 +116,7 @@ async function recordUnit(
 		await recordPricePoint(ctx, existing._id, now, facts);
 	}
 	// Listed vs relisted is decided here: a known unit back from off the
-	// market is relisted (ticket 06 pushes for it here, like a new listing).
+	// market is relisted, and pushes like a new listing.
 	const relisted = existing.status === "offMarket";
 	if (relisted) {
 		await ctx.db.insert("henryUnitEvents", {
@@ -129,6 +134,10 @@ async function recordUnit(
 			? { status: "onMarket", listedAt: now, offMarketAt: null }
 			: {}),
 	});
+	if (relisted) {
+		const unit = await ctx.db.get("henryUnits", existing._id);
+		if (unit) await pushNewUnit(ctx, unit, "relisted", now);
+	}
 }
 
 /** A unit on the market missing from a successful check: the second miss in a row takes it off. */

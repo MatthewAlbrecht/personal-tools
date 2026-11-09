@@ -25,6 +25,7 @@ import {
 import { Separator } from "~/components/ui/separator";
 import { Skeleton } from "~/components/ui/skeleton";
 import { LONGEST_CHANGE_WINDOW } from "~/lib/henry/changes";
+import { newUnitPushLabel } from "~/lib/henry/pushes";
 import { bedLabel, formatMoney } from "~/lib/henry/units";
 import { useHeldWhileLoading } from "~/lib/hooks/use-held-while-loading";
 import { useMediaQuery } from "~/lib/hooks/use-media-query";
@@ -208,6 +209,10 @@ function UnitDetailsView({
 					<Fact
 						label="Faces"
 						value={unit.facesI25 ? "I-25" : "Away from I-25"}
+					/>
+					<Fact
+						label="New-unit push"
+						value={newUnitPushLabel(unit, unit.unitStarred || unit.planStarred)}
 					/>
 					{unit.specials !== null ? (
 						<Fact label="Special" value={unit.specials} />

@@ -29,6 +29,8 @@ import { zineInsideBackSectionsValidator } from "./_utils/zineInsideBackSections
 import { zinePageRecommendationsValidator } from "./_utils/zinePageRecommendations";
 import {
 	henryCheckOutcomeValidator,
+	henryPushReasonValidator,
+	henryPushStatusValidator,
 	henryUnitEventKindValidator,
 	henryUnitFactsValidator,
 	henryUnitStatusValidator,
@@ -2123,6 +2125,27 @@ export default defineSchema({
 		floorPlan: v.string(),
 		starredAt: v.number(),
 	}).index("by_floorPlan", ["floorPlan"]),
+
+	// The Henry's pushes, one row per unit per delivery. While a unit's push
+	// is pending (held through quiet hours), later events for it add their
+	// reason here instead of a new row. The text is written from the unit's
+	// state when it's delivered.
+	henryPushes: defineTable({
+		unitId: v.id("henryUnits"),
+		reasons: v.array(henryPushReasonValidator),
+		createdAt: v.number(),
+		// The latest event merged in.
+		updatedAt: v.number(),
+		deliverAt: v.number(),
+		status: henryPushStatusValidator,
+		// Set when it's claimed for sending.
+		title: v.union(v.string(), v.null()),
+		body: v.union(v.string(), v.null()),
+		sentAt: v.union(v.number(), v.null()),
+		devicesReached: v.number(),
+		// Why it was skipped or failed.
+		note: v.union(v.string(), v.null()),
+	}).index("by_unitId_and_status", ["unitId", "status"]),
 
 	// Every hourly check. Kept 30 days, pruned a few at a time by later checks.
 	henryChecks: defineTable({

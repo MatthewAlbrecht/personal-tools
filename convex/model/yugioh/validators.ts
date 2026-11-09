@@ -740,3 +740,22 @@ export const yugiohPushOptionsValidator = v.object({
 	// Replaces a still-undelivered push with the same topic.
 	topic: v.union(v.string(), v.null()),
 });
+
+/** A delivery: the payload, how to send it and the devices to send it to. */
+export const pushDeliveryValidator = v.object({
+	payload: v.string(),
+	options: yugiohPushOptionsValidator,
+	subscriptions: v.array(
+		yugiohPushSubscriptionValidator.extend({
+			_id: v.id("yugiohPushSubscriptions"),
+		}),
+	),
+});
+
+/** What the push service said for each device of one push. */
+export const pushDeviceResultsValidator = v.array(
+	v.object({
+		subscriptionId: v.id("yugiohPushSubscriptions"),
+		outcome: yugiohPushOutcomeValidator,
+	}),
+);

@@ -15,6 +15,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import type * as React from "react";
+import { PushSettings } from "~/components/push-settings";
 import { Button } from "~/components/ui/button";
 import {
 	DropdownMenu,
@@ -143,6 +144,12 @@ export function LedgerPage(): React.ReactElement {
 					) : null}
 				</>
 			)}
+
+			<PushSettings
+				description="A push when a unit lists or comes back, unless it faces I-25, is a 1 bed of 800 sq ft or less, or is a studio on floors 2-6. Starred units and floor plans always push."
+				label="New unit alerts on this device"
+				hint="Units found between 11pm and 8am arrive at 8am."
+			/>
 
 			<UnitDrawer
 				number={openUnit}

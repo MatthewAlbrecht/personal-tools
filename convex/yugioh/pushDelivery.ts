@@ -3,7 +3,7 @@
 import { v } from "convex/values";
 import { internal } from "../_generated/api";
 import { internalAction } from "../_generated/server";
-import { sendWebPush } from "../model/yugioh/webPushSender";
+import { sendToDevices } from "../model/webPushDelivery";
 
 // Sends a due push to every device with push on (Node: the `web-push`
 // library). Scheduled by `queuePush` in `convex/model/yugioh/pushes.ts`.
@@ -16,16 +16,7 @@ export const deliver = internalAction({
 			{ pushId },
 		);
 		if (delivery === null) return null;
-		const results = await Promise.all(
-			delivery.subscriptions.map(async ({ _id, ...subscription }) => ({
-				subscriptionId: _id,
-				outcome: await sendSafely(
-					subscription,
-					delivery.payload,
-					delivery.options,
-				),
-			})),
-		);
+		const results = await sendToDevices(delivery);
 		await ctx.runMutation(internal.yugioh.pushes.recordDelivery, {
 			pushId,
 			results,
@@ -33,17 +24,3 @@ export const deliver = internalAction({
 		return null;
 	},
 });
-
-/** One device's send; a throw is that device's failure, not the whole push's. */
-async function sendSafely(
-	...args: Parameters<typeof sendWebPush>
-): ReturnType<typeof sendWebPush> {
-	try {
-		return await sendWebPush(...args);
-	} catch (error) {
-		return {
-			status: "failed",
-			reason: `The send failed: ${error instanceof Error ? error.message : String(error)}`,
-		};
-	}
-}

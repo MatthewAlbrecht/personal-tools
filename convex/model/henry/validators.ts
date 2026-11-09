@@ -1,5 +1,29 @@
 import { v } from "convex/values";
 
+/**
+ * Why a unit has a push waiting: it listed or relisted (ticket 06). Events
+ * for one unit while its push is held add to one set. Ticket 07 adds
+ * `dropped` (a starred unit's price went down).
+ */
+export const henryPushReasonValidator = v.union(
+	v.literal("listed"),
+	v.literal("relisted"),
+);
+
+/**
+ * `pending` until its delivery time (held through quiet hours, taking in
+ * later events for the unit), `sending` while the push service is called,
+ * then `sent` (reached a device), `failed` (reached none) or `skipped` (no
+ * longer true, or no device has push on).
+ */
+export const henryPushStatusValidator = v.union(
+	v.literal("pending"),
+	v.literal("sending"),
+	v.literal("sent"),
+	v.literal("failed"),
+	v.literal("skipped"),
+);
+
 /** On the market until it's missing from two successful checks in a row; then off the market until seen again (relisted). */
 export const henryUnitStatusValidator = v.union(
 	v.literal("onMarket"),

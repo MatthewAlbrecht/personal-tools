@@ -4,15 +4,27 @@
 
 **Blocked by:** 01 (Installed app opens the website), 04 (Off the market, relisted, and failing checks), 05 (Stars)
 
-**Status:** ready-for-agent
+**Status:** done (a real push on the phone is left for the user)
 
 Spec: docs/superpowers/specs/2026-11-08-henry-tracker-design.md (Push rules; stories 37–41, 43–50). Note the spec's flagged assumption: starring overrides the rules (story 43) — not yet confirmed by the user.
 
-- [ ] Push rule as in the spec (prototype snippet), plus the star override; baseline units never push
-- [ ] Push decided inside record check for listed and relisted units; sent to all subscribed devices via the existing Web Push sending
-- [ ] Quiet hours reused from Yu-Gi-Oh; held pushes merge per unit; dropped at delivery if the unit is off the market
-- [ ] Push text: unit, layout, sq ft, price (copywriting rules); tag per unit; URL opens `/henry` with the unit's drawer
-- [ ] Shared push toggle on The Henry page
-- [ ] Yu-Gi-Oh push behaviour unchanged (its tests pass)
-- [ ] convex-test covers each rule, the star override, baseline silence, relisting, quiet-hours hold, merging, drop-on-delivery
+- [x] Push rule as in the spec (prototype snippet), plus the star override; baseline units never push
+- [x] Push decided inside record check for listed and relisted units; sent to all subscribed devices via the existing Web Push sending
+- [x] Quiet hours reused from Yu-Gi-Oh; held pushes merge per unit; dropped at delivery if the unit is off the market
+- [x] Push text: unit, layout, sq ft, price (copywriting rules); tag per unit; URL opens `/henry` with the unit's drawer
+- [x] Shared push toggle on The Henry page
+- [x] Yu-Gi-Oh push behaviour unchanged (its tests pass)
+- [x] convex-test covers each rule, the star override, baseline silence, relisting, quiet-hours hold, merging, drop-on-delivery
 - [ ] A real push received on the phone (left for the user)
+
+## Notes from the build
+
+- **Rule** (pure, `src/lib/henry/pushes.ts`, `pushes.test.ts`): `pushRuleMiss(unit)` → the failed rule ("Faces I-25", "1 bed, 800 sq ft or less", "Studio on floors 2-6") or null; `pushesNewUnit(unit, starred)` holds the **star override** as its one marked branch (story 43, unconfirmed: delete that `if` to make stars drive only drop pushes). `newUnitPushLabel(unit, starred)` is the drawer's new "New-unit push" fact ("Yes", "Yes, starred", "No: faces I-25"). On the fixture the rules alone push exactly the spec's 12 (asserted through record check).
+- **Outbox** (`convex/schema.ts`): `henryPushes { unitId, reasons: ("listed" | "relisted")[], createdAt, updatedAt, deliverAt, status: pending | sending | sent | failed | skipped, title | null, body | null, sentAt | null, devicesReached, note | null }`, index `by_unitId_and_status`. Validators `henryPushReasonValidator` / `henryPushStatusValidator` in `convex/model/henry/validators.ts`. Title and body are written when the push is claimed, from the unit as it is then. Subscriptions stay in `yugiohPushSubscriptions`.
+- **Deciding and merging** (`convex/model/henry/pushes.ts`): `recordUnit` (`convex/model/henry/checks.ts`) calls `pushNewUnit(ctx, unit, "listed" | "relisted", now)` after the insert (not on the baseline) and after a relisting. `pushNewUnit` checks `isStarred` + `pushesNewUnit`, then calls `queueUnitPush(ctx, unitId, reason, now)`: if the unit has a `pending` push it adds the reason to `reasons` (deduped) and bumps `updatedAt` (same row, same scheduled delivery); otherwise it inserts one with `deliverAt = pushDeliveryTime(now, userTimeZone)` and `ctx.scheduler.runAt(deliverAt, internal.henry.pushDelivery.deliver, { pushId })`. Once a push is `sending`, a later event starts a new row. **Ticket 07**: add `v.literal("dropped")` to `henryPushReasonValidator` and call `queueUnitPush(ctx, unitId, "dropped", now)` from the price-change path in `recordUnit`; the merge works as is.
+- **Delivery**: `internal.henry.pushDelivery.deliver` (Node) → `internal.henry.pushes.claimDelivery` → `sendToDevices` → `internal.henry.pushes.recordDelivery`; `internal.henry.pushes.expireDelivery` fails a send unrecorded after `SEND_DEADLINE_MS`. **Drop-on-delivery hook**: the top of `claimDelivery` in `convex/model/henry/pushes.ts` skips with note "The unit went off the market." (marked with a `Ticket 07` comment for the "no longer starred / price no longer below" checks). No devices → skipped "No device has alerts on." TTL 12 hours, urgency normal, Topic = the unit id.
+- **Text**: `unitPushText({ number, beds, sqft, price, relisted })` → "New at The Henry: Apt 516" / "1 bed · 813 sq ft · $2,256/mo", or "Back at The Henry: Apt 608" / "Relisted · 2 bed · 1,091 sq ft · $2,599/mo". `relisted` is true only when `reasons` has no `listed` (listed and relisted while held still reads as New). `unitPushUrl(number)` = `/henry?unit=N`, `unitPushTag(number)` = `henry-unit-N`. Ticket 07 extends the text for drops (price and change).
+- **Shared with Yu-Gi-Oh** (behaviour unchanged, its 33 push tests pass untouched): quiet hours `pushDeliveryTime(now, timeZone)` in `src/lib/yugioh/pushes.ts`; from `convex/model/yugioh/pushes.ts`, `userTimeZone`, `SEND_DEADLINE_MS`, and the newly exported `pushDevices(ctx)` (newest `MAX_PUSH_DEVICES` subscriptions), `recordDeviceOutcomes(ctx, results)` (→ `{ reached, note }`, deletes gone subscriptions), `pushTopic(id)` and `DeviceResults`; validators `pushDeliveryValidator` / `pushDeviceResultsValidator` (`convex/model/yugioh/validators.ts`); and the Node helper `sendToDevices(delivery)` in `convex/model/webPushDelivery.ts`, which both `deliver` actions use. It imports `sendWebPush` from `./yugioh/webPushSender`, so tests that mock that module still fake every send.
+- **Page**: `PushSettings` sits below the table and gone list on `/henry` ("New unit alerts on this device"). The drawer facts grid has "New-unit push".
+- **Tests**: `convex/henry/pushes.test.ts` fakes `webPushSender` like Yu-Gi-Oh's tests. Its `check(t, now)` moves the fake clock with `advanceTimersByTime`, not `setSystemTime` (that one drags held timers along with it). It covers the 12 of 33, each rule, the baseline, price changes not pushing, relisting (passing and failing), unit and plan star overrides, the 8am hold, the overnight merge (listed, gone, relisted, cheaper → one push at 8am with the latest price), drop-on-delivery, a second listing after a sent push, no devices, and the internal surface.
+- **Seen in a browser** (dev, 1280 and 430): the card renders with the copy and no errors or sideways scroll; headless Chromium denies notifications, so it shows the blocked line. Push was not turned on. The drawer shows "New-unit push: Yes" for 608.

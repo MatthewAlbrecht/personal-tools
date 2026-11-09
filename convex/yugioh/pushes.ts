@@ -3,8 +3,8 @@ import { internalMutation, mutation, query } from "../_generated/server";
 import { requireAuth } from "../auth";
 import * as Pushes from "../model/yugioh/pushes";
 import {
-	yugiohPushOptionsValidator,
-	yugiohPushOutcomeValidator,
+	pushDeliveryValidator,
+	pushDeviceResultsValidator,
 	yugiohPushSubscriptionValidator,
 } from "../model/yugioh/validators";
 
@@ -73,19 +73,9 @@ export const checkAuction = internalMutation({
 	},
 });
 
-const deliveryValidator = v.object({
-	payload: v.string(),
-	options: yugiohPushOptionsValidator,
-	subscriptions: v.array(
-		yugiohPushSubscriptionValidator.extend({
-			_id: v.id("yugiohPushSubscriptions"),
-		}),
-	),
-});
-
 export const claimDelivery = internalMutation({
 	args: { pushId: v.id("yugiohPushes") },
-	returns: v.union(deliveryValidator, v.null()),
+	returns: v.union(pushDeliveryValidator, v.null()),
 	handler: async (ctx, { pushId }) =>
 		await Pushes.claimDelivery(ctx, pushId, Date.now()),
 });
@@ -102,12 +92,7 @@ export const expireDelivery = internalMutation({
 export const recordDelivery = internalMutation({
 	args: {
 		pushId: v.id("yugiohPushes"),
-		results: v.array(
-			v.object({
-				subscriptionId: v.id("yugiohPushSubscriptions"),
-				outcome: yugiohPushOutcomeValidator,
-			}),
-		),
+		results: pushDeviceResultsValidator,
 	},
 	returns: v.null(),
 	handler: async (ctx, { pushId, results }) => {
