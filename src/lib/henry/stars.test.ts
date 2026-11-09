@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
 	filterCounts,
 	filterUnits,
+	hideI25,
 	isStarred,
 	pinStarred,
 	planSummaries,
@@ -80,6 +81,24 @@ describe("planSummaries", () => {
 			{ floorPlan: "A1", beds: 1, onMarket: 4, starred: false },
 			{ floorPlan: "B2", beds: 2, onMarket: 1, starred: true },
 			{ floorPlan: "TH", beds: null, onMarket: 0, starred: true },
+		]);
+	});
+});
+
+describe("hideI25", () => {
+	test("hides I-25 side units unless starred, keeping the order", () => {
+		const units = [
+			{ ...unit("608"), facesI25: false },
+			{ ...unit("777"), facesI25: true },
+			{ ...unit("359", { unitStarred: true }), facesI25: true },
+			{ ...unit("571", { planStarred: true }), facesI25: true },
+			{ ...unit("101"), facesI25: false },
+		];
+		expect(hideI25(units).map((row) => row.number)).toEqual([
+			"608",
+			"359",
+			"571",
+			"101",
 		]);
 	});
 });
