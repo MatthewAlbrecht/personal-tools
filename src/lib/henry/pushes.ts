@@ -1,6 +1,8 @@
-// The Henry's new-unit push rule and push text, shared by Convex (relative
-// imports only) and the page.
+// The Henry's new-unit push rule and push text (new, relisted and dropped
+// units; failing checks), shared by Convex (relative imports only) and the
+// page.
 
+import { DEFAULT_TIME_ZONE } from "../yugioh/pushes";
 import { bedLabel, formatMoney } from "./units";
 
 /** The facts the push rules read. */
@@ -50,30 +52,109 @@ export function newUnitPushLabel(
 	return `No: ${miss.charAt(0).toLowerCase()}${miss.slice(1)}`;
 }
 
+/**
+ * What a unit's push reports: it listed or relisted (with the drop since,
+ * while held, if it's still below), or only dropped. `droppedFrom` is the
+ * price before the first drop the push carries.
+ */
+export type UnitPushNews =
+	| { kind: "listed" | "relisted"; droppedFrom: number | null }
+	| { kind: "dropped"; droppedFrom: number };
+
 export type UnitPushFacts = {
 	number: string;
 	beds: number;
 	sqft: number;
 	price: number;
-	/** Back after going off the market, rather than never seen before. */
-	relisted: boolean;
+	news: UnitPushNews;
 };
 
 /**
  * "New at The Henry: Apt 516" over "1 bed · 813 sq ft · $2,256/mo"; a
  * relisting is "Back at The Henry: Apt 608" over "Relisted · 2 bed · …".
+ * A drop alone is "Down $41 at The Henry: Apt 608" over "2 bed · 1,091 sq
+ * ft · $2,615/mo, was $2,656"; with a listing it leads the body ("Down $41 ·
+ * …", "Relisted, down $41 · …").
  */
 export function unitPushText(unit: UnitPushFacts): {
 	title: string;
 	body: string;
 } {
 	const facts = `${bedLabel(unit.beds)} · ${unit.sqft.toLocaleString("en-US")} sq ft · ${formatMoney(unit.price)}/mo`;
-	return unit.relisted
-		? {
+	const { news } = unit;
+	const down =
+		news.droppedFrom === null
+			? null
+			: formatMoney(news.droppedFrom - unit.price);
+	switch (news.kind) {
+		case "dropped":
+			return {
+				title: `Down ${down} at The Henry: Apt ${unit.number}`,
+				body: `${facts}, was ${formatMoney(news.droppedFrom)}`,
+			};
+		case "relisted":
+			return {
 				title: `Back at The Henry: Apt ${unit.number}`,
-				body: `Relisted · ${facts}`,
-			}
-		: { title: `New at The Henry: Apt ${unit.number}`, body: facts };
+				body: `${down === null ? "Relisted" : `Relisted, down ${down}`} · ${facts}`,
+			};
+		case "listed":
+			return {
+				title: `New at The Henry: Apt ${unit.number}`,
+				body: down === null ? facts : `Down ${down} · ${facts}`,
+			};
+	}
+}
+
+/** Longest last error the failing-checks push quotes. */
+const MAX_ERROR_LENGTH = 60;
+
+/**
+ * "The Henry checks are failing" over "No successful check since Sun 11:00
+ * AM. Last error: HTTP 503", the time in `timeZone`.
+ */
+export function checksFailingPushText(facts: {
+	lastSuccessAt: number;
+	lastError: string;
+	timeZone: string;
+}): { title: string; body: string } {
+	const since = formatShortTime(facts.lastSuccessAt, facts.timeZone);
+	const error =
+		facts.lastError.length > MAX_ERROR_LENGTH
+			? `${facts.lastError.slice(0, MAX_ERROR_LENGTH - 1).trimEnd()}…`
+			: facts.lastError;
+	return {
+		title: "The Henry checks are failing",
+		body: `No successful check since ${since}. Last error: ${error}`,
+	};
+}
+
+/** Where tapping the failing-checks push goes. */
+export const CHECKS_FAILING_PUSH_URL = "/henry";
+
+/** One failing-checks notification at a time. */
+export const CHECKS_FAILING_PUSH_TAG = "henry-checks";
+
+/** "Sun 11:00 AM" in `timeZone` (the default zone when it isn't one). */
+function formatShortTime(ms: number, timeZone: string): string {
+	try {
+		return formatShortTimeIn(ms, timeZone);
+	} catch {
+		return formatShortTimeIn(ms, DEFAULT_TIME_ZONE);
+	}
+}
+
+function formatShortTimeIn(ms: number, timeZone: string): string {
+	return (
+		new Intl.DateTimeFormat("en-US", {
+			weekday: "short",
+			hour: "numeric",
+			minute: "2-digit",
+			timeZone,
+		})
+			.format(ms)
+			// Newer ICU puts a narrow no-break space before AM/PM.
+			.replace(/\u202f/g, " ")
+	);
 }
 
 /** Where tapping a unit's push goes: The Henry with its drawer open. */

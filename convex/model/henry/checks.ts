@@ -1,7 +1,7 @@
 import type { Infer } from "convex/values";
 import type { Doc } from "../../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../../_generated/server";
-import { pushNewUnit } from "./pushes";
+import { pushChecksFailing, pushDrop, pushNewUnit } from "./pushes";
 import { type HenryUnitFacts, parseSightmap } from "./sightmap";
 import type { henryCheckResultValidator } from "./validators";
 
@@ -39,7 +39,7 @@ export async function recordCheck(
 			? ({ ok: false, reason: result.reason } as const)
 			: parseSightmap(result.body);
 	if (!parsed.ok) {
-		await logCheck(ctx, now, { outcome: "failure", reason: parsed.reason });
+		await logFailure(ctx, now, parsed.reason);
 		return;
 	}
 
@@ -60,7 +60,7 @@ export async function recordCheck(
 				.take(MAX_ON_MARKET);
 	const short = shortResponseReason(parsed.units.length, onMarket.length);
 	if (!isBaseline && short !== null) {
-		await logCheck(ctx, now, { outcome: "failure", reason: short });
+		await logFailure(ctx, now, short);
 		return;
 	}
 
@@ -134,10 +134,14 @@ async function recordUnit(
 			? { status: "onMarket", listedAt: now, offMarketAt: null }
 			: {}),
 	});
-	if (relisted) {
-		const unit = await ctx.db.get("henryUnits", existing._id);
-		if (unit) await pushNewUnit(ctx, unit, "relisted", now);
-	}
+	const dropped = facts.price < existing.price;
+	if (!relisted && !dropped) return;
+	const unit = await ctx.db.get("henryUnits", existing._id);
+	if (!unit) return;
+	if (relisted) await pushNewUnit(ctx, unit, "relisted", now);
+	// A relisting below its last price is a drop too; the per-unit merge
+	// makes the two one push.
+	if (dropped) await pushDrop(ctx, unit, existing.price, now);
 }
 
 /** A unit on the market missing from a successful check: the second miss in a row takes it off. */
@@ -192,6 +196,21 @@ async function recordPricePoint(
 		totalPrice: facts.totalPrice,
 		leaseTermMonths: facts.leaseTermMonths,
 	});
+}
+
+/**
+ * Logs a failed check; after 6 hours without a success (since tracking
+ * began) that's the failing-checks push, once per outage.
+ */
+async function logFailure(
+	ctx: MutationCtx,
+	now: number,
+	reason: string,
+): Promise<void> {
+	await logCheck(ctx, now, { outcome: "failure", reason });
+	const lastSuccessAt =
+		(await latestCheck(ctx, "success"))?.at ?? (await trackingBeganAt(ctx));
+	if (lastSuccessAt !== null) await pushChecksFailing(ctx, lastSuccessAt, now);
 }
 
 async function logCheck(

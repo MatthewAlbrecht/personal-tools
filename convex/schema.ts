@@ -2129,10 +2129,14 @@ export default defineSchema({
 	// The Henry's pushes, one row per unit per delivery. While a unit's push
 	// is pending (held through quiet hours), later events for it add their
 	// reason here instead of a new row. The text is written from the unit's
-	// state when it's delivered.
+	// state when it's delivered. The failing-checks push (once per outage)
+	// is a row with no unit.
 	henryPushes: defineTable({
-		unitId: v.id("henryUnits"),
+		unitId: v.union(v.id("henryUnits"), v.null()),
 		reasons: v.array(henryPushReasonValidator),
+		// The price before the first drop this push carries; absent until it
+		// carries one (rows from before drops have none).
+		priceBefore: v.optional(v.number()),
 		createdAt: v.number(),
 		// The latest event merged in.
 		updatedAt: v.number(),
@@ -2145,7 +2149,9 @@ export default defineSchema({
 		devicesReached: v.number(),
 		// Why it was skipped or failed.
 		note: v.union(v.string(), v.null()),
-	}).index("by_unitId_and_status", ["unitId", "status"]),
+	})
+		.index("by_unitId_and_status", ["unitId", "status"])
+		.index("by_unitId_and_createdAt", ["unitId", "createdAt"]),
 
 	// Every hourly check. Kept 30 days, pruned a few at a time by later checks.
 	henryChecks: defineTable({

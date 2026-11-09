@@ -389,6 +389,293 @@ describe("quiet hours", () => {
 	});
 });
 
+async function starUnit(t: T, number: string): Promise<void> {
+	await t.mutation(api.henry.stars.toggleUnitStar, {
+		unitId: await unitId(t, number),
+	});
+}
+
+describe("drop pushes", () => {
+	// 608 is $2,656 in the fixture: a 2 bed in plan B2 that passes the rules.
+	test("a starred unit's drop pushes the new price and how much it dropped", async () => {
+		const t = setup();
+		await turnOn(t);
+		await check(t, BASELINE_AT);
+		await starUnit(t, "608");
+		await check(t, BASELINE_AT + HOUR, payload(withPrice("608", 2615)));
+		await settle(t);
+
+		expect(fakes.sent.map((push) => push.payload)).toEqual([
+			{
+				title: "Down $41 at The Henry: Apt 608",
+				body: "2 bed · 1,091 sq ft · $2,615/mo, was $2,656",
+				url: "/henry?unit=608",
+				tag: "henry-unit-608",
+			},
+		]);
+		expect(fakes.sent[0]?.at).toBe(BASELINE_AT + HOUR);
+	});
+
+	test("a unit in a starred floor plan pushes its drop, though the rules skip it", async () => {
+		const t = setup();
+		await turnOn(t);
+		await check(t, BASELINE_AT);
+		// 563 is B2 on the I-25 side.
+		await t.mutation(api.henry.stars.toggleFloorPlanStar, { floorPlan: "B2" });
+		await check(t, BASELINE_AT + HOUR, payload(withPrice("563", 2600)));
+		await settle(t);
+		expect(pushedUnits()).toEqual(["563"]);
+		expect(fakes.sent[0]?.payload.title).toBe("Down $22 at The Henry: Apt 563");
+	});
+
+	test("an unstarred unit's drop doesn't push", async () => {
+		const t = setup();
+		await turnOn(t);
+		await check(t, BASELINE_AT);
+		await check(t, BASELINE_AT + HOUR, payload(withPrice("608", 2500)));
+		await settle(t);
+		expect(fakes.sent).toEqual([]);
+		expect(await henryPushes(t)).toEqual([]);
+	});
+
+	test("a drop of $1 pushes", async () => {
+		const t = setup();
+		await turnOn(t);
+		await check(t, BASELINE_AT);
+		await starUnit(t, "608");
+		await check(t, BASELINE_AT + HOUR, payload(withPrice("608", 2655)));
+		await settle(t);
+		expect(fakes.sent[0]?.payload.title).toBe("Down $1 at The Henry: Apt 608");
+	});
+
+	test("a starred unit's rise doesn't push", async () => {
+		const t = setup();
+		await turnOn(t);
+		await check(t, BASELINE_AT);
+		await starUnit(t, "608");
+		await check(t, BASELINE_AT + HOUR, payload(withPrice("608", 2700)));
+		await settle(t);
+		expect(fakes.sent).toEqual([]);
+	});
+
+	test("two drops overnight are one push at 8am with the total change", async () => {
+		const t = setup();
+		await turnOn(t);
+		await check(t, BASELINE_AT);
+		await starUnit(t, "608");
+		await check(t, NIGHT, payload(withPrice("608", 2615)));
+		await check(t, NIGHT + HOUR, payload(withPrice("608", 2600)));
+		expect(fakes.sent).toEqual([]);
+		await settle(t);
+
+		expect(fakes.sent).toHaveLength(1);
+		expect(fakes.sent[0]).toMatchObject({
+			at: EIGHT_AM,
+			payload: {
+				title: "Down $56 at The Henry: Apt 608",
+				body: "2 bed · 1,091 sq ft · $2,600/mo, was $2,656",
+			},
+		});
+	});
+
+	test("listed then dropped while held is one new-unit push saying the drop", async () => {
+		const t = setup();
+		await turnOn(t);
+		await check(t, BASELINE_AT, payload(without("608")));
+		await t.mutation(api.henry.stars.toggleFloorPlanStar, { floorPlan: "B2" });
+		await check(t, NIGHT);
+		await check(t, NIGHT + HOUR, payload(withPrice("608", 2615)));
+		await settle(t);
+
+		expect(fakes.sent.map((push) => push.payload)).toMatchObject([
+			{
+				title: "New at The Henry: Apt 608",
+				body: "Down $41 · 2 bed · 1,091 sq ft · $2,615/mo",
+			},
+		]);
+		expect(await henryPushes(t)).toHaveLength(1);
+	});
+
+	test("listed then dropped then back up is a plain new-unit push", async () => {
+		const t = setup();
+		await turnOn(t);
+		await check(t, BASELINE_AT, payload(without("608")));
+		await t.mutation(api.henry.stars.toggleFloorPlanStar, { floorPlan: "B2" });
+		await check(t, NIGHT);
+		await check(t, NIGHT + HOUR, payload(withPrice("608", 2615)));
+		await check(t, NIGHT + 2 * HOUR);
+		await settle(t);
+
+		expect(fakes.sent.map((push) => push.payload)).toMatchObject([
+			{
+				title: "New at The Henry: Apt 608",
+				body: "2 bed · 1,091 sq ft · $2,656/mo",
+			},
+		]);
+	});
+
+	test("a starred unit relisted below its last price is one push", async () => {
+		const t = setup();
+		await turnOn(t);
+		await check(t, BASELINE_AT);
+		await starUnit(t, "608");
+		await check(t, BASELINE_AT + HOUR, payload(without("608")));
+		await check(t, BASELINE_AT + 2 * HOUR, payload(without("608")));
+		await check(t, BASELINE_AT + 3 * DAY, payload(withPrice("608", 2599)));
+		await settle(t);
+
+		expect(fakes.sent.map((push) => push.payload)).toMatchObject([
+			{
+				title: "Back at The Henry: Apt 608",
+				body: "Relisted, down $57 · 2 bed · 1,091 sq ft · $2,599/mo",
+			},
+		]);
+		expect(await henryPushes(t)).toHaveLength(1);
+	});
+
+	describe("a held drop is dropped at delivery", () => {
+		async function heldDrop(t: T): Promise<void> {
+			await turnOn(t);
+			await check(t, BASELINE_AT);
+			await starUnit(t, "608");
+			await check(t, NIGHT, payload(withPrice("608", 2615)));
+		}
+
+		async function skippedNote(t: T): Promise<string | null | undefined> {
+			await settle(t);
+			expect(fakes.sent).toEqual([]);
+			const [push] = await henryPushes(t);
+			expect(push?.status).toBe("skipped");
+			return push?.note;
+		}
+
+		test("when the unit is no longer starred", async () => {
+			const t = setup();
+			await heldDrop(t);
+			await starUnit(t, "608");
+			expect(await skippedNote(t)).toMatch(/no longer starred/);
+		});
+
+		test("when the price is back at the price before the drop", async () => {
+			const t = setup();
+			await heldDrop(t);
+			await check(t, NIGHT + HOUR);
+			expect(await skippedNote(t)).toBe(
+				"The price is back at $2,656 or above.",
+			);
+		});
+
+		test("when the unit has gone off the market", async () => {
+			const t = setup();
+			await heldDrop(t);
+			await check(t, NIGHT + HOUR, payload(without("608")));
+			await check(t, NIGHT + 2 * HOUR, payload(without("608")));
+			expect(await skippedNote(t)).toMatch(/off the market/);
+		});
+
+		test("but not while it's still starred through its plan", async () => {
+			const t = setup();
+			await heldDrop(t);
+			await t.mutation(api.henry.stars.toggleFloorPlanStar, {
+				floorPlan: "B2",
+			});
+			await starUnit(t, "608");
+			await settle(t);
+			expect(pushedUnits()).toEqual(["608"]);
+		});
+	});
+});
+
+describe("the failing-checks push", () => {
+	async function fail(t: T, now: number, reason = "HTTP 503"): Promise<void> {
+		vi.advanceTimersByTime(now - Date.now());
+		await t.mutation(internal.henry.checks.recordCheck, {
+			now,
+			result: { kind: "fetchFailed", reason },
+		});
+		await t.finishInProgressScheduledFunctions();
+	}
+
+	test("after 6 hours without a successful check, one push, once per outage", async () => {
+		const t = setup();
+		await turnOn(t);
+		await check(t, BASELINE_AT);
+		for (let hour = 1; hour <= 5; hour++) {
+			await fail(t, BASELINE_AT + hour * HOUR);
+		}
+		expect(fakes.sent).toEqual([]);
+
+		await fail(t, BASELINE_AT + 6 * HOUR, "The operation was aborted");
+		await settle(t);
+		await fail(t, BASELINE_AT + 7 * HOUR);
+		await fail(t, BASELINE_AT + 8 * HOUR);
+		await settle(t);
+
+		expect(fakes.sent.map((push) => push.payload)).toEqual([
+			{
+				title: "The Henry checks are failing",
+				body: "No successful check since Sun 11:00 AM. Last error: The operation was aborted",
+				url: "/henry",
+				tag: "henry-checks",
+			},
+		]);
+		// 5pm in Denver: not held.
+		expect(fakes.sent[0]?.at).toBe(BASELINE_AT + 6 * HOUR);
+	});
+
+	test("it resets after the next successful check, and a night outage waits for 8am", async () => {
+		const t = setup();
+		await turnOn(t);
+		await check(t, BASELINE_AT);
+		for (let hour = 1; hour <= 6; hour++) {
+			await fail(t, BASELINE_AT + hour * HOUR);
+		}
+		await settle(t);
+		await check(t, BASELINE_AT + 7 * HOUR);
+		// 6pm: a new outage; its sixth hour is midnight.
+		for (let hour = 8; hour <= 13; hour++) {
+			await fail(t, BASELINE_AT + hour * HOUR);
+		}
+		expect(fakes.sent).toHaveLength(1);
+
+		await settle(t);
+		expect(fakes.sent).toHaveLength(2);
+		expect(fakes.sent[1]).toMatchObject({
+			at: EIGHT_AM,
+			payload: {
+				body: "No successful check since Sun 6:00 PM. Last error: HTTP 503",
+			},
+		});
+	});
+
+	test("a held failing-checks push is dropped if the checks recover by 8am", async () => {
+		const t = setup();
+		await turnOn(t);
+		await check(t, BASELINE_AT + 7 * HOUR);
+		for (let hour = 8; hour <= 13; hour++) {
+			await fail(t, BASELINE_AT + hour * HOUR);
+		}
+		await check(t, BASELINE_AT + 14 * HOUR);
+		await settle(t);
+		expect(fakes.sent).toEqual([]);
+		const [push] = await henryPushes(t);
+		expect(push).toMatchObject({
+			status: "skipped",
+			note: "The checks are working again.",
+		});
+	});
+
+	test("failures before tracking begins don't push", async () => {
+		const t = setup();
+		await turnOn(t);
+		for (let hour = 0; hour <= 8; hour++) {
+			await fail(t, BASELINE_AT + hour * HOUR);
+		}
+		await settle(t);
+		expect(fakes.sent).toEqual([]);
+	});
+});
+
 describe("devices", () => {
 	test("with push off everywhere, nothing is sent", async () => {
 		const t = setup();

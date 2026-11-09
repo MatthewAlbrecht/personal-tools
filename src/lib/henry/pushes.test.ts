@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
+	checksFailingPushText,
 	newUnitPushLabel,
 	pushRuleMiss,
 	pushesNewUnit,
@@ -34,15 +35,11 @@ test("a starred unit pushes whatever the rules say", () => {
 	expect(pushesNewUnit(TWO_BED, false)).toBe(true);
 });
 
+const UNIT_127 = { number: "127", beds: 2, sqft: 1490, price: 3271 };
+
 test("push text says the unit, layout, size and price", () => {
 	expect(
-		unitPushText({
-			number: "127",
-			beds: 2,
-			sqft: 1490,
-			price: 3271,
-			relisted: false,
-		}),
+		unitPushText({ ...UNIT_127, news: { kind: "listed", droppedFrom: null } }),
 	).toEqual({
 		title: "New at The Henry: Apt 127",
 		body: "2 bed · 1,490 sq ft · $3,271/mo",
@@ -53,12 +50,59 @@ test("push text says the unit, layout, size and price", () => {
 			beds: 0,
 			sqft: 630,
 			price: 1823,
-			relisted: true,
+			news: { kind: "relisted", droppedFrom: null },
 		}),
 	).toEqual({
 		title: "Back at The Henry: Apt 733",
 		body: "Relisted · Studio · 630 sq ft · $1,823/mo",
 	});
+});
+
+test("drop push text says how much it dropped and the new price", () => {
+	expect(
+		unitPushText({ ...UNIT_127, news: { kind: "dropped", droppedFrom: 3300 } }),
+	).toEqual({
+		title: "Down $29 at The Henry: Apt 127",
+		body: "2 bed · 1,490 sq ft · $3,271/mo, was $3,300",
+	});
+	expect(
+		unitPushText({ ...UNIT_127, news: { kind: "listed", droppedFrom: 3300 } }),
+	).toEqual({
+		title: "New at The Henry: Apt 127",
+		body: "Down $29 · 2 bed · 1,490 sq ft · $3,271/mo",
+	});
+	expect(
+		unitPushText({
+			...UNIT_127,
+			news: { kind: "relisted", droppedFrom: 3300 },
+		}),
+	).toEqual({
+		title: "Back at The Henry: Apt 127",
+		body: "Relisted, down $29 · 2 bed · 1,490 sq ft · $3,271/mo",
+	});
+});
+
+test("the failing-checks push names the last success and the last error", () => {
+	const lastSuccessAt = Date.UTC(2026, 10, 8, 18);
+	expect(
+		checksFailingPushText({
+			lastSuccessAt,
+			lastError: "HTTP 503",
+			timeZone: "America/Denver",
+		}),
+	).toEqual({
+		title: "The Henry checks are failing",
+		body: "No successful check since Sun 11:00 AM. Last error: HTTP 503",
+	});
+	const long = checksFailingPushText({
+		lastSuccessAt,
+		lastError: "x".repeat(200),
+		timeZone: "Not/AZone",
+	}).body;
+	expect(long).toMatch(
+		/^No successful check since Sun 11:00 AM\. Last error: x+…$/,
+	);
+	expect(long.length).toBeLessThan(140);
 });
 
 test("the drawer says whether a unit would push, and why not", () => {

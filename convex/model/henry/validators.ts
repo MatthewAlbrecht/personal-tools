@@ -1,13 +1,16 @@
 import { v } from "convex/values";
 
 /**
- * Why a unit has a push waiting: it listed or relisted (ticket 06). Events
- * for one unit while its push is held add to one set. Ticket 07 adds
- * `dropped` (a starred unit's price went down).
+ * Why a push is waiting: a unit listed or relisted, or a starred unit's
+ * price went down (`dropped`). Events for one unit while its push is held
+ * add to one set. `checksFailing` is the one push without a unit: no check
+ * has succeeded for 6 hours.
  */
 export const henryPushReasonValidator = v.union(
 	v.literal("listed"),
 	v.literal("relisted"),
+	v.literal("dropped"),
+	v.literal("checksFailing"),
 );
 
 /**
