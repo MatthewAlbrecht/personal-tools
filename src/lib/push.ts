@@ -1,4 +1,5 @@
 // Web Push in the browser: what this device can do, and its subscription.
+// Shared by the whole app (one subscription per device covers every feature).
 // Platform facts: docs/yugioh/references/ios-web-push.md.
 
 /**

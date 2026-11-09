@@ -3,6 +3,7 @@ import "~/styles/globals.css";
 import type { Metadata } from "next";
 import { Fraunces, Source_Sans_3 } from "next/font/google";
 import { SiteHeader } from "~/app/_components/site-header";
+import { AppServiceWorker } from "~/components/app-service-worker";
 import { AppShell } from "~/components/app-shell/app-shell";
 import { Toaster } from "~/components/ui/sonner";
 import { AuthProvider } from "~/lib/auth-context";
@@ -23,7 +24,10 @@ const fraunces = Fraunces({
 export const metadata: Metadata = {
 	title: "moooose",
 	description: "moooose.dev",
-	icons: [{ rel: "icon", url: "/favicon.svg" }],
+	// The installed app is the whole site (see `manifest.ts`). Site-wide so
+	// adding to the home screen from any page gets the same name and icon.
+	appleWebApp: { capable: true, title: "moooose", statusBarStyle: "default" },
+	icons: { icon: "/favicon.svg", apple: "/apple-icon.png" },
 };
 
 export default function RootLayout({
@@ -43,6 +47,7 @@ export default function RootLayout({
 								<SiteHeader />
 								<AppShell>{children}</AppShell>
 								<Toaster />
+								<AppServiceWorker />
 							</TRPCReactProvider>
 						</ConvexClientProvider>
 					</AuthProvider>

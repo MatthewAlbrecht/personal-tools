@@ -87,7 +87,7 @@ Sources: WebKit `main` (fca78fce77), Apple's "Sending web push notifications in 
 
 - **Scope:** a worker's maximum scope is its script's directory. `/sw.js` registered with `{ scope: '/' }` controls every page on the origin with no `Service-Worker-Allowed` header (Service Workers spec, https://w3c.github.io/ServiceWorker/#start-register-algorithm; MDN `register()`). Pages loaded before the worker activates are uncontrolled until reload, unless the worker calls `clients.claim()` (relevant to `navigate()` above).
 - **Serving:** Next.js serves `public/sw.js` as a static file with `Content-Type: application/javascript`. Vercel's default `cache-control: public, max-age=0, must-revalidate` (https://vercel.com/docs/caching/cache-control-headers) plus the spec's `updateViaCache: 'imports'` means no override is needed. If one is ever added for `/sw.js`, keep it `no-cache`, never `immutable`.
-- **Manifest:** use the App Router metadata file `src/app/manifest.ts` (served at `/manifest.webmanifest`) with `display: "standalone"`. `start_url: "/yugioh"`, `scope: "/"` (the login page at `/login` must stay in scope, or signing in from the installed app bounces to Safari).
+- **Manifest:** use the App Router metadata file `src/app/manifest.ts` (served at `/manifest.webmanifest`) with `display: "standalone"`. `start_url: "/"` (it was `"/yugioh"`; `id` stays `"/yugioh"` so installs carry over), `scope: "/"` (the login page at `/login` must stay in scope, or signing in from the installed app bounces to Safari).
 - **The middleware is default-deny.** `src/middleware.ts` redirects every path not in `src/lib/route-access.ts` to `/login`. A redirected `/sw.js` comes back as HTML, and registration fails with a MIME-type `SecurityError`; that's the failure to recognize. Add `/sw.js`, `/manifest.webmanifest` and the app icons (`/icon-192.png`, `/icon-512.png`, `/apple-icon.png`, or whatever the build names them) to `PUBLIC_EXACT`, and cover them in the route-access test.
 
 ## 7. `pushsubscriptionchange` and the app badge
@@ -107,7 +107,7 @@ Sources: WebKit `main` (fca78fce77), Apple's "Sending web push notifications in 
 ## For this app (`/yugioh`)
 
 - The "Turn on notifications" control lives at `/yugioh/settings`. Show it only when `PushManager` and `Notification` exist. On an iPhone Safari tab without them, show the add-to-home-screen steps instead.
-- Register `/sw.js` at app start (a client component in the `/yugioh` layout). In the button's `onClick`, do one `await navigator.serviceWorker.ready` then `pushManager.subscribe({ userVisibleOnly: true, applicationServerKey })`, with no other awaits first. Save the subscription to Convex in the same handler.
+- Register `/sw.js` at app start (`src/components/app-service-worker.tsx`, mounted in the root layout). In the button's `onClick`, do one `await navigator.serviceWorker.ready` then `pushManager.subscribe({ userVisibleOnly: true, applicationServerKey })`, with no other awaits first. Save the subscription to Convex in the same handler.
 - Resync the subscription on every launch. There's no `pushsubscriptionchange` on iOS.
 - The worker's `push` handler always calls `event.waitUntil(showNotification(...))` and never rejects. Three misses and iOS drops the subscription for good. Quiet hours are enforced in Convex by **not sending**, never by a worker that receives and stays silent.
 - Convex action sends (Node runtime, `web-push`, which is not yet an approved dependency: ask first):

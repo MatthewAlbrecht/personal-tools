@@ -7,9 +7,9 @@
 // enforced on the server by not sending, never here.
 
 const FALLBACK = {
-	title: "Yu-Gi-Oh",
-	body: "Something changed in your Decks.",
-	url: "/yugioh",
+	title: "moooose",
+	body: "Something changed. Tap to see it.",
+	url: "/",
 };
 
 self.addEventListener("install", () => {
@@ -59,10 +59,10 @@ function readPush(event) {
 	return { ...FALLBACK, tag: undefined };
 }
 
-/** An eBay Listing: an auction push opens it directly, as time matters most. */
+/** An eBay Listing: a Yu-Gi-Oh auction push opens it directly, as time matters most. */
 const EBAY_ITEM = /^https:\/\/www\.ebay\.com\/itm\/\d+$/;
 
-/** A same-origin path or an eBay Listing to open; anything else opens the tracker. */
+/** A same-origin path or an eBay Listing to open; anything else opens the home page. */
 function pushTarget(url) {
 	if (typeof url === "string" && EBAY_ITEM.test(url)) return url;
 	if (typeof url !== "string" || !url.startsWith("/") || url.startsWith("//")) {
@@ -83,7 +83,8 @@ async function openTarget(url) {
 /**
  * Focuses an open window and has the page route itself there (`navigate()`
  * only works on a window this worker controls), else opens a new one. Both
- * need the click's short user gesture, so nothing slow comes first.
+ * need the click's short user gesture, so nothing slow comes first. The page
+ * side is `src/components/app-service-worker.tsx`, mounted in the root layout.
  */
 async function openApp(path) {
 	const windows = await self.clients.matchAll({
@@ -93,7 +94,7 @@ async function openApp(path) {
 	const open = windows[0];
 	if (open) {
 		await open.focus();
-		open.postMessage({ type: "yugioh-open", url: path });
+		open.postMessage({ type: "app-open", url: path });
 		return;
 	}
 	await self.clients.openWindow(path);

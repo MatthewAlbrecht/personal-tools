@@ -158,6 +158,3 @@ export const listingSortSchema = z.object({
 	key: z.enum(SORT_KEYS),
 	direction: z.enum(SORT_DIRECTIONS),
 });
-
-/** The alerts switch on Settings: on or off for this device. */
-export const pushAlertsSchema = z.object({ enabled: z.boolean() });

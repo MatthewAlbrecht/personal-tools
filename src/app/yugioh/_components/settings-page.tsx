@@ -7,6 +7,7 @@ import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import type * as React from "react";
 import { toast } from "sonner";
+import { PushSettings } from "~/components/push-settings";
 import { Button } from "~/components/ui/button";
 import {
 	Card,
@@ -45,7 +46,6 @@ import { api } from "../../../../convex/_generated/api";
 import { errorMessage } from "../_utils/errors";
 import { importFeeRateSchema, newImportFeeRateSchema } from "../_utils/schemas";
 import { AutomatedRuns } from "./automated-runs";
-import { PushSettings } from "./push-settings";
 
 const SAVE_FAILED = "Couldn't save. Try again.";
 
@@ -71,7 +71,11 @@ export function SettingsPage(): React.ReactElement {
 				</h1>
 			</header>
 
-			<PushSettings />
+			<PushSettings
+				description="A push for each new Great or Good deal on a Card you still need."
+				label="Deal and auction alerts on this device"
+				hint="Great and Good deals, 8am-11pm. Auctions 15 minutes before they end, any time."
+			/>
 
 			{settings === undefined ? (
 				<SettingsPageSkeleton />

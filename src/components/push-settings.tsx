@@ -6,6 +6,7 @@ import { Share } from "lucide-react";
 import type * as React from "react";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 import { Button } from "~/components/ui/button";
 import {
 	Card,
@@ -24,26 +25,41 @@ import {
 import { Skeleton } from "~/components/ui/skeleton";
 import { Switch } from "~/components/ui/switch";
 import { env } from "~/env";
-import { api } from "../../../../convex/_generated/api";
-import { errorMessage } from "../_utils/errors";
+import { errorMessage } from "~/lib/error-message";
 import {
 	type PushSupport,
 	currentSubscription,
 	pushSupport,
 	subscribeThisDevice,
 	subscriptionArgs,
-} from "../_utils/push";
-import { pushAlertsSchema } from "../_utils/schemas";
+} from "~/lib/push";
+import { api } from "../../convex/_generated/api";
+
+/** The alerts switch: on or off for this device. */
+const pushAlertsSchema = z.object({ enabled: z.boolean() });
 
 const BLOCKED =
 	"Notifications are blocked for this app. Allow them in your browser or iPhone Settings, then try again.";
 
 /**
- * Settings: deal alerts on this device. The switch shows in browsers that
- * have push (the installed app on iPhone); an iPhone Safari tab gets the
- * add-to-home-screen steps instead.
+ * Alerts on this device, for any feature page. One push subscription per
+ * device covers every feature, so turning it on here turns it on everywhere.
+ * The switch shows in browsers that have push (the installed app on iPhone);
+ * an iPhone Safari tab gets the add-to-home-screen steps instead. The copy
+ * says what this page's feature pushes; the behaviour is the same everywhere.
  */
-export function PushSettings(): React.ReactElement {
+export function PushSettings({
+	description,
+	label,
+	hint,
+}: {
+	/** Under the card title: what pushes this feature sends. */
+	description: string;
+	/** The switch's label. */
+	label: string;
+	/** Under the label: when the pushes arrive. */
+	hint: string;
+}): React.ReactElement {
 	const support = useSyncExternalStore(
 		noSubscribe,
 		pushSupport,
@@ -54,9 +70,7 @@ export function PushSettings(): React.ReactElement {
 		<Card id="notifications">
 			<CardHeader>
 				<CardTitle>Notifications</CardTitle>
-				<CardDescription>
-					A push for each new Great or Good deal on a Card you still need.
-				</CardDescription>
+				<CardDescription>{description}</CardDescription>
 			</CardHeader>
 			{support === null ? (
 				<CardContent>
@@ -79,7 +93,11 @@ export function PushSettings(): React.ReactElement {
 					</p>
 				</CardContent>
 			) : (
-				<AlertsSwitch vapidPublicKey={env.NEXT_PUBLIC_VAPID_PUBLIC_KEY} />
+				<AlertsSwitch
+					vapidPublicKey={env.NEXT_PUBLIC_VAPID_PUBLIC_KEY}
+					label={label}
+					hint={hint}
+				/>
 			)}
 		</Card>
 	);
@@ -88,8 +106,12 @@ export function PushSettings(): React.ReactElement {
 /** On or off for this device, saved as soon as it's flipped. */
 function AlertsSwitch({
 	vapidPublicKey,
+	label,
+	hint,
 }: {
 	vapidPublicKey: string;
+	label: string;
+	hint: string;
 }): React.ReactElement {
 	// undefined while this device's subscription is being read.
 	const [endpoint, setEndpoint] = useState<string | null | undefined>(
@@ -174,13 +196,8 @@ function AlertsSwitch({
 							{(submitting) => (
 								<Field orientation="horizontal" className="min-h-11">
 									<FieldContent>
-										<FieldLabel htmlFor="push-alerts">
-											Deal and auction alerts on this device
-										</FieldLabel>
-										<FieldDescription>
-											Great and Good deals, 8am-11pm. Auctions 15 minutes before
-											they end, any time.
-										</FieldDescription>
+										<FieldLabel htmlFor="push-alerts">{label}</FieldLabel>
+										<FieldDescription>{hint}</FieldDescription>
 										{!on && Notification.permission === "denied" ? (
 											<FieldDescription className="text-destructive">
 												{BLOCKED}
@@ -234,7 +251,7 @@ function InstallSteps(): React.ReactElement {
 				</li>
 				<li>Tap Add to Home Screen, then Add.</li>
 				<li>
-					Open Yu-Gi-Oh from your home screen, come back to Settings and turn on
+					Open moooose from your home screen, come back to this page and turn on
 					alerts.
 				</li>
 			</ol>

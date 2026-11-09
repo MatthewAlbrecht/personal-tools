@@ -1,9 +1,2 @@
-import { ConvexError } from "convex/values";
-
-/** The message a Convex mutation threw on purpose, or the fallback for anything else. */
-export function errorMessage(error: unknown, fallback: string): string {
-	if (error instanceof ConvexError && typeof error.data === "string") {
-		return error.data;
-	}
-	return fallback;
-}
+// Shared with the rest of the app in `~/lib/error-message`.
+export { errorMessage } from "~/lib/error-message";

@@ -1,18 +1,20 @@
 import type { MetadataRoute } from "next";
 
 /**
- * The installable app (served at /manifest.webmanifest). It opens on the
- * Yu-Gi-Oh tracker; the scope is the whole site so signing in at /login stays
- * inside the installed app. iOS only allows push once it's on the home screen
- * with `display: standalone`. Public in `src/lib/route-access.ts`.
+ * The installable app (served at /manifest.webmanifest): the whole site,
+ * opening on the home page. The scope is the whole site so signing in at
+ * /login stays inside the installed app. `id` is still "/yugioh" from when it
+ * was the Yu-Gi-Oh app: changing it would orphan existing Android and desktop
+ * installs. iOS only allows push once it's on the home screen with
+ * `display: standalone`. Public in `src/lib/route-access.ts`.
  */
 export default function manifest(): MetadataRoute.Manifest {
 	return {
-		name: "Yu-Gi-Oh · moooose",
-		short_name: "Yu-Gi-Oh",
-		description: "What it costs to finish each max-rarity Deck.",
+		name: "moooose",
+		short_name: "moooose",
+		description: "Personal tools for music, books, cards and more.",
 		id: "/yugioh",
-		start_url: "/yugioh",
+		start_url: "/",
 		scope: "/",
 		display: "standalone",
 		background_color: "#ffffff",
