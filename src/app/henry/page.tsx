@@ -1,6 +1,12 @@
 import type * as React from "react";
-import { LedgerPage } from "./_components/ledger-page";
+import { Suspense } from "react";
+import { LedgerPage, LedgerPageSkeleton } from "./_components/ledger-page";
 
 export default function HenryPage(): React.ReactElement {
-	return <LedgerPage />;
+	return (
+		// LedgerPage reads `?unit=` with useSearchParams, which needs a Suspense boundary.
+		<Suspense fallback={<LedgerPageSkeleton />}>
+			<LedgerPage />
+		</Suspense>
+	);
 }

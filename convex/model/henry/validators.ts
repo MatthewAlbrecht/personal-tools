@@ -57,13 +57,65 @@ export const henryCheckSummaryValidator = v.object({
 	unitCount: v.union(v.number(), v.null()),
 });
 
+/**
+ * Current price minus the price 3, 7 and 14 days before `now`, measured from
+ * the first price point when the unit listed (or tracking began) within the
+ * window. Negative is a drop.
+ */
+export const henryPriceChangesValidator = v.object({
+	d3: v.number(),
+	d7: v.number(),
+	d14: v.number(),
+});
+
 export const henryLedgerUnitValidator = henryUnitFactsValidator
 	.omit("sightmapId")
 	.extend({
 		_id: v.id("henryUnits"),
 		/** Whole days since it listed while that's under 7; null otherwise (incl. baseline units). */
 		newDays: v.union(v.number(), v.null()),
+		changes: henryPriceChangesValidator,
 	});
+
+export const henryPricePointValidator = v.object({
+	at: v.number(),
+	price: v.number(),
+	totalPrice: v.number(),
+	leaseTermMonths: v.union(v.number(), v.null()),
+});
+
+/**
+ * One line of a unit's timeline: an event from `henryUnitEvents` (with the
+ * price then), or a price change from consecutive price points.
+ */
+export const henryTimelineEntryValidator = v.union(
+	v.object({
+		kind: henryUnitEventKindValidator,
+		at: v.number(),
+		price: v.number(),
+	}),
+	v.object({
+		kind: v.literal("priceChange"),
+		at: v.number(),
+		from: v.number(),
+		to: v.number(),
+	}),
+);
+
+/** The unit drawer. */
+export const henryUnitDetailsValidator = henryLedgerUnitValidator.extend({
+	status: henryUnitStatusValidator,
+	/** When it came on the market after the baseline; null when tracked since the baseline. */
+	listedAt: v.union(v.number(), v.null()),
+	firstSeenAt: v.number(),
+	offMarketAt: v.union(v.number(), v.null()),
+	/** Current price minus its first price point (listing or tracking began). */
+	sinceStart: v.number(),
+	/** Oldest first; the latest `MAX_HISTORY` price points. */
+	history: v.array(henryPricePointValidator),
+	/** Newest first. */
+	timeline: v.array(henryTimelineEntryValidator),
+});
 
 export const henryLedgerValidator = v.object({
 	/** The baseline: the first successful check. Null before it. */

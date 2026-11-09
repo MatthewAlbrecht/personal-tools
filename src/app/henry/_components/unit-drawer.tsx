@@ -1,0 +1,292 @@
+"use client";
+
+import { useQuery } from "convex/react";
+import type { FunctionReturnType } from "convex/server";
+import { format, parseISO } from "date-fns";
+import { ExternalLink, SearchX } from "lucide-react";
+import { useState } from "react";
+import type * as React from "react";
+import { Button } from "~/components/ui/button";
+import {
+	Drawer,
+	DrawerContent,
+	DrawerDescription,
+	DrawerFooter,
+	DrawerHeader,
+	DrawerTitle,
+} from "~/components/ui/drawer";
+import {
+	Empty,
+	EmptyDescription,
+	EmptyHeader,
+	EmptyMedia,
+	EmptyTitle,
+} from "~/components/ui/empty";
+import { Separator } from "~/components/ui/separator";
+import { Skeleton } from "~/components/ui/skeleton";
+import { LONGEST_CHANGE_WINDOW } from "~/lib/henry/changes";
+import { bedLabel, formatMoney } from "~/lib/henry/units";
+import { useHeldWhileLoading } from "~/lib/hooks/use-held-while-loading";
+import { useMediaQuery } from "~/lib/hooks/use-media-query";
+import { api } from "../../../../convex/_generated/api";
+import { PriceChange, PriceChangeTrio } from "./price-change";
+import { PriceStepChart } from "./price-step-chart";
+import { UnitBadges } from "./unit-badges";
+
+type UnitDetails = NonNullable<
+	FunctionReturnType<typeof api.henry.units.getUnit>
+>;
+type TimelineEntry = UnitDetails["timeline"][number];
+type EventKind = Exclude<TimelineEntry["kind"], "priceChange">;
+
+/** Where to go apply. */
+const HENRY_SITE = "https://www.thehenrydenver.com/Floor-plans.aspx";
+
+/** How each timeline event reads, with the price then. Ticket 04 adds off market and relisted. */
+const EVENT_LABELS: Record<EventKind, (price: string) => string> = {
+	trackingBegan: (price) => `Tracking began at ${price}`,
+	listed: (price) => `Listed at ${price}`,
+};
+
+/**
+ * One unit's details, opened with `?unit=<number>`: a right panel at `md:`
+ * and up, a bottom sheet on phones (the Yu-Gi-Oh drawer style). Keeps
+ * showing the last unit while it closes.
+ */
+export function UnitDrawer({
+	number,
+	now,
+	onClose,
+}: {
+	/** The unit number from the URL; null when closed. */
+	number: string | null;
+	now: number;
+	onClose: () => void;
+}): React.ReactElement {
+	const isDesktop = useMediaQuery("(min-width: 768px)");
+	// The unit stays rendered through the close animation after the URL clears.
+	const [shown, setShown] = useState(number);
+	if (number !== null && number !== shown) setShown(number);
+
+	const details = useHeldWhileLoading(
+		useQuery(
+			api.henry.units.getUnit,
+			shown === null ? "skip" : { number: shown, now },
+		),
+		shown ?? "",
+	);
+
+	return (
+		<Drawer
+			open={number !== null}
+			onOpenChange={(open) => {
+				if (!open) onClose();
+			}}
+			direction={isDesktop ? "right" : "bottom"}
+		>
+			<DrawerContent className="data-[vaul-drawer-direction=bottom]:h-[90dvh] data-[vaul-drawer-direction=bottom]:max-h-[90dvh] data-[vaul-drawer-direction=right]:w-full data-[vaul-drawer-direction=right]:sm:max-w-md">
+				{details === undefined ? (
+					<UnitDrawerSkeleton number={shown} />
+				) : details === null ? (
+					<UnknownUnit number={shown} />
+				) : (
+					<UnitDetailsView unit={details} now={now} />
+				)}
+			</DrawerContent>
+		</Drawer>
+	);
+}
+
+function UnitDetailsView({
+	unit,
+	now,
+}: {
+	unit: UnitDetails;
+	now: number;
+}): React.ReactElement {
+	const today = format(now, "yyyy-MM-dd");
+	return (
+		<>
+			<DrawerHeader className="gap-1 text-left group-data-[vaul-drawer-direction=bottom]/drawer-content:text-left">
+				{/* Ticket 05: the star button sits at the end of this row. */}
+				<div className="flex flex-wrap items-center gap-2">
+					<DrawerTitle className="font-display text-2xl tabular-nums">
+						Apt {unit.number}
+					</DrawerTitle>
+					<UnitBadges unit={unit} />
+				</div>
+				<DrawerDescription>
+					{unit.floorPlan} · {bedLabel(unit.beds)} ·{" "}
+					{unit.sqft.toLocaleString()} sq ft · Floor {unit.floor}
+				</DrawerDescription>
+			</DrawerHeader>
+
+			<div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-4 pb-6">
+				<div className="flex flex-col gap-1">
+					<p className="font-display font-semibold text-4xl tabular-nums">
+						{formatMoney(unit.price)}
+						<span className="ml-1 font-normal font-sans text-base text-muted-foreground">
+							/mo
+						</span>
+					</p>
+					<p className="text-muted-foreground text-sm">{terms(unit, today)}</p>
+				</div>
+
+				<PriceChangeTrio changes={unit.changes} />
+
+				<section className="flex flex-col gap-3">
+					<div className="flex items-baseline justify-between gap-3">
+						<h3 className="font-medium text-sm">Last 14 days</h3>
+						<span className="inline-flex items-baseline gap-1.5 text-muted-foreground text-xs">
+							{unit.listedAt === null
+								? "Since tracking began"
+								: "Since listing"}
+							<PriceChange value={unit.sinceStart} />
+						</span>
+					</div>
+					<PriceStepChart
+						history={unit.history}
+						from={now - LONGEST_CHANGE_WINDOW}
+						to={now}
+					/>
+				</section>
+
+				<Separator />
+
+				<section className="flex flex-col gap-3">
+					<h3 className="font-medium text-sm">Timeline</h3>
+					<ol className="flex flex-col gap-3 text-sm">
+						{unit.timeline.map((entry) => (
+							<TimelineRow key={`${entry.kind}-${entry.at}`} entry={entry} />
+						))}
+					</ol>
+				</section>
+
+				<Separator />
+
+				<dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+					<Fact label="Floor plan" value={unit.floorPlan} />
+					<Fact
+						label="Layout"
+						value={`${bedLabel(unit.beds)} · ${unit.baths} bath`}
+					/>
+					<Fact label="Size" value={`${unit.sqft.toLocaleString()} sq ft`} />
+					<Fact label="Floor" value={String(unit.floor)} />
+					<Fact
+						label="Faces"
+						value={unit.facesI25 ? "I-25" : "Away from I-25"}
+					/>
+					{unit.specials !== null ? (
+						<Fact label="Special" value={unit.specials} />
+					) : null}
+				</dl>
+			</div>
+
+			<DrawerFooter className="border-t pb-[max(1rem,env(safe-area-inset-bottom))]">
+				<Button asChild variant="outline" className="h-11 md:h-9">
+					<a href={HENRY_SITE} target="_blank" rel="noopener noreferrer">
+						Floor plans on The Henry's site
+						<ExternalLink data-icon="inline-end" />
+					</a>
+				</Button>
+			</DrawerFooter>
+		</>
+	);
+}
+
+/** "Available now · 16-month lease · $2,662 with fees". */
+function terms(unit: UnitDetails, today: string): string {
+	const parts = [
+		unit.availableOn <= today
+			? "Available now"
+			: `Available ${format(parseISO(unit.availableOn), "MMM d")}`,
+	];
+	if (unit.leaseTermMonths !== null) {
+		parts.push(`${unit.leaseTermMonths}-month lease`);
+	}
+	parts.push(`${formatMoney(unit.totalPrice)} with fees`);
+	return parts.join(" · ");
+}
+
+function TimelineRow({ entry }: { entry: TimelineEntry }): React.ReactElement {
+	return (
+		<li className="flex items-baseline gap-3">
+			<span className="w-14 shrink-0 text-muted-foreground tabular-nums">
+				{format(entry.at, "MMM d")}
+			</span>
+			{entry.kind === "priceChange" ? (
+				<>
+					<span className="flex-1 tabular-nums">
+						{formatMoney(entry.from)} → {formatMoney(entry.to)}
+					</span>
+					<PriceChange value={entry.to - entry.from} />
+				</>
+			) : (
+				<span className="flex-1 tabular-nums">
+					{EVENT_LABELS[entry.kind](formatMoney(entry.price))}
+				</span>
+			)}
+		</li>
+	);
+}
+
+function Fact({
+	label,
+	value,
+}: {
+	label: string;
+	value: string;
+}): React.ReactElement {
+	return (
+		<div className="flex flex-col gap-0.5">
+			<dt className="text-muted-foreground text-xs">{label}</dt>
+			<dd>{value}</dd>
+		</div>
+	);
+}
+
+function UnknownUnit({
+	number,
+}: { number: string | null }): React.ReactElement {
+	return (
+		<>
+			<DrawerHeader className="sr-only">
+				<DrawerTitle>Apt {number}</DrawerTitle>
+			</DrawerHeader>
+			<Empty className="flex-1">
+				<EmptyHeader>
+					<EmptyMedia variant="icon">
+						<SearchX />
+					</EmptyMedia>
+					<EmptyTitle>No apt {number}</EmptyTitle>
+					<EmptyDescription>
+						The Henry hasn't listed a unit with that number since tracking
+						began.
+					</EmptyDescription>
+				</EmptyHeader>
+			</Empty>
+		</>
+	);
+}
+
+function UnitDrawerSkeleton({
+	number,
+}: {
+	number: string | null;
+}): React.ReactElement {
+	return (
+		<>
+			<DrawerHeader className="gap-2 text-left group-data-[vaul-drawer-direction=bottom]/drawer-content:text-left">
+				<DrawerTitle className="font-display text-2xl tabular-nums">
+					{number === null ? "Unit" : `Apt ${number}`}
+				</DrawerTitle>
+				<Skeleton className="h-4 w-56" />
+			</DrawerHeader>
+			<div className="flex flex-col gap-6 px-4">
+				<Skeleton className="h-10 w-40" />
+				<Skeleton className="h-10 w-full" />
+				<Skeleton className="h-24 w-full" />
+			</div>
+		</>
+	);
+}

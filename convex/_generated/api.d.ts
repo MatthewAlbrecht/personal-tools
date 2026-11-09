@@ -88,6 +88,7 @@ import type * as geniusAlbums from "../geniusAlbums.js";
 import type * as geniusCreditLabels from "../geniusCreditLabels.js";
 import type * as henry_checks from "../henry/checks.js";
 import type * as henry_ledger from "../henry/ledger.js";
+import type * as henry_units from "../henry/units.js";
 import type * as home from "../home.js";
 import type * as http from "../http.js";
 import type * as launch from "../launch.js";
@@ -103,6 +104,7 @@ import type * as migrations_migrateRatingsToThreeTier from "../migrations/migrat
 import type * as model_henry_checks from "../model/henry/checks.js";
 import type * as model_henry_ledger from "../model/henry/ledger.js";
 import type * as model_henry_sightmap from "../model/henry/sightmap.js";
+import type * as model_henry_units from "../model/henry/units.js";
 import type * as model_henry_validators from "../model/henry/validators.js";
 import type * as model_yugioh_automation from "../model/yugioh/automation.js";
 import type * as model_yugioh_captureListingsPage from "../model/yugioh/captureListingsPage.js";
@@ -239,6 +241,7 @@ declare const fullApi: ApiFromModules<{
   geniusCreditLabels: typeof geniusCreditLabels;
   "henry/checks": typeof henry_checks;
   "henry/ledger": typeof henry_ledger;
+  "henry/units": typeof henry_units;
   home: typeof home;
   http: typeof http;
   launch: typeof launch;
@@ -254,6 +257,7 @@ declare const fullApi: ApiFromModules<{
   "model/henry/checks": typeof model_henry_checks;
   "model/henry/ledger": typeof model_henry_ledger;
   "model/henry/sightmap": typeof model_henry_sightmap;
+  "model/henry/units": typeof model_henry_units;
   "model/henry/validators": typeof model_henry_validators;
   "model/yugioh/automation": typeof model_yugioh_automation;
   "model/yugioh/captureListingsPage": typeof model_yugioh_captureListingsPage;

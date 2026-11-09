@@ -2086,6 +2086,7 @@ export default defineSchema({
 		offMarketAt: v.union(v.number(), v.null()),
 	})
 		.index("by_sightmapId", ["sightmapId"])
+		.index("by_number", ["number"])
 		.index("by_status_and_price", ["status", "price"])
 		.index("by_firstSeenAt", ["firstSeenAt"]),
 
