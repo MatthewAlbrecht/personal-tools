@@ -6,6 +6,7 @@ import {
 } from "../../../src/lib/henry/changes";
 import type { Doc } from "../../_generated/dataModel";
 import type { QueryCtx } from "../../_generated/server";
+import { type HenryStar, readStar } from "./stars";
 import type {
 	henryLedgerUnitValidator,
 	henryTimelineEntryValidator,
@@ -33,6 +34,7 @@ const MAX_EVENTS = 100;
 export function ledgerUnit(
 	unit: Doc<"henryUnits">,
 	changes: PriceChanges,
+	star: HenryStar,
 	now: number,
 ): HenryLedgerUnit {
 	return {
@@ -51,6 +53,8 @@ export function ledgerUnit(
 		specials: unit.specials,
 		newDays: newDays(unit.listedAt, now),
 		changes,
+		unitStarred: star.unitStarred,
+		planStarred: star.planStarred,
 	};
 }
 
@@ -102,8 +106,9 @@ export async function readUnitDetails(
 		.first();
 	if (unit === null) return null;
 
-	const [changes, first, latest, events] = await Promise.all([
+	const [changes, star, first, latest, events] = await Promise.all([
 		readPriceChanges(ctx, unit, now),
+		readStar(ctx, unit),
 		ctx.db
 			.query("henryPricePoints")
 			.withIndex("by_unitId_and_at", (q) => q.eq("unitId", unit._id))
@@ -122,7 +127,7 @@ export async function readUnitDetails(
 	const history = latest.reverse();
 
 	return {
-		...ledgerUnit(unit, changes, now),
+		...ledgerUnit(unit, changes, star, now),
 		status: unit.status,
 		listedAt: unit.listedAt,
 		firstSeenAt: unit.firstSeenAt,

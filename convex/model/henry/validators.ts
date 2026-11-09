@@ -77,6 +77,10 @@ export const henryLedgerUnitValidator = henryUnitFactsValidator
 		/** Whole days since it listed while that's under 7; null otherwise (incl. baseline units). */
 		newDays: v.union(v.number(), v.null()),
 		changes: henryPriceChangesValidator,
+		/** Starred itself (independent of its floor plan's star). */
+		unitStarred: v.boolean(),
+		/** Its floor plan is starred. Starred = either. */
+		planStarred: v.boolean(),
 	});
 
 export const henryPricePointValidator = v.object({
@@ -143,6 +147,8 @@ export const henryLedgerValidator = v.object({
 	goneThisWeekCount: v.number(),
 	/** Tracking has begun and the latest successful check is over 3 hours before `now`. */
 	checksFailing: v.boolean(),
+	/** Starred floor plans, by name, whether or not a unit on one is on the market. */
+	starredPlans: v.array(v.string()),
 	/** On the market, cheapest first. */
 	units: v.array(henryLedgerUnitValidator),
 	/** Off the market in the 7 days before `now`, newest first. */

@@ -1,6 +1,7 @@
 import type { Infer } from "convex/values";
 import type { QueryCtx } from "../../_generated/server";
 import { MAX_ON_MARKET, latestCheck, trackingBeganAt } from "./checks";
+import { readStar, readStarredPlans } from "./stars";
 import { ledgerUnit, readPriceChanges } from "./units";
 import type { henryLedgerValidator } from "./validators";
 
@@ -23,27 +24,34 @@ export async function readLedger(
 	ctx: QueryCtx,
 	now: number,
 ): Promise<HenryLedger> {
-	const [began, lastSuccess, last, onMarket, gone] = await Promise.all([
-		trackingBeganAt(ctx),
-		latestCheck(ctx, "success"),
-		latestCheck(ctx),
-		ctx.db
-			.query("henryUnits")
-			.withIndex("by_status_and_price", (q) => q.eq("status", "onMarket"))
-			.take(MAX_ON_MARKET),
-		ctx.db
-			.query("henryUnits")
-			.withIndex("by_status_and_offMarketAt", (q) =>
-				q.eq("status", "offMarket").gte("offMarketAt", now - GONE_FOR),
-			)
-			.order("desc")
-			.take(MAX_GONE),
-	]);
+	const [began, lastSuccess, last, onMarket, gone, starredPlans] =
+		await Promise.all([
+			trackingBeganAt(ctx),
+			latestCheck(ctx, "success"),
+			latestCheck(ctx),
+			ctx.db
+				.query("henryUnits")
+				.withIndex("by_status_and_price", (q) => q.eq("status", "onMarket"))
+				.take(MAX_ON_MARKET),
+			ctx.db
+				.query("henryUnits")
+				.withIndex("by_status_and_offMarketAt", (q) =>
+					q.eq("status", "offMarket").gte("offMarketAt", now - GONE_FOR),
+				)
+				.order("desc")
+				.take(MAX_GONE),
+			readStarredPlans(ctx),
+		]);
 
+	const plans = new Set(starredPlans);
 	const units = await Promise.all(
-		onMarket.map(async (unit) =>
-			ledgerUnit(unit, await readPriceChanges(ctx, unit, now), now),
-		),
+		onMarket.map(async (unit) => {
+			const [changes, star] = await Promise.all([
+				readPriceChanges(ctx, unit, now),
+				readStar(ctx, unit, plans),
+			]);
+			return ledgerUnit(unit, changes, star, now);
+		}),
 	);
 
 	return {
@@ -63,6 +71,7 @@ export async function readLedger(
 		checksFailing:
 			began !== null &&
 			(lastSuccess === null || now - lastSuccess.at > STALE_AFTER),
+		starredPlans,
 		units,
 		goneThisWeek: gone.map((unit) => ({
 			_id: unit._id,

@@ -30,8 +30,10 @@ import { useHeldWhileLoading } from "~/lib/hooks/use-held-while-loading";
 import { useMediaQuery } from "~/lib/hooks/use-media-query";
 import { cn } from "~/lib/utils";
 import { api } from "../../../../convex/_generated/api";
+import { useStarToggles } from "../_utils/use-star-toggles";
 import { PriceChange, PriceChangeTrio } from "./price-change";
 import { PriceStepChart } from "./price-step-chart";
+import { StarButton } from "./star-button";
 import { UnitBadges } from "./unit-badges";
 
 type UnitDetails = NonNullable<
@@ -109,16 +111,25 @@ function UnitDetailsView({
 }): React.ReactElement {
 	const today = format(now, "yyyy-MM-dd");
 	const gone = unit.status === "offMarket";
+	const stars = useStarToggles();
 	return (
 		<>
 			<DrawerHeader className="gap-1 text-left group-data-[vaul-drawer-direction=bottom]/drawer-content:text-left">
-				{/* Ticket 05: the star button sits at the end of this row. */}
-				<div className="flex flex-wrap items-center gap-2">
-					<DrawerTitle className="font-display text-2xl tabular-nums">
-						Apt {unit.number}
-					</DrawerTitle>
-					{/* A gone unit isn't New, however recently it listed. */}
-					<UnitBadges unit={gone ? { ...unit, newDays: null } : unit} />
+				<div className="flex items-center gap-2">
+					<div className="flex min-w-0 flex-wrap items-center gap-2">
+						<DrawerTitle className="font-display text-2xl tabular-nums">
+							Apt {unit.number}
+						</DrawerTitle>
+						{/* A gone unit isn't New, however recently it listed. */}
+						<UnitBadges unit={gone ? { ...unit, newDays: null } : unit} />
+					</div>
+					<StarButton
+						active={unit.unitStarred}
+						viaPlan={unit.planStarred}
+						label={`apt ${unit.number}`}
+						onToggle={() => stars.toggleUnit(unit._id)}
+						className="ml-auto shrink-0"
+					/>
 				</div>
 				<DrawerDescription>
 					{unit.floorPlan} · {bedLabel(unit.beds)} ·{" "}
@@ -174,7 +185,20 @@ function UnitDetailsView({
 				<Separator />
 
 				<dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-					<Fact label="Floor plan" value={unit.floorPlan} />
+					<div className="flex flex-col gap-0.5">
+						<dt className="text-muted-foreground text-xs">Floor plan</dt>
+						<dd className="-my-2 -ml-1 flex items-center gap-0.5">
+							<StarButton
+								active={unit.planStarred}
+								label={`floor plan ${unit.floorPlan}`}
+								onToggle={() => stars.togglePlan(unit.floorPlan)}
+							/>
+							{unit.floorPlan}
+							{unit.planStarred ? (
+								<span className="text-muted-foreground text-xs">· starred</span>
+							) : null}
+						</dd>
+					</div>
 					<Fact
 						label="Layout"
 						value={`${bedLabel(unit.beds)} · ${unit.baths} bath`}

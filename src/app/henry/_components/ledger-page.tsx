@@ -3,12 +3,28 @@
 import { useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { format, formatDistanceStrict } from "date-fns";
-import { ArrowDown, ArrowDownUp, ArrowUp, Building2 } from "lucide-react";
+import {
+	ArrowDown,
+	ArrowDownUp,
+	ArrowUp,
+	Building2,
+	ChevronDown,
+	Star,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import type * as React from "react";
 import { Button } from "~/components/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuCheckboxItem,
+	DropdownMenuContent,
+	DropdownMenuGroup,
+	DropdownMenuLabel,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
 import {
 	Empty,
 	EmptyDescription,
@@ -25,6 +41,7 @@ import {
 	TableHeader,
 	TableRow,
 } from "~/components/ui/table";
+import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group";
 import {
 	DEFAULT_SORT,
 	type Sort,
@@ -32,12 +49,23 @@ import {
 	nextSort,
 	sortUnits,
 } from "~/lib/henry/sort";
+import {
+	type LedgerFilter,
+	type PlanSummary,
+	filterCounts,
+	filterUnits,
+	isStarred,
+	pinStarred,
+	planSummaries,
+} from "~/lib/henry/stars";
 import { bedLabel, formatMoney, moveInLabel } from "~/lib/henry/units";
 import { useHeldWhileLoading } from "~/lib/hooks/use-held-while-loading";
 import { useMinuteClock } from "~/lib/hooks/use-minute-clock";
 import { cn } from "~/lib/utils";
 import { api } from "../../../../convex/_generated/api";
+import { useStarToggles } from "../_utils/use-star-toggles";
 import { PriceChange } from "./price-change";
+import { StarButton } from "./star-button";
 import { UnitBadges } from "./unit-badges";
 import { UnitDrawer } from "./unit-drawer";
 
@@ -101,6 +129,7 @@ export function LedgerPage(): React.ReactElement {
 					) : null}
 					<LedgerTable
 						units={ledger.units}
+						starredPlans={ledger.starredPlans}
 						today={format(now, "yyyy-MM-dd")}
 						unitHref={unitHref}
 						onOpen={openUnitDrawer}
@@ -185,106 +214,263 @@ function NoCheckYet({ ledger }: { ledger: Ledger }): React.ReactElement {
 	);
 }
 
+const FILTER_LABELS: Record<LedgerFilter, string> = {
+	all: "All",
+	starred: "Starred",
+	new: "New",
+};
+
+/** The filter and floor plan stars above the table, then the units: starred pinned to the top within the current sort. */
 function LedgerTable({
 	units,
+	starredPlans,
 	today,
 	unitHref,
 	onOpen,
 }: {
 	units: LedgerUnit[];
+	starredPlans: string[];
 	today: string;
 	unitHref: (number: string) => string;
 	onOpen: (number: string) => void;
 }): React.ReactElement {
 	const [sort, setSort] = useState<Sort>(DEFAULT_SORT);
-	const rows = sortUnits(units, sort);
+	const [filter, setFilter] = useState<LedgerFilter>("all");
+	const stars = useStarToggles();
+	const counts = filterCounts(units);
+	const rows = pinStarred(filterUnits(sortUnits(units, sort), filter));
 
 	function sortBy(key: SortKey): void {
 		setSort((current) => nextSort(current, key));
 	}
 
 	return (
-		<div className="overflow-x-auto rounded-lg border">
-			<Table>
-				<TableHeader>
-					<TableRow>
-						<TableHead>Unit</TableHead>
-						<TableHead>Layout</TableHead>
-						<SortHead
-							label="Sq ft"
-							sortKey="sqft"
-							sort={sort}
-							onSort={sortBy}
-						/>
-						<SortHead
-							label="Floor"
-							sortKey="floor"
-							sort={sort}
-							onSort={sortBy}
-						/>
-						<SortHead
-							label="Price"
-							sortKey="price"
-							sort={sort}
-							onSort={sortBy}
-						/>
-						<SortHead label="3d" sortKey="d3" sort={sort} onSort={sortBy} />
-						<SortHead label="7d" sortKey="d7" sort={sort} onSort={sortBy} />
-						<SortHead label="14d" sortKey="d14" sort={sort} onSort={sortBy} />
-						<TableHead>Move in</TableHead>
-					</TableRow>
-				</TableHeader>
-				<TableBody>
-					{rows.map((unit) => (
-						<TableRow
-							key={unit._id}
-							onClick={() => onOpen(unit.number)}
-							className="cursor-pointer"
+		<section className="flex flex-col gap-3">
+			<div className="flex flex-wrap items-center justify-between gap-2">
+				<ToggleGroup
+					aria-label="Show"
+					variant="outline"
+					spacing={0}
+					value={[filter]}
+					onValueChange={(next) => {
+						const [picked] = next as LedgerFilter[];
+						// Pressing the active option again would clear the group; keep it.
+						if (picked) setFilter(picked);
+					}}
+				>
+					{(["all", "starred", "new"] as const).map((option) => (
+						<ToggleGroupItem
+							key={option}
+							value={option}
+							className="h-11 px-3 md:h-9"
 						>
-							<TableCell>
-								<div className="flex items-center gap-2">
-									<Link
-										href={unitHref(unit.number)}
-										replace
-										scroll={false}
-										onClick={(event) => event.stopPropagation()}
-										className="rounded-sm font-medium tabular-nums underline-offset-4 outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
-									>
-										<span className="sr-only">Apt </span>
-										{unit.number}
-									</Link>
-									<UnitBadges unit={unit} />
-								</div>
-							</TableCell>
-							<TableCell className="text-muted-foreground">
-								{unit.floorPlan} · {bedLabel(unit.beds)}
-							</TableCell>
-							<TableCell className="text-right tabular-nums">
-								{unit.sqft.toLocaleString()}
-							</TableCell>
-							<TableCell className="text-right tabular-nums">
-								{unit.floor}
-							</TableCell>
-							<TableCell className="text-right font-medium tabular-nums">
-								{formatMoney(unit.price)}
-							</TableCell>
-							<TableCell className="text-right">
-								<PriceChange value={unit.changes.d3} />
-							</TableCell>
-							<TableCell className="text-right">
-								<PriceChange value={unit.changes.d7} />
-							</TableCell>
-							<TableCell className="text-right">
-								<PriceChange value={unit.changes.d14} />
-							</TableCell>
-							<TableCell className="text-muted-foreground">
-								{moveInLabel(unit.availableOn, today)}
-							</TableCell>
-						</TableRow>
+							{FILTER_LABELS[option]}
+							<span className="text-muted-foreground tabular-nums">
+								{counts[option]}
+							</span>
+						</ToggleGroupItem>
 					))}
-				</TableBody>
-			</Table>
-		</div>
+				</ToggleGroup>
+				<FloorPlanStars
+					plans={planSummaries(units, starredPlans)}
+					onToggle={stars.togglePlan}
+				/>
+			</div>
+
+			{rows.length === 0 ? (
+				<NoUnitsInFilter filter={filter} />
+			) : (
+				<div className="overflow-x-auto rounded-lg border">
+					<Table>
+						<TableHeader>
+							<TableRow>
+								<TableHead className="w-10">
+									<span className="sr-only">Star</span>
+								</TableHead>
+								<TableHead>Unit</TableHead>
+								<TableHead>Layout</TableHead>
+								<SortHead
+									label="Sq ft"
+									sortKey="sqft"
+									sort={sort}
+									onSort={sortBy}
+								/>
+								<SortHead
+									label="Floor"
+									sortKey="floor"
+									sort={sort}
+									onSort={sortBy}
+								/>
+								<SortHead
+									label="Price"
+									sortKey="price"
+									sort={sort}
+									onSort={sortBy}
+								/>
+								<SortHead label="3d" sortKey="d3" sort={sort} onSort={sortBy} />
+								<SortHead label="7d" sortKey="d7" sort={sort} onSort={sortBy} />
+								<SortHead
+									label="14d"
+									sortKey="d14"
+									sort={sort}
+									onSort={sortBy}
+								/>
+								<TableHead>Move in</TableHead>
+							</TableRow>
+						</TableHeader>
+						<TableBody>
+							{rows.map((unit) => (
+								<TableRow
+									key={unit._id}
+									onClick={() => onOpen(unit.number)}
+									className={cn(
+										"cursor-pointer",
+										isStarred(unit) && "bg-muted/40 font-semibold",
+									)}
+								>
+									<TableCell className="py-1">
+										<StarButton
+											active={unit.unitStarred}
+											viaPlan={unit.planStarred}
+											label={`apt ${unit.number}`}
+											onToggle={() => stars.toggleUnit(unit._id)}
+										/>
+									</TableCell>
+									<TableCell>
+										<div className="flex items-center gap-2">
+											<Link
+												href={unitHref(unit.number)}
+												replace
+												scroll={false}
+												onClick={(event) => event.stopPropagation()}
+												className="rounded-sm tabular-nums underline-offset-4 outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
+											>
+												<span className="sr-only">Apt </span>
+												{unit.number}
+											</Link>
+											<UnitBadges unit={unit} />
+										</div>
+									</TableCell>
+									<TableCell className="text-muted-foreground">
+										{unit.floorPlan} · {bedLabel(unit.beds)}
+									</TableCell>
+									<TableCell className="text-right tabular-nums">
+										{unit.sqft.toLocaleString()}
+									</TableCell>
+									<TableCell className="text-right tabular-nums">
+										{unit.floor}
+									</TableCell>
+									<TableCell
+										className={cn(
+											"text-right tabular-nums",
+											!isStarred(unit) && "font-medium",
+										)}
+									>
+										{formatMoney(unit.price)}
+									</TableCell>
+									<TableCell className="text-right">
+										<PriceChange value={unit.changes.d3} />
+									</TableCell>
+									<TableCell className="text-right">
+										<PriceChange value={unit.changes.d7} />
+									</TableCell>
+									<TableCell className="text-right">
+										<PriceChange value={unit.changes.d14} />
+									</TableCell>
+									<TableCell className="text-muted-foreground">
+										{moveInLabel(unit.availableOn, today)}
+									</TableCell>
+								</TableRow>
+							))}
+						</TableBody>
+					</Table>
+				</div>
+			)}
+		</section>
+	);
+}
+
+/** Stars a whole floor plan: every unit on it counts as starred, now and when more list. */
+function FloorPlanStars({
+	plans,
+	onToggle,
+}: {
+	plans: PlanSummary[];
+	onToggle: (floorPlan: string) => void;
+}): React.ReactElement {
+	const starredCount = plans.filter((plan) => plan.starred).length;
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<Button variant="outline" className="h-11 md:h-9">
+					<Star
+						data-icon="inline-start"
+						className={cn(starredCount > 0 && "fill-foreground")}
+					/>
+					Floor plans
+					{starredCount > 0 ? (
+						<span className="text-muted-foreground tabular-nums">
+							{starredCount}
+						</span>
+					) : null}
+					<ChevronDown data-icon="inline-end" />
+				</Button>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="end" className="w-64">
+				<DropdownMenuLabel>Star a floor plan</DropdownMenuLabel>
+				<p className="px-2 pb-1.5 text-muted-foreground text-xs">
+					Every unit on it counts as starred, including ones that list later.
+				</p>
+				<DropdownMenuSeparator />
+				<DropdownMenuGroup>
+					{plans.map((plan) => (
+						<DropdownMenuCheckboxItem
+							key={plan.floorPlan}
+							checked={plan.starred}
+							onCheckedChange={() => onToggle(plan.floorPlan)}
+							// Keep the menu open to star several.
+							onSelect={(event) => event.preventDefault()}
+						>
+							<span className="font-medium">{plan.floorPlan}</span>
+							{plan.beds !== null ? (
+								<span className="text-muted-foreground">
+									{bedLabel(plan.beds)}
+								</span>
+							) : null}
+							<span className="ml-auto text-muted-foreground text-xs tabular-nums">
+								{plan.onMarket === 0 ? "none listed" : plan.onMarket}
+							</span>
+						</DropdownMenuCheckboxItem>
+					))}
+				</DropdownMenuGroup>
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+
+function NoUnitsInFilter({
+	filter,
+}: {
+	filter: LedgerFilter;
+}): React.ReactElement {
+	return (
+		<Empty className="border">
+			<EmptyHeader>
+				<EmptyMedia variant="icon">
+					{filter === "starred" ? <Star /> : <Building2 />}
+				</EmptyMedia>
+				<EmptyTitle>
+					{filter === "starred"
+						? "No starred units on the market"
+						: "No new units this week"}
+				</EmptyTitle>
+				<EmptyDescription>
+					{filter === "starred"
+						? "Star a unit, or a whole floor plan, to pin it to the top."
+						: "Units that come on the market show up here for 7 days."}
+				</EmptyDescription>
+			</EmptyHeader>
+		</Empty>
 	);
 }
 

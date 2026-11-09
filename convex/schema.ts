@@ -2110,6 +2110,20 @@ export default defineSchema({
 		price: v.number(),
 	}).index("by_unitId_and_at", ["unitId", "at"]),
 
+	// Units I starred, by unit (so a star survives going off the market and
+	// relisting). One row per starred unit; unstarring deletes it.
+	henryStarredUnits: defineTable({
+		unitId: v.id("henryUnits"),
+		starredAt: v.number(),
+	}).index("by_unitId", ["unitId"]),
+
+	// Floor plans I starred (e.g. "B2"): every unit on one counts as starred,
+	// including ones that list later. Unstarring deletes the row.
+	henryStarredPlans: defineTable({
+		floorPlan: v.string(),
+		starredAt: v.number(),
+	}).index("by_floorPlan", ["floorPlan"]),
+
 	// Every hourly check. Kept 30 days, pruned a few at a time by later checks.
 	henryChecks: defineTable({
 		at: v.number(),

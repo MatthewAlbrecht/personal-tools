@@ -4,6 +4,7 @@
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api, internal } from "../_generated/api";
+import * as Stars from "../model/henry/stars";
 import schema from "../schema";
 import fixture from "./fixtures/sightmap-2026-11-08.json";
 
@@ -126,6 +127,7 @@ describe("before the first check", () => {
 			newThisWeekCount: 0,
 			goneThisWeekCount: 0,
 			checksFailing: false,
+			starredPlans: [],
 			units: [],
 			goneThisWeek: [],
 		});
@@ -757,6 +759,181 @@ describe("failed checks", () => {
 	});
 });
 
+describe("stars", () => {
+	async function starUnit(t: T, number: string) {
+		const unit = await details(t, number);
+		return await t.mutation(api.henry.stars.toggleUnitStar, {
+			unitId: unit._id,
+		});
+	}
+
+	async function starPlan(t: T, floorPlan: string) {
+		return await t.mutation(api.henry.stars.toggleFloorPlanStar, {
+			floorPlan,
+		});
+	}
+
+	function stars(unit: { unitStarred: boolean; planStarred: boolean }) {
+		return { unitStarred: unit.unitStarred, planStarred: unit.planStarred };
+	}
+
+	test("nothing is starred at first", async () => {
+		const t = setup();
+		await check(t, BASELINE_AT);
+		const page = await ledger(t, BASELINE_AT);
+		expect(page.starredPlans).toEqual([]);
+		expect(
+			page.units.every((unit) => !unit.unitStarred && !unit.planStarred),
+		).toBe(true);
+	});
+
+	test("starring a unit stars only that unit, on the Ledger and in its drawer", async () => {
+		const t = setup();
+		await check(t, BASELINE_AT);
+		expect(await starUnit(t, "608")).toBe(true);
+
+		const page = await ledger(t, BASELINE_AT);
+		expect(stars(row(page, "608"))).toEqual({
+			unitStarred: true,
+			planStarred: false,
+		});
+		// 526 shares 608's floor plan but wasn't starred.
+		expect(row(page, "526").floorPlan).toBe("B2");
+		expect(stars(row(page, "526"))).toEqual({
+			unitStarred: false,
+			planStarred: false,
+		});
+		expect(stars(await details(t, "608"))).toEqual({
+			unitStarred: true,
+			planStarred: false,
+		});
+	});
+
+	test("toggling a starred unit unstars it", async () => {
+		const t = setup();
+		await check(t, BASELINE_AT);
+		await starUnit(t, "608");
+		expect(await starUnit(t, "608")).toBe(false);
+		expect(stars(row(await ledger(t, BASELINE_AT), "608"))).toEqual({
+			unitStarred: false,
+			planStarred: false,
+		});
+	});
+
+	test("starring a floor plan stars every unit on it", async () => {
+		const t = setup();
+		await check(t, BASELINE_AT);
+		expect(await starPlan(t, "B2")).toBe(true);
+
+		const page = await ledger(t, BASELINE_AT);
+		expect(page.starredPlans).toEqual(["B2"]);
+		const b2 = page.units.filter((unit) => unit.floorPlan === "B2");
+		expect(b2.length).toBeGreaterThan(1);
+		for (const unit of b2) {
+			expect(stars(unit)).toEqual({ unitStarred: false, planStarred: true });
+		}
+		expect(
+			page.units
+				.filter((unit) => unit.floorPlan !== "B2")
+				.some((unit) => unit.unitStarred || unit.planStarred),
+		).toBe(false);
+		expect(stars(await details(t, "608"))).toEqual({
+			unitStarred: false,
+			planStarred: true,
+		});
+	});
+
+	test("a starred floor plan stars a unit that lists later", async () => {
+		const t = setup();
+		await check(t, BASELINE_AT);
+		await starPlan(t, "B2");
+		await check(t, BASELINE_AT + HOUR, payload(withNewUnit()));
+
+		const page = await ledger(t, BASELINE_AT + HOUR);
+		expect(row(page, "609").floorPlan).toBe("B2");
+		expect(stars(row(page, "609"))).toEqual({
+			unitStarred: false,
+			planStarred: true,
+		});
+	});
+
+	test("a unit starred directly and through its plan keeps both, and each toggles alone", async () => {
+		const t = setup();
+		await check(t, BASELINE_AT);
+		await starUnit(t, "608");
+		await starPlan(t, "B2");
+		expect(stars(row(await ledger(t, BASELINE_AT), "608"))).toEqual({
+			unitStarred: true,
+			planStarred: true,
+		});
+
+		expect(await starPlan(t, "B2")).toBe(false);
+		let page = await ledger(t, BASELINE_AT);
+		expect(page.starredPlans).toEqual([]);
+		expect(stars(row(page, "608"))).toEqual({
+			unitStarred: true,
+			planStarred: false,
+		});
+		expect(stars(row(page, "526"))).toEqual({
+			unitStarred: false,
+			planStarred: false,
+		});
+
+		await starPlan(t, "B2");
+		await starUnit(t, "608");
+		page = await ledger(t, BASELINE_AT);
+		expect(stars(row(page, "608"))).toEqual({
+			unitStarred: false,
+			planStarred: true,
+		});
+	});
+
+	test("a unit's star stays through going off the market and relisting", async () => {
+		const t = setup();
+		await check(t, BASELINE_AT);
+		await starUnit(t, "608");
+		await check(t, BASELINE_AT + HOUR, payload(without("608")));
+		await check(t, BASELINE_AT + 2 * HOUR, payload(without("608")));
+		expect((await details(t, "608")).status).toBe("offMarket");
+		expect((await details(t, "608")).unitStarred).toBe(true);
+
+		await check(t, BASELINE_AT + 3 * HOUR);
+		expect(stars(row(await ledger(t, BASELINE_AT + 3 * HOUR), "608"))).toEqual({
+			unitStarred: true,
+			planStarred: false,
+		});
+	});
+
+	test("isStarred is true for a direct or a plan star", async () => {
+		const t = setup();
+		await check(t, BASELINE_AT);
+		await starUnit(t, "608");
+		await starPlan(t, "U1");
+		const result = await t.run(async (ctx) => {
+			const byNumber = async (number: string) => {
+				const unit = await ctx.db
+					.query("henryUnits")
+					.withIndex("by_number", (q) => q.eq("number", number))
+					.first();
+				if (!unit) throw new Error(`No ${number}`);
+				return await Stars.isStarred(ctx, unit);
+			};
+			return {
+				direct: await byNumber("608"),
+				viaPlan: await byNumber("733"),
+				neither: await byNumber("526"),
+			};
+		});
+		expect(result).toEqual({ direct: true, viaPlan: true, neither: false });
+	});
+
+	test("a blank floor plan is refused", async () => {
+		const t = setup();
+		await check(t, BASELINE_AT);
+		await expect(starPlan(t, "  ")).rejects.toThrow(/floor plan/i);
+	});
+});
+
 describe("public surface", () => {
 	test("only the page queries are public; the check functions are internal", async () => {
 		const checks = (await modules["/convex/henry/checks.ts"]?.()) as Record<
@@ -774,5 +951,11 @@ describe("public surface", () => {
 		expect(checks.checkSightmap?.isInternal).toBe(true);
 		expect(ledgerModule.getLedger?.isPublic).toBe(true);
 		expect(unitsModule.getUnit?.isPublic).toBe(true);
+		const starsModule = (await modules["/convex/henry/stars.ts"]?.()) as Record<
+			string,
+			{ isPublic?: boolean }
+		>;
+		expect(starsModule.toggleUnitStar?.isPublic).toBe(true);
+		expect(starsModule.toggleFloorPlanStar?.isPublic).toBe(true);
 	});
 });
