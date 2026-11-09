@@ -55,11 +55,17 @@ import {
 	type PlanSummary,
 	filterCounts,
 	filterUnits,
+	hideI25,
 	isStarred,
 	pinStarred,
 	planSummaries,
 } from "~/lib/henry/stars";
-import { bedLabel, formatMoney, moveInLabel } from "~/lib/henry/units";
+import {
+	bedLabel,
+	formatMoney,
+	isI25Side,
+	moveInLabel,
+} from "~/lib/henry/units";
 import { useHeldWhileLoading } from "~/lib/hooks/use-held-while-loading";
 import { useMinuteClock } from "~/lib/hooks/use-minute-clock";
 import { cn } from "~/lib/utils";
@@ -103,6 +109,13 @@ export function LedgerPage(): React.ReactElement {
 		router.replace(unitHref(number), { scroll: false });
 	}
 
+	// I-25 side units are always hidden (starred ones stay); gone rows carry
+	// no star, so every I-25 one is hidden.
+	const units = ledger ? hideI25(ledger.units) : [];
+	const gone = ledger
+		? ledger.goneThisWeek.filter((unit) => !isI25Side(unit.number))
+		: [];
+
 	return (
 		<div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
 			<header className="flex flex-col gap-1">
@@ -112,7 +125,13 @@ export function LedgerPage(): React.ReactElement {
 				{ledger === undefined ? (
 					<Skeleton className="h-5 w-72 max-w-full" />
 				) : ledger.trackingBeganAt !== null ? (
-					<SummaryLine ledger={ledger} now={now} />
+					<SummaryLine
+						ledger={ledger}
+						onMarket={units.length}
+						newThisWeek={units.filter((unit) => unit.newDays !== null).length}
+						goneThisWeek={gone.length}
+						now={now}
+					/>
 				) : null}
 			</header>
 
@@ -129,15 +148,15 @@ export function LedgerPage(): React.ReactElement {
 						</p>
 					) : null}
 					<LedgerTable
-						units={ledger.units}
+						units={units}
 						starredPlans={ledger.starredPlans}
 						today={format(now, "yyyy-MM-dd")}
 						unitHref={unitHref}
 						onOpen={openUnitDrawer}
 					/>
-					{ledger.goneThisWeek.length > 0 ? (
+					{gone.length > 0 ? (
 						<GoneThisWeek
-							units={ledger.goneThisWeek}
+							units={gone}
 							unitHref={unitHref}
 							onOpen={openUnitDrawer}
 						/>
@@ -163,15 +182,21 @@ export function LedgerPage(): React.ReactElement {
 /** "33 on the market · 5 new this week · 3 gone this week · checked 12 min ago", or a warning in place of "checked" when checks are failing. */
 function SummaryLine({
 	ledger,
+	onMarket,
+	newThisWeek,
+	goneThisWeek,
 	now,
 }: {
 	ledger: Ledger;
+	onMarket: number;
+	newThisWeek: number;
+	goneThisWeek: number;
 	now: number;
 }): React.ReactElement {
 	const counts = [
-		`${ledger.onMarketCount} on the market`,
-		`${ledger.newThisWeekCount} new this week`,
-		`${ledger.goneThisWeekCount} gone this week`,
+		`${onMarket} on the market`,
+		`${newThisWeek} new this week`,
+		`${goneThisWeek} gone this week`,
 	].join(" · ");
 	return (
 		<p className="text-muted-foreground text-sm">

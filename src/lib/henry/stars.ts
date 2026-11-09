@@ -11,6 +11,16 @@ export function isStarred(unit: Starrable): boolean {
 	return unit.unitStarred || unit.planStarred;
 }
 
+/**
+ * The Ledger never shows I-25 side units, except starred ones (a star
+ * overrides the rules, as it does for pushes).
+ */
+export function hideI25<T extends Starrable & { facesI25: boolean }>(
+	units: readonly T[],
+): T[] {
+	return units.filter((unit) => !unit.facesI25 || isStarred(unit));
+}
+
 /** Starred units first, each group keeping the order it came in (the current sort). */
 export function pinStarred<T extends Starrable>(units: readonly T[]): T[] {
 	return [
