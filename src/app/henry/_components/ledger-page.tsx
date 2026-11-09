@@ -43,6 +43,7 @@ import { UnitDrawer } from "./unit-drawer";
 
 type Ledger = FunctionReturnType<typeof api.henry.ledger.getLedger>;
 type LedgerUnit = Ledger["units"][number];
+type GoneUnit = Ledger["goneThisWeek"][number];
 
 const DAY = 24 * 60 * 60 * 1000;
 /** The longest change window (3/7/14 days): until then, history is still short. */
@@ -69,6 +70,10 @@ export function LedgerPage(): React.ReactElement {
 		return query ? `${pathname}?${query}` : pathname;
 	}
 
+	function openUnitDrawer(number: string): void {
+		router.replace(unitHref(number), { scroll: false });
+	}
+
 	return (
 		<div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
 			<header className="flex flex-col gap-1">
@@ -78,9 +83,7 @@ export function LedgerPage(): React.ReactElement {
 				{ledger === undefined ? (
 					<Skeleton className="h-5 w-72 max-w-full" />
 				) : ledger.trackingBeganAt !== null ? (
-					<p className="text-muted-foreground text-sm">
-						{summaryLine(ledger, now)}
-					</p>
+					<SummaryLine ledger={ledger} now={now} />
 				) : null}
 			</header>
 
@@ -100,10 +103,15 @@ export function LedgerPage(): React.ReactElement {
 						units={ledger.units}
 						today={format(now, "yyyy-MM-dd")}
 						unitHref={unitHref}
-						onOpen={(number) =>
-							router.replace(unitHref(number), { scroll: false })
-						}
+						onOpen={openUnitDrawer}
 					/>
+					{ledger.goneThisWeek.length > 0 ? (
+						<GoneThisWeek
+							units={ledger.goneThisWeek}
+							unitHref={unitHref}
+							onOpen={openUnitDrawer}
+						/>
+					) : null}
 				</>
 			)}
 
@@ -116,15 +124,37 @@ export function LedgerPage(): React.ReactElement {
 	);
 }
 
-function summaryLine(ledger: Ledger, now: number): string {
-	const parts = [
+/** "33 on the market · 5 new this week · 3 gone this week · checked 12 min ago", or a warning in place of "checked" when checks are failing. */
+function SummaryLine({
+	ledger,
+	now,
+}: {
+	ledger: Ledger;
+	now: number;
+}): React.ReactElement {
+	const counts = [
 		`${ledger.onMarketCount} on the market`,
 		`${ledger.newThisWeekCount} new this week`,
-	];
-	if (ledger.lastCheckedAt !== null) {
-		parts.push(`checked ${checkedAgo(ledger.lastCheckedAt, now)}`);
-	}
-	return parts.join(" · ");
+		`${ledger.goneThisWeekCount} gone this week`,
+	].join(" · ");
+	return (
+		<p className="text-muted-foreground text-sm">
+			{counts}
+			{ledger.checksFailing ? (
+				<>
+					{" · "}
+					<span className="font-medium text-destructive">
+						checks failing
+						{ledger.lastCheckedAt !== null
+							? ` · last success ${checkedAgo(ledger.lastCheckedAt, now)}`
+							: null}
+					</span>
+				</>
+			) : ledger.lastCheckedAt !== null ? (
+				` · checked ${checkedAgo(ledger.lastCheckedAt, now)}`
+			) : null}
+		</p>
+	);
 }
 
 function checkedAgo(at: number, now: number): string {
@@ -255,6 +285,64 @@ function LedgerTable({
 				</TableBody>
 			</Table>
 		</div>
+	);
+}
+
+/** Units off the market in the last 7 days, newest first, last price struck through. */
+function GoneThisWeek({
+	units,
+	unitHref,
+	onOpen,
+}: {
+	units: GoneUnit[];
+	unitHref: (number: string) => string;
+	onOpen: (number: string) => void;
+}): React.ReactElement {
+	return (
+		<section className="flex flex-col gap-2">
+			<h2 className="font-medium text-muted-foreground text-sm">
+				Gone this week
+			</h2>
+			<div className="overflow-x-auto rounded-lg border">
+				<Table>
+					<TableBody>
+						{units.map((unit) => (
+							<TableRow
+								key={unit._id}
+								onClick={() => onOpen(unit.number)}
+								className="cursor-pointer text-muted-foreground"
+							>
+								<TableCell>
+									<Link
+										href={unitHref(unit.number)}
+										replace
+										scroll={false}
+										onClick={(event) => event.stopPropagation()}
+										className="rounded-sm tabular-nums underline-offset-4 outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
+									>
+										<span className="sr-only">Apt </span>
+										{unit.number}
+									</Link>
+								</TableCell>
+								<TableCell>
+									{unit.floorPlan} · {bedLabel(unit.beds)} ·{" "}
+									{unit.sqft.toLocaleString()} sq ft
+								</TableCell>
+								<TableCell className="tabular-nums">
+									Gone {format(unit.offMarketAt, "MMM d")}
+								</TableCell>
+								<TableCell className="text-right tabular-nums">
+									<span className="sr-only">Last price </span>
+									<span className="line-through">
+										{formatMoney(unit.price)}
+									</span>
+								</TableCell>
+							</TableRow>
+						))}
+					</TableBody>
+				</Table>
+			</div>
+		</section>
 	);
 }
 

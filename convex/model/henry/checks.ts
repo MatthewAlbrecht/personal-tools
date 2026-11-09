@@ -11,13 +11,20 @@ const DAY = 24 * 60 * 60 * 1000;
 const KEEP_CHECKS_FOR = 30 * DAY;
 /** Old checks deleted per check: hourly checks, so a few keep up. */
 const PRUNE_PER_CHECK = 5;
+/** Far above The Henry's ~250 apartments: a bound, not a page size. */
+export const MAX_ON_MARKET = 400;
+/** Successful checks in a row a unit can be missing from before it's gone. */
+const MISSES_TO_GO = 2;
 
 /**
- * Records one hourly check. A response that can't be read is logged as a
- * failure and changes nothing. A good one updates every unit in it: the first
- * successful check is the baseline (units "tracked since" then); after it,
- * units not seen before are listed. A price point is recorded only when base
- * rent changes.
+ * Records one hourly check. A response that can't be read, or (after the
+ * baseline) one that's empty or under half the units on the market, is
+ * logged as a failure and changes nothing. A good one updates every unit in
+ * it: the first successful check is the baseline (units "tracked since"
+ * then); after it, units not seen before are listed and gone units seen
+ * again are relisted. Units on the market but missing from it get a miss;
+ * two in a row take them off the market. A price point is recorded only
+ * when base rent changes.
  */
 export async function recordCheck(
 	ctx: MutationCtx,
@@ -44,8 +51,24 @@ export async function recordCheck(
 		return;
 	}
 
+	const onMarket = isBaseline
+		? []
+		: await ctx.db
+				.query("henryUnits")
+				.withIndex("by_status_and_price", (q) => q.eq("status", "onMarket"))
+				.take(MAX_ON_MARKET);
+	const short = shortResponseReason(parsed.units.length, onMarket.length);
+	if (!isBaseline && short !== null) {
+		await logCheck(ctx, now, { outcome: "failure", reason: short });
+		return;
+	}
+
 	for (const facts of parsed.units) {
 		await recordUnit(ctx, now, facts, isBaseline);
+	}
+	const seen = new Set(parsed.units.map((facts) => facts.sightmapId));
+	for (const unit of onMarket) {
+		if (!seen.has(unit.sightmapId)) await recordMiss(ctx, now, unit);
 	}
 	await logCheck(ctx, now, {
 		outcome: "success",
@@ -84,15 +107,67 @@ async function recordUnit(
 		return;
 	}
 
-	// Ticket 04: an off-market unit seen again is relisted here.
 	if (existing.price !== facts.price) {
 		await recordPricePoint(ctx, existing._id, now, facts);
+	}
+	// Listed vs relisted is decided here: a known unit back from off the
+	// market is relisted (ticket 06 pushes for it here, like a new listing).
+	const relisted = existing.status === "offMarket";
+	if (relisted) {
+		await ctx.db.insert("henryUnitEvents", {
+			unitId: existing._id,
+			kind: "relisted",
+			at: now,
+			price: facts.price,
+		});
 	}
 	await ctx.db.patch("henryUnits", existing._id, {
 		...facts,
 		lastSeenAt: now,
 		missedChecks: 0,
+		...(relisted
+			? { status: "onMarket", listedAt: now, offMarketAt: null }
+			: {}),
 	});
+}
+
+/** A unit on the market missing from a successful check: the second miss in a row takes it off. */
+async function recordMiss(
+	ctx: MutationCtx,
+	now: number,
+	unit: Doc<"henryUnits">,
+): Promise<void> {
+	const missedChecks = unit.missedChecks + 1;
+	if (missedChecks < MISSES_TO_GO) {
+		await ctx.db.patch("henryUnits", unit._id, { missedChecks });
+		return;
+	}
+	await ctx.db.patch("henryUnits", unit._id, {
+		missedChecks,
+		status: "offMarket",
+		offMarketAt: now,
+	});
+	await ctx.db.insert("henryUnitEvents", {
+		unitId: unit._id,
+		kind: "offMarket",
+		at: now,
+		price: unit.price,
+	});
+}
+
+/**
+ * Why a response is too short to trust after the baseline (a broken page on
+ * their side, not a building emptying out), or null when it's fine.
+ */
+function shortResponseReason(
+	unitCount: number,
+	onMarketCount: number,
+): string | null {
+	if (unitCount === 0) return "No units in the response";
+	if (unitCount * 2 < onMarketCount) {
+		return `Only ${unitCount} units, under half of the ${onMarketCount} on the market`;
+	}
+	return null;
 }
 
 async function recordPricePoint(

@@ -124,7 +124,10 @@ describe("before the first check", () => {
 			lastCheck: null,
 			onMarketCount: 0,
 			newThisWeekCount: 0,
+			goneThisWeekCount: 0,
+			checksFailing: false,
 			units: [],
+			goneThisWeek: [],
 		});
 	});
 });
@@ -408,6 +411,270 @@ describe("price changes", () => {
 				now: BASELINE_AT,
 			}),
 		).toBeNull();
+	});
+});
+
+function without(...numbers: string[]) {
+	return (units: SightmapUnit[]) =>
+		units.filter((unit) => !numbers.includes(unit.unit_number));
+}
+
+describe("off the market", () => {
+	const H1 = BASELINE_AT + HOUR;
+	const H2 = BASELINE_AT + 2 * HOUR;
+	const H3 = BASELINE_AT + 3 * HOUR;
+
+	test("one missed check keeps a unit on the market", async () => {
+		const t = setup();
+		await check(t, BASELINE_AT);
+		await check(t, H1, payload(without("608")));
+
+		const page = await ledger(t, H1);
+		expect(page.onMarketCount).toBe(33);
+		expect(row(page, "608").price).toBe(2656);
+		expect(page.goneThisWeek).toEqual([]);
+		expect(await details(t, "608", H1)).toMatchObject({
+			status: "onMarket",
+			offMarketAt: null,
+		});
+	});
+
+	test("two missed checks in a row take it off the market at its last price", async () => {
+		const t = setup();
+		await check(t, BASELINE_AT);
+		await check(t, H1, payload(withPrice("608", 2615)));
+		await check(t, H2, payload(without("608")));
+		await check(t, H3, payload(without("608")));
+
+		const page = await ledger(t, H3);
+		expect(page.onMarketCount).toBe(32);
+		expect(page.units.some((unit) => unit.number === "608")).toBe(false);
+		expect(page.goneThisWeekCount).toBe(1);
+		expect(page.goneThisWeek).toEqual([
+			{
+				_id: expect.any(String),
+				number: "608",
+				floorPlan: "B2",
+				beds: 2,
+				sqft: 1091,
+				price: 2615,
+				offMarketAt: H3,
+			},
+		]);
+
+		const unit = await details(t, "608", H3);
+		expect(unit).toMatchObject({
+			status: "offMarket",
+			offMarketAt: H3,
+			price: 2615,
+		});
+		expect(unit.history).toHaveLength(2);
+		expect(unit.timeline[0]).toEqual({
+			kind: "offMarket",
+			at: H3,
+			price: 2615,
+		});
+	});
+
+	test("seen again after one miss resets the misses", async () => {
+		const t = setup();
+		await check(t, BASELINE_AT);
+		await check(t, H1, payload(without("608")));
+		await check(t, H2);
+		await check(t, H3, payload(without("608")));
+
+		const page = await ledger(t, H3);
+		expect(row(page, "608").price).toBe(2656);
+		expect(page.goneThisWeekCount).toBe(0);
+	});
+
+	test("gone this week lists the last 7 days, newest first", async () => {
+		const t = setup();
+		await check(t, BASELINE_AT);
+		await check(t, H1, payload(without("608")));
+		await check(t, H2, payload(without("608")));
+		const D3 = BASELINE_AT + 3 * DAY;
+		await check(t, D3, payload(without("608", "101")));
+		await check(t, D3 + HOUR, payload(without("608", "101")));
+
+		const soon = await ledger(t, D3 + 2 * HOUR);
+		expect(soon.goneThisWeek.map((unit) => unit.number)).toEqual([
+			"101",
+			"608",
+		]);
+		expect(soon.goneThisWeekCount).toBe(2);
+
+		// 608 went at H2; eight days on it has left the list, 101 hasn't.
+		const later = await ledger(t, H2 + 8 * DAY);
+		expect(later.goneThisWeek.map((unit) => unit.number)).toEqual(["101"]);
+		expect(later.goneThisWeekCount).toBe(1);
+		// Its drawer still opens.
+		expect((await details(t, "608", H2 + 8 * DAY)).status).toBe("offMarket");
+	});
+});
+
+describe("relisting", () => {
+	const H1 = BASELINE_AT + HOUR;
+	const H2 = BASELINE_AT + 2 * HOUR;
+	const BACK = BASELINE_AT + 3 * DAY;
+
+	async function goneThenBack(t: T, body: string = payload()): Promise<void> {
+		await check(t, BASELINE_AT);
+		await check(t, H1, payload(without("608")));
+		await check(t, H2, payload(without("608")));
+		await check(t, BACK, body);
+	}
+
+	test("a gone unit seen again is relisted with its history kept", async () => {
+		const t = setup();
+		await goneThenBack(t, payload(withPrice("608", 2599)));
+
+		const page = await ledger(t, BACK + HOUR);
+		expect(row(page, "608")).toMatchObject({ price: 2599, newDays: 0 });
+		expect(page.onMarketCount).toBe(33);
+		expect(page.newThisWeekCount).toBe(1);
+		expect(page.goneThisWeek).toEqual([]);
+
+		const unit = await details(t, "608", BACK + HOUR);
+		expect(unit).toMatchObject({
+			status: "onMarket",
+			offMarketAt: null,
+			listedAt: BACK,
+			firstSeenAt: BASELINE_AT,
+			sinceStart: -57,
+		});
+		expect(unit.history.map(({ at, price }) => ({ at, price }))).toEqual([
+			{ at: BASELINE_AT, price: 2656 },
+			{ at: BACK, price: 2599 },
+		]);
+		expect(unit.timeline).toEqual([
+			{ kind: "priceChange", at: BACK, from: 2656, to: 2599 },
+			{ kind: "relisted", at: BACK, price: 2599 },
+			{ kind: "offMarket", at: H2, price: 2656 },
+			{ kind: "trackingBegan", at: BASELINE_AT, price: 2656 },
+		]);
+	});
+
+	test("New counts from the relisting", async () => {
+		const t = setup();
+		await goneThenBack(t);
+		expect(row(await ledger(t, BACK + 2 * DAY), "608").newDays).toBe(2);
+		expect(row(await ledger(t, BACK + 8 * DAY), "608").newDays).toBeNull();
+	});
+
+	test("a relisted unit can go off the market again", async () => {
+		const t = setup();
+		await goneThenBack(t);
+		await check(t, BACK + HOUR, payload(without("608")));
+		await check(t, BACK + 2 * HOUR, payload(without("608")));
+
+		const page = await ledger(t, BACK + 2 * HOUR);
+		expect(page.goneThisWeek.map((unit) => unit.offMarketAt)).toEqual([
+			BACK + 2 * HOUR,
+		]);
+		const kinds = (await timeline(t, "608")).map((entry) => entry.kind);
+		expect(kinds).toEqual([
+			"offMarket",
+			"relisted",
+			"offMarket",
+			"trackingBegan",
+		]);
+	});
+});
+
+describe("short responses", () => {
+	const H1 = BASELINE_AT + HOUR;
+	const H2 = BASELINE_AT + 2 * HOUR;
+	const H3 = BASELINE_AT + 3 * HOUR;
+
+	test("an empty response after the baseline fails and changes nothing", async () => {
+		const t = setup();
+		await check(t, BASELINE_AT);
+		const before = await ledger(t, H1);
+		await check(
+			t,
+			H1,
+			payload(() => []),
+		);
+
+		const after = await ledger(t, H1);
+		expect(after.lastCheck).toEqual({
+			at: H1,
+			outcome: "failure",
+			reason: "No units in the response",
+			unitCount: null,
+		});
+		expect({ ...after, lastCheck: null }).toEqual({
+			...before,
+			lastCheck: null,
+		});
+	});
+
+	test("under half the units on the market fails; half is fine", async () => {
+		const t = setup();
+		await check(t, BASELINE_AT);
+		// 33 on the market: 16 is under half, 17 isn't.
+		await check(
+			t,
+			H1,
+			payload((units) => units.slice(0, 16)),
+		);
+		const page = await ledger(t, H1);
+		expect(page.lastCheck).toMatchObject({
+			outcome: "failure",
+			reason: "Only 16 units, under half of the 33 on the market",
+		});
+		expect(page.lastCheckedAt).toBe(BASELINE_AT);
+
+		await check(
+			t,
+			H2,
+			payload((units) => units.slice(0, 17)),
+		);
+		expect((await ledger(t, H2)).lastCheck?.outcome).toBe("success");
+	});
+
+	test("failed checks don't count as misses", async () => {
+		const t = setup();
+		await check(t, BASELINE_AT);
+		await check(t, H1, payload(without("608")));
+		await check(
+			t,
+			H2,
+			payload(() => []),
+		);
+		await check(t, H2 + 10 * 60 * 1000, "<html>down</html>");
+		await t.mutation(internal.henry.checks.recordCheck, {
+			now: H2 + 20 * 60 * 1000,
+			result: { kind: "fetchFailed", reason: "HTTP 503" },
+		});
+		await check(t, H3);
+
+		const page = await ledger(t, H3);
+		expect(row(page, "608").price).toBe(2656);
+		expect(page.goneThisWeekCount).toBe(0);
+
+		// The miss before the failures reset when it was seen at H3.
+		await check(t, H3 + HOUR, payload(without("608")));
+		expect((await ledger(t, H3 + HOUR)).goneThisWeekCount).toBe(0);
+	});
+});
+
+describe("checks failing", () => {
+	test("the Ledger says checks are failing once the last success is over 3 hours old", async () => {
+		const t = setup();
+		await check(t, BASELINE_AT);
+		for (const hours of [1, 2, 3]) {
+			await check(t, BASELINE_AT + hours * HOUR, "nope");
+		}
+
+		expect((await ledger(t, BASELINE_AT + 3 * HOUR)).checksFailing).toBe(false);
+		const stale = await ledger(t, BASELINE_AT + 3 * HOUR + 60_000);
+		expect(stale.checksFailing).toBe(true);
+		expect(stale.lastCheckedAt).toBe(BASELINE_AT);
+
+		await check(t, BASELINE_AT + 4 * HOUR);
+		expect((await ledger(t, BASELINE_AT + 4 * HOUR)).checksFailing).toBe(false);
 	});
 });
 

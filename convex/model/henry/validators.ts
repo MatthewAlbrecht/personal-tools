@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 
-/** On the market = in the latest successful check. Off the market (ticket 04): missed two in a row. */
+/** On the market until it's missing from two successful checks in a row; then off the market until seen again (relisted). */
 export const henryUnitStatusValidator = v.union(
 	v.literal("onMarket"),
 	v.literal("offMarket"),
@@ -8,12 +8,14 @@ export const henryUnitStatusValidator = v.union(
 
 /**
  * A unit's timeline. The baseline's units start with `trackingBegan`; units
- * first seen after it start with `listed`. Ticket 04 adds `offMarket` and
- * `relisted`.
+ * first seen after it start with `listed`. `offMarket` when it misses two
+ * successful checks in a row; `relisted` when it's seen again after that.
  */
 export const henryUnitEventKindValidator = v.union(
 	v.literal("trackingBegan"),
 	v.literal("listed"),
+	v.literal("offMarket"),
+	v.literal("relisted"),
 );
 
 export const henryCheckOutcomeValidator = v.union(
@@ -117,6 +119,18 @@ export const henryUnitDetailsValidator = henryLedgerUnitValidator.extend({
 	timeline: v.array(henryTimelineEntryValidator),
 });
 
+/** A "Gone this week" row: what it was and what it last cost. */
+export const henryGoneUnitValidator = v.object({
+	_id: v.id("henryUnits"),
+	number: v.string(),
+	floorPlan: v.string(),
+	beds: v.number(),
+	sqft: v.number(),
+	/** Its last price on the market. */
+	price: v.number(),
+	offMarketAt: v.number(),
+});
+
 export const henryLedgerValidator = v.object({
 	/** The baseline: the first successful check. Null before it. */
 	trackingBeganAt: v.union(v.number(), v.null()),
@@ -126,6 +140,11 @@ export const henryLedgerValidator = v.object({
 	lastCheck: v.union(henryCheckSummaryValidator, v.null()),
 	onMarketCount: v.number(),
 	newThisWeekCount: v.number(),
+	goneThisWeekCount: v.number(),
+	/** Tracking has begun and the latest successful check is over 3 hours before `now`. */
+	checksFailing: v.boolean(),
 	/** On the market, cheapest first. */
 	units: v.array(henryLedgerUnitValidator),
+	/** Off the market in the 7 days before `now`, newest first. */
+	goneThisWeek: v.array(henryGoneUnitValidator),
 });

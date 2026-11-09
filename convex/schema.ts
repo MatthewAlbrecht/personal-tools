@@ -2078,16 +2078,18 @@ export default defineSchema({
 		status: henryUnitStatusValidator,
 		firstSeenAt: v.number(),
 		lastSeenAt: v.number(),
-		// When it came on the market after the baseline (listed, or relisted in
-		// ticket 04); null for units on the market since tracking began.
+		// When it last came on the market after the baseline (listed, or
+		// relisted); null for units on the market since tracking began.
 		listedAt: v.union(v.number(), v.null()),
-		// Successful checks in a row it was missing from (ticket 04: two = gone).
+		// Successful checks in a row it was missing from: two = off the market.
 		missedChecks: v.number(),
+		// When it went off the market; null while on it.
 		offMarketAt: v.union(v.number(), v.null()),
 	})
 		.index("by_sightmapId", ["sightmapId"])
 		.index("by_number", ["number"])
 		.index("by_status_and_price", ["status", "price"])
+		.index("by_status_and_offMarketAt", ["status", "offMarketAt"])
 		.index("by_firstSeenAt", ["firstSeenAt"]),
 
 	// A unit's base rent each time it changed, starting with the price it was

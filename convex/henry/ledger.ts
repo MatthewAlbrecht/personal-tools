@@ -5,9 +5,10 @@ import * as Ledger from "../model/henry/ledger";
 import { henryLedgerValidator } from "../model/henry/validators";
 
 /**
- * The Henry page: the summary line and every unit on the market, cheapest
- * first. Pass `now` (Unix ms; a query can't read the clock) to judge which
- * units are New.
+ * The Henry page: the summary line, every unit on the market (cheapest
+ * first) and the units gone this week. Pass `now` (Unix ms; a query can't
+ * read the clock) to judge which units are New, which went this week, and
+ * whether checks are failing.
  */
 export const getLedger = query({
 	args: { now: v.number() },

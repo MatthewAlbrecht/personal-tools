@@ -28,6 +28,7 @@ import { LONGEST_CHANGE_WINDOW } from "~/lib/henry/changes";
 import { bedLabel, formatMoney } from "~/lib/henry/units";
 import { useHeldWhileLoading } from "~/lib/hooks/use-held-while-loading";
 import { useMediaQuery } from "~/lib/hooks/use-media-query";
+import { cn } from "~/lib/utils";
 import { api } from "../../../../convex/_generated/api";
 import { PriceChange, PriceChangeTrio } from "./price-change";
 import { PriceStepChart } from "./price-step-chart";
@@ -42,10 +43,12 @@ type EventKind = Exclude<TimelineEntry["kind"], "priceChange">;
 /** Where to go apply. */
 const HENRY_SITE = "https://www.thehenrydenver.com/Floor-plans.aspx";
 
-/** How each timeline event reads, with the price then. Ticket 04 adds off market and relisted. */
+/** How each timeline event reads, with the price then. */
 const EVENT_LABELS: Record<EventKind, (price: string) => string> = {
 	trackingBegan: (price) => `Tracking began at ${price}`,
 	listed: (price) => `Listed at ${price}`,
+	offMarket: (price) => `Off the market at ${price}`,
+	relisted: (price) => `Relisted at ${price}`,
 };
 
 /**
@@ -105,6 +108,7 @@ function UnitDetailsView({
 	now: number;
 }): React.ReactElement {
 	const today = format(now, "yyyy-MM-dd");
+	const gone = unit.status === "offMarket";
 	return (
 		<>
 			<DrawerHeader className="gap-1 text-left group-data-[vaul-drawer-direction=bottom]/drawer-content:text-left">
@@ -113,7 +117,8 @@ function UnitDetailsView({
 					<DrawerTitle className="font-display text-2xl tabular-nums">
 						Apt {unit.number}
 					</DrawerTitle>
-					<UnitBadges unit={unit} />
+					{/* A gone unit isn't New, however recently it listed. */}
+					<UnitBadges unit={gone ? { ...unit, newDays: null } : unit} />
 				</div>
 				<DrawerDescription>
 					{unit.floorPlan} · {bedLabel(unit.beds)} ·{" "}
@@ -123,7 +128,13 @@ function UnitDetailsView({
 
 			<div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-4 pb-6">
 				<div className="flex flex-col gap-1">
-					<p className="font-display font-semibold text-4xl tabular-nums">
+					<p
+						className={cn(
+							"font-display font-semibold text-4xl tabular-nums",
+							gone && "text-muted-foreground line-through",
+						)}
+					>
+						{gone ? <span className="sr-only">Last price </span> : null}
 						{formatMoney(unit.price)}
 						<span className="ml-1 font-normal font-sans text-base text-muted-foreground">
 							/mo
@@ -132,15 +143,13 @@ function UnitDetailsView({
 					<p className="text-muted-foreground text-sm">{terms(unit, today)}</p>
 				</div>
 
-				<PriceChangeTrio changes={unit.changes} />
+				{gone ? null : <PriceChangeTrio changes={unit.changes} />}
 
 				<section className="flex flex-col gap-3">
 					<div className="flex items-baseline justify-between gap-3">
 						<h3 className="font-medium text-sm">Last 14 days</h3>
 						<span className="inline-flex items-baseline gap-1.5 text-muted-foreground text-xs">
-							{unit.listedAt === null
-								? "Since tracking began"
-								: "Since listing"}
+							{sinceLabel(unit)}
 							<PriceChange value={unit.sinceStart} />
 						</span>
 					</div>
@@ -194,12 +203,25 @@ function UnitDetailsView({
 	);
 }
 
-/** "Available now · 16-month lease · $2,662 with fees". */
+/**
+ * What `sinceStart` measures from: its very first price point, which is
+ * where tracking began or where it first listed (a relisting keeps it).
+ */
+function sinceLabel(unit: UnitDetails): string {
+	if (unit.listedAt === unit.firstSeenAt) return "Since listing";
+	return unit.timeline.at(-1)?.kind === "listed"
+		? "Since first listed"
+		: "Since tracking began";
+}
+
+/** "Available now · 16-month lease · $2,662 with fees", or "Off the market Nov 12 · …" once it's gone. */
 function terms(unit: UnitDetails, today: string): string {
 	const parts = [
-		unit.availableOn <= today
-			? "Available now"
-			: `Available ${format(parseISO(unit.availableOn), "MMM d")}`,
+		unit.status === "offMarket" && unit.offMarketAt !== null
+			? `Off the market ${format(unit.offMarketAt, "MMM d")}`
+			: unit.availableOn <= today
+				? "Available now"
+				: `Available ${format(parseISO(unit.availableOn), "MMM d")}`,
 	];
 	if (unit.leaseTermMonths !== null) {
 		parts.push(`${unit.leaseTermMonths}-month lease`);

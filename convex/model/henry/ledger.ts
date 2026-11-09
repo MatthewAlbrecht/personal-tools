@@ -1,20 +1,29 @@
 import type { Infer } from "convex/values";
 import type { QueryCtx } from "../../_generated/server";
-import { latestCheck, trackingBeganAt } from "./checks";
+import { MAX_ON_MARKET, latestCheck, trackingBeganAt } from "./checks";
 import { ledgerUnit, readPriceChanges } from "./units";
 import type { henryLedgerValidator } from "./validators";
 
 export type HenryLedger = Infer<typeof henryLedgerValidator>;
 
-/** Far above The Henry's ~250 apartments: a bound, not a page size. */
-const MAX_ON_MARKET = 400;
+const HOUR = 60 * 60 * 1000;
+const DAY = 24 * HOUR;
+/** "Gone this week" looks back this far. */
+const GONE_FOR = 7 * DAY;
+/** With no successful check for longer than this, the page says checks are failing. */
+const STALE_AFTER = 3 * HOUR;
+/** A week of units going off the market: a bound, not an expected size. */
+const MAX_GONE = 100;
 
-/** The Ledger at `now`: the summary line and every unit on the market, cheapest first. */
+/**
+ * The Ledger at `now`: the summary line, every unit on the market (cheapest
+ * first) and the units gone this week (newest first).
+ */
 export async function readLedger(
 	ctx: QueryCtx,
 	now: number,
 ): Promise<HenryLedger> {
-	const [began, lastSuccess, last, onMarket] = await Promise.all([
+	const [began, lastSuccess, last, onMarket, gone] = await Promise.all([
 		trackingBeganAt(ctx),
 		latestCheck(ctx, "success"),
 		latestCheck(ctx),
@@ -22,6 +31,13 @@ export async function readLedger(
 			.query("henryUnits")
 			.withIndex("by_status_and_price", (q) => q.eq("status", "onMarket"))
 			.take(MAX_ON_MARKET),
+		ctx.db
+			.query("henryUnits")
+			.withIndex("by_status_and_offMarketAt", (q) =>
+				q.eq("status", "offMarket").gte("offMarketAt", now - GONE_FOR),
+			)
+			.order("desc")
+			.take(MAX_GONE),
 	]);
 
 	const units = await Promise.all(
@@ -43,6 +59,20 @@ export async function readLedger(
 			: null,
 		onMarketCount: units.length,
 		newThisWeekCount: units.filter((unit) => unit.newDays !== null).length,
+		goneThisWeekCount: gone.length,
+		checksFailing:
+			began !== null &&
+			(lastSuccess === null || now - lastSuccess.at > STALE_AFTER),
 		units,
+		goneThisWeek: gone.map((unit) => ({
+			_id: unit._id,
+			number: unit.number,
+			floorPlan: unit.floorPlan,
+			beds: unit.beds,
+			sqft: unit.sqft,
+			price: unit.price,
+			// Always set off the market; the index range excludes null.
+			offMarketAt: unit.offMarketAt ?? now,
+		})),
 	};
 }

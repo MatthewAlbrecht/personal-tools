@@ -26,7 +26,7 @@ const NEW_FOR = 7 * DAY;
 const MAX_POINTS_IN_WINDOW = 400;
 /** Price points the drawer shows: years of history at a few changes a week. */
 const MAX_HISTORY = 500;
-/** Timeline events (tracking began, listed; ticket 04 adds off/relisted). */
+/** Timeline events (tracking began, listed, off the market, relisted). */
 const MAX_EVENTS = 100;
 
 /** A unit's Ledger row at `now`. */
