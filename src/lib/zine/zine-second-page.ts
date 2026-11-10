@@ -1,62 +1,39 @@
-/** Rough characters per rendered row in a 2-column zine page at 9pt, used to weigh long lines. */
-const CHARS_PER_ROW = 40;
+type Rect = { left: number; top: number; right: number; bottom: number };
+
+/** Rounding slack (px) for rects sitting exactly on the lyrics area's edge. */
+const EDGE_SLACK_PX = 1;
 
 /**
- * Share of a track's lyrics for its first page. The first page carries the title and
- * metadata (and the art, when shown) while the continued page carries the credits, so
- * the first page holds a bit less when there is art. Measured from real zine pages.
+ * For a track's first page, which renders all its lyrics into a fixed-height column box:
+ * the first lyric line (index into `lyrics.split("\n")`) drawn even partly outside the
+ * visible area — past the bottom, or spilled into a clipped extra column. Everything from
+ * that line on belongs on the continued page. Returns `lineCount` when everything fits.
  */
-export function getSecondPageFirstShare({
-	hasAlbumArt,
-}: {
-	hasAlbumArt: boolean;
-}): number {
-	return hasAlbumArt ? 0.46 : 0.52;
-}
-
-/**
- * Split lyrics across two zine pages at the stanza break (blank line) closest to
- * `firstPageShare` of the track. Returns null when there is no stanza break to split at.
- */
-export function splitLyricsForSecondPage(
-	lyrics: string,
-	firstPageShare: number,
-): { first: string; second: string } | null {
-	const stanzas = lyrics
-		.trim()
-		.split(/\n[ \t]*\n+/)
-		.map((stanza) => stanza.replace(/^\n+|\n+$/g, ""))
-		.filter((stanza) => stanza.trim() !== "");
-	if (stanzas.length < 2) return null;
-
-	const weights = stanzas.map(stanzaWeight);
-	const total =
-		weights.reduce((sum, weight) => sum + weight, 0) + (stanzas.length - 1);
-	const target = total * firstPageShare;
-
-	let splitAfter = 0;
-	let bestDistance = Number.POSITIVE_INFINITY;
-	let cumulative = 0;
-	for (let index = 0; index < stanzas.length - 1; index++) {
-		cumulative += (weights[index] ?? 0) + (index > 0 ? 1 : 0);
-		const distance = Math.abs(cumulative - target);
-		if (distance < bestDistance) {
-			bestDistance = distance;
-			splitAfter = index;
+export function findFirstOverflowLine(
+	lines: Array<{ line: number; rects: Rect[] }>,
+	clip: Rect,
+	lineCount: number,
+): number {
+	let firstOverflow = lineCount;
+	for (const { line, rects } of lines) {
+		const outside = rects.some(
+			(rect) =>
+				rect.right > clip.right + EDGE_SLACK_PX ||
+				rect.bottom > clip.bottom + EDGE_SLACK_PX ||
+				rect.left < clip.left - EDGE_SLACK_PX,
+		);
+		if (outside && line < firstOverflow) {
+			firstOverflow = line;
 		}
 	}
-
-	return {
-		first: stanzas.slice(0, splitAfter + 1).join("\n\n"),
-		second: stanzas.slice(splitAfter + 1).join("\n\n"),
-	};
+	return firstOverflow;
 }
 
-function stanzaWeight(stanza: string): number {
-	return stanza
-		.split("\n")
-		.reduce(
-			(sum, line) => sum + 1 + Math.floor(line.trim().length / CHARS_PER_ROW),
-			0,
-		);
+/** The lyrics from `cutLine` on (index into `lyrics.split("\n")`), without leading blank lines. */
+export function lyricsFromLine(lyrics: string, cutLine: number): string {
+	const rest = lyrics.split("\n").slice(cutLine);
+	while (rest.length > 0 && rest[0]?.trim() === "") {
+		rest.shift();
+	}
+	return rest.join("\n");
 }

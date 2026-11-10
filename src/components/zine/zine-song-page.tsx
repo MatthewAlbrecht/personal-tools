@@ -62,10 +62,13 @@ export function ZineSongPage({
 	canEditCredits = false,
 	onHideCreditLabel,
 	pagePart = "full",
+	onOverflowLine,
 }: {
 	song: ZineSongPageSong;
 	displayOptions: ZineDisplayOptions;
 	pagePart?: ZineSongPagePart;
+	/** First page only: reports the first lyric line that did not fit. */
+	onOverflowLine?: (line: number) => void;
 	lyricsColumnMode?: ZineLyricsColumnMode;
 	lyricsTargetFontSizePt?: number;
 	titleCondenseScale?: number;
@@ -108,6 +111,7 @@ export function ZineSongPage({
 			lyricsColumnMode={lyricsColumnMode}
 			lyricsTargetFontSizePt={lyricsTargetFontSizePt}
 			onHideCreditLabel={onHideCreditLabel}
+			onOverflowLine={onOverflowLine}
 			pagePart={pagePart}
 			pageRecommendations={
 				pagePart === "first" ? undefined : pageRecommendations
@@ -132,10 +136,12 @@ function ZineSongPageContent({
 	canEditCredits,
 	onHideCreditLabel,
 	pagePart,
+	onOverflowLine,
 }: {
 	song: ZineSongPageSong;
 	displayOptions: ZineDisplayOptions;
 	pagePart: ZineSongPagePart;
+	onOverflowLine?: (line: number) => void;
 	displayKey: string;
 	lyricsColumnMode: ZineLyricsColumnMode;
 	lyricsTargetFontSizePt?: number;
@@ -159,6 +165,8 @@ function ZineSongPageContent({
 		lyrics: song.lyrics,
 		lyricsColumnMode,
 		targetFontSizePt: resolvedLyricsTargetPt,
+		continuesOnNextPage: pagePart === "first",
+		onOverflowLine,
 	});
 
 	const hasLyrics = hasRenderableLyrics(song.lyrics, {
@@ -215,7 +223,7 @@ function ZineSongPageContent({
 							lyrics={song.lyrics}
 							showSectionLabels={displayOptions.showSectionLabels}
 						/>
-					) : (
+					) : pagePart === "continued" ? null : (
 						<p className="zine-instrumental-empty">Instrumental track</p>
 					)}
 				</div>

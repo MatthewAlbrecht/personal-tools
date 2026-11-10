@@ -6,10 +6,7 @@ import {
 } from "./zine-inside-back-sections";
 import { buildCollapsedSongPages } from "./zine-instrumental-pages";
 import type { ZineIntroSettings } from "./zine-intro-layout";
-import {
-	getSecondPageFirstShare,
-	splitLyricsForSecondPage,
-} from "./zine-second-page";
+import { lyricsFromLine } from "./zine-second-page";
 import type { ZineSongDisplayInput } from "./zine-types";
 
 export type ZineSongInput = ZineSongDisplayInput;
@@ -124,7 +121,7 @@ export function buildZinePages({
 	insideBack,
 	collapseInstrumentalTracks = true,
 	showSectionLabels = false,
-	showAlbumArt = true,
+	secondPageCutLines = {},
 }: {
 	playlistTitle: string;
 	coverArtistName?: string;
@@ -140,8 +137,11 @@ export function buildZinePages({
 	};
 	collapseInstrumentalTracks?: boolean;
 	showSectionLabels?: boolean;
-	/** Whether song pages show album art; page one holds fewer lyrics when they do. */
-	showAlbumArt?: boolean;
+	/**
+	 * Per song id: the first lyric line (index into `lyrics.split("\n")`) that did not fit
+	 * on the track's first page, as measured in the browser. Absent until measured.
+	 */
+	secondPageCutLines?: Record<string, number>;
 }): ZinePage[] {
 	const resolvedCoverArtistName = coverArtistName?.trim() || undefined;
 	const sortedSongs = [...songs].sort(
@@ -174,26 +174,21 @@ export function buildZinePages({
 
 	for (const songPage of collapsedSongPages) {
 		if (songPage.kind === "song") {
-			const split = songPage.data.continueOnSecondPage
-				? splitLyricsForSecondPage(
-						songPage.data.lyrics,
-						getSecondPageFirstShare({
-							hasAlbumArt:
-								showAlbumArt && Boolean(songPage.data.albumArtUrl?.trim()),
-						}),
-					)
-				: null;
-			if (split) {
+			if (songPage.data.continueOnSecondPage) {
+				// Page one renders every line and shows what fits; page two gets the rest.
+				const cutLine = secondPageCutLines[songPage.data.songId];
 				pages.push({
 					kind: "song",
 					...songPage.data,
-					lyrics: split.first,
 					continuesOnNextPage: true,
 				});
 				pages.push({
 					kind: "song-continued",
 					...songPage.data,
-					lyrics: split.second,
+					lyrics:
+						cutLine === undefined
+							? ""
+							: lyricsFromLine(songPage.data.lyrics, cutLine),
 				});
 				continue;
 			}
