@@ -62,7 +62,7 @@ test("drop push text says how much it dropped and the new price", () => {
 	expect(
 		unitPushText({ ...UNIT_127, news: { kind: "dropped", droppedFrom: 3300 } }),
 	).toEqual({
-		title: "Down $29 at The Henry: Apt 127",
+		title: "Apt 127 is down $29",
 		body: "2 bed · 1,490 sq ft · $3,271/mo, was $3,300",
 	});
 	expect(

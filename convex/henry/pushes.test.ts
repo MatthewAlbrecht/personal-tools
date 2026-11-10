@@ -407,7 +407,7 @@ describe("drop pushes", () => {
 
 		expect(fakes.sent.map((push) => push.payload)).toEqual([
 			{
-				title: "Down $41 at The Henry: Apt 608",
+				title: "Apt 608 is down $41",
 				body: "2 bed · 1,091 sq ft · $2,615/mo, was $2,656",
 				url: "/henry?unit=608",
 				tag: "henry-unit-608",
@@ -425,7 +425,7 @@ describe("drop pushes", () => {
 		await check(t, BASELINE_AT + HOUR, payload(withPrice("563", 2600)));
 		await settle(t);
 		expect(pushedUnits()).toEqual(["563"]);
-		expect(fakes.sent[0]?.payload.title).toBe("Down $22 at The Henry: Apt 563");
+		expect(fakes.sent[0]?.payload.title).toBe("Apt 563 is down $22");
 	});
 
 	test("an unstarred unit's drop doesn't push", async () => {
@@ -445,7 +445,7 @@ describe("drop pushes", () => {
 		await starUnit(t, "608");
 		await check(t, BASELINE_AT + HOUR, payload(withPrice("608", 2655)));
 		await settle(t);
-		expect(fakes.sent[0]?.payload.title).toBe("Down $1 at The Henry: Apt 608");
+		expect(fakes.sent[0]?.payload.title).toBe("Apt 608 is down $1");
 	});
 
 	test("a starred unit's rise doesn't push", async () => {
@@ -472,7 +472,7 @@ describe("drop pushes", () => {
 		expect(fakes.sent[0]).toMatchObject({
 			at: EIGHT_AM,
 			payload: {
-				title: "Down $56 at The Henry: Apt 608",
+				title: "Apt 608 is down $56",
 				body: "2 bed · 1,091 sq ft · $2,600/mo, was $2,656",
 			},
 		});
