@@ -25,6 +25,7 @@ export default function PublicAlbumLyricsPage({
 	const [isCompact, setIsCompact] = useState(false);
 	const [showGeniusInfo, setShowGeniusInfo] = useState(false);
 	const [showSectionLabels, setShowSectionLabels] = useState(true);
+	const [collapseRepeats, setCollapseRepeats] = useState(true);
 
 	if (albumData === undefined) {
 		return <AlbumSkeleton />;
@@ -51,8 +52,12 @@ export default function PublicAlbumLyricsPage({
 		setTimeout(() => window.print(), 50);
 	}
 
-	const { album, songs, siteWideHiddenCreditLabelKeys, ignoredCreditLabelKeys } =
-		albumData;
+	const {
+		album,
+		songs,
+		siteWideHiddenCreditLabelKeys,
+		ignoredCreditLabelKeys,
+	} = albumData;
 	const displayAlbumTitle =
 		album.albumTitleOverride?.trim() || album.albumTitle;
 	const displayArtistName =
@@ -130,6 +135,16 @@ export default function PublicAlbumLyricsPage({
 						Show song part labels
 					</Label>
 				</div>
+				<div className="flex items-center gap-2">
+					<Checkbox
+						id="collapse-repeats"
+						checked={collapseRepeats}
+						onCheckedChange={(checked) => setCollapseRepeats(checked === true)}
+					/>
+					<Label htmlFor="collapse-repeats" className="cursor-pointer text-sm">
+						Collapse repeated lines
+					</Label>
+				</div>
 				<div className="flex gap-2">
 					<Button asChild variant="outline">
 						<Link href={`/public/lyrics/${slug}/zine`}>
@@ -194,6 +209,7 @@ export default function PublicAlbumLyricsPage({
 									<LyricsRenderer
 										lyrics={displayLyrics}
 										showSectionLabels={showSectionLabels}
+										collapseRepeats={collapseRepeats}
 									/>
 								) : (
 									<p className="rounded-lg border bg-muted/30 p-4 text-muted-foreground text-sm">

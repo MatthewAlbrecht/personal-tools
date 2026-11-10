@@ -99,6 +99,7 @@ function PlaylistLyricsReaderContent({
 	const [showYear, setShowYear] = useState(true);
 	const [showAlbumArt, setShowAlbumArt] = useState(false);
 	const [showSectionLabels, setShowSectionLabels] = useState(true);
+	const [collapseRepeats, setCollapseRepeats] = useState(true);
 	const backHref =
 		variant === "public" ? "/public/playlist-lyrics" : "/lyrics/playlists";
 	const backLabel =
@@ -135,8 +136,12 @@ function PlaylistLyricsReaderContent({
 		);
 	}
 
-	const { playlist, songs, siteWideHiddenCreditLabelKeys, ignoredCreditLabelKeys } =
-		playlistData;
+	const {
+		playlist,
+		songs,
+		siteWideHiddenCreditLabelKeys,
+		ignoredCreditLabelKeys,
+	} = playlistData;
 
 	return (
 		<div
@@ -221,6 +226,12 @@ function PlaylistLyricsReaderContent({
 							onCheckedChange={setShowSectionLabels}
 							label="Show song part labels"
 						/>
+						<ToggleControl
+							id="collapse-repeats"
+							checked={collapseRepeats}
+							onCheckedChange={setCollapseRepeats}
+							label="Collapse repeated lines"
+						/>
 					</div>
 				</div>
 			</div>
@@ -262,15 +273,12 @@ function PlaylistLyricsReaderContent({
 							showYear,
 						});
 						const albumArtUrl = getAlbumArtUrl(song);
-						const visibleCredits = filterVisibleCredits(
-							song.scrape?.credits,
-							{
-								hiddenCreditLabels: song.hiddenCreditLabels,
-								shownCreditLabels: song.shownCreditLabels,
-								siteWideHiddenLabelKeys: siteWideHiddenCreditLabelKeys,
-								ignoredLabelKeys: ignoredCreditLabelKeys,
-							},
-						);
+						const visibleCredits = filterVisibleCredits(song.scrape?.credits, {
+							hiddenCreditLabels: song.hiddenCreditLabels,
+							shownCreditLabels: song.shownCreditLabels,
+							siteWideHiddenLabelKeys: siteWideHiddenCreditLabelKeys,
+							ignoredLabelKeys: ignoredCreditLabelKeys,
+						});
 
 						return (
 							<article
@@ -316,6 +324,7 @@ function PlaylistLyricsReaderContent({
 										<LyricsRenderer
 											lyrics={song.scrape.lyrics}
 											showSectionLabels={showSectionLabels}
+											collapseRepeats={collapseRepeats}
 										/>
 									) : (
 										<p className="text-muted-foreground">
