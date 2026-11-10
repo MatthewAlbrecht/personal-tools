@@ -340,6 +340,7 @@ export default defineSchema({
 		zineShowCredits: v.optional(v.boolean()),
 		zineCollapseWithPrevious: v.optional(v.boolean()),
 		zineCollapseRepeats: v.optional(v.boolean()),
+		zineSecondPage: v.optional(v.boolean()),
 		zinePageRecommendations: v.optional(zinePageRecommendationsValidator),
 		createdAt: v.number(), // Unix timestamp
 	})
@@ -431,6 +432,7 @@ export default defineSchema({
 		zineShowCredits: v.optional(v.boolean()),
 		zineCollapseWithPrevious: v.optional(v.boolean()),
 		zineCollapseRepeats: v.optional(v.boolean()),
+		zineSecondPage: v.optional(v.boolean()),
 		durationSecondsOverride: v.optional(v.number()),
 		hiddenCreditLabels: v.optional(v.array(v.string())),
 		shownCreditLabels: v.optional(v.array(v.string())),

@@ -131,6 +131,7 @@ export function PlaylistLyricsZine({ slug, variant }: PlaylistLyricsZineProps) {
 			showCredits: song.zineShowCredits !== false,
 			collapseWithPrevious: song.zineCollapseWithPrevious === true,
 			collapseRepeats: song.zineCollapseRepeats === true,
+			secondPage: song.zineSecondPage === true,
 		};
 	}
 
@@ -191,6 +192,7 @@ export function PlaylistLyricsZine({ slug, variant }: PlaylistLyricsZineProps) {
 									zineShowCredits: s.showCredits,
 									zineCollapseWithPrevious: s.collapseWithPrevious,
 									zineCollapseRepeats: s.collapseRepeats,
+									zineSecondPage: s.secondPage,
 								});
 							},
 							hideCreditLabel: (songId, label) => {

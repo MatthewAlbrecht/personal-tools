@@ -54,3 +54,34 @@ test("collapse repeats is saved per album track and cleared when turned off", as
 	saved = await songs();
 	expect(saved.pornomiseria?.zineCollapseRepeats).toBeUndefined();
 });
+
+test("second page is saved per album track and cleared when turned off", async () => {
+	const t = convexTest(schema, modules);
+	const albumId = await t.mutation(api.geniusAlbums.createAlbum, {
+		albumTitle: "Morir Saltando",
+		artistName: "Hesse Kassel",
+		albumSlug: "hesse-kassel-morir-saltando-english",
+		geniusAlbumUrl: "https://genius.com/albums/Hesse-kassel/Morir-saltando",
+		totalSongs: 1,
+	});
+	const songId = await t.mutation(api.geniusAlbums.createSong, {
+		albumId,
+		songTitle: "Pornomiseria",
+		geniusSongUrl: "https://genius.com/Hesse-kassel-pornomiseria-lyrics",
+		trackNumber: 1,
+		lyrics: "You can't pass there",
+	});
+	const read = () => t.run(async (ctx) => ctx.db.get(songId));
+
+	await t.mutation(api.geniusAlbums.updateZineSongSettings, {
+		songId,
+		zineSecondPage: true,
+	});
+	expect((await read())?.zineSecondPage).toBe(true);
+
+	await t.mutation(api.geniusAlbums.updateZineSongSettings, {
+		songId,
+		zineSecondPage: false,
+	});
+	expect((await read())?.zineSecondPage).toBeUndefined();
+});

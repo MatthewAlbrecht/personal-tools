@@ -6,6 +6,10 @@ import {
 } from "./zine-inside-back-sections";
 import { buildCollapsedSongPages } from "./zine-instrumental-pages";
 import type { ZineIntroSettings } from "./zine-intro-layout";
+import {
+	getSecondPageFirstShare,
+	splitLyricsForSecondPage,
+} from "./zine-second-page";
 import type { ZineSongDisplayInput } from "./zine-types";
 
 export type ZineSongInput = ZineSongDisplayInput;
@@ -33,11 +37,19 @@ export type ZineSongPageData = {
 	hiddenCreditLabels?: string[];
 	shownCreditLabels?: string[];
 	collapseWithPrevious?: boolean;
+	continueOnSecondPage?: boolean;
 	pageRecommendations?: ZineSongDisplayInput["pageRecommendations"];
 };
 
 export type ZineSongPage = {
 	kind: "song";
+	/** Lyrics continue on the next page, so credits and recommendations move there. */
+	continuesOnNextPage?: boolean;
+} & ZineSongPageData;
+
+/** The rest of a track's lyrics, after its first page. */
+export type ZineSongContinuedPage = {
+	kind: "song-continued";
 } & ZineSongPageData;
 
 export type ZineInstrumentalGroupPage = {
@@ -74,6 +86,7 @@ export type ZinePage =
 	| ZineCoverPage
 	| ZineIntroPageModel
 	| ZineSongPage
+	| ZineSongContinuedPage
 	| ZineInstrumentalGroupPage
 	| ZineSongGroupPage
 	| ZineBlankPage
@@ -98,6 +111,7 @@ function mapSongInputToPageData(song: ZineSongInput): ZineSongPageData {
 		hiddenCreditLabels: song.hiddenCreditLabels,
 		shownCreditLabels: song.shownCreditLabels,
 		collapseWithPrevious: song.collapseWithPrevious,
+		continueOnSecondPage: song.continueOnSecondPage,
 		pageRecommendations: song.pageRecommendations,
 	};
 }
@@ -110,6 +124,7 @@ export function buildZinePages({
 	insideBack,
 	collapseInstrumentalTracks = true,
 	showSectionLabels = false,
+	showAlbumArt = true,
 }: {
 	playlistTitle: string;
 	coverArtistName?: string;
@@ -125,6 +140,8 @@ export function buildZinePages({
 	};
 	collapseInstrumentalTracks?: boolean;
 	showSectionLabels?: boolean;
+	/** Whether song pages show album art; page one holds fewer lyrics when they do. */
+	showAlbumArt?: boolean;
 }): ZinePage[] {
 	const resolvedCoverArtistName = coverArtistName?.trim() || undefined;
 	const sortedSongs = [...songs].sort(
@@ -157,6 +174,29 @@ export function buildZinePages({
 
 	for (const songPage of collapsedSongPages) {
 		if (songPage.kind === "song") {
+			const split = songPage.data.continueOnSecondPage
+				? splitLyricsForSecondPage(
+						songPage.data.lyrics,
+						getSecondPageFirstShare({
+							hasAlbumArt:
+								showAlbumArt && Boolean(songPage.data.albumArtUrl?.trim()),
+						}),
+					)
+				: null;
+			if (split) {
+				pages.push({
+					kind: "song",
+					...songPage.data,
+					lyrics: split.first,
+					continuesOnNextPage: true,
+				});
+				pages.push({
+					kind: "song-continued",
+					...songPage.data,
+					lyrics: split.second,
+				});
+				continue;
+			}
 			pages.push({ kind: "song", ...songPage.data });
 			continue;
 		}

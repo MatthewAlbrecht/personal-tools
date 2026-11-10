@@ -256,6 +256,17 @@ export function LyricsZine({
 		}
 		return collapsed;
 	});
+	const [songSecondPage, setSongSecondPage] = useState<Record<string, true>>(
+		() => {
+			const continued: Record<string, true> = {};
+			for (const [id, settings] of Object.entries(itemSettingsById)) {
+				if (settings.secondPage === true) {
+					continued[id] = true;
+				}
+			}
+			return continued;
+		},
+	);
 	const [coverImageUrl, setCoverImageUrl] = useState(cover.imageUrl ?? "");
 	const [coverGreyscale, setCoverGreyscale] = useState(cover.greyscale);
 	const [coverFullBleed, setCoverFullBleed] = useState(
@@ -353,6 +364,7 @@ export function LyricsZine({
 				? songIntroContentById[song.id]
 				: song.introContent,
 		collapseWithPrevious: song.id in songCollapseWithPrevious,
+		continueOnSecondPage: song.id in songSecondPage,
 	}));
 
 	const orderedSongIds = [...songs]
@@ -393,6 +405,7 @@ export function LyricsZine({
 			: undefined,
 		collapseInstrumentalTracks: !displaySettings.separateInstrumentalPages,
 		showSectionLabels: displaySettings.showSectionLabels,
+		showAlbumArt: displaySettings.showAlbumArt,
 		insideBack: {
 			sections: insideBackSections ?? [],
 			settings: insideBackLayoutSettings,
@@ -421,6 +434,7 @@ export function LyricsZine({
 			showCredits: !(songId in songCreditsHidden),
 			collapseWithPrevious: songId in songCollapseWithPrevious,
 			collapseRepeats: songId in songCollapseRepeats,
+			secondPage: songId in songSecondPage,
 		};
 	}
 
@@ -462,6 +476,7 @@ export function LyricsZine({
 				showCredits: settings.showCredits,
 				collapseWithPrevious: settings.collapseWithPrevious,
 				collapseRepeats: settings.collapseRepeats,
+				secondPage: settings.secondPage,
 			});
 		}, 500);
 
@@ -801,7 +816,7 @@ export function LyricsZine({
 			);
 		}
 
-		if (page.kind === "song") {
+		if (page.kind === "song" || page.kind === "song-continued") {
 			const lyricsColumnMode: ZineLyricsColumnMode =
 				page.songId in songLyricsColumnModes ? 1 : 2;
 			const lyricsTargetFontSizePt = getLyricsTargetPtForSong(
@@ -813,9 +828,16 @@ export function LyricsZine({
 				page.songId,
 			);
 			const showCredits = !(page.songId in songCreditsHidden);
+			const pagePart =
+				page.kind === "song-continued"
+					? "continued"
+					: page.continuesOnNextPage
+						? "first"
+						: "full";
 			return (
 				<ZineSongPage
-					key={`${keyPrefix}-song-${page.songId}`}
+					key={`${keyPrefix}-song-${pagePart}-${page.songId}`}
+					pagePart={pagePart}
 					canEditCredits={canEdit}
 					creditVisibility={creditVisibility}
 					displayOptions={displayOptions}
@@ -1602,6 +1624,7 @@ export function LyricsZine({
 							);
 							const showCredits = !(page.songId in songCreditsHidden);
 							const collapseRepeats = page.songId in songCollapseRepeats;
+							const secondPage = page.songId in songSecondPage;
 							const songInput = songsById.get(page.songId);
 							const hiddenCreditLabelsForRestore = songInput
 								? getHiddenCreditLabelsForRestore(songInput.credits, {
@@ -1628,6 +1651,20 @@ export function LyricsZine({
 													lyricsSizePt={lyricsTargetFontSizePt}
 													mode={lyricsColumnMode}
 													showCredits={showCredits}
+													secondPage={secondPage}
+													onSecondPageChange={(nextSecondPage) => {
+														setSongSecondPage((previous) =>
+															setSongCollapsed(
+																previous,
+																page.songId,
+																nextSecondPage,
+															),
+														);
+														queueDebouncedPersistZineItemSettings(page.songId, {
+															...getZineSettingsSnapshot(page.songId),
+															secondPage: nextSecondPage,
+														});
+													}}
 													collapseRepeats={collapseRepeats}
 													onCollapseRepeatsChange={(nextCollapse) => {
 														setSongCollapseRepeats((previous) =>
@@ -2046,6 +2083,8 @@ function ZineTrackLyricsColumnControls({
 	onShowCreditsChange,
 	collapseRepeats,
 	onCollapseRepeatsChange,
+	secondPage,
+	onSecondPageChange,
 	hiddenCreditLabels,
 	onRestoreCreditLabel,
 }: {
@@ -2055,6 +2094,7 @@ function ZineTrackLyricsColumnControls({
 	onCondenseScaleChange: (scale: number) => void;
 	onShowCreditsChange: (showCredits: boolean) => void;
 	onCollapseRepeatsChange: (collapseRepeats: boolean) => void;
+	onSecondPageChange: (secondPage: boolean) => void;
 	onRestoreCreditLabel?: (label: string) => void;
 	songTitle: string;
 	songId: string;
@@ -2063,6 +2103,7 @@ function ZineTrackLyricsColumnControls({
 	condenseScale: number;
 	showCredits: boolean;
 	collapseRepeats: boolean;
+	secondPage: boolean;
 	hiddenCreditLabels: string[];
 }) {
 	const groupName = `zine-lyrics-cols-${songId}`;
@@ -2071,6 +2112,7 @@ function ZineTrackLyricsColumnControls({
 	const condenseSliderId = `${songId}-zine-text-condense`;
 	const creditsToggleId = `${songId}-zine-show-credits`;
 	const collapseRepeatsToggleId = `${songId}-zine-collapse-repeats`;
+	const secondPageToggleId = `${songId}-zine-second-page`;
 
 	return (
 		<fieldset className="m-0 space-y-3 border-0 p-0">
@@ -2118,6 +2160,12 @@ function ZineTrackLyricsColumnControls({
 					id={collapseRepeatsToggleId}
 					label="Collapse repeated lines"
 					onCheckedChange={onCollapseRepeatsChange}
+				/>
+				<ZineToggleControl
+					checked={secondPage}
+					id={secondPageToggleId}
+					label="Continue on a second page"
+					onCheckedChange={onSecondPageChange}
 				/>
 				{hiddenCreditLabels.length > 0 && onRestoreCreditLabel ? (
 					<div className="space-y-2 border-t pt-3">

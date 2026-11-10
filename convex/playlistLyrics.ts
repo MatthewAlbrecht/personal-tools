@@ -212,6 +212,7 @@ const itemWithScrapeValidator = v.object({
 	zineShowCredits: v.optional(v.boolean()),
 	zineCollapseWithPrevious: v.optional(v.boolean()),
 	zineCollapseRepeats: v.optional(v.boolean()),
+	zineSecondPage: v.optional(v.boolean()),
 	durationSecondsOverride: v.optional(v.number()),
 	hiddenCreditLabels: v.optional(v.array(v.string())),
 	shownCreditLabels: v.optional(v.array(v.string())),
@@ -238,6 +239,7 @@ const publicItemWithScrapeValidator = v.object({
 	zineShowCredits: v.optional(v.boolean()),
 	zineCollapseWithPrevious: v.optional(v.boolean()),
 	zineCollapseRepeats: v.optional(v.boolean()),
+	zineSecondPage: v.optional(v.boolean()),
 	durationSecondsOverride: v.optional(v.number()),
 	hiddenCreditLabels: v.optional(v.array(v.string())),
 	shownCreditLabels: v.optional(v.array(v.string())),
@@ -1286,6 +1288,7 @@ export const updateZineItemSettings = mutation({
 		zineShowCredits: v.optional(v.boolean()),
 		zineCollapseWithPrevious: v.optional(v.boolean()),
 		zineCollapseRepeats: v.optional(v.boolean()),
+		zineSecondPage: v.optional(v.boolean()),
 	},
 	returns: v.id("playlistLyricsItems"),
 	handler: async (ctx, args) => {
@@ -1297,7 +1300,8 @@ export const updateZineItemSettings = mutation({
 			args.zineTitleCondenseScale === undefined &&
 			args.zineShowCredits === undefined &&
 			args.zineCollapseWithPrevious === undefined &&
-			args.zineCollapseRepeats === undefined
+			args.zineCollapseRepeats === undefined &&
+			args.zineSecondPage === undefined
 		) {
 			throw new Error("No zine settings provided");
 		}
@@ -1346,6 +1350,7 @@ export const updateZineItemSettings = mutation({
 			zineShowCredits?: boolean | undefined;
 			zineCollapseWithPrevious?: boolean | undefined;
 			zineCollapseRepeats?: boolean | undefined;
+			zineSecondPage?: boolean | undefined;
 			updatedAt: number;
 		} = {
 			updatedAt: Date.now(),
@@ -1382,6 +1387,9 @@ export const updateZineItemSettings = mutation({
 		}
 		if (args.zineCollapseRepeats !== undefined) {
 			patch.zineCollapseRepeats = args.zineCollapseRepeats ? true : undefined;
+		}
+		if (args.zineSecondPage !== undefined) {
+			patch.zineSecondPage = args.zineSecondPage ? true : undefined;
 		}
 
 		await ctx.db.patch(args.itemId, patch);
@@ -1775,6 +1783,7 @@ function toPublicItemWithScrape(item: ItemWithScrape) {
 		zineShowCredits: item.zineShowCredits,
 		zineCollapseWithPrevious: item.zineCollapseWithPrevious,
 		zineCollapseRepeats: item.zineCollapseRepeats,
+		zineSecondPage: item.zineSecondPage,
 		durationSecondsOverride: item.durationSecondsOverride,
 		hiddenCreditLabels: item.hiddenCreditLabels,
 		shownCreditLabels: item.shownCreditLabels,

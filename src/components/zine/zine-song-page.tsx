@@ -26,6 +26,12 @@ import { ZineSongPageRecommendations } from "./zine-song-page-recommendations";
 export type { ZineDisplayOptions } from "./zine-song-header";
 export type { ZineLyricsColumnMode } from "./use-zine-song-lyrics-fit";
 
+/**
+ * Which part of a track this page shows. "first" is the opening page of a track that
+ * continues on the next page (no footer); "continued" is that next page.
+ */
+export type ZineSongPagePart = "full" | "first" | "continued";
+
 type ZineSongPageSong = {
 	songId: string;
 	position: number;
@@ -55,9 +61,11 @@ export function ZineSongPage({
 	creditVisibility,
 	canEditCredits = false,
 	onHideCreditLabel,
+	pagePart = "full",
 }: {
 	song: ZineSongPageSong;
 	displayOptions: ZineDisplayOptions;
+	pagePart?: ZineSongPagePart;
 	lyricsColumnMode?: ZineLyricsColumnMode;
 	lyricsTargetFontSizePt?: number;
 	titleCondenseScale?: number;
@@ -87,6 +95,7 @@ export function ZineSongPage({
 		song.hiddenCreditLabels?.join("|") ?? "",
 		song.shownCreditLabels?.join("|") ?? "",
 		creditVisibility?.siteWideHiddenLabelKeys?.join("|") ?? "",
+		pagePart,
 	].join(":");
 
 	return (
@@ -99,8 +108,11 @@ export function ZineSongPage({
 			lyricsColumnMode={lyricsColumnMode}
 			lyricsTargetFontSizePt={lyricsTargetFontSizePt}
 			onHideCreditLabel={onHideCreditLabel}
-			pageRecommendations={pageRecommendations}
-			showCredits={showCredits}
+			pagePart={pagePart}
+			pageRecommendations={
+				pagePart === "first" ? undefined : pageRecommendations
+			}
+			showCredits={pagePart !== "first" && showCredits}
 			song={song}
 			titleCondenseScale={titleCondenseScale}
 		/>
@@ -119,9 +131,11 @@ function ZineSongPageContent({
 	creditVisibility,
 	canEditCredits,
 	onHideCreditLabel,
+	pagePart,
 }: {
 	song: ZineSongPageSong;
 	displayOptions: ZineDisplayOptions;
+	pagePart: ZineSongPagePart;
 	displayKey: string;
 	lyricsColumnMode: ZineLyricsColumnMode;
 	lyricsTargetFontSizePt?: number;
@@ -163,11 +177,15 @@ function ZineSongPageContent({
 			className="zine-page zine-page-preview zine-page-song"
 		>
 			<div ref={lyricsFit.headerRef} className="zine-song-page-header-wrap">
-				<ZineSongHeader
-					displayOptions={displayOptions}
-					titleCondenseScale={titleCondenseScale}
-					song={song}
-				/>
+				{pagePart === "continued" ? (
+					<ZineSongContinuedHeader song={song} />
+				) : (
+					<ZineSongHeader
+						displayOptions={displayOptions}
+						titleCondenseScale={titleCondenseScale}
+						song={song}
+					/>
+				)}
 			</div>
 			<div
 				ref={lyricsFit.lyricsClipRef}
@@ -230,5 +248,22 @@ function ZineSongPageContent({
 				</div>
 			) : null}
 		</section>
+	);
+}
+
+function ZineSongContinuedHeader({
+	song,
+}: {
+	song: Pick<ZineSongPageSong, "position" | "title">;
+}) {
+	const trackNumberLabel = song.position.toString().padStart(2, "0");
+
+	return (
+		<div className="zine-song-header">
+			<p className="zine-song-credits mb-2 text-[8pt] leading-snug">
+				<span className="zine-song-track-number">{trackNumberLabel}</span>{" "}
+				{song.title} <em>(continued)</em>
+			</p>
+		</div>
 	);
 }
