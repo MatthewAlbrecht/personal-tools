@@ -8,37 +8,49 @@ import schema from "./schema";
 
 const modules = import.meta.glob("./**/*.ts");
 
-test("album zine display settings save and return collapseRepeats", async () => {
+test("collapse repeats is saved per album track and cleared when turned off", async () => {
 	const t = convexTest(schema, modules);
 	const albumId = await t.mutation(api.geniusAlbums.createAlbum, {
 		albumTitle: "Morir Saltando",
 		artistName: "Hesse Kassel",
 		albumSlug: "hesse-kassel-morir-saltando-english",
 		geniusAlbumUrl: "https://genius.com/albums/Hesse-kassel/Morir-saltando",
-		totalSongs: 0,
+		totalSongs: 2,
 	});
-
-	await t.mutation(api.geniusAlbums.updateZineDisplaySettings, {
+	const pornomiseria = await t.mutation(api.geniusAlbums.createSong, {
 		albumId,
-		settings: {
-			showArtist: true,
-			showAlbum: true,
-			showYear: true,
-			showAlbumArt: true,
-			showIntro: true,
-			showGeniusInfo: false,
-			showSectionLabels: false,
-			collapseRepeats: true,
-			showUserNote: true,
-			separateInstrumentalPages: false,
-			showCreditsRule: false,
-			showRecommendationsLabel: true,
-			showRecommendationsPadding: true,
-		},
+		songTitle: "Pornomiseria",
+		geniusSongUrl: "https://genius.com/Hesse-kassel-pornomiseria-lyrics",
+		trackNumber: 1,
+		lyrics: "We have to stop\nWe have to stop",
+	});
+	const relajar = await t.mutation(api.geniusAlbums.createSong, {
+		albumId,
+		songTitle: "No Me Puedo Relajar",
+		geniusSongUrl: "https://genius.com/Hesse-kassel-no-me-puedo-relajar-lyrics",
+		trackNumber: 2,
+		lyrics: "I can't relax\nI can't relax",
 	});
 
-	const album = await t.query(api.geniusAlbums.getAlbumBySlug, {
-		slug: "hesse-kassel-morir-saltando-english",
+	await t.mutation(api.geniusAlbums.updateZineSongSettings, {
+		songId: pornomiseria,
+		zineCollapseRepeats: true,
 	});
-	expect(album?.album.zineDisplaySettings?.collapseRepeats).toBe(true);
+
+	const songs = () =>
+		t.run(async (ctx) => ({
+			pornomiseria: await ctx.db.get(pornomiseria),
+			relajar: await ctx.db.get(relajar),
+		}));
+
+	let saved = await songs();
+	expect(saved.pornomiseria?.zineCollapseRepeats).toBe(true);
+	expect(saved.relajar?.zineCollapseRepeats).toBeUndefined();
+
+	await t.mutation(api.geniusAlbums.updateZineSongSettings, {
+		songId: pornomiseria,
+		zineCollapseRepeats: false,
+	});
+	saved = await songs();
+	expect(saved.pornomiseria?.zineCollapseRepeats).toBeUndefined();
 });

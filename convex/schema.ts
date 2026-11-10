@@ -76,6 +76,7 @@ const zineDisplaySettingsValidator = v.object({
 	showIntro: v.optional(v.boolean()),
 	showGeniusInfo: v.optional(v.boolean()),
 	showSectionLabels: v.optional(v.boolean()),
+	// Retired zine-wide toggle (now per track: zineCollapseRepeats); kept so saved settings still validate
 	collapseRepeats: v.optional(v.boolean()),
 	showUserNote: v.optional(v.boolean()),
 	separateInstrumentalPages: v.optional(v.boolean()),
@@ -338,6 +339,7 @@ export default defineSchema({
 		zineTitleCondenseScale: v.optional(v.number()),
 		zineShowCredits: v.optional(v.boolean()),
 		zineCollapseWithPrevious: v.optional(v.boolean()),
+		zineCollapseRepeats: v.optional(v.boolean()),
 		zinePageRecommendations: v.optional(zinePageRecommendationsValidator),
 		createdAt: v.number(), // Unix timestamp
 	})
@@ -428,6 +430,7 @@ export default defineSchema({
 		zineTitleCondenseScale: v.optional(v.number()),
 		zineShowCredits: v.optional(v.boolean()),
 		zineCollapseWithPrevious: v.optional(v.boolean()),
+		zineCollapseRepeats: v.optional(v.boolean()),
 		durationSecondsOverride: v.optional(v.number()),
 		hiddenCreditLabels: v.optional(v.array(v.string())),
 		shownCreditLabels: v.optional(v.array(v.string())),

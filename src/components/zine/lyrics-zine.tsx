@@ -245,6 +245,17 @@ export function LyricsZine({
 		}
 		return collapsed;
 	});
+	const [songCollapseRepeats, setSongCollapseRepeats] = useState<
+		Record<string, true>
+	>(() => {
+		const collapsed: Record<string, true> = {};
+		for (const [id, settings] of Object.entries(itemSettingsById)) {
+			if (settings.collapseRepeats === true) {
+				collapsed[id] = true;
+			}
+		}
+		return collapsed;
+	});
 	const [coverImageUrl, setCoverImageUrl] = useState(cover.imageUrl ?? "");
 	const [coverGreyscale, setCoverGreyscale] = useState(cover.greyscale);
 	const [coverFullBleed, setCoverFullBleed] = useState(
@@ -333,9 +344,10 @@ export function LyricsZine({
 
 	const songsForPages = songs.map((song) => ({
 		...song,
-		lyrics: displaySettings.collapseRepeats
-			? collapseRepeatedLyrics(song.lyrics)
-			: song.lyrics,
+		lyrics:
+			song.id in songCollapseRepeats
+				? collapseRepeatedLyrics(song.lyrics)
+				: song.lyrics,
 		introContent:
 			song.id in songIntroContentById
 				? songIntroContentById[song.id]
@@ -408,6 +420,7 @@ export function LyricsZine({
 			condenseScale: getCondenseScaleForSong(songTextCondenseScales, songId),
 			showCredits: !(songId in songCreditsHidden),
 			collapseWithPrevious: songId in songCollapseWithPrevious,
+			collapseRepeats: songId in songCollapseRepeats,
 		};
 	}
 
@@ -448,6 +461,7 @@ export function LyricsZine({
 				condenseScale: roundedCondense,
 				showCredits: settings.showCredits,
 				collapseWithPrevious: settings.collapseWithPrevious,
+				collapseRepeats: settings.collapseRepeats,
 			});
 		}, 500);
 
@@ -1216,14 +1230,6 @@ export function LyricsZine({
 								label="Show song part labels"
 							/>
 							<ZineToggleControl
-								id="zine-collapse-repeats"
-								checked={displaySettings.collapseRepeats}
-								onCheckedChange={(checked) =>
-									updateDisplaySettings({ collapseRepeats: checked })
-								}
-								label="Collapse repeated lines"
-							/>
-							<ZineToggleControl
 								id="zine-separate-instrumental-pages"
 								checked={displaySettings.separateInstrumentalPages}
 								onCheckedChange={(checked) =>
@@ -1595,6 +1601,7 @@ export function LyricsZine({
 								page.songId,
 							);
 							const showCredits = !(page.songId in songCreditsHidden);
+							const collapseRepeats = page.songId in songCollapseRepeats;
 							const songInput = songsById.get(page.songId);
 							const hiddenCreditLabelsForRestore = songInput
 								? getHiddenCreditLabelsForRestore(songInput.credits, {
@@ -1621,6 +1628,20 @@ export function LyricsZine({
 													lyricsSizePt={lyricsTargetFontSizePt}
 													mode={lyricsColumnMode}
 													showCredits={showCredits}
+													collapseRepeats={collapseRepeats}
+													onCollapseRepeatsChange={(nextCollapse) => {
+														setSongCollapseRepeats((previous) =>
+															setSongCollapsed(
+																previous,
+																page.songId,
+																nextCollapse,
+															),
+														);
+														queueDebouncedPersistZineItemSettings(page.songId, {
+															...getZineSettingsSnapshot(page.songId),
+															collapseRepeats: nextCollapse,
+														});
+													}}
 													onRestoreCreditLabel={
 														persistence?.showCreditLabel
 															? (label) =>
@@ -2023,6 +2044,8 @@ function ZineTrackLyricsColumnControls({
 	onCondenseScaleChange,
 	showCredits,
 	onShowCreditsChange,
+	collapseRepeats,
+	onCollapseRepeatsChange,
 	hiddenCreditLabels,
 	onRestoreCreditLabel,
 }: {
@@ -2031,6 +2054,7 @@ function ZineTrackLyricsColumnControls({
 	onLyricsSizePtChange: (fontSizePt: number) => void;
 	onCondenseScaleChange: (scale: number) => void;
 	onShowCreditsChange: (showCredits: boolean) => void;
+	onCollapseRepeatsChange: (collapseRepeats: boolean) => void;
 	onRestoreCreditLabel?: (label: string) => void;
 	songTitle: string;
 	songId: string;
@@ -2038,6 +2062,7 @@ function ZineTrackLyricsColumnControls({
 	lyricsSizePt: number;
 	condenseScale: number;
 	showCredits: boolean;
+	collapseRepeats: boolean;
 	hiddenCreditLabels: string[];
 }) {
 	const groupName = `zine-lyrics-cols-${songId}`;
@@ -2045,6 +2070,7 @@ function ZineTrackLyricsColumnControls({
 	const lyricsSliderId = `${songId}-zine-lyrics-font-size`;
 	const condenseSliderId = `${songId}-zine-text-condense`;
 	const creditsToggleId = `${songId}-zine-show-credits`;
+	const collapseRepeatsToggleId = `${songId}-zine-collapse-repeats`;
 
 	return (
 		<fieldset className="m-0 space-y-3 border-0 p-0">
@@ -2086,6 +2112,12 @@ function ZineTrackLyricsColumnControls({
 					id={creditsToggleId}
 					label="Show credits"
 					onCheckedChange={onShowCreditsChange}
+				/>
+				<ZineToggleControl
+					checked={collapseRepeats}
+					id={collapseRepeatsToggleId}
+					label="Collapse repeated lines"
+					onCheckedChange={onCollapseRepeatsChange}
 				/>
 				{hiddenCreditLabels.length > 0 && onRestoreCreditLabel ? (
 					<div className="space-y-2 border-t pt-3">

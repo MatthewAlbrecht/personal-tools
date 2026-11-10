@@ -133,6 +133,7 @@ export function AlbumLyricsZine({ slug, variant }: AlbumLyricsZineProps) {
 			condenseScale: song.zineTitleCondenseScale,
 			showCredits: song.zineShowCredits !== false,
 			collapseWithPrevious: song.zineCollapseWithPrevious === true,
+			collapseRepeats: song.zineCollapseRepeats === true,
 		};
 	}
 
@@ -207,6 +208,7 @@ export function AlbumLyricsZine({ slug, variant }: AlbumLyricsZineProps) {
 									zineTitleCondenseScale: s.condenseScale,
 									zineShowCredits: s.showCredits,
 									zineCollapseWithPrevious: s.collapseWithPrevious,
+									zineCollapseRepeats: s.collapseRepeats,
 								});
 							},
 							hideCreditLabel: (songId, label) => {
