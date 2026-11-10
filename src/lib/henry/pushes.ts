@@ -71,7 +71,7 @@ export type UnitPushFacts = {
 /**
  * "New at The Henry: Apt 516" over "1 bed · 813 sq ft · $2,256/mo"; a
  * relisting is "Back at The Henry: Apt 608" over "Relisted · 2 bed · …".
- * A drop alone is "Down $41 at The Henry: Apt 608" over "2 bed · 1,091 sq
+ * A drop alone is "Apt 608 is down $41" over "2 bed · 1,091 sq
  * ft · $2,615/mo, was $2,656"; with a listing it leads the body ("Down $41 ·
  * …", "Relisted, down $41 · …").
  */
@@ -88,7 +88,7 @@ export function unitPushText(unit: UnitPushFacts): {
 	switch (news.kind) {
 		case "dropped":
 			return {
-				title: `Down ${down} at The Henry: Apt ${unit.number}`,
+				title: `Apt ${unit.number} is down ${down}`,
 				body: `${facts}, was ${formatMoney(news.droppedFrom)}`,
 			};
 		case "relisted":
