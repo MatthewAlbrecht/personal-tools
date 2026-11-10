@@ -23,6 +23,7 @@ export default defineConfig({
 			"src/app/henry/**/*.test.tsx",
 			"extensions/rym-release-scraper/tests/*.test.ts",
 			"convex/_utils/serverSecret.test.ts",
+			"convex/_utils/geniusTranslation.test.ts",
 			"src/server/convex-server.test.ts",
 			"src/lib/session-cookie.test.ts",
 			"src/lib/route-access.test.ts",

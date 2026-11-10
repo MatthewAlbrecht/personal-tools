@@ -9,6 +9,7 @@ import {
 	type GeniusCredit,
 	extractAlbumTracklistItems,
 	extractCredits,
+	extractEnglishTranslationUrl,
 } from "../../../../convex/_utils/geniusParser";
 
 type SongData = {
@@ -27,6 +28,8 @@ type AlbumData = {
 	artistName: string;
 	geniusAlbumUrl: string;
 	songs: SongData[];
+	/** Titles of tracks kept in the original language because Genius has no English translation */
+	untranslatedTracks: string[];
 };
 
 type HtmlParserNode = {
@@ -171,7 +174,7 @@ function extractAboutFromHTML(html: string): string | undefined {
 export async function POST(request: NextRequest) {
 	try {
 		const body = await request.json();
-		const { geniusAlbumUrl } = body;
+		const { geniusAlbumUrl, useEnglishTranslation } = body;
 
 		if (!geniusAlbumUrl || !geniusAlbumUrl.includes("genius.com")) {
 			return NextResponse.json(
@@ -259,6 +262,7 @@ export async function POST(request: NextRequest) {
 
 		// Fetch each song
 		const songs: SongData[] = [];
+		const untranslatedTracks: string[] = [];
 
 		for (let i = 0; i < tracklistInfo.length; i++) {
 			const trackInfo = tracklistInfo[i];
@@ -292,8 +296,24 @@ export async function POST(request: NextRequest) {
 				);
 				const songTitle = songTitleElem ? songTitleElem.textContent.trim() : "";
 
-				// Extract lyrics
-				const lyrics = extractLyricsFromHTML(songHtml);
+				// Extract lyrics, from the English translation page when asked
+				let lyrics = extractLyricsFromHTML(songHtml);
+				if (useEnglishTranslation === true) {
+					const translationUrl = extractEnglishTranslationUrl(songHtml);
+					if (translationUrl) {
+						const translationResponse = await fetch(translationUrl, {
+							headers,
+						});
+						if (!translationResponse.ok) {
+							throw new Error(
+								`Failed to fetch translation page: ${translationResponse.status} ${translationResponse.statusText}`,
+							);
+						}
+						lyrics = extractLyricsFromHTML(await translationResponse.text());
+					} else {
+						untranslatedTracks.push(songTitle || trackInfo.title);
+					}
+				}
 
 				// Extract about
 				const about = extractAboutFromHTML(songHtml);
@@ -333,6 +353,7 @@ export async function POST(request: NextRequest) {
 			artistName,
 			geniusAlbumUrl,
 			songs,
+			untranslatedTracks,
 		};
 
 		return NextResponse.json(albumData);
