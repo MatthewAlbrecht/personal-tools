@@ -1,40 +1,49 @@
 import type React from "react";
+import { collapseRepeatedLyrics } from "~/lib/collapse-repeated-lyrics";
 
 export function LyricsRenderer({
 	lyrics,
 	showSectionLabels = true,
+	collapseRepeats = false,
 }: {
 	lyrics: string;
 	showSectionLabels?: boolean;
+	/** Show lines or short blocks repeated back to back once, marked "(Nx)" */
+	collapseRepeats?: boolean;
 }) {
-	return dropLeadingBlankLines(lyrics.split("\n")).map((line, lineIndex) => {
-		if (line.trim() === "") {
-			return <br key={lineIndex} />;
-		}
+	const displayLyrics = collapseRepeats
+		? collapseRepeatedLyrics(lyrics)
+		: lyrics;
+	return dropLeadingBlankLines(displayLyrics.split("\n")).map(
+		(line, lineIndex) => {
+			if (line.trim() === "") {
+				return <br key={lineIndex} />;
+			}
 
-		if (/^\[.*\]$/.test(line.trim())) {
-			if (!showSectionLabels) {
-				return null;
+			if (/^\[.*\]$/.test(line.trim())) {
+				if (!showSectionLabels) {
+					return null;
+				}
+
+				return (
+					<span
+						key={lineIndex}
+						className="text-muted-foreground text-sm print:text-xs"
+					>
+						{line}
+						<br />
+					</span>
+				);
 			}
 
 			return (
-				<span
-					key={lineIndex}
-					className="text-muted-foreground text-sm print:text-xs"
-				>
-					{line}
+				<span key={lineIndex}>
+					{formatInlineLyrics(line, lineIndex)}
 					<br />
 				</span>
 			);
-		}
-
-		return (
-			<span key={lineIndex}>
-				{formatInlineLyrics(line, lineIndex)}
-				<br />
-			</span>
-		);
-	});
+		},
+	);
 }
 
 function dropLeadingBlankLines(lines: string[]): string[] {

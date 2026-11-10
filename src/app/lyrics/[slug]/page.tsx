@@ -33,6 +33,7 @@ export default function AlbumLyricsPage({
 	const [isCompact, setIsCompact] = useState(false);
 	const [showGeniusInfo, setShowGeniusInfo] = useState(false);
 	const [showSectionLabels, setShowSectionLabels] = useState(true);
+	const [collapseRepeats, setCollapseRepeats] = useState(true);
 
 	function handlePrint() {
 		setIsCompact(false);
@@ -124,6 +125,21 @@ export default function AlbumLyricsPage({
 							className="cursor-pointer text-sm"
 						>
 							Show song part labels
+						</Label>
+					</div>
+					<div className="flex items-center gap-2">
+						<Checkbox
+							id="collapse-repeats"
+							checked={collapseRepeats}
+							onCheckedChange={(checked) =>
+								setCollapseRepeats(checked === true)
+							}
+						/>
+						<Label
+							htmlFor="collapse-repeats"
+							className="cursor-pointer text-sm"
+						>
+							Collapse repeated lines
 						</Label>
 					</div>
 					<div className="flex gap-2">
@@ -246,6 +262,7 @@ export default function AlbumLyricsPage({
 										<LyricsRenderer
 											lyrics={displayLyrics}
 											showSectionLabels={showSectionLabels}
+											collapseRepeats={collapseRepeats}
 										/>
 									) : (
 										<p className="rounded-lg border bg-muted/30 p-4 text-muted-foreground text-sm">
