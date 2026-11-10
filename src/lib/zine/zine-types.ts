@@ -28,6 +28,8 @@ export type ZineSongDisplayInput = {
 	shownCreditLabels?: string[];
 	/** When true, this track shares a page with the track above it. */
 	collapseWithPrevious?: boolean;
+	/** When true, this track's lyrics continue onto a second page. */
+	continueOnSecondPage?: boolean;
 	/** Per-track lyric-page recommendations (falls back to playlist/album defaults). */
 	pageRecommendations?: ZinePageRecommendation[];
 };
@@ -42,6 +44,8 @@ export type ZineItemSettings = {
 	collapseWithPrevious?: boolean;
 	/** When true, back-to-back repeated lines in this track print once with "(Nx)". */
 	collapseRepeats?: boolean;
+	/** When true, this track's lyrics continue onto a second page. */
+	secondPage?: boolean;
 };
 
 export type ZineBackCoverQrSlot = {

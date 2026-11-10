@@ -1413,6 +1413,7 @@ export const updateZineSongSettings = mutation({
 		zineShowCredits: v.optional(v.boolean()),
 		zineCollapseWithPrevious: v.optional(v.boolean()),
 		zineCollapseRepeats: v.optional(v.boolean()),
+		zineSecondPage: v.optional(v.boolean()),
 	},
 	returns: v.id("geniusSongs"),
 	handler: async (ctx, args) => {
@@ -1423,7 +1424,8 @@ export const updateZineSongSettings = mutation({
 			args.zineTitleCondenseScale === undefined &&
 			args.zineShowCredits === undefined &&
 			args.zineCollapseWithPrevious === undefined &&
-			args.zineCollapseRepeats === undefined
+			args.zineCollapseRepeats === undefined &&
+			args.zineSecondPage === undefined
 		) {
 			throw new Error("No zine settings provided");
 		}
@@ -1437,6 +1439,7 @@ export const updateZineSongSettings = mutation({
 			zineShowCredits?: boolean | undefined;
 			zineCollapseWithPrevious?: boolean | undefined;
 			zineCollapseRepeats?: boolean | undefined;
+			zineSecondPage?: boolean | undefined;
 		} = {};
 
 		if (args.zineLyricsColumnCount !== undefined) {
@@ -1461,6 +1464,9 @@ export const updateZineSongSettings = mutation({
 		}
 		if (args.zineCollapseRepeats !== undefined) {
 			patch.zineCollapseRepeats = args.zineCollapseRepeats ? true : undefined;
+		}
+		if (args.zineSecondPage !== undefined) {
+			patch.zineSecondPage = args.zineSecondPage ? true : undefined;
 		}
 
 		await ctx.db.patch(args.songId, patch);
