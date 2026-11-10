@@ -130,6 +130,7 @@ export function PlaylistLyricsZine({ slug, variant }: PlaylistLyricsZineProps) {
 			condenseScale: song.zineTitleCondenseScale,
 			showCredits: song.zineShowCredits !== false,
 			collapseWithPrevious: song.zineCollapseWithPrevious === true,
+			collapseRepeats: song.zineCollapseRepeats === true,
 		};
 	}
 
@@ -189,6 +190,7 @@ export function PlaylistLyricsZine({ slug, variant }: PlaylistLyricsZineProps) {
 									zineTitleCondenseScale: s.condenseScale,
 									zineShowCredits: s.showCredits,
 									zineCollapseWithPrevious: s.collapseWithPrevious,
+									zineCollapseRepeats: s.collapseRepeats,
 								});
 							},
 							hideCreditLabel: (songId, label) => {

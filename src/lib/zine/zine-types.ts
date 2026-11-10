@@ -40,6 +40,8 @@ export type ZineItemSettings = {
 	showCredits?: boolean;
 	/** When true, this track shares a page with the track above it. */
 	collapseWithPrevious?: boolean;
+	/** When true, back-to-back repeated lines in this track print once with "(Nx)". */
+	collapseRepeats?: boolean;
 };
 
 export type ZineBackCoverQrSlot = {
