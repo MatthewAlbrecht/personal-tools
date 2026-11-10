@@ -267,6 +267,11 @@ export function LyricsZine({
 			return continued;
 		},
 	);
+	// First lyric line that didn't fit on each continuing track's first page, measured in
+	// the browser by that page.
+	const [secondPageCutLines, setSecondPageCutLines] = useState<
+		Record<string, number>
+	>({});
 	const [coverImageUrl, setCoverImageUrl] = useState(cover.imageUrl ?? "");
 	const [coverGreyscale, setCoverGreyscale] = useState(cover.greyscale);
 	const [coverFullBleed, setCoverFullBleed] = useState(
@@ -405,7 +410,7 @@ export function LyricsZine({
 			: undefined,
 		collapseInstrumentalTracks: !displaySettings.separateInstrumentalPages,
 		showSectionLabels: displaySettings.showSectionLabels,
-		showAlbumArt: displaySettings.showAlbumArt,
+		secondPageCutLines,
 		insideBack: {
 			sections: insideBackSections ?? [],
 			settings: insideBackLayoutSettings,
@@ -436,6 +441,12 @@ export function LyricsZine({
 			collapseRepeats: songId in songCollapseRepeats,
 			secondPage: songId in songSecondPage,
 		};
+	}
+
+	function updateSecondPageCutLine(songId: string, line: number): void {
+		setSecondPageCutLines((previous) =>
+			previous[songId] === line ? previous : { ...previous, [songId]: line },
+		);
 	}
 
 	function updateCollapseWithPrevious(songId: string, collapse: boolean): void {
@@ -838,6 +849,12 @@ export function LyricsZine({
 				<ZineSongPage
 					key={`${keyPrefix}-song-${pagePart}-${page.songId}`}
 					pagePart={pagePart}
+					onOverflowLine={
+						// Only the on-screen copy reports; print copies just hide what overflows.
+						pagePart === "first" && keyPrefix.startsWith("scr-")
+							? (line) => updateSecondPageCutLine(page.songId, line)
+							: undefined
+					}
 					canEditCredits={canEdit}
 					creditVisibility={creditVisibility}
 					displayOptions={displayOptions}

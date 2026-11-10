@@ -11,6 +11,7 @@ import {
 	ZINE_FOOTER_ZONE_CSS_PX,
 	ZINE_LYRICS_SIZE_SLIDER,
 } from "~/lib/zine/zine-layout";
+import { findFirstOverflowLine } from "~/lib/zine/zine-second-page";
 import {
 	fitFontSizeToContainer,
 	useZinePrintRemeasure,
@@ -24,6 +25,8 @@ export function useZineSongLyricsFit({
 	contentKey,
 	lyricsColumnMode,
 	hasFooter = true,
+	continuesOnNextPage = false,
+	onOverflowLine,
 }: {
 	lyrics: string;
 	/** Slider target/max; fit shrinks down to slider min pt if overflowing. */
@@ -31,6 +34,12 @@ export function useZineSongLyricsFit({
 	contentKey: string;
 	lyricsColumnMode: ZineLyricsColumnMode;
 	hasFooter?: boolean;
+	/**
+	 * First page of a track that continues on the next page: keep the target font size,
+	 * hide the lines that don't fit, and report the first of them via `onOverflowLine`.
+	 */
+	continuesOnNextPage?: boolean;
+	onOverflowLine?: (line: number) => void;
 }): {
 	pageRef: RefObject<HTMLElement | null>;
 	headerRef: RefObject<HTMLDivElement | null>;
@@ -80,6 +89,17 @@ export function useZineSongLyricsFit({
 		lyricsClip.style.height = `${nextLyricsHeightPx}px`;
 		setLyricsHeightPx(nextLyricsHeightPx);
 
+		if (continuesOnNextPage) {
+			lyricsMeasuring.style.fontSize = `${targetFontSizePt}pt`;
+			setFontSizePt(targetFontSizePt);
+			const overflowLine = hideOverflowingLines(lyricsMeasuring, lyricsClip);
+			// A hidden copy (e.g. the screen view while printing) has no box to measure.
+			if (lyricsClip.clientHeight > 0) {
+				onOverflowLine?.(overflowLine);
+			}
+			return;
+		}
+
 		const minFontSizePt = ZINE_LYRICS_SIZE_SLIDER.minPt;
 
 		const nextFontSizePt = fitFontSizeToContainer({
@@ -90,7 +110,15 @@ export function useZineSongLyricsFit({
 		});
 
 		setFontSizePt(nextFontSizePt);
-	}, [contentKey, hasFooter, lyrics, lyricsColumnMode, targetFontSizePt]);
+	}, [
+		contentKey,
+		continuesOnNextPage,
+		hasFooter,
+		lyrics,
+		lyricsColumnMode,
+		onOverflowLine,
+		targetFontSizePt,
+	]);
 
 	useLayoutEffect(() => {
 		remeasure();
@@ -108,4 +136,37 @@ export function useZineSongLyricsFit({
 		fontSizePt,
 		columnCount: lyricsColumnMode,
 	};
+}
+
+/**
+ * Hide every lyric line from the first one that is drawn outside the visible lyrics box,
+ * and return that line's index. Uses `visibility` so the layout being measured stays put.
+ */
+function hideOverflowingLines(content: HTMLElement, clip: HTMLElement): number {
+	const elements = [
+		...content.querySelectorAll<HTMLElement>("[data-lyric-line]"),
+	];
+	for (const element of elements) {
+		element.style.visibility = "";
+	}
+	const lineOf = (element: HTMLElement) =>
+		Number(element.dataset.lyricLine ?? "0");
+	const lineCount =
+		elements.length > 0 ? Math.max(...elements.map(lineOf)) + 1 : 0;
+	const overflowLine = findFirstOverflowLine(
+		elements
+			.filter((element) => element.tagName !== "BR")
+			.map((element) => ({
+				line: lineOf(element),
+				rects: [...element.getClientRects()],
+			})),
+		clip.getBoundingClientRect(),
+		lineCount,
+	);
+	for (const element of elements) {
+		if (lineOf(element) >= overflowLine) {
+			element.style.visibility = "hidden";
+		}
+	}
+	return overflowLine;
 }
