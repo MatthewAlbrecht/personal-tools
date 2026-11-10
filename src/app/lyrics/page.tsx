@@ -14,6 +14,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Separator } from "~/components/ui/separator";
@@ -55,6 +56,7 @@ function slugify(text: string): string {
 export default function LyricsSearchPage() {
 	const router = useRouter();
 	const [geniusUrl, setGeniusUrl] = useState("");
+	const [useEnglishTranslation, setUseEnglishTranslation] = useState(false);
 	const [isFetching, setIsFetching] = useState(false);
 	const [isSyncing, setIsSyncing] = useState(false);
 	const [creditDefaultsOpen, setCreditDefaultsOpen] = useState(false);
@@ -87,7 +89,10 @@ export default function LyricsSearchPage() {
 			const response = await fetch("/api/scrape-genius", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ geniusAlbumUrl: geniusUrl.trim() }),
+				body: JSON.stringify({
+					geniusAlbumUrl: geniusUrl.trim(),
+					useEnglishTranslation,
+				}),
 			});
 
 			if (!response.ok) {
@@ -98,8 +103,9 @@ export default function LyricsSearchPage() {
 			const albumData = await response.json();
 
 			// Generate slug
+			// Translated imports get their own slug so they don't overwrite the original
 			const albumSlug = slugify(
-				`${albumData.artistName} ${albumData.albumTitle}`,
+				`${albumData.artistName} ${albumData.albumTitle}${useEnglishTranslation ? " english" : ""}`,
 			);
 
 			// Store in Convex
@@ -127,6 +133,12 @@ export default function LyricsSearchPage() {
 			}
 
 			toast.success(`Successfully fetched ${albumData.songs.length} songs!`);
+			if (albumData.untranslatedTracks?.length) {
+				toast.warning(
+					`No English translation on Genius, kept original lyrics: ${albumData.untranslatedTracks.join(", ")}`,
+					{ duration: 15000 },
+				);
+			}
 			router.push(`/lyrics/${albumSlug}`);
 		} catch (error) {
 			console.error("Error fetching album:", error);
@@ -218,6 +230,20 @@ export default function LyricsSearchPage() {
 								placeholder="Paste Genius album URL here..."
 								disabled={isFetching}
 							/>
+						</div>
+
+						<div className="flex items-center gap-2">
+							<Checkbox
+								id="useEnglishTranslation"
+								checked={useEnglishTranslation}
+								onCheckedChange={(checked) =>
+									setUseEnglishTranslation(checked === true)
+								}
+								disabled={isFetching}
+							/>
+							<Label htmlFor="useEnglishTranslation">
+								Use English translations
+							</Label>
 						</div>
 
 						<Button type="submit" variant="outline" disabled={isFetching}>

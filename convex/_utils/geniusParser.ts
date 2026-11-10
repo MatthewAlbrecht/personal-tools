@@ -427,6 +427,18 @@ export function extractSongTitle(html: string): string {
 }
 
 /**
+ * Extract the English translation link from a song page's translations dropdown
+ */
+export function extractEnglishTranslationUrl(html: string): string | null {
+	const root = parse(html);
+	for (const anchor of root.querySelectorAll('a[class*="TranslationLink"]')) {
+		const href = anchor.getAttribute("href");
+		if (href && anchor.textContent.trim() === "English") return href;
+	}
+	return null;
+}
+
+/**
  * Generate URL-safe slug from text
  */
 export function slugify(text: string): string {
