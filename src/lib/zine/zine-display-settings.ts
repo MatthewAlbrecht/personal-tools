@@ -6,6 +6,7 @@ export type ZineDisplaySettings = {
 	showIntro: boolean;
 	showGeniusInfo: boolean;
 	showSectionLabels: boolean;
+	collapseRepeats: boolean;
 	showUserNote: boolean;
 	separateInstrumentalPages: boolean;
 	showCreditsRule: boolean;
@@ -21,6 +22,7 @@ export const ZINE_DISPLAY_DEFAULTS: ZineDisplaySettings = {
 	showIntro: true,
 	showGeniusInfo: false,
 	showSectionLabels: false,
+	collapseRepeats: false,
 	showUserNote: true,
 	separateInstrumentalPages: false,
 	showCreditsRule: false,
