@@ -76,6 +76,7 @@ const zineDisplaySettingsValidator = v.object({
 	showIntro: v.optional(v.boolean()),
 	showGeniusInfo: v.optional(v.boolean()),
 	showSectionLabels: v.optional(v.boolean()),
+	collapseRepeats: v.optional(v.boolean()),
 	showUserNote: v.optional(v.boolean()),
 	separateInstrumentalPages: v.optional(v.boolean()),
 	showCreditsRule: v.optional(v.boolean()),

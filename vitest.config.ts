@@ -27,6 +27,7 @@ export default defineConfig({
 			"src/lib/session-cookie.test.ts",
 			"src/lib/route-access.test.ts",
 			"src/lib/collapse-repeated-lyrics.test.ts",
+			"convex/zine-collapse-repeats.test.ts",
 			"src/middleware.test.ts",
 		],
 		exclude: ["**/node_modules/**", "**/dist/**", ".worktrees/**"],

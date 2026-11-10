@@ -19,6 +19,7 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Slider } from "~/components/ui/slider";
+import { collapseRepeatedLyrics } from "~/lib/collapse-repeated-lyrics";
 import { cn } from "~/lib/utils";
 import { buildBookletSheets } from "~/lib/zine/zine-booklet";
 import {
@@ -32,8 +33,8 @@ import {
 	resolveZineDisplaySettings,
 } from "~/lib/zine/zine-display-settings";
 import {
-	type ZineDrcLogoCorner,
 	ZINE_DRC_LOGO_CORNER_OPTIONS,
+	type ZineDrcLogoCorner,
 } from "~/lib/zine/zine-drc-logo";
 import {
 	ZINE_INSIDE_BACK_MARGIN_SLIDER,
@@ -332,6 +333,9 @@ export function LyricsZine({
 
 	const songsForPages = songs.map((song) => ({
 		...song,
+		lyrics: displaySettings.collapseRepeats
+			? collapseRepeatedLyrics(song.lyrics)
+			: song.lyrics,
 		introContent:
 			song.id in songIntroContentById
 				? songIntroContentById[song.id]
@@ -1210,6 +1214,14 @@ export function LyricsZine({
 									updateDisplaySettings({ showSectionLabels: checked })
 								}
 								label="Show song part labels"
+							/>
+							<ZineToggleControl
+								id="zine-collapse-repeats"
+								checked={displaySettings.collapseRepeats}
+								onCheckedChange={(checked) =>
+									updateDisplaySettings({ collapseRepeats: checked })
+								}
+								label="Collapse repeated lines"
 							/>
 							<ZineToggleControl
 								id="zine-separate-instrumental-pages"
