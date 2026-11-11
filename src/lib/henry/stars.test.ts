@@ -86,7 +86,7 @@ describe("planSummaries", () => {
 });
 
 describe("hideI25", () => {
-	test("hides I-25 side units unless starred, keeping the order", () => {
+	test("hides every I-25 side unit, starred or not, keeping the order", () => {
 		const units = [
 			{ ...unit("608"), facesI25: false },
 			{ ...unit("777"), facesI25: true },
@@ -94,11 +94,6 @@ describe("hideI25", () => {
 			{ ...unit("571", { planStarred: true }), facesI25: true },
 			{ ...unit("101"), facesI25: false },
 		];
-		expect(hideI25(units).map((row) => row.number)).toEqual([
-			"608",
-			"359",
-			"571",
-			"101",
-		]);
+		expect(hideI25(units).map((row) => row.number)).toEqual(["608", "101"]);
 	});
 });

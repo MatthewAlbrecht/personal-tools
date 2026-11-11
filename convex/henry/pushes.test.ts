@@ -299,7 +299,7 @@ describe("relisting", () => {
 });
 
 describe("stars override the rules", () => {
-	test("a unit starred itself pushes when it relists, though it faces I-25", async () => {
+	test("a unit starred itself doesn't push when it relists on the I-25 side", async () => {
 		const t = setup();
 		await turnOn(t);
 		await check(t, BASELINE_AT);
@@ -310,10 +310,10 @@ describe("stars override the rules", () => {
 		await check(t, BASELINE_AT + 2 * HOUR, payload(without("563")));
 		await check(t, BASELINE_AT + 3 * DAY);
 		await settle(t);
-		expect(pushedUnits()).toEqual(["563"]);
+		expect(pushedUnits()).toEqual([]);
 	});
 
-	test("a unit in a starred floor plan pushes when it lists, though the rules skip it", async () => {
+	test("a starred floor plan doesn't push its I-25 side unit", async () => {
 		const t = setup();
 		await turnOn(t);
 		await check(t, BASELINE_AT, payload(without("563", "437")));
@@ -321,7 +321,7 @@ describe("stars override the rules", () => {
 		await t.mutation(api.henry.stars.toggleFloorPlanStar, { floorPlan: "B2" });
 		await check(t, BASELINE_AT + HOUR);
 		await settle(t);
-		expect(pushedUnits()).toEqual(["563"]);
+		expect(pushedUnits()).toEqual([]);
 	});
 });
 
@@ -416,7 +416,7 @@ describe("drop pushes", () => {
 		expect(fakes.sent[0]?.at).toBe(BASELINE_AT + HOUR);
 	});
 
-	test("a unit in a starred floor plan pushes its drop, though the rules skip it", async () => {
+	test("a starred I-25 side unit's drop doesn't push", async () => {
 		const t = setup();
 		await turnOn(t);
 		await check(t, BASELINE_AT);
@@ -424,8 +424,7 @@ describe("drop pushes", () => {
 		await t.mutation(api.henry.stars.toggleFloorPlanStar, { floorPlan: "B2" });
 		await check(t, BASELINE_AT + HOUR, payload(withPrice("563", 2600)));
 		await settle(t);
-		expect(pushedUnits()).toEqual(["563"]);
-		expect(fakes.sent[0]?.payload.title).toBe("Apt 563 is down $22");
+		expect(pushedUnits()).toEqual([]);
 	});
 
 	test("an unstarred unit's drop doesn't push", async () => {

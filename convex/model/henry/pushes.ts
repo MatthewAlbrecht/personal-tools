@@ -56,7 +56,7 @@ export async function pushNewUnit(
 }
 
 /**
- * Pushes a starred unit's price drop (any amount), against `priceBefore`,
+ * Pushes a starred unit's price drop (any amount, never I-25 side), against `priceBefore`,
  * its last price. Not for the baseline or a rise: the caller only calls on
  * a lower price.
  */
@@ -66,7 +66,7 @@ export async function pushDrop(
 	priceBefore: number,
 	now: number,
 ): Promise<void> {
-	if (!(await isStarred(ctx, unit))) return;
+	if (unit.facesI25 || !(await isStarred(ctx, unit))) return;
 	await queueUnitPush(ctx, unit._id, "dropped", now, priceBefore);
 }
 
@@ -220,6 +220,9 @@ async function unitMessage(
 	const unit = await ctx.db.get("henryUnits", unitId);
 	if (!unit || unit.status === "offMarket") {
 		return { send: false, note: "The unit went off the market." };
+	}
+	if (unit.facesI25) {
+		return { send: false, note: "The unit faces I-25." };
 	}
 	const droppedFrom =
 		push.reasons.includes("dropped") &&
