@@ -28,11 +28,11 @@ export function pushRuleMiss(unit: PushRuleFacts): string | null {
 }
 
 /**
- * Whether a listed or relisted unit pushes: starred (itself or its floor
- * plan) always does, else it must pass the rules.
+ * Whether a listed or relisted unit pushes: never on the I-25 side; else
+ * starred (itself or its floor plan) always does, or it must pass the rules.
  */
 export function pushesNewUnit(unit: PushRuleFacts, starred: boolean): boolean {
-	// The star override (story 43, confirmed): starred units always push.
+	if (unit.facesI25) return false;
 	if (starred) return true;
 	return pushRuleMiss(unit) === null;
 }

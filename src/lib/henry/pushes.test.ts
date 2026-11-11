@@ -28,11 +28,12 @@ describe("pushRuleMiss", () => {
 	});
 });
 
-test("a starred unit pushes whatever the rules say", () => {
-	const skipped = { ...TWO_BED, facesI25: true };
+test("a starred unit pushes whatever the rules say, except I-25 side", () => {
+	const skipped = { ...TWO_BED, beds: 0, floor: 4 };
 	expect(pushesNewUnit(skipped, false)).toBe(false);
 	expect(pushesNewUnit(skipped, true)).toBe(true);
 	expect(pushesNewUnit(TWO_BED, false)).toBe(true);
+	expect(pushesNewUnit({ ...TWO_BED, facesI25: true }, true)).toBe(false);
 });
 
 const UNIT_127 = { number: "127", beds: 2, sqft: 1490, price: 3271 };
@@ -113,7 +114,10 @@ test("the drawer says whether a unit would push, and why not", () => {
 	expect(newUnitPushLabel({ ...TWO_BED, beds: 0, floor: 4 }, false)).toBe(
 		"No: studio on floors 2-6",
 	);
-	expect(newUnitPushLabel({ ...TWO_BED, facesI25: true }, true)).toBe(
+	expect(newUnitPushLabel({ ...TWO_BED, beds: 0, floor: 4 }, true)).toBe(
 		"Yes, starred",
+	);
+	expect(newUnitPushLabel({ ...TWO_BED, facesI25: true }, true)).toBe(
+		"No: faces I-25",
 	);
 });
