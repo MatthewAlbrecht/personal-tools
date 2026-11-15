@@ -10,6 +10,7 @@ import {
 	refreshAccessToken,
 	trackToUri,
 } from "~/lib/spotify";
+import { keepFirstPerArtistAndName } from "~/lib/rooleases-dedupe";
 import {
 	getSpotifyConnection,
 	updateSpotifyTokens,
@@ -216,7 +217,10 @@ export default async function handler(
 
 						for (const track of album.tracks.items) {
 							const isAdded = await convex.query(api.rooleases.isTrackAdded, {
+								yearId: year._id,
 								spotifyTrackId: track.id,
+								spotifyArtistId: rooArtist.spotifyArtistId,
+								trackName: track.name,
 							});
 
 							if (isAdded) {
@@ -257,8 +261,13 @@ export default async function handler(
 			return a.trackName.localeCompare(b.trackName);
 		});
 
-		if (newTracks.length > 0) {
-			for (const [index, track] of newTracks.entries()) {
+		// The same song often ships as a single and again on an album: keep the first.
+		const uniqueTracks = keepFirstPerArtistAndName(newTracks);
+		stats.tracksFound -= newTracks.length - uniqueTracks.length;
+		stats.tracksSkipped += newTracks.length - uniqueTracks.length;
+
+		if (uniqueTracks.length > 0) {
+			for (const [index, track] of uniqueTracks.entries()) {
 				await addTracksToPlaylist(accessToken, year.targetPlaylistId, [
 					trackToUri(track.trackId),
 				]);
@@ -272,7 +281,7 @@ export default async function handler(
 				});
 				stats.tracksAdded++;
 
-				if (index < newTracks.length - 1) {
+				if (index < uniqueTracks.length - 1) {
 					await sleep(1000);
 				}
 			}

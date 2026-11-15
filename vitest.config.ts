@@ -31,6 +31,8 @@ export default defineConfig({
 			"convex/zine-track-settings.test.ts",
 			"src/lib/zine/zine-second-page.test.ts",
 			"src/middleware.test.ts",
+			"convex/rooleases-dedupe.test.ts",
+			"src/lib/rooleases-dedupe.test.ts",
 		],
 		exclude: ["**/node_modules/**", "**/dist/**", ".worktrees/**"],
 	},

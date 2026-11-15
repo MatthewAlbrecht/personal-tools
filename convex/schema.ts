@@ -1566,7 +1566,13 @@ export default defineSchema({
 	})
 		.index("by_yearId", ["yearId"])
 		.index("by_spotifyTrackId", ["spotifyTrackId"])
-		.index("by_yearId_addedAt", ["yearId", "addedAt"]),
+		.index("by_yearId_addedAt", ["yearId", "addedAt"])
+		.index("by_yearId_spotifyTrackId", ["yearId", "spotifyTrackId"])
+		.index("by_yearId_spotifyArtistId_trackName", [
+			"yearId",
+			"spotifyArtistId",
+			"trackName",
+		]),
 
 	// Rate Your Music taxonomy (keys: trim + lowercase; labels: pretty / first-seen)
 	rateYourMusicGenres: defineTable({

@@ -9,6 +9,7 @@ import {
 	refreshAccessToken,
 	trackToUri,
 } from "~/lib/spotify";
+import { keepFirstPerArtistAndName } from "~/lib/rooleases-dedupe";
 import {
 	getSpotifyConnection,
 	updateSpotifyTokens,
@@ -164,7 +165,10 @@ export default async function handler(
 						for (const track of album.tracks.items) {
 							// Check if already added
 							const isAdded = await convex.query(api.rooleases.isTrackAdded, {
+								yearId: defaultYear._id,
 								spotifyTrackId: track.id,
+								spotifyArtistId: rooArtist.spotifyArtistId,
+								trackName: track.name,
 							});
 
 							if (isAdded) {
@@ -207,10 +211,15 @@ export default async function handler(
 		// Sort by release date (oldest first)
 		newTracks.sort((a, b) => a.releaseDate.localeCompare(b.releaseDate));
 
+		// The same song often ships as a single and again on an album: keep the first.
+		const uniqueTracks = keepFirstPerArtistAndName(newTracks);
+		stats.tracksFound -= newTracks.length - uniqueTracks.length;
+		stats.tracksSkipped += newTracks.length - uniqueTracks.length;
+
 		// Add tracks to playlist and record in DB
-		if (newTracks.length > 0) {
+		if (uniqueTracks.length > 0) {
 			// Add to Spotify playlist in batches of 100
-			const trackUris = newTracks.map((t) => trackToUri(t.trackId));
+			const trackUris = uniqueTracks.map((t) => trackToUri(t.trackId));
 
 			for (let i = 0; i < trackUris.length; i += 100) {
 				const batch = trackUris.slice(i, i + 100);
@@ -222,7 +231,7 @@ export default async function handler(
 			}
 
 			// Record each track in Convex
-			for (const track of newTracks) {
+			for (const track of uniqueTracks) {
 				await convex.mutation(api.rooleases.addTrackToYear, {
 					yearId: defaultYear._id,
 					spotifyTrackId: track.trackId,
