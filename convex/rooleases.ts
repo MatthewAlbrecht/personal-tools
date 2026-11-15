@@ -1,5 +1,11 @@
 import { v } from "convex/values";
-import { action, mutation, query } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
+import {
+	type QueryCtx,
+	action,
+	mutation,
+	query,
+} from "./_generated/server";
 import { api, internal } from "./_generated/api";
 
 // ============================================================================
@@ -307,17 +313,13 @@ export const addTrackToYear = mutation({
 		albumName: v.string(),
 		releaseDate: v.string(),
 	},
+	returns: v.object({
+		added: v.boolean(),
+		reason: v.union(v.literal("already_exists"), v.null()),
+	}),
 	handler: async (ctx, args) => {
-		// Check if track already added
-		const existing = await ctx.db
-			.query("rooTracksAdded")
-			.withIndex("by_spotifyTrackId", (q) =>
-				q.eq("spotifyTrackId", args.spotifyTrackId),
-			)
-			.first();
-
-		if (existing) {
-			return { added: false, reason: "already_exists" };
+		if (await hasTrackBeenAdded(ctx, args)) {
+			return { added: false, reason: "already_exists" as const };
 		}
 
 		await ctx.db.insert("rooTracksAdded", {
@@ -330,7 +332,7 @@ export const addTrackToYear = mutation({
 			addedAt: Date.now(),
 		});
 
-		return { added: true };
+		return { added: true, reason: null };
 	},
 });
 
@@ -353,19 +355,50 @@ export const getTracksAddedForYear = query({
 	},
 });
 
+// A track counts as added for a festival year when that year already has the
+// same Spotify track, or the same artist with the exact same track name (the
+// single and the album version of one song are different Spotify tracks).
 export const isTrackAdded = query({
-	args: { spotifyTrackId: v.string() },
+	args: {
+		yearId: v.id("rooYears"),
+		spotifyTrackId: v.string(),
+		spotifyArtistId: v.string(),
+		trackName: v.string(),
+	},
+	returns: v.boolean(),
 	handler: async (ctx, args) => {
-		const existing = await ctx.db
-			.query("rooTracksAdded")
-			.withIndex("by_spotifyTrackId", (q) =>
-				q.eq("spotifyTrackId", args.spotifyTrackId),
-			)
-			.first();
-
-		return existing !== null;
+		return await hasTrackBeenAdded(ctx, args);
 	},
 });
+
+async function hasTrackBeenAdded(
+	ctx: QueryCtx,
+	args: {
+		yearId: Id<"rooYears">;
+		spotifyTrackId: string;
+		spotifyArtistId: string;
+		trackName: string;
+	},
+): Promise<boolean> {
+	const sameTrack = await ctx.db
+		.query("rooTracksAdded")
+		.withIndex("by_yearId_spotifyTrackId", (q) =>
+			q.eq("yearId", args.yearId).eq("spotifyTrackId", args.spotifyTrackId),
+		)
+		.first();
+	if (sameTrack) return true;
+
+	const sameName = await ctx.db
+		.query("rooTracksAdded")
+		.withIndex("by_yearId_spotifyArtistId_trackName", (q) =>
+			q
+				.eq("yearId", args.yearId)
+				.eq("spotifyArtistId", args.spotifyArtistId)
+				.eq("trackName", args.trackName),
+		)
+		.first();
+	return sameName !== null;
+}
 
 // ============================================================================
 // Bulk Operations (for playlist import)

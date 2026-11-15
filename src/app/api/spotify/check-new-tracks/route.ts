@@ -10,6 +10,7 @@ import {
 	refreshAccessToken,
 	trackToUri,
 } from "~/lib/spotify";
+import { keepFirstPerArtistAndName } from "~/lib/rooleases-dedupe";
 
 type CheckNewTracksRequest = {
 	yearId: string;
@@ -145,7 +146,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 						for (const track of album.tracks.items) {
 							// Check if already added
 							const isAdded = await convex.query(api.rooleases.isTrackAdded, {
+								yearId: yearId as Id<"rooYears">,
 								spotifyTrackId: track.id,
+								spotifyArtistId: rooArtist.spotifyArtistId,
+								trackName: track.name,
 							});
 
 							if (isAdded) {
@@ -190,9 +194,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 			return a.trackName.localeCompare(b.trackName);
 		});
 
+		// The same song often ships as a single and again on an album: keep the first.
+		const uniqueTracks = keepFirstPerArtistAndName(newTracks);
+		stats.tracksFound -= newTracks.length - uniqueTracks.length;
+		stats.tracksSkipped += newTracks.length - uniqueTracks.length;
+
 		// Add tracks to playlist and record in DB
-		if (newTracks.length > 0) {
-			for (const [index, track] of newTracks.entries()) {
+		if (uniqueTracks.length > 0) {
+			for (const [index, track] of uniqueTracks.entries()) {
 				await addTracksToPlaylist(accessToken, year.targetPlaylistId, [
 					trackToUri(track.trackId),
 				]);
@@ -206,7 +215,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 				});
 				stats.tracksAdded++;
 
-				if (index < newTracks.length - 1) {
+				if (index < uniqueTracks.length - 1) {
 					await sleep(1000);
 				}
 			}
@@ -222,7 +231,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 		return NextResponse.json({
 			success: true,
 			stats,
-			newTracks: newTracks.map((t) => ({
+			newTracks: uniqueTracks.map((t) => ({
 				name: t.trackName,
 				artist: t.artistName,
 				album: t.albumName,
